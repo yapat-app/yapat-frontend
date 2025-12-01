@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+#root {
+  height: 100vh;
+}
+
+.nav_logo_dfki {
+  width: 5rem;
+  height: 3.75rem;
+}
+
+.bg_body_color {
+  background-color: #f7fafc;
+}
+
+.main_heading_text {
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.input_heading_text {
+  font-size: 0.9rem;
+}
