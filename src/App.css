@@ -2,6 +2,7 @@
 
 #root {
   height: 100vh;
+  background-color: #f7fafc;
 }
 
 .nav_logo_dfki {
@@ -18,6 +19,53 @@
   font-weight: 600;
 }
 
+.card_heading_text {
+  font-family: IBM Plex Mono;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 10px 0px 10px 0px;
+}
+
+.sub_head_text {
+  font-family: "IBM Plex Mono", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 24px;
+  letter-spacing: 0em;
+  text-align: left;
+}
+
+.sub_base_text {
+  font-family: "IBM Plex Sans", sans-serif;
+  color: #4a709c;
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 24px;
+  letter-spacing: 0em;
+  text-align: left;
+}
+
 .input_heading_text {
   font-size: 0.9rem;
+}
+
+.sub_description_text {
+  font-size: 0.8rem;
+  font-family: IBM Plex Sans;
+  font-weight: 400;
+  color: #4a709c;
+  line-height: 2rem;
+}
+
+.ant-card-head-title {
+  font-family: IBM Plex Mono;
+  font-weight: 800 !important;
+}
+
+.ant-table-container {
+  font-family: IBM Plex Sans;
+}
+
+.nav_tabs {
+  cursor: pointer;
 }
