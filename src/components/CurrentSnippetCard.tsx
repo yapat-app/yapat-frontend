@@ -1,0 +1,117 @@
+/**
+ * Current Snippet Card Component
+ * 
+ * Displays the current snippet being annotated with:
+ * - Snippet information
+ * - Audio player
+ * - Existing annotations
+ * - Navigation and action buttons
+ */
+
+import React from "react";
+import { Card, Tag, Space, Button } from "antd";
+import {
+  ArrowRightOutlined,
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+} from "@ant-design/icons";
+import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
+import type { Snippet, Annotation } from "../types";
+
+interface CurrentSnippetCardProps {
+  snippet: Snippet;
+  annotations: Annotation[];
+  onPrevious: () => void;
+  onNext: () => void;
+  onAddAnnotation: () => void;
+  canGoPrevious: boolean;
+  canGoNext: boolean;
+}
+
+export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
+  snippet,
+  annotations,
+  onPrevious,
+  onNext,
+  onAddAnnotation,
+  canGoPrevious,
+  canGoNext,
+}) => {
+  return (
+    <Card className="mb-4 shadow-md">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-xl font-semibold mb-1">Snippet #{snippet.id}</h3>
+          <p className="text-gray-600">
+            <strong>Time:</strong> {snippet.start_time.toFixed(2)}s -{" "}
+            {snippet.end_time.toFixed(2)}s ({snippet.duration.toFixed(1)}s
+            duration)
+          </p>
+          <p className="text-gray-500 text-sm">
+            <strong>Recording ID:</strong> {snippet.recording_id}
+          </p>
+        </div>
+        <div>
+          <Tag
+            color={snippet.is_annotated ? "green" : "orange"}
+            className="text-sm"
+          >
+            {snippet.is_annotated ? "✓ Annotated" : "Pending"}
+          </Tag>
+        </div>
+      </div>
+
+      {/* Audio Player */}
+      <AudioPlayerPlaceholder />
+
+      {/* Existing Annotations */}
+      {annotations.length > 0 && (
+        <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+          <h4 className="font-semibold mb-2 text-green-900">
+            Existing Annotations ({annotations.length}):
+          </h4>
+          <Space wrap>
+            {annotations.map((ann) => (
+              <Tag key={ann.id} color="green" className="text-sm py-1 px-3">
+                <strong>{ann.resolved_name_snapshot}</strong>
+                <span className="ml-2 text-xs">
+                  ({(ann.confidence * 100).toFixed(0)}%)
+                </span>
+              </Tag>
+            ))}
+          </Space>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          <Button
+            size="large"
+            onClick={onPrevious}
+            disabled={!canGoPrevious}
+            icon={<ArrowLeftOutlined />}
+          >
+            Previous
+          </Button>
+          <Button
+            size="large"
+            onClick={onNext}
+            disabled={!canGoNext}
+          >
+            Next <ArrowRightOutlined />
+          </Button>
+        </div>
+        <Button
+          type="primary"
+          size="large"
+          onClick={onAddAnnotation}
+          icon={<CheckCircleOutlined />}
+        >
+          Add Annotation
+        </Button>
+      </div>
+    </Card>
+  );
+};
+

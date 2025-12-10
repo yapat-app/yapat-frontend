@@ -3,6 +3,9 @@ import { authSlice } from "./features/authSlice";
 import { datasetSlice } from "./features/datasetSlice";
 import { invitationSlice } from "./features/invitationSlice";
 import { teamSlice } from "./features/teamSlice";
+import snippetReducer from "./features/snippetSlice";
+import annotationReducer from "./features/annotationSlice";
+import taxonomyReducer from "./features/taxonomySlice";
 
 const store = configureStore({
   reducer: {
@@ -10,6 +13,9 @@ const store = configureStore({
     dataset: datasetSlice.reducer,
     invitation: invitationSlice.reducer,
     team: teamSlice.reducer,
+    snippet: snippetReducer,
+    annotation: annotationReducer,
+    taxonomy: taxonomyReducer,
   },
 });
 
