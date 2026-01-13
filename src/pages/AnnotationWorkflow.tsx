@@ -1,6 +1,6 @@
 /**
  * Annotation Workflow Page
- * 
+ *
  * Main page for annotating audio snippets
  */
 
@@ -18,7 +18,7 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
-  
+
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
   const datasetId = searchParams.get("dataset_id");
 
@@ -84,7 +84,9 @@ export const AnnotationWorkflow: React.FC = () => {
           <Empty
             description={
               <div>
-                <p className="text-lg font-semibold mb-2">No Snippets Available</p>
+                <p className="text-lg font-semibold mb-2">
+                  No Snippets Available
+                </p>
                 <p className="text-gray-500">
                   {datasetId
                     ? `No unannotated snippets found for dataset ${datasetId}`
@@ -111,7 +113,9 @@ export const AnnotationWorkflow: React.FC = () => {
             </h1>
             <p className="text-gray-600">
               Annotate audio snippets with species labels
-              {datasetId && <span className="ml-2">(Dataset #{datasetId})</span>}
+              {datasetId && (
+                <span className="ml-2">(Dataset #{datasetId})</span>
+              )}
             </p>
           </div>
 
@@ -159,4 +163,3 @@ export const AnnotationWorkflow: React.FC = () => {
     </div>
   );
 };
-

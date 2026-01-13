@@ -1,6 +1,6 @@
 /**
  * API Service Layer
- * 
+ *
  * Centralized API client that abstracts all backend communication.
  * This layer makes it easy to:
  * - Switch between mock and real implementations
@@ -23,6 +23,11 @@ import type {
   Dataset,
   FeedParams,
   TaskStatus,
+  Embedding,
+  CreateEmbedding,
+  EmbeddingMethod,
+  Feed,
+  FeedCreate,
 } from "../types";
 
 // ============================================================================
@@ -73,14 +78,28 @@ export const snippetApi = {
    */
   getAudioUrl: (snippetId: number): string => {
     const useMock = import.meta.env.VITE_USE_MOCK_AUDIO === "true";
-    
+
     if (useMock) {
       // Return placeholder/silent audio for mock
       return `/mock-audio/snippet-${snippetId}.wav`;
     }
-    
+
     // Real audio URL from backend
-    return `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/snippets/${snippetId}/audio`;
+    return `${
+      import.meta.env.VITE_YAPAT_BACKEND_URL
+    }/api/snippets/${snippetId}/audio`;
+  },
+
+  /**
+   * Get snippet audio for snippet playback
+   */
+  getSnippetAudio: async (snippetId: number): Promise<string> => {
+    const response = await api.get(`/api/snippets/${snippetId}/audio`, {
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(response.data);
+    // return seriazable audio url
+    return url;
   },
 };
 
@@ -133,6 +152,48 @@ export const annotationApi = {
 };
 
 // ============================================================================
+// Embeddings API
+// ============================================================================
+
+export const embeddingApi = {
+  /**
+   * Create a new embedding
+   */
+  create: async (
+    datasetId: number,
+    data: CreateEmbedding
+  ): Promise<Embedding> => {
+    const response = await api.post(
+      `api/datasets/${datasetId}/embeddings`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Get all embedding methods
+   */
+  allEmbeddingList: async (): Promise<EmbeddingMethod[]> => {
+    const response = await api.get(`api/embedding-models`);
+    return response.data;
+  },
+};
+
+// ============================================================================
+// Feed API
+// ============================================================================
+
+export const feedApi = {
+  /**
+   * Get Feed
+   */
+  create: async (data: FeedCreate): Promise<Feed[]> => {
+    const response = await api.get(`api/feed?datasetId=${data.dataset_id}`);
+    return response.data;
+  },
+};
+
+// ============================================================================
 // Taxonomy API
 // ============================================================================
 
@@ -141,7 +202,10 @@ export const taxonomyApi = {
    * Get fast autocomplete suggestions for species names
    * Optimized for real-time typing
    */
-  suggest: async (query: string, limit: number = 10): Promise<TaxonSuggestion[]> => {
+  suggest: async (
+    query: string,
+    limit: number = 10
+  ): Promise<TaxonSuggestion[]> => {
     const response = await api.get("/api/taxonomy/suggest", {
       params: { q: query, limit },
     });
@@ -192,7 +256,9 @@ export const taxonomyApi = {
   /**
    * Validate if a taxon ID exists
    */
-  validate: async (taxonId: string): Promise<{ taxon_id: string; valid: boolean }> => {
+  validate: async (
+    taxonId: string
+  ): Promise<{ taxon_id: string; valid: boolean }> => {
     const response = await api.get("/api/taxonomy/validate", {
       params: { id: taxonId },
     });
@@ -240,7 +306,10 @@ export const recordingApi = {
 export const datasetApi = {
   //Get all datasets
 
-  getAll: async (params?: { skip?: number; limit?: number }): Promise<Dataset[]> => {
+  getAll: async (params?: {
+    skip?: number;
+    limit?: number;
+  }): Promise<Dataset[]> => {
     const response = await api.get("/api/datasets/", { params });
     return response.data;
   },
@@ -267,8 +336,12 @@ export const taskApi = {
 
   //Trigger recording processing
 
-  processRecording: async (recordingId: number): Promise<{ task_id: string }> => {
-    const response = await api.post(`/api/tasks/recordings/${recordingId}/process`);
+  processRecording: async (
+    recordingId: number
+  ): Promise<{ task_id: string }> => {
+    const response = await api.post(
+      `/api/tasks/recordings/${recordingId}/process`
+    );
     return response.data;
   },
 
@@ -327,4 +400,3 @@ export const isNetworkError = (error: any): boolean => {
 export const isAuthError = (error: any): boolean => {
   return error.response?.status === 401 || error.response?.status === 403;
 };
-

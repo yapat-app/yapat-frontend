@@ -1,23 +1,39 @@
-/**
- * Audio Player Placeholder Component
- * 
- * Placeholder for audio player functionality
- * In production, this would be replaced with an actual audio player
- */
-
-import React from "react";
+import React, { useEffect, useMemo } from "react";
+import SpectrogramPlayer from "react-audio-spectrogram-player";
+import { useAppDispatch } from "../hooks";
+import { useSelector } from "react-redux";
+import { fetchSnippetAudio } from "../redux/features/snippetSlice";
 
 export const AudioPlayerPlaceholder: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const { currentSnippetAudio, currentSnippet } = useSelector(
+    (state: any) => state.snippet
+  );
+
+  // Fetch audio when snippet changes
+  useEffect(() => {
+    if (currentSnippet?.id != null) {
+      dispatch(fetchSnippetAudio(currentSnippet.id));
+    }
+  }, [currentSnippet?.id]);
+
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-12 mb-4 text-center border-2 border-dashed border-blue-200">
-      <div className="text-6xl mb-4">🎵</div>
-      <p className="text-lg font-medium text-gray-700 mb-2">
-        Audio Player (To be Implemented)
-      </p>
-      <p className="text-sm text-gray-500">
-        This would play the audio snippet for annotation
-      </p>
+    <div className=" from-blue-50 to-indigo-50 rounded-lg p-12 mb-4 text-center border-2 border-dashed border-blue-200">
+      {currentSnippetAudio ? (
+        <SpectrogramPlayer
+          key={currentSnippet ?? currentSnippet.id}
+          src={currentSnippetAudio}
+          sampleRate={16000}
+          specHeight={250}
+          navHeight={60}
+          dark={false}
+          navigator={false} //  hide zoom / navigator UI
+          settings={false} // settings
+          colormap="viridis"
+        />
+      ) : (
+        <p className="text-sm text-gray-400">Loading audio…</p>
+      )}
     </div>
   );
 };
-

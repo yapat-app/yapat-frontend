@@ -4,6 +4,38 @@
  */
 
 // ============================================================================
+// Embedding Types
+// ============================================================================
+
+export interface Embedding {
+  embedding_job_id: number;
+  snippet_set_id: number;
+  model_id: number;
+  celery_task_id: string;
+  status: string;
+}
+
+export interface CreateEmbedding {
+  embedding_model_id: number;
+  window_size: number;
+  step_size: number;
+  overlap: number;
+}
+
+export interface EmbeddingMethod {
+  id: number;
+  name: string;
+  version: string;
+  description: string;
+  window_size: number;
+  step_size: number;
+  overlap: number;
+  requires_fixed_window: boolean;
+  requires_fixed_step: boolean;
+  requires_fixed_overlap: boolean;
+}
+
+// ============================================================================
 // Annotation Types
 // ============================================================================
 
@@ -22,8 +54,8 @@ export interface Annotation {
 
 export interface AnnotationCreate {
   snippet_id: number;
-  species_name?: string;  // User can type species name
-  taxon_id?: string;      // Or provide taxon_id directly
+  species_name?: string; // User can type species name
+  taxon_id?: string; // Or provide taxon_id directly
   confidence?: number;
   notes?: string;
   extra_metadata?: Record<string, any>;
@@ -31,7 +63,7 @@ export interface AnnotationCreate {
 
 export interface AnnotationBatchCreate {
   snippet_id: number;
-  annotations: Omit<AnnotationCreate, 'snippet_id'>[];
+  annotations: Omit<AnnotationCreate, "snippet_id">[];
 }
 
 // ============================================================================
@@ -63,6 +95,33 @@ export interface TaxonDetails extends TaxonSuggestion {
   taxonomic_status?: string;
   match_type?: string;
   confidence?: number;
+}
+
+// ============================================================================
+// Feed Types
+// ============================================================================
+
+export interface Feed {
+  start_time: number;
+  duration: number;
+  snippet_set_id: number;
+  id: number;
+  recording_id: number;
+  end_time: number;
+  created_at: string;
+}
+
+export interface FeedCreate {
+  method?: string;
+  dataset_id?: number;
+  recording_id?: number;
+  skip?: number;
+  limit?: number;
+  status?: string;
+  embedding_model_id?: number;
+  query_snippet_id?: number;
+  crop_start_sec?: number;
+  crop_end_sec?: number;
 }
 
 // ============================================================================
@@ -144,7 +203,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  role: 'user' | 'admin';
+  role: "user" | "admin";
   created_at: string;
 }
 
@@ -181,7 +240,7 @@ export interface FeedParams {
 
 export interface TaskStatus {
   task_id: string;
-  status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILURE';
+  status: "PENDING" | "PROCESSING" | "SUCCESS" | "FAILURE";
   ready: boolean;
   successful?: boolean;
   failed?: boolean;
@@ -189,4 +248,3 @@ export interface TaskStatus {
   error?: string;
   meta?: any;
 }
-

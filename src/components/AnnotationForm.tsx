@@ -1,6 +1,6 @@
 /**
  * Annotation Form Component
- * 
+ *
  * Modal form for creating annotations on audio snippets
  * Supports species name input with autocomplete
  */
@@ -9,7 +9,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal, Form, InputNumber, Input, Button, message, Alert } from "antd";
 import { SpeciesAutocomplete } from "./SpeciesAutocomplete";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { createAnnotation, clearError, clearLastCreated } from "../redux/features/annotationSlice";
+import {
+  createAnnotation,
+  clearError,
+  clearLastCreated,
+} from "../redux/features/annotationSlice";
 import type { AnnotationCreate } from "../types";
 
 interface AnnotationFormProps {
@@ -26,12 +30,13 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
   onSuccess,
 }) => {
   const dispatch = useAppDispatch();
-  const { loading, error, lastCreated } = useAppSelector((state) => state.annotation);
+  const { loading, error, lastCreated } = useAppSelector(
+    (state) => state.annotation
+  );
   const [form] = Form.useForm();
   const [selectedTaxonId, setSelectedTaxonId] = useState<string | undefined>();
   const processedAnnotationId = useRef<number | null>(null);
 
-  
   //Reset form when modal opens/closes
 
   useEffect(() => {
@@ -44,11 +49,14 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     }
   }, [visible, form, dispatch]);
 
-  
   //Handle successful annotation creation
 
   useEffect(() => {
-    if (lastCreated && visible && lastCreated.id !== processedAnnotationId.current) {
+    if (
+      lastCreated &&
+      visible &&
+      lastCreated.id !== processedAnnotationId.current
+    ) {
       processedAnnotationId.current = lastCreated.id;
       const speciesName = lastCreated.resolved_name_snapshot;
       message.success(`Annotation created: ${speciesName}`);
@@ -60,7 +68,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     }
   }, [lastCreated, visible, form, onSuccess, dispatch]);
 
-  
   //Handle form submission
 
   const handleSubmit = async (values: any) => {
@@ -86,7 +93,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     }
   };
 
-  
   //Handle species selection from autocomplete
 
   const handleSpeciesChange = (speciesName: string, taxonId?: string) => {
@@ -111,7 +117,7 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
       onCancel={handleCancel}
       footer={null}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       {error && (
         <Alert
@@ -134,7 +140,10 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
           label="Species Name"
           name="species_name"
           rules={[
-            { required: true, message: "Please select or enter a species name" },
+            {
+              required: true,
+              message: "Please select or enter a species name",
+            },
             { min: 2, message: "Species name must be at least 2 characters" },
           ]}
           tooltip="Start typing to get species suggestions from GBIF database"
@@ -183,9 +192,7 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
 
         <Form.Item className="mb-0">
           <div className="flex gap-2 justify-end">
-            <Button onClick={handleCancel}>
-              Cancel
-            </Button>
+            <Button onClick={handleCancel}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={loading}>
               Create Annotation
             </Button>
@@ -201,4 +208,3 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
     </Modal>
   );
 };
-

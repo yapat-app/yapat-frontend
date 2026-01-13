@@ -5,10 +5,12 @@ import api from "../../axios/axiosInstance";
 
 export interface DatasetState {
   allDatasets: { id: string; name: string }[];
+  selectedDatasetId: number | null;
 }
 
 const initialState: DatasetState = {
   allDatasets: [],
+  selectedDatasetId: null,
 };
 
 export const fetchAllDatasets = createAsyncThunk(
@@ -25,7 +27,11 @@ export const fetchAllDatasets = createAsyncThunk(
 export const datasetSlice = createSlice({
   name: "dataset",
   initialState,
-  reducers: {},
+  reducers: {
+    selectDataset: (state, action: PayloadAction<number | null>) => {
+      state.selectedDatasetId = action.payload;
+    },
+  },
   extraReducers: (builder) => {
     builder.addCase(fetchAllDatasets.fulfilled, (state, action) => {
       state.allDatasets = action.payload;
@@ -33,4 +39,5 @@ export const datasetSlice = createSlice({
   },
 });
 
+export const { selectDataset } = datasetSlice.actions;
 export default datasetSlice.reducer;

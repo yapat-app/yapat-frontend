@@ -7,20 +7,11 @@ import {
   resetInvitationState,
 } from "../redux/features/invitationSlice";
 
-import {
-  Flex,
-  List,
-  Space,
-  Table,
-  Tag,
-  Card,
-  Radio,
-  Modal,
-  Button,
-  Checkbox,
-} from "antd";
+import { Flex, Space, Modal, Button, Checkbox } from "antd";
+
 import type { CheckboxProps } from "antd";
 import type { TableProps } from "antd";
+import { GenerateFeedModal } from "../components/GenerateFeed";
 
 export const Datasets = () => {
   const dispatch = useAppDispatch();
@@ -28,9 +19,7 @@ export const Datasets = () => {
   const { user } = useAppSelector((state: any) => state.auth);
   const { invitationLoading, invitationCreated, invitationLinkToken } =
     useAppSelector((state: any) => state.invitation);
-  const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
-    (state) => state.dataset
-  );
+  const { allDatasets } = useAppSelector((state) => state.dataset);
   interface DataType {
     id: string;
     name: string;
@@ -189,12 +178,13 @@ export const Datasets = () => {
                 <div className="flex flex-col gap-3">
                   {allDatasets.map((dataset, index) => (
                     <div>
-                      <div className="pl-5 flex items-start justify-between ">
+                      <div className="pl-5 py-2  flex items-center justify-between ">
                         <div>
                           <h2 className="sub_head_text">{dataset.name}</h2>
                           {/* <p className="sub_base_text">{dataset.subText}</p> */}
                           <p className="sub_base_text">Some description</p>
                         </div>
+                        <GenerateFeedModal datasetId={parseInt(dataset.id)} />
                       </div>
                     </div>
                   ))}

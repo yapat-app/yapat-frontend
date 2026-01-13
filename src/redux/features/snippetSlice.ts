@@ -11,6 +11,7 @@ import type { Snippet, FeedParams } from "../../types";
 export interface SnippetState {
   snippets: Snippet[];
   currentSnippet: Snippet | null;
+  currentSnippetAudio: string | null;
   currentIndex: number;
   loading: boolean;
   error: string | null;
@@ -20,6 +21,7 @@ export interface SnippetState {
 const initialState: SnippetState = {
   snippets: [],
   currentSnippet: null,
+  currentSnippetAudio: null,
   currentIndex: 0,
   loading: false,
   error: null,
@@ -73,6 +75,19 @@ export const fetchSnippet = createAsyncThunk(
   }
 );
 
+//Fetch single snippet audio
+
+export const fetchSnippetAudio = createAsyncThunk(
+  "snippet/audio",
+  async (snippetId: number, { rejectWithValue }) => {
+    try {
+      return await snippetApi.getSnippetAudio(snippetId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 // ============================================================================
 // Slice
 // ============================================================================
@@ -114,7 +129,9 @@ export const snippetSlice = createSlice({
       if (state.currentSnippet) {
         state.currentSnippet.is_annotated = true;
         // Update in list
-        const snippet = state.snippets.find(s => s.id === state.currentSnippet?.id);
+        const snippet = state.snippets.find(
+          (s) => s.id === state.currentSnippet?.id
+        );
         if (snippet) {
           snippet.is_annotated = true;
         }
@@ -148,7 +165,7 @@ export const snippetSlice = createSlice({
         state.loading = false;
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
-        
+
         // Set first snippet as current if none set
         if (action.payload.length > 0 && !state.currentSnippet) {
           state.currentSnippet = action.payload[0];
@@ -159,7 +176,7 @@ export const snippetSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
       // Fetch all snippets
       .addCase(fetchSnippets.pending, (state) => {
         state.loading = true;
@@ -173,7 +190,21 @@ export const snippetSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
+      // Fetch snippet audio
+      .addCase(fetchSnippetAudio.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchSnippetAudio.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentSnippetAudio = action.payload;
+      })
+      .addCase(fetchSnippetAudio.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
       // Fetch single snippet
       .addCase(fetchSnippet.pending, (state) => {
         state.loading = true;
@@ -200,4 +231,3 @@ export const {
 } = snippetSlice.actions;
 
 export default snippetSlice.reducer;
-

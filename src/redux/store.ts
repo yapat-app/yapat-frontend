@@ -6,6 +6,8 @@ import { teamSlice } from "./features/teamSlice";
 import snippetReducer from "./features/snippetSlice";
 import annotationReducer from "./features/annotationSlice";
 import taxonomyReducer from "./features/taxonomySlice";
+import embeddingReducer from "./features/embeddingSlice";
+import feedReducer from "./features/feedSlice";
 
 const store = configureStore({
   reducer: {
@@ -16,6 +18,8 @@ const store = configureStore({
     snippet: snippetReducer,
     annotation: annotationReducer,
     taxonomy: taxonomyReducer,
+    embedding: embeddingReducer,
+    feed: feedReducer,
   },
 });
 
