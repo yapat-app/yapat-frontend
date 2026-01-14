@@ -14,6 +14,7 @@ import {
 } from "antd";
 import type { TableProps } from "antd";
 import { fetchAllteams, createTeam } from "../redux/features/teamSlice";
+import { InviteTeamModal } from "../components/InviteTeamModal";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
@@ -229,6 +230,7 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
+              <InviteTeamModal />
               {user && user.role === "team_owner" && (
                 <Button type="primary" onClick={showModal}>
                   Create Team
