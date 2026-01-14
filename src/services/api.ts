@@ -28,6 +28,7 @@ import type {
   EmbeddingMethod,
   Feed,
   FeedCreate,
+  FeedSimilarityCreate,
 } from "../types";
 
 // ============================================================================
@@ -188,7 +189,20 @@ export const feedApi = {
    * Get Feed
    */
   create: async (data: FeedCreate): Promise<Feed[]> => {
-    const response = await api.get(`api/feed?datasetId=${data.dataset_id}`);
+    const response = await api.get(`api/feed?dataset_id=${data.dataset_id}`);
+    return response.data;
+  },
+
+  similarity: async (data: FeedSimilarityCreate): Promise<Feed[]> => {
+    const formData = new FormData();
+    formData.append("audio_file", data.audio_file); // file field
+    formData.append("dataset_id", String(data.dataset_id));
+    formData.append("end_time", String(data.end_time));
+    formData.append("start_time", String(data.start_time));
+    formData.append("embedding_model_id", String(data.embedding_model_id));
+    const response = await api.post(`api/feed/similarity-search`, data, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return response.data;
   },
 };

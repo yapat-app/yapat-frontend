@@ -1,6 +1,6 @@
 /**
  * Current Snippet Card Component
- * 
+ *
  * Displays the current snippet being annotated with:
  * - Snippet information
  * - Audio player
@@ -9,14 +9,19 @@
  */
 
 import React from "react";
-import { Card, Tag, Space, Button } from "antd";
+import { Card, Tag, Space, Button, Dropdown } from "antd";
+import { DownOutlined } from "@ant-design/icons";
+import type { MenuProps } from "antd";
 import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
-import type { Snippet, Annotation } from "../types";
+import type { Snippet, Annotation, ExportAnnotation } from "../types";
+import { exportAllAnnotations } from "../redux/features/datasetSlice";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import { useSearchParams } from "react-router-dom";
 
 interface CurrentSnippetCardProps {
   snippet: Snippet;
@@ -37,6 +42,38 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   canGoPrevious,
   canGoNext,
 }) => {
+  const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
+  const datasetId = searchParams.get("dataset_id");
+  const handleCSVDownload = (format: string) => {
+    const payload: ExportAnnotation = {
+      dataset_id: datasetId,
+      format: format,
+    };
+    console.log(payload);
+    dispatch(exportAllAnnotations(payload));
+  };
+
+  const items: MenuProps["items"] = [
+    {
+      label: (
+        <Button onClick={() => handleCSVDownload("csv")}>Export as CSV</Button>
+      ),
+      key: "0",
+    },
+    {
+      label: (
+        <Button onClick={() => handleCSVDownload("json")}>
+          Export as JSON
+        </Button>
+      ),
+      key: "1",
+    },
+    {
+      type: "divider",
+    },
+  ];
+
   return (
     <Card className="mb-4 shadow-md">
       <div className="flex justify-between items-start mb-4">
@@ -94,24 +131,29 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
           >
             Previous
           </Button>
-          <Button
-            size="large"
-            onClick={onNext}
-            disabled={!canGoNext}
-          >
+          <Button size="large" onClick={onNext} disabled={!canGoNext}>
             Next <ArrowRightOutlined />
           </Button>
         </div>
-        <Button
-          type="primary"
-          size="large"
-          onClick={onAddAnnotation}
-          icon={<CheckCircleOutlined />}
-        >
-          Add Annotation
-        </Button>
+        <div className="flex justify-center items-center gap-4">
+          <Dropdown menu={{ items }}>
+            <a onClick={(e) => e.preventDefault()}>
+              <Space>
+                Export
+                <DownOutlined />
+              </Space>
+            </a>
+          </Dropdown>
+          <Button
+            type="primary"
+            size="large"
+            onClick={onAddAnnotation}
+            icon={<CheckCircleOutlined />}
+          >
+            Add Annotation
+          </Button>
+        </div>
       </div>
     </Card>
   );
 };
-

@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   fetchAllDatasets,
   selectDataset,
 } from "../redux/features/datasetSlice";
-import { createFeed } from "../redux/features/feedSlice";
+import { createFeed, createSimilarityFeed } from "../redux/features/feedSlice";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Select, Modal, Button, Form } from "antd";
 const { Option } = Select;
@@ -13,7 +13,8 @@ import {
   getAllEmbeddingMethods,
   selectEmbedding,
 } from "../redux/features/embeddingSlice";
-import type { EmbeddingMethod } from "../types";
+import type { EmbeddingMethod, FeedSimilarityCreate } from "../types";
+import { UploadSampleAudio } from "./UploadingAudio";
 
 export const GenerateFeedModal = ({
   datasetId,
@@ -21,9 +22,29 @@ export const GenerateFeedModal = ({
   datasetId: number | null;
 }) => {
   const navigator = useNavigate();
+  const hasNavigatedRef = useRef(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
   const { feed } = useAppSelector((state) => state.feed);
+  const [feedMethod, setFeedMethod] = useState<string | null>(null);
+  const [similarityState, setSimilarityState] = useState<{
+    audioFile: File | null;
+    startSec: number;
+    endSec: number;
+  }>({
+    audioFile: null,
+    startSec: 0,
+    endSec: 3,
+  });
+
+  const handleSimilarityChange = (value: {
+    audioFile: File | null;
+    startSec: number;
+    endSec: number;
+  }) => {
+    setSimilarityState(value);
+  };
+
   const { embeddingMethods, selectedEmbeddedMethodId, embeddingCreated } =
     useAppSelector((state) => state.embedding);
   const dispatch = useAppDispatch();
@@ -32,6 +53,28 @@ export const GenerateFeedModal = ({
     setIsModalOpen(true);
     dispatch(selectDataset(datasetId));
     dispatch(getAllEmbeddingMethods());
+  };
+
+  const handleSubmit = () => {
+    // create random feed
+    if (feedMethod === "random") {
+      selectedEmbeddedMethodId &&
+        dispatch(createFeed({ dataset_id: selectedDatasetId }));
+    }
+    // create similarity feed
+    else if (feedMethod === "similarity") {
+      const { audioFile, startSec, endSec } = similarityState;
+      if (!audioFile) return;
+
+      const payload: FeedSimilarityCreate = {
+        audio_file: audioFile,
+        dataset_id: selectedDatasetId,
+        start_time: startSec,
+        end_time: endSec,
+      };
+      console.log("payload before similarity", payload);
+      dispatch(createSimilarityFeed(payload));
+    }
   };
 
   const handleCancel = () => {
@@ -107,10 +150,6 @@ export const GenerateFeedModal = ({
               >
                 Generate Embeddings
               </Button>
-              <p className="sub_description_text">
-                Embeddings need to be created for the dataset before you can
-                create the feed.
-              </p>
             </div>
           </div>
         )}
@@ -121,12 +160,21 @@ export const GenerateFeedModal = ({
                 label="Feed method"
                 name="feedMethod"
                 rules={[{ required: true, message: "Please select a method" }]}
-                tooltip="Choose which embedding method to use"
+                tooltip="Choose which feed method to use"
               >
-                <Select placeholder="Select a method" style={{ width: "100%" }}>
+                <Select
+                  onChange={(value: string) => {
+                    setFeedMethod(value);
+                  }}
+                  placeholder="Select a method"
+                  style={{ width: "100%" }}
+                >
                   {[
                     {
                       name: "random",
+                    },
+                    {
+                      name: "similarity",
                     },
                   ].map((method: any) => (
                     <Option key={method.name} value={method.name}>
@@ -135,16 +183,12 @@ export const GenerateFeedModal = ({
                   ))}
                 </Select>
               </Form.Item>
+              {feedMethod === "similarity" && (
+                <UploadSampleAudio onChange={handleSimilarityChange} />
+              )}
             </Form>
             <div className="py-2">
-              <Button
-                type="primary"
-                onClick={() =>
-                  selectedEmbeddedMethodId &&
-                  dispatch(createFeed({ dataset_id: selectedDatasetId }))
-                }
-                className="!w-full"
-              >
+              <Button type="primary" onClick={handleSubmit} className="!w-full">
                 Generate Feed
               </Button>
             </div>

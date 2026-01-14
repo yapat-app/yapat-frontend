@@ -52,6 +52,15 @@ export interface Annotation {
   updated_at?: string;
 }
 
+export interface ExportAnnotation {
+  dataset_id: string | null;
+  format: string;
+  taxon_id?: string;
+  user_id?: number | null;
+  created_after?: string;
+  created_before?: string;
+}
+
 export interface AnnotationCreate {
   snippet_id: number;
   species_name?: string; // User can type species name
@@ -113,7 +122,7 @@ export interface Feed {
 
 export interface FeedCreate {
   method?: string;
-  dataset_id?: number;
+  dataset_id?: number | null;
   recording_id?: number;
   skip?: number;
   limit?: number;
@@ -122,6 +131,17 @@ export interface FeedCreate {
   query_snippet_id?: number;
   crop_start_sec?: number;
   crop_end_sec?: number;
+}
+
+export interface FeedSimilarityCreate {
+  audio_file: File;
+  dataset_id: number | null;
+  end_time: number;
+  start_time: number;
+  limit?: number;
+  status?: string;
+  embedding_model_id?: number | null;
+  snippet_set_id?: number;
 }
 
 // ============================================================================
