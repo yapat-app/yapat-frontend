@@ -8,6 +8,7 @@ export interface EmbeddingState {
   embeddingMethods: EmbeddingMethod[] | null;
   selectedEmbeddedMethodId: number | null;
   loading: boolean;
+  embeddingLoading: boolean;
   error: string | null;
 }
 
@@ -16,6 +17,7 @@ const initialState: EmbeddingState = {
   embeddingMethods: null,
   selectedEmbeddedMethodId: null,
   loading: false,
+  embeddingLoading: false,
   error: null,
 };
 
@@ -66,20 +68,25 @@ export const embeddingSlice = createSlice({
     selectEmbedding: (state, action: PayloadAction<number | null>) => {
       state.selectedEmbeddedMethodId = action.payload;
     },
+    clearEmbedding: (state) => {
+      state.selectedEmbeddedMethodId = null;
+      state.embeddingCreated = null;
+      state.embeddingLoading = false;
+    },
   },
   extraReducers: (builder) => {
     builder
       // Create annotation
       .addCase(createEmbedding.pending, (state) => {
-        state.loading = true;
+        state.embeddingLoading = true;
         state.error = null;
       })
       .addCase(createEmbedding.fulfilled, (state, action) => {
-        state.loading = false;
+        state.embeddingLoading = false;
         state.embeddingCreated = action.payload;
       })
       .addCase(createEmbedding.rejected, (state, action) => {
-        state.loading = false;
+        state.embeddingLoading = false;
         state.error = action.payload as string;
         state.embeddingCreated = null;
       })
@@ -99,5 +106,5 @@ export const embeddingSlice = createSlice({
   },
 });
 
-export const { selectEmbedding } = embeddingSlice.actions;
+export const { selectEmbedding, clearEmbedding } = embeddingSlice.actions;
 export default embeddingSlice.reducer;

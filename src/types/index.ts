@@ -45,11 +45,19 @@ export interface Annotation {
   user_id: number;
   taxon_id: string;
   resolved_name_snapshot: string;
-  confidence: number;
-  notes?: string;
   extra_metadata?: Record<string, any>;
   created_at: string;
   updated_at?: string;
+}
+
+export interface DatasetAnnotationStats {
+  dataset_name: string;
+  dataset_id: number;
+  total_snippets: number;
+  annotated_snippets: number;
+  not_annotated_snippets: number;
+  annotation_percentage: number;
+  total_annotations: number;
 }
 
 export interface ExportAnnotation {
@@ -65,8 +73,6 @@ export interface AnnotationCreate {
   snippet_id: number;
   species_name?: string; // User can type species name
   taxon_id?: string; // Or provide taxon_id directly
-  confidence?: number;
-  notes?: string;
   extra_metadata?: Record<string, any>;
 }
 
@@ -248,7 +254,7 @@ export interface PaginatedResponse<T> {
 // ============================================================================
 
 export interface FeedParams {
-  dataset_id?: number;
+  dataset_id?: number | null;
   recording_id?: number;
   skip?: number;
   limit?: number;

@@ -69,28 +69,6 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
     });
   }, [audioFile, windowStart, windowEnd, onChange]);
 
-  const handlePlayWindow = () => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = windowStart;
-    audioRef.current.play();
-    const stopAt = windowEnd;
-    const check = () => {
-      if (!audioRef.current) return;
-      if (audioRef.current.currentTime >= stopAt) {
-        audioRef.current.pause();
-        audioRef.current.removeEventListener("timeupdate", check);
-      }
-    };
-    audioRef.current.addEventListener("timeupdate", check);
-  };
-
-  const handleLogWindowTimes = () => {
-    console.log("Selected window:", {
-      startSec: windowStart,
-      endSec: windowEnd,
-    });
-  };
-
   const clampWindowStart = (value: number) => {
     if (duration == null) return value;
     const maxStart = Math.max(0, duration - defaultWindowSec);

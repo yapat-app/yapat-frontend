@@ -75,8 +75,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
       const annotationData: AnnotationCreate = {
         snippet_id: snippetId,
         species_name: values.species_name,
-        confidence: values.confidence || 0.8,
-        notes: values.notes?.trim() || undefined,
       };
 
       // Use taxon_id if we have it from autocomplete
@@ -130,12 +128,7 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
         />
       )}
 
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleSubmit}
-        initialValues={{ confidence: 0.8 }}
-      >
+      <Form form={form} layout="vertical" onFinish={handleSubmit}>
         <Form.Item
           label="Species Name"
           name="species_name"
@@ -151,42 +144,6 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
           <SpeciesAutocomplete
             onChange={handleSpeciesChange}
             placeholder="e.g., 'Turdus merula' or 'Common Blackbird'"
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Confidence"
-          name="confidence"
-          rules={[
-            { required: true, message: "Please enter confidence" },
-            {
-              type: "number",
-              min: 0,
-              max: 1,
-              message: "Confidence must be between 0 and 1",
-            },
-          ]}
-          tooltip="How confident are you about this identification? (0.0 = not confident, 1.0 = very confident)"
-        >
-          <InputNumber
-            min={0}
-            max={1}
-            step={0.1}
-            style={{ width: "100%" }}
-            placeholder="0.0 - 1.0"
-          />
-        </Form.Item>
-
-        <Form.Item
-          label="Notes"
-          name="notes"
-          tooltip="Optional notes about this annotation"
-        >
-          <Input.TextArea
-            rows={3}
-            placeholder="Optional notes about this annotation..."
-            maxLength={500}
-            showCount
           />
         </Form.Item>
 

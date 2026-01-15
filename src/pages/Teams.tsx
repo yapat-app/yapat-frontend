@@ -47,7 +47,7 @@ export const Teams = () => {
   };
 
   const handleChangeDataset = (value: string) => {
-    setTeamInfo((prev) => {
+    setTeamInfo((prev: any) => {
       const updated = { ...prev, ["dataset_id"]: value };
       return updated;
     });

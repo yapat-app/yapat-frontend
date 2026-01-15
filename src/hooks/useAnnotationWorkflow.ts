@@ -1,6 +1,6 @@
 /**
  * Custom Hook for Annotation Workflow
- * 
+ *
  * Manages data fetching and state management for the annotation workflow
  */
 
@@ -18,42 +18,63 @@ import {
   clearAnnotations,
 } from "../redux/features/annotationSlice";
 import { annotationApi } from "../services/api";
+import { message } from "antd";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { clearEmbedding } from "../redux/features/embeddingSlice";
 
 interface UseAnnotationWorkflowParams {
   datasetId: string | null;
   limit?: number;
 }
 
-export const useAnnotationWorkflow = ({
-  datasetId,
-  limit = 50,
-}: UseAnnotationWorkflowParams) => {
+export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   const dispatch = useAppDispatch();
+  const navigator = useNavigate();
+  const [searchParams] = useSearchParams();
+  const datasetId = searchParams.get("dataset_id");
+
   const { snippets, currentSnippet, currentIndex, loading, error } =
     useAppSelector((state) => state.snippet);
   const { annotations } = useAppSelector((state) => state.annotation);
-  
+
   // Track which snippets have annotations (Set of snippet IDs)
-  const [snippetsWithAnnotations, setSnippetsWithAnnotations] = useState<Set<number>>(new Set());
+  const [snippetsWithAnnotations, setSnippetsWithAnnotations] = useState<
+    Set<number>
+  >(new Set());
 
   //Load snippets feed on mount
 
+  // useEffect(() => {
+  //get default feed if it's already not generated with the datasetId and limit:50
+  // if (snippets.length === 0) {
+  //   if (datasetId) {
+  //     dispatch(fetchSnippetFeed({ dataset_id: parseInt(datasetId), limit }));
+  //   } else {
+  //     // Load without dataset filter (all unannotated snippets)
+  //     dispatch(fetchSnippetFeed({ limit }));
+  //   }
+  // }
+
+  // Cleanup on unmount
+  //   return () => {
+  //     dispatch(clearSnippets());
+  //     dispatch(clearAnnotations());
+  //   };
+  // }, []);
+
   useEffect(() => {
-    if (datasetId) {
-      dispatch(
-        fetchSnippetFeed({ dataset_id: parseInt(datasetId), limit })
+    dispatch(clearEmbedding());
+  });
+
+  useEffect(() => {
+    if (snippets && snippets.length > 0) {
+      message.success(
+        `${snippets.length} snippets feed generated for dataset#${datasetId}`
       );
     } else {
-      // Load without dataset filter (all unannotated snippets)
-      dispatch(fetchSnippetFeed({ limit }));
+      navigator(`/datasets`);
     }
-
-    // Cleanup on unmount
-    return () => {
-      dispatch(clearSnippets());
-      dispatch(clearAnnotations());
-    };
-  }, [dispatch, datasetId, limit]);
+  }, [snippets]);
 
   //Load annotations for current snippet
   useEffect(() => {
@@ -63,11 +84,23 @@ export const useAnnotationWorkflow = ({
   }, [currentSnippet, dispatch]);
 
   //Memoize snippet IDs for dependency tracking
-  const snippetIds = useMemo(() => snippets.map(s => s.id).sort().join(','), [snippets]);
-  
+  const snippetIds = useMemo(
+    () =>
+      snippets
+        .map((s) => s.id)
+        .sort()
+        .join(","),
+    [snippets]
+  );
+
   //Memoize annotation snippet IDs for dependency tracking
   const annotationSnippetIds = useMemo(
-    () => annotations.map(a => a.snippet_id).filter((id, index, arr) => arr.indexOf(id) === index).sort().join(','),
+    () =>
+      annotations
+        .map((a) => a.snippet_id)
+        .filter((id, index, arr) => arr.indexOf(id) === index)
+        .sort()
+        .join(","),
     [annotations]
   );
 
@@ -82,7 +115,7 @@ export const useAnnotationWorkflow = ({
             annotationApi.getAll({ snippet_id: snippet.id }).catch(() => [])
           );
           const allAnnotationArrays = await Promise.all(annotationPromises);
-          
+
           // Build set of snippet IDs that have annotations
           const annotatedSnippetIds = new Set<number>();
           allAnnotationArrays.forEach((anns, index) => {
@@ -90,14 +123,14 @@ export const useAnnotationWorkflow = ({
               annotatedSnippetIds.add(snippets[index].id);
             }
           });
-          
+
           setSnippetsWithAnnotations(annotatedSnippetIds);
         } catch (error) {
           // Silently fail - we'll still track annotations as we encounter them
           console.warn("Failed to fetch all annotations:", error);
         }
       };
-      
+
       fetchAllAnnotations();
     } else {
       setSnippetsWithAnnotations(new Set());
@@ -140,7 +173,7 @@ export const useAnnotationWorkflow = ({
   const handleAnnotationSuccess = () => {
     // Mark current snippet as annotated
     dispatch(markCurrentAsAnnotated());
-    
+
     // Update tracked set to include current snippet
     if (currentSnippet) {
       setSnippetsWithAnnotations((prev) => {
@@ -149,7 +182,7 @@ export const useAnnotationWorkflow = ({
         return updated;
       });
     }
-    
+
     // Note: We don't automatically move to next snippet - user can navigate manually
   };
 
@@ -182,4 +215,3 @@ export const useAnnotationWorkflow = ({
     canGoNext: currentIndex < snippets.length - 1,
   };
 };
-

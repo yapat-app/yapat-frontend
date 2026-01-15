@@ -4,9 +4,9 @@
  * Main page for annotating audio snippets
  */
 
-import React, { useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Spin, Empty, Alert } from "antd";
+import React, { useEffect, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { Spin, Empty, Alert, message } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
 import { AnnotationForm } from "../components/AnnotationForm";
 import { AnnotationStatistics } from "../components/AnnotationStatistics";
@@ -17,6 +17,7 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigator = useNavigate();
   const [modalVisible, setModalVisible] = useState(false);
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
@@ -109,7 +110,7 @@ export const AnnotationWorkflow: React.FC = () => {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-3xl font-bold font-ibm-mono mb-2">
-              Annotation Workflow
+              Annotation
             </h1>
             <p className="text-gray-600">
               Annotate audio snippets with species labels
@@ -146,7 +147,6 @@ export const AnnotationWorkflow: React.FC = () => {
           <SnippetQueuePreview
             snippets={snippets}
             currentSnippetId={currentSnippet?.id ?? null}
-            maxVisible={15}
           />
         </div>
       </div>

@@ -5,8 +5,8 @@
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import { snippetApi, getErrorMessage } from "../../services/api";
-import type { Snippet, FeedParams } from "../../types";
+import { snippetApi, getErrorMessage, feedApi } from "../../services/api";
+import type { Snippet, FeedParams, FeedSimilarityCreate } from "../../types";
 
 export interface SnippetState {
   snippets: Snippet[];
@@ -14,6 +14,7 @@ export interface SnippetState {
   currentSnippetAudio: string | null;
   currentIndex: number;
   loading: boolean;
+  snippetsLoading: boolean;
   error: string | null;
   hasMore: boolean;
 }
@@ -24,6 +25,7 @@ const initialState: SnippetState = {
   currentSnippetAudio: null,
   currentIndex: 0,
   loading: false,
+  snippetsLoading: false,
   error: null,
   hasMore: true,
 };
@@ -40,6 +42,17 @@ export const fetchSnippetFeed = createAsyncThunk(
   async (params: FeedParams, { rejectWithValue }) => {
     try {
       return await snippetApi.getFeed(params);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const fetchSimilaritySnippetFeed = createAsyncThunk(
+  "snippet/fetchSimilarityFeed",
+  async (data: FeedSimilarityCreate, { rejectWithValue }) => {
+    try {
+      return await feedApi.similarity(data);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -158,11 +171,11 @@ export const snippetSlice = createSlice({
     builder
       // Fetch feed
       .addCase(fetchSnippetFeed.pending, (state) => {
-        state.loading = true;
+        state.snippetsLoading = true;
         state.error = null;
       })
       .addCase(fetchSnippetFeed.fulfilled, (state, action) => {
-        state.loading = false;
+        state.snippetsLoading = false;
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
 
@@ -173,7 +186,26 @@ export const snippetSlice = createSlice({
         }
       })
       .addCase(fetchSnippetFeed.rejected, (state, action) => {
-        state.loading = false;
+        state.snippetsLoading = false;
+        state.error = action.payload as string;
+      })
+      // Fetch similarity feed
+      .addCase(fetchSimilaritySnippetFeed.pending, (state) => {
+        state.snippetsLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchSimilaritySnippetFeed.fulfilled, (state, action) => {
+        state.snippetsLoading = false;
+        state.snippets = action.payload;
+        state.hasMore = action.payload.length > 0;
+        // Set first snippet as current if none set
+        if (action.payload.length > 0 && !state.currentSnippet) {
+          state.currentSnippet = action.payload[0];
+          state.currentIndex = 0;
+        }
+      })
+      .addCase(fetchSimilaritySnippetFeed.rejected, (state, action) => {
+        state.snippetsLoading = false;
         state.error = action.payload as string;
       })
 

@@ -2,16 +2,22 @@ import React, { useEffect, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
-
-import { Flex, Space, Modal, Button, Checkbox } from "antd";
+import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
+import { Flex, Space, Modal, Button, Checkbox, message } from "antd";
 
 import type { CheckboxProps } from "antd";
 import type { TableProps } from "antd";
 import { GenerateFeedModal } from "../components/GenerateFeed";
+import { ExportAnnotationButton } from "../components/ExportAnnotation";
+import { DatasetCard } from "../components/DatasetCard";
+import { clearSnippets } from "../redux/features/snippetSlice";
+import { clearEmbedding } from "../redux/features/embeddingSlice";
 
 export const Datasets = () => {
   const dispatch = useAppDispatch();
+
   const { user } = useAppSelector((state: any) => state.auth);
+  const { snippets } = useAppSelector((state: any) => state.snippet);
   const { allDatasets } = useAppSelector((state) => state.dataset);
   interface DataType {
     id: string;
@@ -37,16 +43,16 @@ export const Datasets = () => {
     },
   ];
 
-  const radioStyle = {
-    display: "flex",
-    width: "100%",
-    flexDirection: "column",
-    gap: 25,
-    paddingTop: 20,
-  };
+  //clear embeddings and snippets flags
+  useEffect(() => {
+    if (snippets.length > 0) {
+      dispatch(clearSnippets());
+    }
+  }, []);
 
   useEffect(() => {
     dispatch(fetchAllDatasets());
+    dispatch(getAllDatasetAnnotationStats());
   }, []);
 
   useEffect(() => {}, [allDatasets]);
@@ -74,16 +80,7 @@ export const Datasets = () => {
                 </div>
                 <div className="flex flex-col gap-3">
                   {allDatasets.map((dataset, index) => (
-                    <div>
-                      <div className="pl-5 py-2  flex items-center justify-between ">
-                        <div>
-                          <h2 className="sub_head_text">{dataset.name}</h2>
-                          {/* <p className="sub_base_text">{dataset.subText}</p> */}
-                          <p className="sub_base_text">Some description</p>
-                        </div>
-                        <GenerateFeedModal datasetId={parseInt(dataset.id)} />
-                      </div>
-                    </div>
+                    <DatasetCard key={dataset.id} dataset={dataset} />
                   ))}
                 </div>
               </div>

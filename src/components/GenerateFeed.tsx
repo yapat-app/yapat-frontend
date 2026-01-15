@@ -1,12 +1,16 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   fetchAllDatasets,
   selectDataset,
 } from "../redux/features/datasetSlice";
 import { createFeed, createSimilarityFeed } from "../redux/features/feedSlice";
+import {
+  fetchSimilaritySnippetFeed,
+  fetchSnippetFeed,
+} from "../redux/features/snippetSlice";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Select, Modal, Button, Form } from "antd";
+import { Select, Modal, Button, Form, Input, message, Steps } from "antd";
 const { Option } = Select;
 import {
   createEmbedding,
@@ -21,12 +25,23 @@ export const GenerateFeedModal = ({
 }: {
   datasetId: number | null;
 }) => {
+  const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const hasNavigatedRef = useRef(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
+  const { snippetsLoading } = useAppSelector((state) => state.snippet);
   const { feed } = useAppSelector((state) => state.feed);
   const [feedMethod, setFeedMethod] = useState<string | null>(null);
+  const [stepCount, setStepCount] = useState<number>(0);
+  const {
+    embeddingMethods,
+    selectedEmbeddedMethodId,
+    embeddingCreated,
+    embeddingLoading,
+  } = useAppSelector((state) => state.embedding);
+  const [feedParams, setFeedParams] = useState({ limit: 50 });
+  const { snippets } = useAppSelector((state) => state.snippet);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null;
     startSec: number;
@@ -37,17 +52,34 @@ export const GenerateFeedModal = ({
     endSec: 3,
   });
 
-  const handleSimilarityChange = (value: {
-    audioFile: File | null;
-    startSec: number;
-    endSec: number;
-  }) => {
-    setSimilarityState(value);
-  };
+  const items = [
+    {
+      title: "Embeddings",
+      content: embeddingCreated
+        ? "Embeddings Generated"
+        : "Generate Embeddings",
+    },
+    {
+      title: "Generate feed",
+      content: "Generate Feed",
+    },
+  ];
 
-  const { embeddingMethods, selectedEmbeddedMethodId, embeddingCreated } =
-    useAppSelector((state) => state.embedding);
-  const dispatch = useAppDispatch();
+  //Memoize the result for changing the states inside the child component
+  const handleSimilarityChange = useCallback(
+    (value: { audioFile: File | null; startSec: number; endSec: number }) => {
+      setSimilarityState(value);
+    },
+    []
+  );
+
+  const onChangeFeedParams = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFeedParams((prev: any) => {
+      const updated = { ...prev, [name]: value };
+      return updated;
+    });
+  };
 
   const showModal = async () => {
     setIsModalOpen(true);
@@ -59,7 +91,12 @@ export const GenerateFeedModal = ({
     // create random feed
     if (feedMethod === "random") {
       selectedEmbeddedMethodId &&
-        dispatch(createFeed({ dataset_id: selectedDatasetId }));
+        dispatch(
+          fetchSnippetFeed({
+            dataset_id: selectedDatasetId,
+            limit: feedParams.limit,
+          })
+        );
     }
     // create similarity feed
     else if (feedMethod === "similarity") {
@@ -71,9 +108,10 @@ export const GenerateFeedModal = ({
         dataset_id: selectedDatasetId,
         start_time: startSec,
         end_time: endSec,
+        limit: feedParams.limit,
       };
       console.log("payload before similarity", payload);
-      dispatch(createSimilarityFeed(payload));
+      dispatch(fetchSimilaritySnippetFeed(payload));
     }
   };
 
@@ -82,16 +120,27 @@ export const GenerateFeedModal = ({
   };
 
   useEffect(() => {
-    if (feed) {
+    if (feed || snippets.length > 0) {
       navigator(`/annotate?dataset_id=${selectedDatasetId}`);
     }
-  }, [embeddingCreated, feed]);
+  }, [embeddingCreated, feed, snippets]);
+
+  useEffect(() => {
+    console.log(embeddingCreated);
+    if (embeddingCreated) {
+      message.success(`Embeddings Generated for dataset ${selectedDatasetId}`);
+      // increase step count for stepper
+      setStepCount(stepCount + 1);
+    }
+  }, [embeddingCreated]);
 
   return (
     <div>
       <div>
         <div className="flex gap-3">
-          <Button onClick={showModal}>Generate Feed</Button>
+          <Button type="primary" onClick={showModal}>
+            Generate Feed
+          </Button>
         </div>
       </div>
       <Modal
@@ -105,6 +154,10 @@ export const GenerateFeedModal = ({
         onCancel={handleCancel}
         footer={null}
       >
+        <>
+          <Steps current={stepCount} titlePlacement="vertical" items={items} />
+          <br />
+        </>
         {embeddingMethods && !embeddingCreated && (
           <div>
             <Form layout="vertical">
@@ -131,6 +184,7 @@ export const GenerateFeedModal = ({
             </Form>
             <div className="py-2 w-full ">
               <Button
+                loading={embeddingLoading}
                 type="primary"
                 onClick={() =>
                   selectedEmbeddedMethodId &&
@@ -148,7 +202,9 @@ export const GenerateFeedModal = ({
                 }
                 className="!w-full"
               >
-                Generate Embeddings
+                {embeddingLoading
+                  ? "Generating Embeddings"
+                  : "Generate Embeddings"}
               </Button>
             </div>
           </div>
@@ -183,13 +239,32 @@ export const GenerateFeedModal = ({
                   ))}
                 </Select>
               </Form.Item>
+              {feedMethod && (
+                <Form.Item
+                  label="Limit"
+                  name="feedlimit"
+                  tooltip="Maximum number of snippets to return"
+                >
+                  <Input
+                    onChange={onChangeFeedParams}
+                    name="limit"
+                    defaultValue={feedParams.limit}
+                    type={"number"}
+                  ></Input>
+                </Form.Item>
+              )}
               {feedMethod === "similarity" && (
                 <UploadSampleAudio onChange={handleSimilarityChange} />
               )}
             </Form>
             <div className="py-2">
-              <Button type="primary" onClick={handleSubmit} className="!w-full">
-                Generate Feed
+              <Button
+                loading={snippetsLoading}
+                type="primary"
+                onClick={handleSubmit}
+                className="!w-full"
+              >
+                {snippetsLoading ? "...Generating Feed" : "Generate Feed"}
               </Button>
             </div>
           </div>

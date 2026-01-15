@@ -10,8 +10,6 @@
 
 import React from "react";
 import { Card, Tag, Space, Button, Dropdown } from "antd";
-import { DownOutlined } from "@ant-design/icons";
-import type { MenuProps } from "antd";
 import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
@@ -42,37 +40,7 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   canGoPrevious,
   canGoNext,
 }) => {
-  const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
-  const datasetId = searchParams.get("dataset_id");
-  const handleCSVDownload = (format: string) => {
-    const payload: ExportAnnotation = {
-      dataset_id: datasetId,
-      format: format,
-    };
-    console.log(payload);
-    dispatch(exportAllAnnotations(payload));
-  };
-
-  const items: MenuProps["items"] = [
-    {
-      label: (
-        <Button onClick={() => handleCSVDownload("csv")}>Export as CSV</Button>
-      ),
-      key: "0",
-    },
-    {
-      label: (
-        <Button onClick={() => handleCSVDownload("json")}>
-          Export as JSON
-        </Button>
-      ),
-      key: "1",
-    },
-    {
-      type: "divider",
-    },
-  ];
 
   return (
     <Card className="mb-4 shadow-md">
@@ -93,7 +61,7 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             color={snippet.is_annotated ? "green" : "orange"}
             className="text-sm"
           >
-            {snippet.is_annotated ? "✓ Annotated" : "Pending"}
+            {snippet.is_annotated ? "✓ Annotated" : "Not Annotated"}
           </Tag>
         </div>
       </div>
@@ -111,9 +79,6 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             {annotations.map((ann) => (
               <Tag key={ann.id} color="green" className="text-sm py-1 px-3">
                 <strong>{ann.resolved_name_snapshot}</strong>
-                <span className="ml-2 text-xs">
-                  ({(ann.confidence * 100).toFixed(0)}%)
-                </span>
               </Tag>
             ))}
           </Space>
@@ -136,14 +101,6 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
           </Button>
         </div>
         <div className="flex justify-center items-center gap-4">
-          <Dropdown menu={{ items }}>
-            <a onClick={(e) => e.preventDefault()}>
-              <Space>
-                Export
-                <DownOutlined />
-              </Space>
-            </a>
-          </Dropdown>
           <Button
             type="primary"
             size="large"

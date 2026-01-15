@@ -29,6 +29,7 @@ import type {
   Feed,
   FeedCreate,
   FeedSimilarityCreate,
+  DatasetAnnotationStats,
 } from "../types";
 
 // ============================================================================
@@ -145,6 +146,12 @@ export const annotationApi = {
     return response.data;
   },
 
+  // Get annotation stats for a dataset
+  getAnnotationsForDataset: async (): Promise<DatasetAnnotationStats[]> => {
+    const response = await api.get(`/api/annotations/datasets/stats`);
+    return response.data;
+  },
+
   //Delete an annotation
 
   delete: async (annotationId: number): Promise<void> => {
@@ -189,7 +196,9 @@ export const feedApi = {
    * Get Feed
    */
   create: async (data: FeedCreate): Promise<Feed[]> => {
-    const response = await api.get(`api/feed?dataset_id=${data.dataset_id}`);
+    const response = await api.get(
+      `api/feed?dataset_id=${data.dataset_id}&limit=${data.limit}`
+    );
     return response.data;
   },
 
@@ -200,6 +209,7 @@ export const feedApi = {
     formData.append("end_time", String(data.end_time));
     formData.append("start_time", String(data.start_time));
     formData.append("embedding_model_id", String(data.embedding_model_id));
+    formData.append("limit", String(data.limit));
     const response = await api.post(`api/feed/similarity-search`, data, {
       headers: { "Content-Type": "multipart/form-data" },
     });

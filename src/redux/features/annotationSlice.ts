@@ -6,10 +6,16 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { annotationApi, getErrorMessage } from "../../services/api";
-import type { Annotation, AnnotationCreate, AnnotationBatchCreate } from "../../types";
+import type {
+  Annotation,
+  AnnotationCreate,
+  AnnotationBatchCreate,
+  DatasetAnnotationStats,
+} from "../../types";
 
 export interface AnnotationState {
   annotations: Annotation[];
+  datasetAnnotations: DatasetAnnotationStats[];
   currentAnnotation: Annotation | null;
   loading: boolean;
   error: string | null;
@@ -18,6 +24,7 @@ export interface AnnotationState {
 
 const initialState: AnnotationState = {
   annotations: [],
+  datasetAnnotations: [],
   currentAnnotation: null,
   loading: false,
   error: null,
@@ -108,6 +115,20 @@ export const deleteAnnotation = createAsyncThunk(
   }
 );
 
+/**
+ * All Dataset Annotation Stats
+ */
+export const getAllDatasetAnnotationStats = createAsyncThunk(
+  "annotation/allDatasetStats",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await annotationApi.getAnnotationsForDataset();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 // ============================================================================
 // Slice
 // ============================================================================
@@ -116,9 +137,8 @@ export const annotationSlice = createSlice({
   name: "annotation",
   initialState,
   reducers: {
-    
-   //Set the current annotation
-     
+    //Set the current annotation
+
     setCurrentAnnotation: (state, action: PayloadAction<Annotation | null>) => {
       state.currentAnnotation = action.payload;
     },
@@ -160,7 +180,7 @@ export const annotationSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
       // Create annotation batch
       .addCase(createAnnotationBatch.pending, (state) => {
         state.loading = true;
@@ -175,7 +195,7 @@ export const annotationSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
       // Fetch annotations
       .addCase(fetchAnnotations.pending, (state) => {
         state.loading = true;
@@ -189,12 +209,17 @@ export const annotationSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
       // Fetch single annotation
       .addCase(fetchAnnotation.fulfilled, (state, action) => {
         state.currentAnnotation = action.payload;
       })
-      
+
+      // Fetch all dataset annotation stats
+      .addCase(getAllDatasetAnnotationStats.fulfilled, (state, action) => {
+        state.datasetAnnotations = action.payload;
+      })
+
       // Delete annotation
       .addCase(deleteAnnotation.fulfilled, (state, action) => {
         state.annotations = state.annotations.filter(
@@ -215,4 +240,3 @@ export const {
 } = annotationSlice.actions;
 
 export default annotationSlice.reducer;
-
