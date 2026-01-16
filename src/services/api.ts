@@ -196,9 +196,15 @@ export const feedApi = {
    * Get Feed
    */
   create: async (data: FeedCreate): Promise<Feed[]> => {
-    const response = await api.get(
-      `api/feed?dataset_id=${data.dataset_id}&limit=${data.limit}`
-    );
+    const response = await api.get("api/feed/", { data });
+    return response.data;
+  },
+
+  /**
+   * Get Feed History
+   */
+  history: async (): Promise<[]> => {
+    const response = await api.get("api/feed/history");
     return response.data;
   },
 

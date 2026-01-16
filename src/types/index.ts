@@ -61,7 +61,7 @@ export interface DatasetAnnotationStats {
 }
 
 export interface ExportAnnotation {
-  dataset_id: string | null;
+  dataset_id: number | null;
   format: string;
   taxon_id?: string;
   user_id?: number | null;
@@ -162,7 +162,7 @@ export interface Snippet {
   duration: number;
   file_path?: string;
   embedding?: any;
-  is_annotated: boolean;
+  is_annotated?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -210,7 +210,7 @@ export interface Dataset {
   description?: string;
   source_uri?: string;
   team_id?: number;
-  created_at: string;
+  created_at?: string;
   updated_at?: string;
 }
 
@@ -256,6 +256,7 @@ export interface PaginatedResponse<T> {
 export interface FeedParams {
   dataset_id?: number | null;
   recording_id?: number;
+  method?: string;
   skip?: number;
   limit?: number;
 }

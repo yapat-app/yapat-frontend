@@ -21,13 +21,13 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
         </div>
         <div className="flex items-center justify-end gap-3 pt-1">
           <ExportAnnotationButton datasetId={dataset.id} />
-          <GenerateFeedModal datasetId={parseInt(dataset.id, 10)} />
+          <GenerateFeedModal datasetId={dataset.id} />
         </div>
       </div>
       Annotation stats
       {datasetAnnotations.datasets
-        ?.filter((d) => d.dataset_id === 1)
-        .map((d) => (
+        ?.filter((d: any) => d.dataset_id === 1)
+        .map((d: any) => (
           <div
             key={d.dataset_id}
             className="grid grid-cols-3 gap-3 text-center"

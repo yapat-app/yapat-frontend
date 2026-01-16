@@ -10,9 +10,12 @@ import type { Snippet, FeedParams, FeedSimilarityCreate } from "../../types";
 
 export interface SnippetState {
   snippets: Snippet[];
+  selectedFeedId: number | null;
   currentSnippet: Snippet | null;
   currentSnippetAudio: string | null;
   currentIndex: number;
+  snippetsFetched: boolean;
+  snippetsLoaded: boolean;
   loading: boolean;
   snippetsLoading: boolean;
   error: string | null;
@@ -22,9 +25,12 @@ export interface SnippetState {
 const initialState: SnippetState = {
   snippets: [],
   currentSnippet: null,
+  selectedFeedId: null,
   currentSnippetAudio: null,
   currentIndex: 0,
   loading: false,
+  snippetsFetched: false,
+  snippetsLoaded: false,
   snippetsLoading: false,
   error: null,
   hasMore: true,
@@ -156,9 +162,26 @@ export const snippetSlice = createSlice({
     clearSnippets: (state) => {
       state.snippets = [];
       state.currentSnippet = null;
+      state.snippetsFetched = false;
       state.currentIndex = 0;
       state.hasMore = true;
+      state.selectedFeedId = null;
       state.error = null;
+    },
+
+    setFeedId: (state, action) => {
+      state.selectedFeedId = action.payload;
+    },
+    // load snippets manually
+    loadSnippets: (state, action) => {
+      state.snippets = action.payload.response;
+      state.selectedFeedId = action.payload.id;
+      state.snippetsFetched = true;
+      state.snippetsLoaded = true;
+      state.currentSnippet = action.payload.response[0];
+      state.currentIndex = state.snippets.findIndex(
+        (s) => s.id === action.payload.response[0].id
+      );
     },
 
     //Clear error message
@@ -172,10 +195,12 @@ export const snippetSlice = createSlice({
       // Fetch feed
       .addCase(fetchSnippetFeed.pending, (state) => {
         state.snippetsLoading = true;
+
         state.error = null;
       })
       .addCase(fetchSnippetFeed.fulfilled, (state, action) => {
         state.snippetsLoading = false;
+        state.snippetsFetched = true;
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
 
@@ -187,6 +212,7 @@ export const snippetSlice = createSlice({
       })
       .addCase(fetchSnippetFeed.rejected, (state, action) => {
         state.snippetsLoading = false;
+        state.snippetsFetched = false;
         state.error = action.payload as string;
       })
       // Fetch similarity feed
@@ -196,6 +222,7 @@ export const snippetSlice = createSlice({
       })
       .addCase(fetchSimilaritySnippetFeed.fulfilled, (state, action) => {
         state.snippetsLoading = false;
+        state.snippetsFetched = true;
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
         // Set first snippet as current if none set
@@ -206,6 +233,7 @@ export const snippetSlice = createSlice({
       })
       .addCase(fetchSimilaritySnippetFeed.rejected, (state, action) => {
         state.snippetsLoading = false;
+        state.snippetsFetched = false;
         state.error = action.payload as string;
       })
 
@@ -259,6 +287,8 @@ export const {
   moveToPreviousSnippet,
   markCurrentAsAnnotated,
   clearSnippets,
+  loadSnippets,
+  setFeedId,
   clearError,
 } = snippetSlice.actions;
 

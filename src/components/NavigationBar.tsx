@@ -49,10 +49,15 @@ export const NavigationBar = () => {
           <div className="nav_tabs" onClick={() => navigateTab("/annotate")}>
             Annotate
           </div>
+          <div className="nav_tabs" onClick={() => navigateTab("/history")}>
+            Feed History
+          </div>
           <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
             Teams
           </div>
-          <div className="nav_tabs">Documentation</div>
+          <div className="nav_tabs" onClick={() => navigateTab("/docs")}>
+            Documentation
+          </div>
         </div>
         <div id="orgLogos" className="flex gap-4 items-center">
           <div>

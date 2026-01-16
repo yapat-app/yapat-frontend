@@ -4,7 +4,7 @@
  * Manages data fetching and state management for the annotation workflow
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   fetchSnippetFeed,
@@ -12,6 +12,7 @@ import {
   moveToPreviousSnippet,
   markCurrentAsAnnotated,
   clearSnippets,
+  loadSnippets,
 } from "../redux/features/snippetSlice";
 import {
   fetchAnnotations,
@@ -21,6 +22,7 @@ import { annotationApi } from "../services/api";
 import { message } from "antd";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { clearEmbedding } from "../redux/features/embeddingSlice";
+import { getFeedHistory } from "../redux/features/feedSlice";
 
 interface UseAnnotationWorkflowParams {
   datasetId: string | null;
@@ -32,10 +34,20 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
   const datasetId = searchParams.get("dataset_id");
+  const feedId = searchParams.get("feed_id");
+  const isFirstRender = useRef(true);
+  const {
+    snippets,
+    currentSnippet,
+    currentIndex,
+    loading,
+    selectedFeedId,
+    error,
+    snippetsFetched,
+  } = useAppSelector((state) => state.snippet);
 
-  const { snippets, currentSnippet, currentIndex, loading, error } =
-    useAppSelector((state) => state.snippet);
   const { annotations } = useAppSelector((state) => state.annotation);
+  const { feedHistory } = useAppSelector((state) => state.feed);
 
   // Track which snippets have annotations (Set of snippet IDs)
   const [snippetsWithAnnotations, setSnippetsWithAnnotations] = useState<
@@ -67,14 +79,29 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   });
 
   useEffect(() => {
-    if (snippets && snippets.length > 0) {
-      message.success(
-        `${snippets.length} snippets feed generated for dataset#${datasetId}`
-      );
-    } else {
-      navigator(`/datasets`);
+    dispatch(getFeedHistory());
+  }, []);
+
+  useEffect(() => {
+    console.log("inside annotation workflow");
+    if (feedHistory && feedHistory.length > 0 && snippets.length === 0) {
+      dispatch(loadSnippets(feedHistory[0]));
     }
-  }, [snippets]);
+  }, [feedHistory]);
+
+  useEffect(() => {
+    if (snippetsFetched) {
+      message.success(
+        `${snippets.length} snippets feed generated  ${
+          datasetId
+            ? `for dataset# ${datasetId}`
+            : `from Feed# ${selectedFeedId}`
+        }`
+      );
+    } else if (snippets.length > 0) {
+      return;
+    }
+  }, [snippetsFetched]);
 
   //Load annotations for current snippet
   useEffect(() => {

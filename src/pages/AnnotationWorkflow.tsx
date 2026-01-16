@@ -22,6 +22,7 @@ export const AnnotationWorkflow: React.FC = () => {
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
   const datasetId = searchParams.get("dataset_id");
+  const feedId = searchParams.get("feed_id");
 
   // Use custom hook for workflow logic
   const {
@@ -117,6 +118,7 @@ export const AnnotationWorkflow: React.FC = () => {
               {datasetId && (
                 <span className="ml-2">(Dataset #{datasetId})</span>
               )}
+              {feedId && <span className="ml-2">(Feed #{feedId})</span>}
             </p>
           </div>
 

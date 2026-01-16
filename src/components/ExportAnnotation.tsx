@@ -7,7 +7,7 @@ import type { MenuProps } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 
 type ExportAnnotationButtonProps = {
-  datasetId: string;
+  datasetId: number;
 };
 
 export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({

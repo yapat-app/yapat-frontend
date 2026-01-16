@@ -1,16 +1,23 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { feedApi, getErrorMessage } from "../../services/api";
-import type { Feed, FeedCreate, FeedSimilarityCreate } from "../../types";
+import type {
+  Snippet,
+  Feed,
+  FeedCreate,
+  FeedSimilarityCreate,
+} from "../../types";
 
 export interface FeedState {
   feed: Feed[] | null;
+  feedHistory: Snippet[] | null;
   loading: boolean;
   error: string | null;
 }
 
 const initialState: FeedState = {
   feed: null,
+  feedHistory: [],
   loading: false,
   error: null,
 };
@@ -27,6 +34,20 @@ export const createFeed = createAsyncThunk(
   async (data: FeedCreate, { rejectWithValue }) => {
     try {
       return await feedApi.create(data);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+/**
+ * Get Feed History
+ */
+export const getFeedHistory = createAsyncThunk(
+  "feed/history",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await feedApi.history();
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -69,6 +90,19 @@ export const feedSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
         state.feed = null;
+      })
+      .addCase(getFeedHistory.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getFeedHistory.fulfilled, (state, action) => {
+        state.loading = false;
+        state.feedHistory = action.payload;
+      })
+      .addCase(getFeedHistory.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.feedHistory = null;
       })
       .addCase(createSimilarityFeed.pending, (state) => {
         state.loading = true;
