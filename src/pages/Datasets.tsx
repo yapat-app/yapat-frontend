@@ -28,7 +28,6 @@ export const Datasets = () => {
   const { user } = useAppSelector((state: any) => state.auth);
   const { invitationLoading, invitationCreated, invitationLinkToken } =
     useAppSelector((state: any) => state.invitation);
-    const {}
   const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
     (state) => state.dataset
   );

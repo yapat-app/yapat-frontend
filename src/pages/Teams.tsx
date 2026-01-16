@@ -24,7 +24,11 @@ export const Teams = () => {
   const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
     (state) => state.dataset
   );
-  const [teamInfo, setTeamInfo] = useState({
+  const [teamInfo, setTeamInfo] = useState<{
+    name: string;
+    description: string;
+    dataset_id: string | null;
+  }>({
     name: "",
     description: "",
     dataset_id: null,

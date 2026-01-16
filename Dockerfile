@@ -14,7 +14,8 @@ RUN npm install
 COPY . .
 
 # Build the application
-RUN npm run build
+
+RUN npx vite build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
