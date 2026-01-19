@@ -4,6 +4,8 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
+
 // import React from "react";
 
 export const NavigationBar = () => {
@@ -61,10 +63,7 @@ export const NavigationBar = () => {
         </div>
         <div id="orgLogos" className="flex gap-4 items-center">
           <div>
-            <img
-              className="nav_logo_dfki"
-              src="/src/assets/Logos/dfki_Logo_digital_black.png"
-            ></img>
+            <img className="nav_logo_dfki" src={DFKI_logo}></img>
           </div>
 
           <Button

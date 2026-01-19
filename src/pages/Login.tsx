@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 // import { useDispatch, useSelector } from "react-redux";
 import { loginAsync, registerAsync } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
+import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
 
 export const Login = () => {
   const dispatch = useAppDispatch();
@@ -71,10 +72,7 @@ export const Login = () => {
   return (
     <div className=" h-full max-h-full">
       <div>
-        <img
-          className="nav_logo_dfki"
-          src="/src/assets/Logos/dfki_Logo_digital_black.png"
-        ></img>
+        <img className="nav_logo_dfki" src={DFKI_logo}></img>
       </div>
       <div className=" w-full   min-h-[80%]  flex items-center justify-center">
         <form className=" w-1/4" onSubmit={role ? register : login}>
@@ -138,8 +136,6 @@ export const Login = () => {
                 id="role"
                 type="text"
                 value={role}
-                // onChange={onValueChange}
-                // onChange={onValidationChange}
               />
             </div>
           )}
