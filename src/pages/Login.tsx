@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router-dom";
 // import { useDispatch, useSelector } from "react-redux";
 import { loginAsync, registerAsync } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
+import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 
 export const Login = () => {
   const dispatch = useAppDispatch();

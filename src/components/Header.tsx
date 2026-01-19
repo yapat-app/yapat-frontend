@@ -1,5 +1,5 @@
 import { type ReactElement } from "react";
-import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
+import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 
 export const Header = (): ReactElement => {
   return (
