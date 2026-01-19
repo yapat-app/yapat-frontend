@@ -22,7 +22,7 @@ export const createInvitation = createAsyncThunk(
   async (body: any, thunkApi) => {
     try {
       const response = await api.post(
-        `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/invitations`,
+        `/api/invitations`,
         body,
       );
       return response.data;

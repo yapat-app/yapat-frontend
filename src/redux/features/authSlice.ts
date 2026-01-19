@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { ReactNode } from "react";
-import axios from "axios";
 import api from "../../axios/axiosInstance";
 
 export interface Auth {
@@ -41,8 +40,8 @@ export const loginAsync = createAsyncThunk<
   "auth/login",
   async (body, thunkApi) => {
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/auth/login`,
+      const response = await api.post(
+        `/api/auth/login`,
         body,
       );
       return response.data;
@@ -65,8 +64,8 @@ export const registerAsync = createAsyncThunk<
   "auth/register",
   async (body, thunkApi) => {
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/auth/register`,
+      const response = await api.post(
+        `/api/auth/register`,
         body,
       );
       return response.data;
