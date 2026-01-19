@@ -1,47 +1,15 @@
-import React, { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
-import { Flex, Space, Modal, Button, Checkbox, message } from "antd";
-
-import type { CheckboxProps } from "antd";
-import type { TableProps } from "antd";
-import { GenerateFeedModal } from "../components/GenerateFeed";
-import { ExportAnnotationButton } from "../components/ExportAnnotation";
 import { DatasetCard } from "../components/DatasetCard";
 import { clearSnippets } from "../redux/features/snippetSlice";
-import { clearEmbedding } from "../redux/features/embeddingSlice";
 
 export const Datasets = () => {
   const dispatch = useAppDispatch();
-
-  const { user } = useAppSelector((state: any) => state.auth);
   const { snippets } = useAppSelector((state: any) => state.snippet);
   const { allDatasets } = useAppSelector((state) => state.dataset);
-  interface DataType {
-    id: string;
-    name: string;
-  }
-
-  const columns: TableProps<DataType>["columns"] = [
-    {
-      title: "dataset Name",
-      dataIndex: "name",
-      key: "name",
-      render: (text) => <a>{text}</a>,
-    },
-
-    {
-      title: "Action",
-      key: "action",
-      render: (_, record) => (
-        <Space size="middle">
-          <a>Delete</a>
-        </Space>
-      ),
-    },
-  ];
 
   //clear embeddings and snippets flags
   useEffect(() => {
@@ -79,7 +47,7 @@ export const Datasets = () => {
                   <h2 className="card_heading_text">Available Datasets</h2>
                 </div>
                 <div className="flex flex-col gap-3">
-                  {allDatasets.map((dataset, index) => (
+                  {allDatasets.map((dataset) => (
                     <DatasetCard key={dataset.id} dataset={dataset} />
                   ))}
                 </div>

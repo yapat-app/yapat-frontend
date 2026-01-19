@@ -4,9 +4,9 @@
  * Main page for annotating audio snippets
  */
 
-import React, { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { Spin, Empty, Alert, message } from "antd";
+import React, { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Spin, Empty, Alert } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
 import { AnnotationForm } from "../components/AnnotationForm";
 import { AnnotationStatistics } from "../components/AnnotationStatistics";
@@ -17,7 +17,6 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigator = useNavigate();
   const [modalVisible, setModalVisible] = useState(false);
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)

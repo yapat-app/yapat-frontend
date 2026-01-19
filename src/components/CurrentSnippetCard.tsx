@@ -9,17 +9,14 @@
  */
 
 import React from "react";
-import { Card, Tag, Space, Button, Dropdown } from "antd";
+import { Card, Tag, Space, Button } from "antd";
 import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
-import type { Snippet, Annotation, ExportAnnotation } from "../types";
-import { exportAllAnnotations } from "../redux/features/datasetSlice";
-import { useAppDispatch, useAppSelector } from "../hooks";
-import { useSearchParams } from "react-router-dom";
+import type { Snippet, Annotation } from "../types";
 
 interface CurrentSnippetCardProps {
   snippet: Snippet;
@@ -40,8 +37,6 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   canGoPrevious,
   canGoNext,
 }) => {
-  const [searchParams] = useSearchParams();
-
   return (
     <Card className="mb-4 shadow-md">
       <div className="flex justify-between items-start mb-4">

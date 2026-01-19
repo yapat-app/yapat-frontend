@@ -1,21 +1,11 @@
-import React, {
-  useEffect,
-  useState,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import {
-  fetchAllDatasets,
-  selectDataset,
-} from "../redux/features/datasetSlice";
-import { createFeed, createSimilarityFeed } from "../redux/features/feedSlice";
+import { selectDataset } from "../redux/features/datasetSlice";
 import {
   fetchSimilaritySnippetFeed,
   fetchSnippetFeed,
 } from "../redux/features/snippetSlice";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Select, Modal, Button, Form, Input, message, Steps } from "antd";
 const { Option } = Select;
 import {
@@ -29,11 +19,10 @@ import { UploadSampleAudio } from "./UploadingAudio";
 export const GenerateFeedModal = ({
   datasetId,
 }: {
-  datasetId: number | null;
+  datasetId: number | null | string;
 }) => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
-  const hasNavigatedRef = useRef(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
@@ -114,7 +103,7 @@ export const GenerateFeedModal = ({
     (value: { audioFile: File | null; startSec: number; endSec: number }) => {
       setSimilarityState(value);
     },
-    []
+    [],
   );
 
   const onChangeFeedParams = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +116,7 @@ export const GenerateFeedModal = ({
 
   const showModal = async () => {
     setIsModalOpen(true);
-    dispatch(selectDataset(datasetId));
+    dispatch(selectDataset(datasetId ? Number(datasetId) : null));
     dispatch(getAllEmbeddingMethods());
   };
 
@@ -141,7 +130,7 @@ export const GenerateFeedModal = ({
           dataset_id: selectedDatasetId,
           limit: feedParams.limit,
           method: feedMethod,
-        })
+        }),
       );
     }
     // create similarity feed
@@ -245,7 +234,7 @@ export const GenerateFeedModal = ({
                 loading={snippetsLoading}
                 type="primary"
                 onClick={handleSubmit}
-                className="!w-full"
+                className="w-full!"
               >
                 {snippetsLoading ? "...Generating Feed" : "Generate Feed"}
               </Button>
@@ -294,10 +283,10 @@ export const GenerateFeedModal = ({
                             step_size: 0,
                             overlap: 0,
                           },
-                        })
+                        }),
                       )
                     }
-                    className="!w-full"
+                    className="w-full!"
                   >
                     {embeddingLoading
                       ? "Generating Embeddings"

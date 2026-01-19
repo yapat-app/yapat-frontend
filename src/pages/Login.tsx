@@ -11,10 +11,9 @@ export const Login = () => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
-  const [teamOwnerInvitation, setTeamOwnerInvitation] = useState(false);
   const invitationToken = searchParams.get("invitation_token");
-  const { accessToken, loginSuccess, registerSuccess } = useAppSelector(
-    (state: any) => state.auth
+  const { loginSuccess, registerSuccess } = useAppSelector(
+    (state: any) => state.auth,
   );
 
   const [username, setUsername] = useState("");
@@ -23,7 +22,6 @@ export const Login = () => {
 
   useEffect(() => {
     if (invitationToken) {
-      setTeamOwnerInvitation(true);
       console.log("invitationToken", invitationToken);
       setRole("team_owner");
     }
@@ -53,7 +51,7 @@ export const Login = () => {
       loginAsync({
         username: username,
         password: password,
-      })
+      }),
     );
   };
 
@@ -65,7 +63,7 @@ export const Login = () => {
         password: password,
         role: role,
         invitation_token: invitationToken,
-      })
+      }),
     );
   };
 

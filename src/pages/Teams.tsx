@@ -1,17 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
-import {
-  Space,
-  Table,
-  Card,
-  Modal,
-  Button,
-  Checkbox,
-  Input,
-  Select,
-} from "antd";
+import { Space, Table, Card, Modal, Button, Input, Select } from "antd";
 import type { TableProps } from "antd";
 import { fetchAllteams, createTeam } from "../redux/features/teamSlice";
 import { InviteTeamModal } from "../components/InviteTeamModal";
@@ -23,7 +14,7 @@ export const Teams = () => {
   const { allTeams, teamCreated } = useAppSelector((state) => state.team);
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
-    (state) => state.dataset
+    (state) => state.dataset,
   );
   const [teamInfo, setTeamInfo] = useState({
     name: "",
@@ -59,7 +50,7 @@ export const Teams = () => {
       createTeam({
         name: teamInfo.name,
         description: teamInfo.description,
-      })
+      }),
     );
   };
 
@@ -84,7 +75,7 @@ export const Teams = () => {
     {
       title: "Action",
       key: "action",
-      render: (_, record) => (
+      render: (_) => (
         <Space size="middle">
           <a onClick={() => setIsDatasetModalOpen(true)}>Dataset Access</a>
         </Space>
@@ -98,10 +89,6 @@ export const Teams = () => {
 
   const handleCancel = () => {
     setIsModalOpen(false);
-  };
-
-  const showDatasetModal = () => {
-    setIsDatasetModalOpen(true);
   };
 
   const handleDatasetCancel = () => {

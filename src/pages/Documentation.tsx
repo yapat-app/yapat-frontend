@@ -208,8 +208,6 @@ const MANUAL_TABS: ManualTab[] = [
 export const YapatUserManual: React.FC<YapatUserManualProps> = ({
   title = "User Manual",
   subtitle = "A complete guide to using YAPAT for PAM dataset management, AI-assisted annotation, and eco-acoustic analysis.",
-  activeTab = "getting-started",
-  onTabChange,
 }) => {
   return (
     <div>

@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
 import type { ReactNode } from "react";
 import axios from "axios";
 import api from "../../axios/axiosInstance";
@@ -44,13 +43,13 @@ export const loginAsync = createAsyncThunk<
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/auth/login`,
-        body
+        body,
       );
       return response.data;
     } catch (error: JSON | any) {
       return thunkApi.rejectWithValue(error.response.data);
     }
-  }
+  },
 );
 
 export const registerAsync = createAsyncThunk<
@@ -68,13 +67,13 @@ export const registerAsync = createAsyncThunk<
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/auth/register`,
-        body
+        body,
       );
       return response.data;
     } catch (error: JSON | any) {
       return thunkApi.rejectWithValue(error.response.data);
     }
-  }
+  },
 );
 
 export const getLoggedInUser = createAsyncThunk(
@@ -90,7 +89,7 @@ export const getLoggedInUser = createAsyncThunk(
     } catch (error: JSON | any) {
       return thunkAPI.rejectWithValue(error.response.data);
     }
-  }
+  },
 );
 
 export const authSlice = createSlice({
@@ -98,13 +97,6 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     // Your original sync login
-    login: (
-      state,
-      action: PayloadAction<{ name: string; password: string }>
-    ) => {
-      //   state.name = action.payload.name;
-      //   state.password = action.payload.password;
-    },
     logout: (state) => {
       state.accessToken = null;
       state.loginSuccess = false;
@@ -162,5 +154,5 @@ export const authSlice = createSlice({
 });
 
 // Export actions and reducer
-export const { login, logout } = authSlice.actions;
+export const { logout } = authSlice.actions;
 export default authSlice.reducer;

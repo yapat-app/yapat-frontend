@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAppDispatch } from "../hooks";
 import { useSelector } from "react-redux";
@@ -7,7 +7,7 @@ import { fetchSnippetAudio } from "../redux/features/snippetSlice";
 export const AudioPlayerPlaceholder: React.FC = () => {
   const dispatch = useAppDispatch();
   const { currentSnippetAudio, currentSnippet } = useSelector(
-    (state: any) => state.snippet
+    (state: any) => state.snippet,
   );
 
   // Fetch audio when snippet changes

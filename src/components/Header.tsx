@@ -1,8 +1,7 @@
-import React, { type ReactElement } from "react";
-type HeadingProps = { title: string };
+import { type ReactElement } from "react";
 import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
 
-export const Header = ({ title }: HeadingProps): ReactElement => {
+export const Header = (): ReactElement => {
   return (
     <div>
       <div>

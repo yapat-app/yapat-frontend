@@ -61,7 +61,7 @@ export interface DatasetAnnotationStats {
 }
 
 export interface ExportAnnotation {
-  dataset_id: number | null;
+  dataset_id: number | null | string;
   format: string;
   taxon_id?: string;
   user_id?: number | null;
@@ -165,6 +165,8 @@ export interface Snippet {
   is_annotated?: boolean;
   created_at: string;
   updated_at?: string;
+  method?: string;
+  response?: string | undefined;
 }
 
 export interface SnippetCreate {
@@ -205,7 +207,7 @@ export interface RecordingCreate {
 // ============================================================================
 
 export interface Dataset {
-  id: number;
+  id: number | string;
   name: string;
   description?: string;
   source_uri?: string;

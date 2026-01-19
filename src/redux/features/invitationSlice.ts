@@ -1,6 +1,4 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
 
 export interface InvitationState {
@@ -25,13 +23,13 @@ export const createInvitation = createAsyncThunk(
     try {
       const response = await api.post(
         `${import.meta.env.VITE_YAPAT_BACKEND_URL}/api/invitations`,
-        body
+        body,
       );
       return response.data;
     } catch (error: JSON | any) {
       return thunkApi.rejectWithValue(error.response.data);
     }
-  }
+  },
 );
 
 export const invitationSlice = createSlice({

@@ -2,7 +2,7 @@ import { Button } from "antd";
 import { TbLogout } from "react-icons/tb";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
 
@@ -11,9 +11,8 @@ import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
 export const NavigationBar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
-  const localAccessToken = localStorage.getItem("accessToken");
   const { accessToken, isAuthenticated } = useAppSelector(
-    (state) => state.auth
+    (state) => state.auth,
   );
 
   const navigateTab = (url: string) => {

@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
 import { feedApi, getErrorMessage } from "../../services/api";
 import type {
   Snippet,
@@ -37,7 +36,7 @@ export const createFeed = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 /**
@@ -51,7 +50,7 @@ export const getFeedHistory = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 /**
@@ -65,7 +64,7 @@ export const createSimilarityFeed = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 // ============================================================================

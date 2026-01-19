@@ -1,6 +1,6 @@
 /**
  * Species Autocomplete Component
- * 
+ *
  * Provides real-time species name suggestions as users type
  * Uses GBIF taxonomy service via backend API
  */
@@ -10,7 +10,10 @@ import { AutoComplete, Spin } from "antd";
 import type { DefaultOptionType } from "antd/es/select";
 import { debounce } from "lodash";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { getSuggestions, clearSuggestions } from "../redux/features/taxonomySlice";
+import {
+  getSuggestions,
+  clearSuggestions,
+} from "../redux/features/taxonomySlice";
 
 interface SpeciesAutocompleteProps {
   value?: string;
@@ -43,7 +46,7 @@ export const SpeciesAutocomplete: React.FC<SpeciesAutocompleteProps> = ({
         dispatch(clearSuggestions());
       }
     }, 300),
-    [dispatch]
+    [dispatch],
   );
 
   /**
@@ -58,14 +61,16 @@ export const SpeciesAutocomplete: React.FC<SpeciesAutocompleteProps> = ({
    * Handle selection from dropdown
    */
   const handleSelect = (value: string, option: DefaultOptionType) => {
+    console.log("Selected:", value, option);
     const taxonId = option.taxonId as string;
     // Get the canonical name from the original suggestion
-    const selectedTaxon = suggestions.find(t => t.taxon_id === taxonId);
-    const displayName = selectedTaxon?.canonical_name || selectedTaxon?.scientific_name || "";
-    
+    const selectedTaxon = suggestions.find((t) => t.taxon_id === taxonId);
+    const displayName =
+      selectedTaxon?.canonical_name || selectedTaxon?.scientific_name || "";
+
     setSearchValue(displayName);
     onChange?.(displayName, taxonId);
-    
+
     // Clear suggestions after selection
     dispatch(clearSuggestions());
   };
@@ -89,14 +94,16 @@ export const SpeciesAutocomplete: React.FC<SpeciesAutocompleteProps> = ({
     const rank = taxon.rank;
     const kingdom = taxon.kingdom;
     const status = taxon.status;
-    
+
     return {
       value: taxon.taxon_id,
       label: (
         <div className="py-1.5">
           <div className="flex items-center justify-between">
             <span className="font-medium text-gray-900">{displayName}</span>
-            <span className="text-xs text-gray-400 font-mono ml-2">ID: {taxonIdNumber}</span>
+            <span className="text-xs text-gray-400 font-mono ml-2">
+              ID: {taxonIdNumber}
+            </span>
           </div>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {rank && (
@@ -113,14 +120,19 @@ export const SpeciesAutocomplete: React.FC<SpeciesAutocompleteProps> = ({
               </span>
             )}
             {scientificName && scientificName !== canonicalName && (
-              <span className="text-xs text-blue-600 italic">{scientificName}</span>
+              <span className="text-xs text-blue-600 italic">
+                {scientificName}
+              </span>
             )}
           </div>
         </div>
       ),
       taxonId: taxon.taxon_id,
       taxonIdNumber,
-      scientificName: scientificName && scientificName !== canonicalName ? scientificName : null,
+      scientificName:
+        scientificName && scientificName !== canonicalName
+          ? scientificName
+          : null,
       rank,
       kingdom,
       status,
@@ -155,4 +167,3 @@ export const SpeciesAutocomplete: React.FC<SpeciesAutocompleteProps> = ({
     />
   );
 };
-
