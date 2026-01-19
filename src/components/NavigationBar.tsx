@@ -2,16 +2,17 @@ import { Button } from "antd";
 import { TbLogout } from "react-icons/tb";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import DFKI_logo from "../../src/assets/Logos/dfki_Logo_digital_black.png";
+
 // import React from "react";
 
 export const NavigationBar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
-  const localAccessToken = localStorage.getItem("accessToken");
   const { accessToken, isAuthenticated } = useAppSelector(
-    (state) => state.auth
+    (state) => state.auth,
   );
 
   const navigateTab = (url: string) => {
@@ -46,17 +47,22 @@ export const NavigationBar = () => {
           <div className="nav_tabs" onClick={() => navigateTab("/datasets")}>
             Datasets
           </div>
+          <div className="nav_tabs" onClick={() => navigateTab("/annotate")}>
+            Annotate
+          </div>
+          <div className="nav_tabs" onClick={() => navigateTab("/history")}>
+            Feed History
+          </div>
           <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
             Teams
           </div>
-          <div className="nav_tabs">Documentation</div>
+          <div className="nav_tabs" onClick={() => navigateTab("/docs")}>
+            Documentation
+          </div>
         </div>
         <div id="orgLogos" className="flex gap-4 items-center">
           <div>
-            <img
-              className="nav_logo_dfki"
-              src="/src/assets/Logos/dfki_Logo_digital_black.png"
-            ></img>
+            <img className="nav_logo_dfki" src={DFKI_logo}></img>
           </div>
 
           <Button

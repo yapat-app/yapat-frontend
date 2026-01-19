@@ -1,6 +1,4 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
 
 export interface TeamState {
@@ -29,7 +27,7 @@ export const createTeam = createAsyncThunk(
   async (body: any) => {
     const response = await api.post("/api/teams", body);
     return response.data;
-  }
+  },
 );
 
 export const fetchTeamDatasets = createAsyncThunk(
@@ -37,7 +35,7 @@ export const fetchTeamDatasets = createAsyncThunk(
   async (body: any) => {
     const response = await api.post("/api/teams/available-datasets", body);
     return response.data;
-  }
+  },
 );
 
 export const teamSlice = createSlice({
@@ -48,10 +46,10 @@ export const teamSlice = createSlice({
     builder.addCase(fetchAllteams.fulfilled, (state, action) => {
       state.allTeams = action.payload;
     });
-    builder.addCase(createTeam.fulfilled, (state, action) => {
+    builder.addCase(createTeam.fulfilled, (state) => {
       state.teamCreated = true;
     });
-    builder.addCase(fetchTeamDatasets.fulfilled, (state, action) => {
+    builder.addCase(fetchTeamDatasets.fulfilled, (state) => {
       state.teamCreated = true;
     });
   },
