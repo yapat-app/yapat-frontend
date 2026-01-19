@@ -86,10 +86,9 @@ export const snippetApi = {
       return `/mock-audio/snippet-${snippetId}.wav`;
     }
 
-    // Real audio URL from backend
-    return `${
-      import.meta.env.VITE_YAPAT_BACKEND_URL
-    }/api/snippets/${snippetId}/audio`;
+    // Real audio URL from backend - use api instance baseURL
+    const baseURL = api.defaults.baseURL || "http://localhost:8000";
+    return `${baseURL}/api/snippets/${snippetId}/audio`;
   },
 
   /**
