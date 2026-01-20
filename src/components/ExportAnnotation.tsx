@@ -1,13 +1,13 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useAppDispatch, useAppSelector } from "../hooks";
-import { Card, Tag, Space, Button, Dropdown } from "antd";
+import React from "react";
+import { useAppDispatch } from "../hooks";
+import { Space, Button, Dropdown } from "antd";
 import type { ExportAnnotation } from "../types";
 import { exportAllAnnotations } from "../redux/features/datasetSlice";
 import type { MenuProps } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 
 type ExportAnnotationButtonProps = {
-  datasetId: number;
+  datasetId: string | number;
 };
 
 export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({

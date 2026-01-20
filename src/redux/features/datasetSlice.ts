@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
 import type { ExportAnnotation } from "../../types";
 
@@ -9,6 +8,10 @@ export interface DatasetState {
   annotationExported: boolean;
   selectedDatasetId: number | null;
   loading: boolean;
+}
+
+interface AnnotationState {
+  selectedDatasetId: number | null | string; // <-- allow null
 }
 
 const initialState: DatasetState = {
@@ -26,7 +29,7 @@ export const fetchAllDatasets = createAsyncThunk(
       id: dataset.id,
       name: dataset.name,
     }));
-  }
+  },
 );
 
 export const exportAllAnnotations = createAsyncThunk(
@@ -34,7 +37,7 @@ export const exportAllAnnotations = createAsyncThunk(
   async (data: ExportAnnotation) => {
     const response = await api.get(
       `/api/datasets/${data.dataset_id}/annotations/export?format=${data.format}`,
-      { responseType: "blob" }
+      { responseType: "blob" },
     );
     // Create a blob URL and trigger download
     const blob = new Blob([response.data], { type: "text/csv;charset=utf-8" });
@@ -49,14 +52,17 @@ export const exportAllAnnotations = createAsyncThunk(
     URL.revokeObjectURL(url);
 
     return;
-  }
+  },
 );
 
 export const datasetSlice = createSlice({
   name: "dataset",
   initialState,
   reducers: {
-    selectDataset: (state, action: PayloadAction<number | null>) => {
+    selectDataset: (
+      state: AnnotationState,
+      action: PayloadAction<number | null>,
+    ) => {
       state.selectedDatasetId = action.payload;
     },
   },
@@ -64,14 +70,14 @@ export const datasetSlice = createSlice({
     builder.addCase(fetchAllDatasets.fulfilled, (state, action) => {
       state.allDatasets = action.payload;
     });
-    builder.addCase(exportAllAnnotations.pending, (state, action) => {
+    builder.addCase(exportAllAnnotations.pending, (state) => {
       state.loading = true;
     });
-    builder.addCase(exportAllAnnotations.fulfilled, (state, action) => {
+    builder.addCase(exportAllAnnotations.fulfilled, (state) => {
       state.annotationExported = true;
       state.loading = false;
     });
-    builder.addCase(exportAllAnnotations.rejected, (state, action) => {
+    builder.addCase(exportAllAnnotations.rejected, (state) => {
       state.loading = false;
       state.annotationExported = false;
     });

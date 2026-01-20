@@ -1,8 +1,18 @@
 import axios from "axios";
 import store from "../redux/store";
 
+// Get base URL from runtime config (for Docker) or build-time env (for dev)
+const getBaseURL = () => {
+  // Check for runtime config (Docker/production)
+  if (typeof window !== "undefined" && (window as any).__ENV__?.VITE_YAPAT_BACKEND_URL) {
+    return (window as any).__ENV__.VITE_YAPAT_BACKEND_URL;
+  }
+  // Fall back to build-time env variable (development)
+  return import.meta.env.VITE_YAPAT_BACKEND_URL || "http://localhost:8000";
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_YAPAT_BACKEND_URL,
+  baseURL: getBaseURL(),
 });
 
 api.interceptors.request.use(

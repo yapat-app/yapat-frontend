@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Card, Tag, Row, Col, Typography, Space, Button } from "antd";
+import { Card, Tag, Typography, Space, Button } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getFeedHistory } from "../redux/features/feedSlice";
@@ -11,28 +11,6 @@ import {
 import { useNavigate } from "react-router-dom";
 
 const { Title, Text } = Typography;
-
-/* ----------------------------------
- Types
------------------------------------*/
-
-type FeedHistoryItem = {
-  id: string;
-  feedMethod: "random" | "similarity";
-  snippetCount: number;
-  createdAt: string;
-  status: "completed" | "in-progress" | "failed";
-  datasetName: string;
-};
-
-/* ----------------------------------
- Helpers
------------------------------------*/
-
-const feedMethodColorMap: Record<FeedHistoryItem["feedMethod"], string> = {
-  random: "default",
-  similarity: "purple",
-};
 
 /* ----------------------------------
  Component
@@ -94,14 +72,12 @@ export const FeedHistory: React.FC = () => {
                         <Space direction="vertical" size="small">
                           <Text>
                             <strong>Feed Method:</strong>{" "}
-                            <Tag color={feedMethodColorMap[feed.method]}>
-                              {feed.method}
-                            </Tag>
+                            <Tag>{feed.method}</Tag>
                           </Text>
 
                           <Text>
                             <strong>Snippets Generated:</strong>{" "}
-                            {feed.response.length}
+                            {feed.response?.length}
                           </Text>
 
                           <Text>

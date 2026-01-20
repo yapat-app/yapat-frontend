@@ -1,33 +1,25 @@
-import React, { useEffect, useState } from "react";
-import {
-  Space,
-  Table,
-  Card,
-  Modal,
-  Button,
-  Checkbox,
-  Input,
-  Select,
-} from "antd";
-import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchAllTeamMembers } from "../redux/features/teamSlice";
+import { useState } from "react";
+import { Modal } from "antd";
+// import type { TableProps } from "antd";
+// import { useAppDispatch, useAppSelector } from "../hooks";
+// import { fetchAllTeamMembers } from "../redux/features/teamSlice";
 
 export const TeamMemberModal = ({
   record,
 }: {
   record: { name: "string"; id: number };
 }) => {
-  const dispatch = useAppDispatch();
-  const { allTeamMembers } = useAppSelector((state) => state.team);
+  // const dispatch = useAppDispatch();
+  // const { allTeamMembers } = useAppSelector((state) => state.team);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  interface DataType {
-    membership_id: number;
-    user_id: number;
-    username: "string";
-    full_name: "string";
-    role: "owner";
-  }
+  // interface DataType {
+  //   membership_id: number;
+  //   user_id: number;
+  //   username: "string";
+  //   full_name: "string";
+  //   role: "owner";
+  // }
 
   const showModal = () => {
     setIsModalOpen(true);
@@ -39,23 +31,13 @@ export const TeamMemberModal = ({
 
   const createTeamMemberInvitationLink = () => {};
 
-  const columns: TableProps<DataType>["columns"] = [
-    {
-      title: "Member Name",
-      dataIndex: "username",
-      key: "username",
-      render: (text) => <a>{text}</a>,
-    },
-
-  ];
-
-  useEffect(() => {
-    if (isModalOpen) {
-      if (record.id) {
-        dispatch(fetchAllTeamMembers(record.id));
-      }
-    }
-  }, [isModalOpen]);
+  // useEffect(() => {
+  //   if (isModalOpen) {
+  //     if (record.id) {
+  //       dispatch(fetchAllTeamMembers(record.id));
+  //     }
+  //   }
+  // }, [isModalOpen]);
 
   return (
     <div>
@@ -73,13 +55,13 @@ export const TeamMemberModal = ({
 
         // footer={invitationCreated ? null : undefined}
       >
-        {allTeamMembers && allTeamMembers.length > 0 ? (
+        {/* {allTeamMembers && allTeamMembers.length > 0 ? (
           <Table<DataType> columns={columns} dataSource={allTeamMembers} />
         ) : (
           <div>
             <p> No teams to display</p>
           </div>
-        )}
+        )} */}
       </Modal>
     </div>
   );

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAppSelector, useAppDispatch } from "../hooks";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
-import { Button, Form } from "antd";
+import { Form } from "antd";
 
 type UploadedSnippetPlayerProps = {
   defaultWindowSec?: number;
@@ -16,11 +15,6 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
   defaultWindowSec = 3,
   onChange,
 }) => {
-  const { selectedDatasetId } = useAppSelector((state: any) => state.dataset);
-  const { selectedEmbeddedMethodId } = useAppSelector(
-    (state) => state.embedding
-  );
-  const dispatch = useAppDispatch();
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -77,7 +71,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
   };
 
   const handleOverlayMouseDown = (
-    e: React.MouseEvent<HTMLDivElement, MouseEvent>
+    e: React.MouseEvent<HTMLDivElement, MouseEvent>,
   ) => {
     if (!duration || !spectroContainerRef.current) return;
     setIsDragging(true);
@@ -95,7 +89,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
       const secondsPerPx = duration / rect.width;
       const deltaSec = deltaPx * secondsPerPx;
       const newStart = clampWindowStart(
-        dragStartWindowStartRef.current + deltaSec
+        dragStartWindowStartRef.current + deltaSec,
       );
       setWindowStart(newStart);
     };

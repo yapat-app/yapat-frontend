@@ -2,15 +2,11 @@
  * Invite Teams to datasets modal
  */
 
-import React, { useEffect, useState } from "react";
-import { NavigationBar } from "../components/NavigationBar";
+import { useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { Flex, Space, Modal, Button, Checkbox } from "antd";
+import { Modal, Button, Checkbox } from "antd";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
-import {
-  createInvitation,
-  resetInvitationState,
-} from "../redux/features/invitationSlice";
+import { createInvitation } from "../redux/features/invitationSlice";
 
 export const InviteTeamModal = () => {
   const dispatch = useAppDispatch();
@@ -40,7 +36,7 @@ export const InviteTeamModal = () => {
     dispatch(
       createInvitation({
         dataset_ids: checkedList,
-      })
+      }),
     );
   };
 

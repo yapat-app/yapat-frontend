@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Modal, Form, InputNumber, Input, Button, message, Alert } from "antd";
+import { Modal, Form, Button, message, Alert } from "antd";
 import { SpeciesAutocomplete } from "./SpeciesAutocomplete";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
@@ -31,7 +31,7 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const { loading, error, lastCreated } = useAppSelector(
-    (state) => state.annotation
+    (state) => state.annotation,
   );
   const [form] = Form.useForm();
   const [selectedTaxonId, setSelectedTaxonId] = useState<string | undefined>();

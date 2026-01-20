@@ -86,10 +86,9 @@ export const snippetApi = {
       return `/mock-audio/snippet-${snippetId}.wav`;
     }
 
-    // Real audio URL from backend
-    return `${
-      import.meta.env.VITE_YAPAT_BACKEND_URL
-    }/api/snippets/${snippetId}/audio`;
+    // Real audio URL from backend - use api instance baseURL
+    const baseURL = api.defaults.baseURL || "http://localhost:8000";
+    return `${baseURL}/api/snippets/${snippetId}/audio`;
   },
 
   /**
@@ -168,12 +167,12 @@ export const embeddingApi = {
    * Create a new embedding
    */
   create: async (
-    datasetId: number,
-    data: CreateEmbedding
+    datasetId: number | null,
+    data: CreateEmbedding,
   ): Promise<Embedding> => {
     const response = await api.post(
       `api/datasets/${datasetId}/embeddings`,
-      data
+      data,
     );
     return response.data;
   },
@@ -234,7 +233,7 @@ export const taxonomyApi = {
    */
   suggest: async (
     query: string,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<TaxonSuggestion[]> => {
     const response = await api.get("/api/taxonomy/suggest", {
       params: { q: query, limit },
@@ -287,7 +286,7 @@ export const taxonomyApi = {
    * Validate if a taxon ID exists
    */
   validate: async (
-    taxonId: string
+    taxonId: string,
   ): Promise<{ taxon_id: string; valid: boolean }> => {
     const response = await api.get("/api/taxonomy/validate", {
       params: { id: taxonId },
@@ -367,10 +366,10 @@ export const taskApi = {
   //Trigger recording processing
 
   processRecording: async (
-    recordingId: number
+    recordingId: number,
   ): Promise<{ task_id: string }> => {
     const response = await api.post(
-      `/api/tasks/recordings/${recordingId}/process`
+      `/api/tasks/recordings/${recordingId}/process`,
     );
     return response.data;
   },
@@ -379,12 +378,12 @@ export const taskApi = {
 
   generateSnippets: async (
     recordingId: number,
-    params?: { window_duration_sec?: number; hop_duration_sec?: number }
+    params?: { window_duration_sec?: number; hop_duration_sec?: number },
   ): Promise<{ task_id: string }> => {
     const response = await api.post(
       `/api/tasks/recordings/${recordingId}/generate-snippets`,
       null,
-      { params }
+      { params },
     );
     return response.data;
   },

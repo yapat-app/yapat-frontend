@@ -4,23 +4,18 @@
  * Manages data fetching and state management for the annotation workflow
  */
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
-  fetchSnippetFeed,
   moveToNextSnippet,
   moveToPreviousSnippet,
   markCurrentAsAnnotated,
-  clearSnippets,
   loadSnippets,
 } from "../redux/features/snippetSlice";
-import {
-  fetchAnnotations,
-  clearAnnotations,
-} from "../redux/features/annotationSlice";
+import { fetchAnnotations } from "../redux/features/annotationSlice";
 import { annotationApi } from "../services/api";
 import { message } from "antd";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { clearEmbedding } from "../redux/features/embeddingSlice";
 import { getFeedHistory } from "../redux/features/feedSlice";
 
@@ -31,11 +26,8 @@ interface UseAnnotationWorkflowParams {
 
 export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   const dispatch = useAppDispatch();
-  const navigator = useNavigate();
   const [searchParams] = useSearchParams();
   const datasetId = searchParams.get("dataset_id");
-  const feedId = searchParams.get("feed_id");
-  const isFirstRender = useRef(true);
   const {
     snippets,
     currentSnippet,
@@ -96,7 +88,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
           datasetId
             ? `for dataset# ${datasetId}`
             : `from Feed# ${selectedFeedId}`
-        }`
+        }`,
       );
     } else if (snippets.length > 0) {
       return;
@@ -117,7 +109,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
         .map((s) => s.id)
         .sort()
         .join(","),
-    [snippets]
+    [snippets],
   );
 
   //Memoize annotation snippet IDs for dependency tracking
@@ -128,7 +120,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
         .filter((id, index, arr) => arr.indexOf(id) === index)
         .sort()
         .join(","),
-    [annotations]
+    [annotations],
   );
 
   //Load annotations for all snippets when snippets are loaded
@@ -139,7 +131,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
       const fetchAllAnnotations = async () => {
         try {
           const annotationPromises = snippets.map((snippet) =>
-            annotationApi.getAll({ snippet_id: snippet.id }).catch(() => [])
+            annotationApi.getAll({ snippet_id: snippet.id }).catch(() => []),
           );
           const allAnnotationArrays = await Promise.all(annotationPromises);
 
@@ -180,13 +172,13 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   //Get annotations for current snippet
 
   const currentSnippetAnnotations = annotations.filter(
-    (ann) => ann.snippet_id === currentSnippet?.id
+    (ann) => ann.snippet_id === currentSnippet?.id,
   );
 
   //Count annotated snippets (snippets that have at least one annotation)
   //Use the tracked set which includes annotations from all snippets
   const annotatedCount = snippets.filter((s) =>
-    snippetsWithAnnotations.has(s.id)
+    snippetsWithAnnotations.has(s.id),
   ).length;
 
   //Calculate progress percentage based on annotated count, not position
