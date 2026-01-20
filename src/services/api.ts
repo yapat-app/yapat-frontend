@@ -24,6 +24,7 @@ import type {
   FeedParams,
   TaskStatus,
   Embedding,
+  EmbeddingJob,
   CreateEmbedding,
   EmbeddingMethod,
   Feed,
@@ -182,6 +183,16 @@ export const embeddingApi = {
    */
   allEmbeddingList: async (): Promise<EmbeddingMethod[]> => {
     const response = await api.get(`api/embedding-models`);
+    return response.data;
+  },
+
+  /**
+   * Get all embedding jobs for dataset
+   */
+  allDatasetEmbeddingList: async (
+    datasetId: number | null,
+  ): Promise<EmbeddingJob[]> => {
+    const response = await api.get(`api/datasets/${datasetId}/embeddings`);
     return response.data;
   },
 };

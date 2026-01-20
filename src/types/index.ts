@@ -22,6 +22,19 @@ export interface CreateEmbedding {
   overlap: number;
 }
 
+export interface EmbeddingJob {
+  embedding_model_id: number;
+  snippet_set_id: number;
+  status: string;
+  celery_task_id: string;
+  started_at: string;
+  error_message: null;
+  dataset_id: number;
+  id: number;
+  created_at: string;
+  completed_at: string;
+}
+
 export interface EmbeddingMethod {
   id: number;
   name: string;

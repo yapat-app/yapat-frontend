@@ -8,10 +8,12 @@ import { DownOutlined } from "@ant-design/icons";
 
 type ExportAnnotationButtonProps = {
   datasetId: string | number;
+  disabled: boolean;
 };
 
 export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
   datasetId,
+  disabled,
 }) => {
   const dispatch = useAppDispatch();
   const handleCSVDownload = (format: string) => {
@@ -19,7 +21,6 @@ export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
       dataset_id: datasetId,
       format: format,
     };
-    console.log(payload);
     dispatch(exportAllAnnotations(payload));
   };
 
@@ -43,10 +44,10 @@ export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
     },
   ];
   return (
-    <Dropdown menu={{ items }}>
+    <Dropdown menu={{ items }} disabled={disabled}>
       <a onClick={(e) => e.preventDefault()}>
         <Space>
-          <Button>
+          <Button disabled={disabled}>
             Export
             <DownOutlined />
           </Button>
