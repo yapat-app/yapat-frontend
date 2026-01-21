@@ -248,6 +248,9 @@ export interface User {
   email: string;
   role: "user" | "admin" | "team_owner";
   created_at: string;
+  full_name?: string;
+  is_active?: boolean;
+  accessToken?: string;
 }
 
 // ============================================================================

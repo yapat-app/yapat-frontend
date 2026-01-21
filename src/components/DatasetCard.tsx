@@ -25,6 +25,9 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
               <div>
                 <h2 className="sub_head_text">{dataset.name}</h2>
                 <p className="sub_base_text">Some description</p>
+                <p className="sub_base_text">
+                  Audio Files: {dataset.recording_count}
+                </p>
               </div>
               <div className="flex items-center justify-end gap-3 pt-1">
                 {datasetAnnotations.datasets && (

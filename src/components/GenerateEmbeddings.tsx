@@ -41,6 +41,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
 
   useEffect(() => {
     if (embeddingCreated) {
+      console.log(embeddingCreated);
       message.success(`Embeddings Generated for dataset ${selectedDatasetId}`);
       handleCancel();
       dispatch(clearEmbedding());
