@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Dataset } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { Select, Modal, Button, Tag, Form, Input, message, Steps } from "antd";
+import { Select, Modal, Button, Tag, Form, message } from "antd";
 import {
   getAllEmbeddingMethods,
   createEmbedding,
@@ -41,7 +41,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
 
   useEffect(() => {
     if (embeddingCreated) {
-      console.log(embeddingCreated);
+      console.log(embeddingCreated, dataset);
       message.success(`Embeddings Generated for dataset ${selectedDatasetId}`);
       handleCancel();
       dispatch(clearEmbedding());

@@ -1,4 +1,9 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  // useMemo
+} from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { selectDataset } from "../redux/features/datasetSlice";
 import {
@@ -6,12 +11,19 @@ import {
   fetchSnippetFeed,
 } from "../redux/features/snippetSlice";
 import { useNavigate } from "react-router-dom";
-import { Select, Modal, Button, Form, Input, message, Steps } from "antd";
+import {
+  Select,
+  Modal,
+  Button,
+  Form,
+  Input,
+  //  message, Steps
+} from "antd";
 const { Option } = Select;
 import {
   clearEmbedding,
   createEmbedding,
-  getAllEmbeddingMethods,
+  // getAllEmbeddingMethods,
   selectEmbedding,
 } from "../redux/features/embeddingSlice";
 import type { EmbeddingMethod, FeedSimilarityCreate } from "../types";
@@ -34,7 +46,7 @@ export const GenerateFeedModal = ({
   const { feed } = useAppSelector((state) => state.feed);
   const [disableFeedGeneration, setDisableFeedGeneration] = useState(true);
   const [feedMethod, setFeedMethod] = useState<string | null>(null);
-  const [stepCount, setStepCount] = useState<number>(0);
+  // const [stepCount, setStepCount] = useState<number>(0);
   const {
     embeddingMethods,
     selectedEmbeddedMethodId,
@@ -92,16 +104,16 @@ export const GenerateFeedModal = ({
     }
   }, [datasetEmbeddings]);
 
-  const steps = useMemo(() => {
-    var baseSteps = [
-      {
-        title: "Generate Feed",
-        content: "Feed Generation",
-      },
-    ];
+  // const steps = useMemo(() => {
+  //   var baseSteps = [
+  //     {
+  //       title: "Generate Feed",
+  //       content: "Feed Generation",
+  //     },
+  //   ];
 
-    return baseSteps;
-  }, [feedMethod, embeddingCreated]);
+  //   return baseSteps;
+  // }, [feedMethod, embeddingCreated]);
 
   //Memoize the result for changing the states inside the child component
   const handleSimilarityChange = useCallback(
