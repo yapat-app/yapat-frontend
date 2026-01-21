@@ -25,9 +25,6 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
               <div>
                 <h2 className="sub_head_text">{dataset.name}</h2>
                 <p className="sub_base_text">Some description</p>
-                <p className="sub_base_text">
-                  Audio Files: {dataset.recording_count}
-                </p>
               </div>
               <div className="flex items-center justify-end gap-3 pt-1">
                 {datasetAnnotations.datasets && (
@@ -44,8 +41,14 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             </div>
             <div
               key={d.dataset_id}
-              className="grid grid-cols-3 gap-3 text-center"
+              className="grid grid-cols-4 gap-3 text-center"
             >
+              <div className="rounded-md bg-gray-50 px-3 py-2">
+                <p className="text-xs text-gray-500">Audio files</p>
+                <p className="text-lg font-semibold text-gray-600">
+                  {dataset.recording_count}
+                </p>
+              </div>
               <div className="rounded-md bg-gray-50 px-3 py-2">
                 <p className="text-xs text-gray-500">Annotated</p>
                 <p className="text-lg font-semibold text-emerald-600">

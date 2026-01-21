@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 #root {
+  min-height: 100vh;
   height: 100%;
   background-color: #f7fafc;
 }
@@ -68,4 +69,13 @@
 
 .nav_tabs {
   cursor: pointer;
+}
+
+#audio-upload {
+  position: absolute;
+  left: -9999px; /* Moves off-screen */
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  color: transparent;
 }

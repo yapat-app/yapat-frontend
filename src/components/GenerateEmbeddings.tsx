@@ -8,7 +8,10 @@ import {
   selectEmbedding,
   clearEmbedding,
 } from "../redux/features/embeddingSlice";
-import { selectDataset } from "../redux/features/datasetSlice";
+import {
+  fetchAllDatasets,
+  selectDataset,
+} from "../redux/features/datasetSlice";
 import type { EmbeddingMethod } from "../types";
 const { Option } = Select;
 
@@ -40,11 +43,16 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   };
 
   useEffect(() => {
-    if (embeddingCreated) {
-      console.log(embeddingCreated, dataset);
-      message.success(`Embeddings Generated for dataset ${selectedDatasetId}`);
+    if (embeddingCreated && dataset.id === selectedDatasetId) {
+      message.success(
+        `Embeddings Generated for dataset ${selectedDatasetId}`,
+        undefined, // Optional: duration (defaults to 1.5s if omitted)
+        () => {
+          dispatch(clearEmbedding());
+          dispatch(fetchAllDatasets());
+        },
+      );
       handleCancel();
-      dispatch(clearEmbedding());
     }
   }, [embeddingCreated]);
 

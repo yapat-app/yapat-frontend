@@ -21,7 +21,7 @@ export const AudioPlayerPlaceholder: React.FC = () => {
     <div className=" from-blue-50 to-indigo-50 rounded-lg p-12 mb-4 text-center border-2 border-dashed border-blue-200">
       {currentSnippetAudio ? (
         <SpectrogramPlayer
-          key={currentSnippet ?? currentSnippet.id}
+          key={currentSnippetAudio}
           src={currentSnippetAudio}
           sampleRate={16000}
           specHeight={250}
