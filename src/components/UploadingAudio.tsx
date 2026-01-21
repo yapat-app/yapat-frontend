@@ -35,7 +35,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
       fileInputRef.current.value = ""; // Reset input
     }
     if (audioRef.current) {
-      audioRef.src = "";
+      audioRef.current.src = "";
     }
   };
 
