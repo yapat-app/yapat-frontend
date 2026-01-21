@@ -1,12 +1,18 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { embeddingApi, getErrorMessage } from "../../services/api";
-import type { Embedding, CreateEmbedding, EmbeddingMethod } from "../../types";
+import type {
+  Embedding,
+  CreateEmbedding,
+  EmbeddingMethod,
+  EmbeddingJob,
+} from "../../types";
 
 export interface EmbeddingState {
   embeddingCreated: Embedding | null;
   embeddingMethods: EmbeddingMethod[] | null;
   selectedEmbeddedMethodId: number | null;
+  datasetEmbeddings: EmbeddingJob[] | null;
   loading: boolean;
   embeddingLoading: boolean;
   error: string | null;
@@ -16,6 +22,7 @@ const initialState: EmbeddingState = {
   embeddingCreated: null,
   embeddingMethods: null,
   selectedEmbeddedMethodId: null,
+  datasetEmbeddings: null,
   loading: false,
   embeddingLoading: false,
   error: null,
@@ -33,14 +40,14 @@ export const createEmbedding = createAsyncThunk(
   "embedding/create",
   async (
     data: { datasetId: number | null; body: CreateEmbedding },
-    { rejectWithValue }
+    { rejectWithValue },
   ) => {
     try {
       return await embeddingApi.create(data.datasetId, data.body);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 /**
@@ -54,7 +61,21 @@ export const getAllEmbeddingMethods = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
+);
+
+/**
+ * Get all embedding jobs for dataset
+ */
+export const getAllDatasetEmbeddings = createAsyncThunk(
+  "embedding/alldatasets",
+  async (datasetId: number, { rejectWithValue }) => {
+    try {
+      return await embeddingApi.allDatasetEmbeddingList(datasetId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
 );
 
 // ============================================================================
@@ -72,6 +93,7 @@ export const embeddingSlice = createSlice({
       state.selectedEmbeddedMethodId = null;
       state.embeddingCreated = null;
       state.embeddingLoading = false;
+      state.datasetEmbeddings = null;
     },
   },
   extraReducers: (builder) => {
@@ -89,6 +111,20 @@ export const embeddingSlice = createSlice({
         state.embeddingLoading = false;
         state.error = action.payload as string;
         state.embeddingCreated = null;
+      })
+      // get all dataset embeddings
+      .addCase(getAllDatasetEmbeddings.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllDatasetEmbeddings.fulfilled, (state, action) => {
+        state.loading = false;
+        state.datasetEmbeddings = action.payload;
+      })
+      .addCase(getAllDatasetEmbeddings.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.datasetEmbeddings = null;
       })
       .addCase(getAllEmbeddingMethods.pending, (state) => {
         state.loading = true;

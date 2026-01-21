@@ -82,7 +82,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   }, [feedHistory]);
 
   useEffect(() => {
-    if (snippetsFetched) {
+    if (snippetsFetched && datasetId) {
       message.success(
         `${snippets.length} snippets feed generated  ${
           datasetId
@@ -90,6 +90,8 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
             : `from Feed# ${selectedFeedId}`
         }`,
       );
+    } else if (snippetsFetched && !datasetId) {
+      message.success(`Viewing Feed #${selectedFeedId}`);
     } else if (snippets.length > 0) {
       return;
     }

@@ -22,6 +22,19 @@ export interface CreateEmbedding {
   overlap: number;
 }
 
+export interface EmbeddingJob {
+  embedding_model_id: number;
+  snippet_set_id: number;
+  status: string;
+  celery_task_id: string;
+  started_at: string;
+  error_message: null;
+  dataset_id: number;
+  id: number;
+  created_at: string;
+  completed_at: string;
+}
+
 export interface EmbeddingMethod {
   id: number;
   name: string;
@@ -214,6 +227,8 @@ export interface Dataset {
   team_id?: number;
   created_at?: string;
   updated_at?: string;
+  is_ready_for_feed?: boolean;
+  recording_count?: number;
 }
 
 export interface DatasetCreate {
@@ -231,8 +246,11 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "team_owner";
   created_at: string;
+  full_name?: string;
+  is_active?: boolean;
+  accessToken?: string;
 }
 
 // ============================================================================

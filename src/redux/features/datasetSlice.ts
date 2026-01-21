@@ -1,10 +1,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
-import type { ExportAnnotation } from "../../types";
+import type { Dataset, ExportAnnotation } from "../../types";
+import { teamApi } from "../../services/api";
+import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
-  allDatasets: { id: string; name: string }[];
+  allDatasets: Dataset[];
   annotationExported: boolean;
   selectedDatasetId: number | null;
   loading: boolean;
@@ -25,10 +27,18 @@ export const fetchAllDatasets = createAsyncThunk(
   "dataset/fetchAllDatasets",
   async () => {
     const response = await api.get("/api/datasets");
-    return response.data.map((dataset: any) => ({
-      id: dataset.id,
-      name: dataset.name,
-    }));
+    return response.data;
+  },
+);
+
+export const fetchAllTeamDatasets = createAsyncThunk(
+  "dataset/teams",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await teamApi.getAllTeamDatasets();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
   },
 );
 
@@ -80,6 +90,17 @@ export const datasetSlice = createSlice({
     builder.addCase(exportAllAnnotations.rejected, (state) => {
       state.loading = false;
       state.annotationExported = false;
+    });
+    builder.addCase(fetchAllTeamDatasets.pending, (state) => {
+      state.loading = true;
+    });
+    builder.addCase(fetchAllTeamDatasets.fulfilled, (state, action) => {
+      state.allDatasets = action.payload;
+      state.loading = false;
+    });
+    builder.addCase(fetchAllTeamDatasets.rejected, (state) => {
+      state.loading = false;
+      state.allDatasets = [];
     });
   },
 });

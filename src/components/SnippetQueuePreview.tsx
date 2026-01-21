@@ -33,7 +33,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
     <Card title="Snippet Queue" size="small" className="shadow-sm auto">
       <div
         className={`
-      flex gap-2 pb-2
+      flex gap-2 pb-2 pl-2 py-2
       ${expanded ? "overflow-x-visible flex-wrap" : "overflow-x-auto"}
     `}
       >
@@ -47,8 +47,8 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
                 snippet.id === currentSnippetId
                   ? "bg-blue-100 border-blue-500 shadow-md scale-105"
                   : snippet.is_annotated
-                  ? "bg-green-50 border-green-300 hover:border-green-400"
-                  : "bg-gray-50 border-gray-200 hover:border-gray-400 hover:bg-gray-100"
+                    ? "bg-green-50 border-green-300 hover:border-green-400"
+                    : "bg-gray-50 border-gray-200 hover:border-gray-400 hover:bg-gray-100"
               }
             `}
             onClick={() => {
@@ -56,7 +56,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               dispatch(setCurrentSnippet(snippet));
             }}
           >
-            <div className="text-xs text-gray-500 mb-1">#{snippet.id}</div>
+            <div className="text-xs text-gray-500 mb-1 ">#{snippet.id}</div>
             {snippet.is_annotated && (
               <CheckCircleOutlined className="text-green-600" />
             )}

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import {
+  fetchAllDatasets,
+  fetchAllTeamDatasets,
+} from "../redux/features/datasetSlice";
 import { Space, Table, Card, Modal, Button, Input, Select } from "antd";
 import type { TableProps } from "antd";
 import { fetchAllteams, createTeam } from "../redux/features/teamSlice";
@@ -13,9 +16,8 @@ export const Teams = () => {
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
   const { allTeams, teamCreated } = useAppSelector((state) => state.team);
   const { user } = useAppSelector((state: any) => state.auth);
-  const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
-    (state) => state.dataset,
-  );
+  const { allDatasets } = useAppSelector((state) => state.dataset);
+
   const [teamInfo, setTeamInfo] = useState<{
     name: string;
     description: string;
@@ -31,7 +33,11 @@ export const Teams = () => {
   }
 
   useEffect(() => {
-    dispatch(fetchAllDatasets());
+    if (user && user.role === "team_owner") {
+      dispatch(fetchAllTeamDatasets());
+    } else {
+      dispatch(fetchAllDatasets());
+    }
   }, []);
 
   const onValueChange = (name: string, value: any) => {
@@ -63,10 +69,6 @@ export const Teams = () => {
       setIsModalOpen(false);
     }
   }, [teamCreated]);
-
-  // const { allDatasets }: { allDatasets: DataType[] } = useAppSelector(
-  //   (state) => state.dataset
-  // );
 
   const columns: TableProps<DataType>["columns"] = [
     {

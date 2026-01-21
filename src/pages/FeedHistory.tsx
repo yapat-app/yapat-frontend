@@ -9,6 +9,7 @@ import {
   setFeedId,
 } from "../redux/features/snippetSlice";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 
 const { Title, Text } = Typography;
 
@@ -65,7 +66,7 @@ export const FeedHistory: React.FC = () => {
                               navigator(`/annotate?feed_id=${feed.id}`);
                             }}
                           >
-                            Regenerate
+                            View Feed
                           </Button>,
                         ]}
                       >
@@ -81,10 +82,12 @@ export const FeedHistory: React.FC = () => {
                           </Text>
 
                           <Text>
-                            <strong>Created At:</strong> {feed.created_at}
+                            <strong>Created At:</strong>{" "}
+                            {format(
+                              new Date(feed.created_at),
+                              "MMMM do yyyy, hh:mm:ss",
+                            )}
                           </Text>
-
-                          <Text type="secondary"> Feed ID: {feed.id}</Text>
                         </Space>
                       </Card>
                     </div>
