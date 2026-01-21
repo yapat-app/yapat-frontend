@@ -19,12 +19,25 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [windowStart, setWindowStart] = useState<number>(0); // seconds
-
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const spectroContainerRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartXRef = useRef<number>(0);
   const dragStartWindowStartRef = useRef<number>(0);
+
+  const removeFile = () => {
+    setAudioFile(null);
+    setAudioUrl(null);
+    setDuration(null);
+    setWindowStart(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""; // Reset input
+    }
+    if (audioRef.current) {
+      audioRef.src = "";
+    }
+  };
 
   useEffect(() => {
     if (!audioFile) {
@@ -46,7 +59,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
 
   const handleAudioLoadedMetadata = () => {
     if (audioRef.current) {
-      setDuration(Math.round(audioRef.current.duration)); // integer duration [web:245]
+      setDuration(Math.round(audioRef.current.duration));
     }
   };
 
@@ -67,7 +80,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
     if (duration == null) return value;
     const maxStart = Math.max(0, duration - defaultWindowSec);
     const clamped = Math.min(Math.max(0, value), maxStart);
-    return Math.round(clamped); // keep as int [web:245]
+    return Math.round(clamped);
   };
 
   const handleOverlayMouseDown = (
@@ -124,17 +137,62 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
       tooltip="Select an audio for the similarity feed"
     >
       <div className="space-y-4">
-        {/* Upload */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Upload audio (wav)
+        {/* Improved File Upload UI */}
+        <div className="space-y-3">
+          <label className="block text-sm font-medium mb-2">
+            Upload audio (WAV recommended)
           </label>
-          <input
-            type="file"
-            accept="audio/wav,audio/*"
-            onChange={handleFileChange}
-          />
+
+          {audioFile ? (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 font-bold text-lg">🎵</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-gray-900 truncate">
+                      {audioFile.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeFile}
+                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-md flex items-center space-x-1 whitespace-nowrap ml-2"
+                  title="Remove file"
+                >
+                  <span className="text-xs">✕</span>
+                  <span>Remove</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label
+              htmlFor="audio-upload"
+              className="block p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer text-center"
+            >
+              <div className="w-12 h-12 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl text-blue-600">📁</span>
+              </div>
+              <p className="text-lg font-medium text-gray-900 mb-1">
+                Upload audio file
+              </p>
+              <input
+                id="audio-upload"
+                ref={fileInputRef}
+                type="file"
+                accept="audio/wav,audio/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
+
         {/* Hidden audio */}
         {audioUrl && (
           <audio
@@ -190,13 +248,17 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
 
         {/* Info + actions with integer display */}
         {duration != null && (
-          <>
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Start: {startDisplay}s</span>
-              <span>End: {endDisplay}s</span>
-              <span>Duration: {durationDisplay}s</span>
-            </div>
-          </>
+          <div className="flex justify-between text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+            <span>
+              Start: <strong>{startDisplay}s</strong>
+            </span>
+            <span>
+              End: <strong>{endDisplay}s</strong>
+            </span>
+            <span>
+              Total: <strong>{durationDisplay}s</strong>
+            </span>
+          </div>
         )}
       </div>
     </Form.Item>
