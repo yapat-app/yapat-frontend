@@ -93,6 +93,7 @@ export const embeddingSlice = createSlice({
       state.selectedEmbeddedMethodId = null;
       state.embeddingCreated = null;
       state.embeddingLoading = false;
+      state.datasetEmbeddings = null;
     },
   },
   extraReducers: (builder) => {
@@ -110,6 +111,20 @@ export const embeddingSlice = createSlice({
         state.embeddingLoading = false;
         state.error = action.payload as string;
         state.embeddingCreated = null;
+      })
+      // get all dataset embeddings
+      .addCase(getAllDatasetEmbeddings.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllDatasetEmbeddings.fulfilled, (state, action) => {
+        state.loading = false;
+        state.datasetEmbeddings = action.payload;
+      })
+      .addCase(getAllDatasetEmbeddings.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.datasetEmbeddings = null;
       })
       .addCase(getAllEmbeddingMethods.pending, (state) => {
         state.loading = true;

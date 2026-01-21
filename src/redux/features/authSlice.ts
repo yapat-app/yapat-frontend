@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
+import type { User } from "../../types";
 
 export interface Auth {
   name: string;
@@ -10,7 +11,7 @@ export interface Auth {
 
 export interface AuthState {
   loginSuccess: boolean;
-  user: Object | null;
+  user: User | null;
   registerSuccess: boolean;
   loginLoading: boolean;
   isAuthenticated: boolean;
@@ -40,10 +41,7 @@ export const loginAsync = createAsyncThunk<
   "auth/login",
   async (body, thunkApi) => {
     try {
-      const response = await api.post(
-        `/api/auth/login`,
-        body,
-      );
+      const response = await api.post(`/api/auth/login`, body);
       return response.data;
     } catch (error: JSON | any) {
       return thunkApi.rejectWithValue(error.response.data);
@@ -64,10 +62,7 @@ export const registerAsync = createAsyncThunk<
   "auth/register",
   async (body, thunkApi) => {
     try {
-      const response = await api.post(
-        `/api/auth/register`,
-        body,
-      );
+      const response = await api.post(`/api/auth/register`, body);
       return response.data;
     } catch (error: JSON | any) {
       return thunkApi.rejectWithValue(error.response.data);

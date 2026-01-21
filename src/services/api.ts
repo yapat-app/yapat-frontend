@@ -363,6 +363,19 @@ export const datasetApi = {
 };
 
 // ============================================================================
+// Team API
+// ============================================================================
+
+export const teamApi = {
+  //Get single dataset by ID
+
+  getAllTeamDatasets: async (): Promise<Dataset[]> => {
+    const response = await api.get(`/api/teams/available-datasets`);
+    return response.data;
+  },
+};
+
+// ============================================================================
 // Task API (Celery tasks)
 // ============================================================================
 

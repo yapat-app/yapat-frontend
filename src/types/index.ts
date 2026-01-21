@@ -227,6 +227,8 @@ export interface Dataset {
   team_id?: number;
   created_at?: string;
   updated_at?: string;
+  is_ready_for_feed?: boolean;
+  recording_count?: number;
 }
 
 export interface DatasetCreate {
@@ -244,7 +246,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "team_owner";
   created_at: string;
 }
 

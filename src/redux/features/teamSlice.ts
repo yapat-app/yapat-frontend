@@ -49,9 +49,6 @@ export const teamSlice = createSlice({
     builder.addCase(createTeam.fulfilled, (state) => {
       state.teamCreated = true;
     });
-    builder.addCase(fetchTeamDatasets.fulfilled, (state) => {
-      state.teamCreated = true;
-    });
   },
 });
 
