@@ -68,11 +68,11 @@ export const Login = () => {
   };
 
   return (
-    <div className=" h-full max-h-full">
+    <div className="flex h-screen flex-col ">
       <div>
         <img className="nav_logo_dfki" src={DFKI_logo}></img>
       </div>
-      <div className=" w-full   min-h-[80%]  flex items-center justify-center">
+      <div className=" w-full  h-full flex items-center justify-center">
         <form className=" w-1/4" onSubmit={role ? register : login}>
           <h1 className="text-center font-ibm-sans main_heading_text">YAPAT</h1>
           <div>
