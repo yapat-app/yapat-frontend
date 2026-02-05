@@ -1,9 +1,13 @@
-import { Input, Button } from "antd";
+import { Input, Button, message } from "antd";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 // import { useDispatch, useSelector } from "react-redux";
-import { loginAsync, registerAsync } from "../redux/features/authSlice";
+import {
+  clearError,
+  loginAsync,
+  registerAsync,
+} from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 
@@ -12,7 +16,7 @@ export const Login = () => {
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
   const invitationToken = searchParams.get("invitation_token");
-  const { loginSuccess, registerSuccess } = useAppSelector(
+  const { loginSuccess, registerSuccess, loginLoading, error } = useAppSelector(
     (state: any) => state.auth,
   );
 
@@ -35,6 +39,14 @@ export const Login = () => {
       navigator("/");
     }
   }, [loginSuccess, registerSuccess]);
+
+  useEffect(() => {
+    if (error) {
+      message.error(error, undefined, () => {
+        dispatch(clearError());
+      });
+    }
+  }, [error]);
 
   const onValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -138,6 +150,7 @@ export const Login = () => {
             </div>
           )}
           <Button
+            loading={loginLoading}
             htmlType="submit"
             style={{
               width: "100%",

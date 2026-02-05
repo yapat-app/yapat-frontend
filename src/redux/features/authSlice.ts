@@ -97,6 +97,9 @@ export const authSlice = createSlice({
       state.isAuthenticated = false;
       localStorage.removeItem("accessToken");
     },
+    clearError: (state) => {
+      state.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -119,10 +122,10 @@ export const authSlice = createSlice({
         // state.name = action.payload.name;
         // state.password = action.payload.password;
       })
-      .addCase(loginAsync.rejected, (state, action) => {
+      .addCase(loginAsync.rejected, (state, action: any) => {
         state.loginLoading = false;
         state.status = "failed";
-        state.error = action.error.message ?? "Unknown error";
+        state.error = action.payload.detail ?? "Unknown error";
         state.loginSuccess = false;
       })
       .addCase(registerAsync.pending, (state) => {
@@ -148,5 +151,5 @@ export const authSlice = createSlice({
 });
 
 // Export actions and reducer
-export const { logout } = authSlice.actions;
+export const { logout, clearError } = authSlice.actions;
 export default authSlice.reducer;

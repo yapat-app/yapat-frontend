@@ -17,6 +17,7 @@ import {
 } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
 import type { Snippet, Annotation } from "../types";
+import { AnnotationForm } from "./AnnotationForm";
 
 interface CurrentSnippetCardProps {
   snippet: Snippet;
@@ -93,16 +94,6 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
           </Button>
           <Button size="large" onClick={onNext} disabled={!canGoNext}>
             Next <ArrowRightOutlined />
-          </Button>
-        </div>
-        <div className="flex justify-center items-center gap-4">
-          <Button
-            type="primary"
-            size="large"
-            onClick={onAddAnnotation}
-            icon={<CheckCircleOutlined />}
-          >
-            Add Annotation
           </Button>
         </div>
       </div>

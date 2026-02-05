@@ -31,6 +31,11 @@ import type {
   FeedCreate,
   FeedSimilarityCreate,
   DatasetAnnotationStats,
+  MessageResponse,
+  Conversation,
+  AllLabelSpace,
+  Taxonomy,
+  AvailableTaxonomies,
 } from "../types";
 
 // ============================================================================
@@ -302,6 +307,103 @@ export const taxonomyApi = {
     const response = await api.get("/api/taxonomy/validate", {
       params: { id: taxonId },
     });
+    return response.data;
+  },
+
+  available: async (): Promise<AvailableTaxonomies> => {
+    const response = await api.get("/api/taxonomy/available");
+    return response.data;
+  },
+};
+
+// ============================================================================
+// Custom Taxonomy API
+// ============================================================================
+
+export const customtaxonomyApi = {
+  /**
+   * Ask AI agent to suggest taxonomies for annotating
+   */
+
+  startConversation: async (teamId: number): Promise<Conversation> => {
+    const response = await api.post("/api/taxonomy/chat/start", {
+      team_id: teamId,
+    });
+    return response.data;
+  },
+
+  cancelConversation: async (conversationId: number): Promise<Conversation> => {
+    const response = await api.post(
+      `/api/taxonomy/chat/${conversationId}/cancel`,
+    );
+    return response.data;
+  },
+
+  freeze: async (params: {
+    name: string;
+    description: string;
+    conversationId: number;
+  }): Promise<Conversation> => {
+    const { name, description, conversationId } = params;
+    const response = await api.post(
+      `/api/taxonomy/chat/${conversationId}/freeze`,
+      {
+        name,
+        description,
+      },
+    );
+    return response.data;
+  },
+
+  getConversation: async (conversationId: number): Promise<Conversation> => {
+    const response = await api.get(`/api/taxonomy/chat/${conversationId}`);
+    return response.data;
+  },
+
+  removeItem: async (params: {
+    itemId: number;
+    conversationId: number;
+  }): Promise<Conversation> => {
+    const { itemId, conversationId } = params;
+    const response = await api.delete(
+      `/api/taxonomy/chat/${conversationId}/item/${itemId}`,
+    );
+    return response.data;
+  },
+
+  getLabelSpace: async (conversationId: number): Promise<AllLabelSpace> => {
+    const response = await api.get(
+      `/api/taxonomy/chat/${conversationId}/label-space`,
+    );
+    return response.data;
+  },
+
+  sendNewMessage: async (params: {
+    conversationId: number;
+    prompt: string;
+  }): Promise<MessageResponse> => {
+    const response = await api.post(
+      `/api/taxonomy/chat/${params.conversationId}/message`,
+      {
+        prompt: params.prompt,
+      },
+    );
+    return response.data;
+  },
+
+  addToLabelSpace: async (params: {
+    conversationId: number;
+    messageId: number;
+    indices: number[];
+  }): Promise<Conversation> => {
+    const { conversationId, messageId, indices } = params;
+    const response = await api.post(
+      `/api/taxonomy/chat/${conversationId}/add`,
+      {
+        message_id: messageId,
+        indices: indices,
+      },
+    );
     return response.data;
   },
 };

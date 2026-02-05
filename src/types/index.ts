@@ -112,6 +112,21 @@ export interface CommonName {
   language: string;
 }
 
+export interface AvailableTaxonomies {
+  total: number;
+  taxonomies: Taxonomy[];
+}
+
+export interface Taxonomy {
+  taxonomy_id: string;
+  name: string;
+  type: string;
+  description: string;
+  team_id: number;
+  is_global: boolean;
+  status?: string;
+}
+
 export interface TaxonDetails extends TaxonSuggestion {
   phylum?: string;
   class?: string;
@@ -123,6 +138,89 @@ export interface TaxonDetails extends TaxonSuggestion {
   taxonomic_status?: string;
   match_type?: string;
   confidence?: number;
+}
+
+// ============================================================================
+// Custom Taxonomy Types
+// ============================================================================
+
+export interface Metadata {
+  iri: string;
+  tool: string;
+  score: number | null;
+  source: string;
+  description: string | null;
+}
+
+export interface Node {
+  id: string;
+  name: string;
+  rank: string;
+  metadata: Metadata;
+  scientific_name: string;
+}
+
+export interface GenerationMetadata {
+  model: string;
+  prompt: string;
+  server: string;
+}
+
+export interface AllLabelSpace {
+  conversation_id: number;
+  is_frozen: boolean;
+  items: LabelSpaceItem[];
+  total: number;
+}
+
+export interface TaxonomyData {
+  nodes: Node[];
+  generation_metadata: GenerationMetadata;
+}
+
+export interface MessageMetadata {
+  taxonomy_data: TaxonomyData;
+}
+
+export interface LabelSpaceItem {
+  id: string;
+  name: string;
+  scientific_name: string;
+  taxon_id: string;
+  metadata: Metadata;
+  added_at: string;
+}
+
+export interface Message {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant";
+  content: string;
+  message_metadata: MessageMetadata | null;
+}
+
+export interface MessageResponse {
+  message: Message;
+  conversation: Conversation;
+}
+
+// Conversation type
+export interface Conversation {
+  id: number;
+  team_id: number;
+  user_id: number;
+  custom_taxonomy_id: number | null;
+  status: "in_progress" | string; // Add other status values as needed
+  label_space: LabelSpaceItem[] | []; // Specify the actual type if known
+  is_frozen: boolean;
+  created_at: string; // Use Date if you'll parse it
+  updated_at: string; // Use Date if you'll parse it
+  messages: Message[] | [];
+}
+
+export interface MessageResponse {
+  message: Message;
+  conversation: Conversation;
 }
 
 // ============================================================================

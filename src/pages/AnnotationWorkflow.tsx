@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Spin, Empty, Alert } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
+import { AnnotationFormModal } from "../components/AnnotationFormModal";
 import { AnnotationForm } from "../components/AnnotationForm";
 import { AnnotationStatistics } from "../components/AnnotationStatistics";
 import { AnnotationProgress } from "../components/AnnotationProgress";
@@ -151,16 +152,6 @@ export const AnnotationWorkflow: React.FC = () => {
           />
         </div>
       </div>
-
-      {/* Annotation Form Modal */}
-      {currentSnippet && (
-        <AnnotationForm
-          visible={modalVisible}
-          snippetId={currentSnippet.id}
-          onClose={() => setModalVisible(false)}
-          onSuccess={handleAnnotationSuccess}
-        />
-      )}
     </div>
   );
 };
