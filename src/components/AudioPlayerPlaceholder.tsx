@@ -20,29 +20,31 @@ export const AudioPlayerPlaceholder: React.FC = () => {
   }, [currentSnippet?.id]);
 
   return (
-    <div className=" from-blue-50 to-indigo-50 rounded-lg mb-4 text-center  border-blue-200">
+    <div className=" from-blue-50 to-indigo-50 rounded-lg mb-4 text-center  border-blue-200 ">
       {currentSnippetAudio ? (
-        <SpectrogramPlayer
-          key={currentSnippetAudio}
-          src={currentSnippetAudio}
-          sampleRate={16000}
-          specHeight={250}
-          navHeight={60}
-          dark={false}
-          navigator={false} //  hide zoom / navigator UI
-          settings={false} // settings
-          colormap="viridis"
-        />
+        <>
+          <SpectrogramPlayer
+            key={currentSnippetAudio}
+            src={currentSnippetAudio}
+            sampleRate={16000}
+            specHeight={380}
+            navHeight={60}
+            dark={false}
+            navigator={false} //  hide zoom / navigator UI
+            settings={false} // settings
+            colormap="viridis"
+          />
+        </>
       ) : (
         <p className="text-sm text-gray-400">Loading audio…</p>
       )}
       <div className="text-left mt-6">
-        {currentSnippet && (
+        {/* {currentSnippet && (
           <AnnotationForm
             snippetId={currentSnippet.id}
             // onSuccess={handleAnnotationSuccess}
           />
-        )}
+        )} */}
         <TaxonomyAssistant />
       </div>
     </div>

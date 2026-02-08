@@ -1,48 +1,6 @@
 /* ============================================================================
    TAXONOMY ASSISTANT COMPONENT - API INTEGRATION GUIDE
    ============================================================================
-   
-   This component provides an AI-powered chat interface for suggesting and
-   managing taxonomies for research annotations.
-   
-   OVERVIEW OF API INTEGRATION POINTS:
-   ------------------------------------
-   There are 3 main API integration points in this component:
-   
-   1. SEND MESSAGE (Line ~210)
-      - Endpoint: POST /api/taxonomy/chat/{conversationId}/message
-      - Body: { prompt: "user's message" }
-      - Response: Updated conversation object with new messages
-   
-   2. ADD LABELS TO LABEL SPACE (Line ~305)
-      - Endpoint: POST /api/taxonomy/chat/{conversationId}
-      - Body: { message_id: number, indices: number[] }
-      - Response: Updated conversation object with new items in label_space
-   
-   3. REMOVE LABEL FROM LABEL SPACE (Line ~378)
-      - Endpoint: DELETE /api/taxonomy/chat/{conversationId}/item/{itemId}
-      - Response: Success status or updated conversation object
-   
-   COMPONENT FLOW:
-   ---------------
-   1. User opens chat → Conversation is created/retrieved via Redux
-   2. User sends message → API call → Conversation updated with new messages
-   3. AI responds with taxonomy suggestions
-   4. User selects taxonomies → Add to label space via API
-   5. Label space is displayed at bottom of chat
-   6. User can remove items from label space or export them
-   
-   REDUX STATE:
-   ------------
-   The component relies on Redux state from customTaxonomySlice:
-   - conversation: The current conversation object
-   - conversation.messages: Array of chat messages
-   - conversation.label_space: Array of accepted taxonomies
-   
-   After each API call, dispatch(getConversation(conversationId)) is called
-   to refresh the conversation state and re-render with updated data.
-   
-   ============================================================================
 */
 
 import React, { useState, useRef, useEffect } from "react";

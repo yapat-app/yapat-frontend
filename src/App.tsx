@@ -8,6 +8,7 @@ import { Teams } from "./pages/Teams";
 import { AnnotationWorkflow } from "./pages/AnnotationWorkflow";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
+import { Taxonomies } from "./pages/Taxonomies";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/datasets" element={<Datasets />} />
       <Route path="/teams" element={<Teams />} />
+      <Route path="/taxonomy" element={<Taxonomies />} />
       <Route path="/history" element={<FeedHistory />} />
       <Route path="/annotate" element={<AnnotationWorkflow />} />
       <Route path="/docs" element={<YapatUserManual />} />

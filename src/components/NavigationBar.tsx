@@ -56,6 +56,9 @@ export const NavigationBar = () => {
           <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
             Teams
           </div>
+          <div className="nav_tabs" onClick={() => navigateTab("/taxonomy")}>
+            Taxonomy
+          </div>
           <div className="nav_tabs" onClick={() => navigateTab("/docs")}>
             Documentation
           </div>
