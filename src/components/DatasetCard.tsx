@@ -3,6 +3,7 @@ import { ExportAnnotationButton } from "./ExportAnnotation";
 import { GenerateFeedModal } from "./GenerateFeed";
 import { useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
+import { GenerateWssed } from "./GenerateWssed";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -37,6 +38,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   <GenerateEmbeddings dataset={dataset} />
                 )}
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
+                <GenerateWssed />
               </div>
             </div>
             <div

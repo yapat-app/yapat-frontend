@@ -65,8 +65,6 @@ export const GenerateFeedModal = ({
     startSec: 0,
     endSec: 3,
   });
-  // const canGenerateFeed =
-  //   embeddingCreated && datasetEmbeddings && datasetEmbeddings.length > 0;
 
   useEffect(() => {
     if (feedMethod === "similarity" && similarityState.audioFile) {
@@ -82,14 +80,6 @@ export const GenerateFeedModal = ({
     }
   }, [embeddingCreated, feed, snippets]);
 
-  // useEffect(() => {
-  //   if (embeddingCreated) {
-  // message.success(`Embeddings Generated for dataset ${selectedDatasetId}`);
-  // increase step count for stepper
-  // setStepCount(1);
-  //   }
-  // }, [embeddingCreated]);
-
   useEffect(() => {
     console.log();
     if (selectedDatasetId) {
@@ -100,20 +90,8 @@ export const GenerateFeedModal = ({
   useEffect(() => {
     if (datasetEmbeddings && datasetEmbeddings.length > 0) {
       console.log("all dataset embeddings", datasetEmbeddings);
-      // setStepCount(1);
     }
   }, [datasetEmbeddings]);
-
-  // const steps = useMemo(() => {
-  //   var baseSteps = [
-  //     {
-  //       title: "Generate Feed",
-  //       content: "Feed Generation",
-  //     },
-  //   ];
-
-  //   return baseSteps;
-  // }, [feedMethod, embeddingCreated]);
 
   //Memoize the result for changing the states inside the child component
   const handleSimilarityChange = useCallback(
