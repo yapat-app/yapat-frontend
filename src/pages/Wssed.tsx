@@ -203,7 +203,7 @@ export const Wssed = () => {
               <Button
                 type="primary"
                 className="bg-green-600 hover:bg-green-700 flex-1"
-                disabled={remaining === 0}
+                // disabled={remaining === 0}
                 onClick={() => handleResponse("accept")}
               >
                 Accept prediction
@@ -212,7 +212,7 @@ export const Wssed = () => {
               <Button
                 danger
                 className="flex-1"
-                disabled={remaining === 0}
+                // disabled={remaining === 0}
                 onClick={() => handleResponse("reject")}
               >
                 Reject prediction
@@ -221,7 +221,7 @@ export const Wssed = () => {
 
             {/* Retraining */}
             <div className="mt-5">
-              <Button block disabled={remaining > 0} onClick={handleRetrain}>
+              <Button block onClick={handleRetrain}>
                 Retrain model now
               </Button>
 
