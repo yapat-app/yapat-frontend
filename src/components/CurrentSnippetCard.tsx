@@ -76,26 +76,28 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
         </div>
       </div>
       {/* Existing Annotations */}
-      <Divider />
-      <div className="flex  gap-4   w-full">
-        {annotations.length > 0 && (
-          <div className="mb-4 p-4 bg-green-50 rounded-lg  border-green-200">
-            <h4 className="font-semibold mb-2 text-green-900">
-              Existing Annotations ({annotations.length}):
-            </h4>
+      {annotations.length > 0 && (
+        <>
+          <Divider />
+          <div className="flex  gap-4   w-full">
+            <div className="mb-4 p-4 bg-green-50 rounded-lg  border-green-200">
+              <h4 className="font-semibold mb-2 text-green-900">
+                Existing Annotations ({annotations.length}):
+              </h4>
 
-            <Space wrap>
-              {annotations.map((ann) => (
-                <Tag key={ann.id} color="green" className="text-sm py-1 px-3">
-                  <strong>{ann.resolved_name_snapshot}</strong>
-                </Tag>
-              ))}
-            </Space>
+              <Space wrap>
+                {annotations.map((ann) => (
+                  <Tag key={ann.id} color="green" className="text-sm py-1 px-3">
+                    <strong>{ann.resolved_name_snapshot}</strong>
+                  </Tag>
+                ))}
+              </Space>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
       {/* Action Buttons */}
-      {/* <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center">
         <div className="flex gap-2">
           <Button
             size="large"
@@ -109,7 +111,7 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             Next <ArrowRightOutlined />
           </Button>
         </div>
-      </div> */}
+      </div>
     </Card>
   );
 };

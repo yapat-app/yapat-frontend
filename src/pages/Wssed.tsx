@@ -18,6 +18,7 @@ import type { SelectProps } from "antd/es/select";
 import { useState } from "react";
 import { useAppDispatch } from "../hooks";
 import { useAppSelector } from "../hooks";
+import { DatasetFolderStructure } from "../components/DatasetFolderStructure";
 
 const audioUrl =
   "blob:http://localhost:3000/446ce7ce-6cbb-478a-a9fd-7cd8a16b1e14";
@@ -34,64 +35,102 @@ const speciesBags = [
   { value: "reptiles_australia", label: "Australian Reptiles - 900 species" },
 ];
 
+type SpeciesPrediction = {
+  species: string;
+  avgConfidence: number; // 0–1
+  predictionCount: number;
+};
+
 const AudioPredictionHistogram: React.FC = () => {
-  // Static sample data
+  // Static sample model output
+  const speciesPredictions: SpeciesPrediction[] = [
+    {
+      species: "Corvus corax",
+      avgConfidence: 0.82,
+      predictionCount: 18,
+    },
+    {
+      species: "Passer domesticus",
+      avgConfidence: 0.67,
+      predictionCount: 14,
+    },
+    {
+      species: "Turdus merula",
+      avgConfidence: 0.74,
+      predictionCount: 12,
+    },
+    {
+      species: "Environmental Noise",
+      avgConfidence: 0.41,
+      predictionCount: 20,
+    },
+    {
+      species: "Unknown / Other",
+      avgConfidence: 0.29,
+      predictionCount: 14,
+    },
+  ];
+
   const plotData: Data[] = [
     {
       type: "bar",
-      x: ["Bird Species", "Environmental Species", "Other / Remaining"],
-      y: [24, 26, 28],
-      text: [
-        "Corvus corax, Passer domesticus, Turdus merula, Parus major",
-        "Anura spp., Cicadidae spp., Gryllidae spp.",
-        "Wind, Rain, Urban noise, Unknown",
-      ],
-      hoverinfo: "y+text",
+      x: speciesPredictions.map((s) => s.species),
+      y: speciesPredictions.map((s) => s.avgConfidence),
+      //   text: speciesPredictions.map((s) => `${s.predictionCount} predictions`),
+      hovertemplate:
+        "<b>%{x}</b><br>" +
+        "Avg confidence: %{y:.2f}<br>" +
+        "%{text}<extra></extra>",
       marker: {
-        color: ["#4ade80", "#60a5fa", "#facc15"],
+        color: speciesPredictions.map((s) =>
+          s.avgConfidence >= 0.7
+            ? "#22c55e"
+            : s.avgConfidence >= 0.4
+              ? "#facc15"
+              : "#ef4444",
+        ),
       },
     },
   ];
 
   const layout: Partial<Layout> = {
     title: {
-      text: "Model Predictions from Audio Samples (n = 78)",
+      text: "Model Prediction Confidence per Species",
       font: { size: 16 },
     },
     xaxis: {
-      title: "Prediction Category",
+      title: "Species",
     },
     yaxis: {
-      title: "Number of Predictions",
-      rangemode: "tozero",
+      title: "Confidence (0–1)",
+      range: [0, 1],
+      tickformat: ".1f",
     },
-    bargap: 0.4,
-    height: 200,
-    margin: { t: 60, l: 60, r: 30, b: 60 },
+    bargap: 0.35,
+    height: 260,
+    margin: { t: 50, l: 60, r: 30, b: 90 },
   };
 
   return (
-    <div className="w-full py-5">
-      <Card className="h-fit ">
-        <Plot
-          data={plotData}
-          layout={layout}
-          config={{ displayModeBar: false }}
-          style={{ width: "inherit", height: "100%" }}
-        />
-      </Card>
+    <div className="w-full py-4">
+      <Plot
+        data={plotData}
+        layout={layout}
+        config={{ displayModeBar: false }}
+        style={{ width: "100%", height: "100%" }}
+      />
     </div>
   );
 };
 
 export const Wssed = () => {
   const dispatch = useAppDispatch();
-  const [selectedBags, setSelectedBags] = useState<string[]>(["birds_europe"]);
+  const [selectedBags, setSelectedBags] = useState<string>("birds_europe");
   const { currentSnippetAudio } = useAppSelector((state: any) => state.snippet);
-  const [remaining, setRemaining] = useState(10);
+  const [remaining, setRemaining] = useState(5);
 
-  const handleChange = (value: SelectProps["value"]) => {
-    setSelectedBags(value as string[]);
+  const handleChange = (value: string) => {
+    setSelectedBags(value as string);
   };
 
   const handleResponse = (action: "accept" | "reject") => {
@@ -107,7 +146,8 @@ export const Wssed = () => {
     <div>
       <NavigationBar />
 
-      <div className="py-10 flex justify-center w-full bg-gray-50">
+      <div className="py-10 flex justify-center w-full bg-gray-50 ">
+        <DatasetFolderStructure />
         <Card className="w-[80%] rounded-xl shadow-sm">
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-900">
@@ -128,7 +168,6 @@ export const Wssed = () => {
 
               <div className="w-[320px]">
                 <Select
-                  mode="multiple"
                   value={selectedBags}
                   placeholder="Select species bags"
                   onChange={handleChange}
@@ -141,18 +180,23 @@ export const Wssed = () => {
             </div>
           </Card>
 
-          <div className="mb-2">
-            <h4 className="text-sm font-semibold text-gray-800 mt-2">
-              Dataset overview
-            </h4>
-            <AudioPredictionHistogram />
-          </div>
-
           <Card className="mb-6">
             <h4 className="text-sm font-semibold text-gray-800 mb-4">
               Audio snippet review
             </h4>
+            <div className="mb-2">
+              <AudioPredictionHistogram />
+            </div>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">
+                  Predicted species
+                </h4>
+                <p className="text-xs italic text-gray-500">Corvus corax</p>
+              </div>
 
+              <Tag color="green">Bird</Tag>
+            </div>
             <div className="relative flex items-center justify-center gap-4">
               <Tooltip title="Previous snippet">
                 <Button icon={<LeftOutlined />} />
@@ -177,60 +221,37 @@ export const Wssed = () => {
             </div>
           </Card>
 
-          <Card>
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900">
-                  Predicted species
-                </h4>
-                <p className="text-xs italic text-gray-500">Morus (bird)</p>
-              </div>
+          {/* Accept / Reject */}
+          <div className="flex gap-3 mt-5 w-full ">
+            <Button
+              danger
+              className=" w-[50%]!"
+              // disabled={remaining === 0}
+              onClick={() => handleResponse("reject")}
+            >
+              x
+            </Button>
+            <Button
+              type="primary"
+              className="bg-green-600! hover:bg-green-700! flex-1 w-[50%]! border border-green-300!"
+              // disabled={remaining === 0}
+              onClick={() => handleResponse("accept")}
+            >
+              ✓
+            </Button>
+          </div>
 
-              <Tag color="green">Bird</Tag>
-            </div>
+          {/* Retraining */}
+          <div className="mt-5">
+            <Button loading={true} block onClick={handleRetrain}>
+              Retrain model now
+            </Button>
 
-            {/* Confidence */}
-            <div className="mb-4">
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>Model confidence</span>
-                <span>60%</span>
-              </div>
-              <Progress percent={60} showInfo={false} strokeColor="#22c55e" />
-            </div>
-
-            {/* Accept / Reject */}
-            <div className="flex gap-3 mt-5">
-              <Button
-                type="primary"
-                className="bg-green-600 hover:bg-green-700 flex-1"
-                // disabled={remaining === 0}
-                onClick={() => handleResponse("accept")}
-              >
-                Accept prediction
-              </Button>
-
-              <Button
-                danger
-                className="flex-1"
-                // disabled={remaining === 0}
-                onClick={() => handleResponse("reject")}
-              >
-                Reject prediction
-              </Button>
-            </div>
-
-            {/* Retraining */}
-            <div className="mt-5">
-              <Button block onClick={handleRetrain}>
-                Retrain model now
-              </Button>
-
-              <p className="text-[11px] text-gray-500 text-center mt-2">
-                The model will automatically retrain after collecting{" "}
-                <span className="font-medium">{remaining}</span> more responses.
-              </p>
-            </div>
-          </Card>
+            <p className="text-[11px] text-gray-500 text-center mt-2">
+              The model will automatically retrain after collecting{" "}
+              <span className="font-medium">{remaining}</span> more responses.
+            </p>
+          </div>
         </Card>
       </div>
     </div>
