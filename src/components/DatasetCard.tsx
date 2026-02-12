@@ -38,7 +38,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   <GenerateEmbeddings dataset={dataset} />
                 )}
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
-                <GenerateWssed />
+                {/* <GenerateWssed /> */}
               </div>
             </div>
             <div
