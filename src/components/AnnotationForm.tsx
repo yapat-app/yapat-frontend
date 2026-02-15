@@ -98,6 +98,8 @@ export const AnnotationForm: React.FC<AnnotationFormProps> = ({
         annotationData.taxon_id = selectedTaxonId;
       }
 
+      console.log("Creating annotation with data:", annotationData);
+
       await dispatch(createAnnotation(annotationData)).unwrap();
       // Success handling is done in useEffect above
     } catch (error: any) {

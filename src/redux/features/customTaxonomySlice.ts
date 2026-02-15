@@ -11,6 +11,7 @@ import type { Conversation, LabelSpaceItem } from "../../types";
 export interface CustomTaxonomyState {
   conversation: Conversation | null;
   labelSpace: LabelSpaceItem[] | [];
+  allTaxonomies: any[] | [];
   messageSent: boolean;
   conversationFreezed: boolean;
   labelRemoved: boolean;
@@ -27,6 +28,7 @@ const initialState: CustomTaxonomyState = {
   messageLoading: false,
   conversationFreezed: false,
   labelRemoved: false,
+  allTaxonomies: [],
   labelSpace: [],
   labelAdded: false,
   loading: false,
@@ -159,6 +161,17 @@ export const removeLabels = createAsyncThunk(
   },
 );
 
+export const getAllTaxonomies = createAsyncThunk(
+  "taxonomy/getAllTaxonomies",
+  async (teamId: number, { rejectWithValue }) => {
+    try {
+      return await customtaxonomyApi.allTaxonomies(teamId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 // ============================================================================
 // Slice
 // ============================================================================
@@ -176,6 +189,9 @@ export const customtaxonomySlice = createSlice({
     reset: (state) => {
       state.conversationFreezed = false;
       state.labelRemoved = false;
+    },
+    setLabelSpace: (state, action) => {
+      state.labelSpace = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -221,6 +237,15 @@ export const customtaxonomySlice = createSlice({
       .addCase(getLabelSpace.fulfilled, (state, action) => {
         state.loading = false;
         state.labelSpace = action.payload.items;
+      })
+      //get all taxonomies for team
+      .addCase(getAllTaxonomies.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllTaxonomies.fulfilled, (state, action) => {
+        state.loading = false;
+        state.allTaxonomies = action.payload.taxonomies;
       })
       //freeze Conversation
       .addCase(freezeConversation.pending, (state) => {
@@ -277,6 +302,6 @@ export const customtaxonomySlice = createSlice({
   },
 });
 
-export const { resetAddLabel, resetSentMessage, reset } =
+export const { resetAddLabel, resetSentMessage, reset, setLabelSpace } =
   customtaxonomySlice.actions;
 export default customtaxonomySlice.reducer;

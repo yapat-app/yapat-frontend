@@ -378,6 +378,11 @@ export const customtaxonomyApi = {
     return response.data;
   },
 
+  allTaxonomies: async (teamId: number): Promise<any> => {
+    const response = await api.get(`/api/taxonomy/custom/?team_id=${teamId}`);
+    return response.data;
+  },
+
   sendNewMessage: async (params: {
     conversationId: number;
     prompt: string;

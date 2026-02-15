@@ -186,8 +186,18 @@ export interface LabelSpaceItem {
   id: string;
   name: string;
   scientific_name: string;
+  canonical_name: string;
   taxon_id: string;
-  metadata: Metadata;
+  metadata: {
+    iri: string;
+    rank: string;
+    tool: string;
+    score: null | number;
+    family: null | string;
+    source: string;
+    kingdom: null | string;
+    description: null | string;
+  };
   added_at: string;
 }
 

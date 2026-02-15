@@ -105,6 +105,7 @@ const TaxonomyChatbot: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const inputRef = useRef<InputRef>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -134,14 +135,14 @@ const TaxonomyChatbot: React.FC = () => {
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
     // Start a new conversation if there isn't one, or if it's frozen/cancelled
-    if (
-      conversation &&
-      (conversation.is_frozen === true || conversation.status === "cancelled")
-    ) {
-      dispatch(startNewConversation(1));
-    } else if (!conversation) {
-      dispatch(startNewConversation(1));
-    }
+    // if (
+    //   conversation &&
+    //   (conversation.is_frozen === true || conversation.status === "cancelled")
+    // ) {
+    dispatch(startNewConversation(1));
+    // } else if (!conversation) {
+    //   dispatch(startNewConversation(1));
+    // }
 
     // Optional cleanup when component unmounts
     return () => {
@@ -173,6 +174,7 @@ const TaxonomyChatbot: React.FC = () => {
   // handle message Success Popup
   useEffect(() => {
     if (messageSent) {
+      setPendingMessage(null);
       message.success("Message Sent Successfully", undefined, () => {
         dispatch(resetSentMessage());
       });
@@ -195,18 +197,18 @@ const TaxonomyChatbot: React.FC = () => {
     }
   }, [labelAdded]);
 
-  useEffect(() => {
-    if (labelRemoved) {
-      message.success(`Label Removed`, undefined, () => {
-        dispatch(reset());
-      });
+  // useEffect(() => {
+  //   if (labelRemoved) {
+  //     message.success(`Label Removed`, undefined, () => {
+  //       dispatch(reset());
+  //     });
 
-      if (conversation?.id) {
-        dispatch(getConversation(conversation.id));
-        dispatch(getLabelSpace(conversation.id));
-      }
-    }
-  }, [labelRemoved]);
+  //     if (conversation?.id) {
+  //       dispatch(getConversation(conversation.id));
+  //       dispatch(getLabelSpace(conversation.id));
+  //     }
+  //   }
+  // }, [labelRemoved]);
 
   useEffect(() => {
     if (conversationFreezed) {
@@ -224,6 +226,7 @@ const TaxonomyChatbot: React.FC = () => {
     if (!inputValue.trim() || messageLoading) return;
 
     const promptText = inputValue.trim();
+    setPendingMessage(promptText);
     setInputValue("");
     setIsLoading(true);
 
@@ -258,8 +261,7 @@ const TaxonomyChatbot: React.FC = () => {
         }),
       ).unwrap();
     } catch (error) {
-      message.error("Failed to add to label space. Please try again.");
-      console.error("API Error:", error);
+      console.log(error);
     }
   };
 
@@ -270,20 +272,6 @@ const TaxonomyChatbot: React.FC = () => {
 
   const handleAddSingleTaxonomy = (messageId: number, index: number) => {
     handleAddToLabelSpace(messageId, [index + 1]);
-  };
-
-  const handleRemoveFromLabelSpace = async (itemId: number) => {
-    if (!conversation?.id) {
-      message.error("No active conversation");
-      return;
-    }
-
-    dispatch(
-      removeLabels({
-        conversationId: conversation.id,
-        itemId,
-      }),
-    );
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -437,7 +425,6 @@ const TaxonomyChatbot: React.FC = () => {
 
   return (
     <>
-      {/* Freeze Modal - Separate from main chat UI */}
       <Modal
         title="Freeze label space"
         centered
@@ -509,16 +496,16 @@ const TaxonomyChatbot: React.FC = () => {
             </Space>
           </div>
 
-          {/* Messages Area */}
           <div
             style={{
               overflowY: "auto",
-              height: "70%",
+              height: "98%",
               padding: "24px",
               background: "#f5f5f5",
             }}
           >
-            {!conversation?.messages || conversation.messages.length === 0 ? (
+            {(!conversation?.messages || conversation.messages.length === 0) &&
+            !pendingMessage ? (
               <div
                 className="flex flex-col justify-center items-center"
                 style={{
@@ -546,6 +533,17 @@ const TaxonomyChatbot: React.FC = () => {
                     {renderMessage(msg)}
                   </div>
                 ))}
+                {pendingMessage && (
+                  <div style={{ marginBottom: 20 }}>
+                    {renderMessage({
+                      id: -1,
+                      conversation_id: conversation.id,
+                      role: "user",
+                      content: pendingMessage,
+                      message_metadata: null,
+                    })}
+                  </div>
+                )}
               </>
             )}
 
@@ -575,58 +573,6 @@ const TaxonomyChatbot: React.FC = () => {
 
             <div ref={messagesEndRef} />
           </div>
-
-          {/* Label Space */}
-          {labelSpace && labelSpace.length > 0 && (
-            <div
-              style={{
-                padding: "16px 24px",
-                background: "white",
-                borderTop: "1px solid #f0f0f0",
-                maxHeight: 220,
-                overflowY: "auto",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 12,
-                }}
-              >
-                <Text strong style={{ fontSize: 15 }}>
-                  Label Space ({labelSpace.length})
-                </Text>
-                <Space size="small">
-                  <Button
-                    size="middle"
-                    type="primary"
-                    onClick={() => setOpenFreeze(true)}
-                  >
-                    Add To label space list
-                  </Button>
-                </Space>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {labelSpace.map((item) => (
-                  <Tag
-                    key={item.id}
-                    closable
-                    onClose={() => handleRemoveFromLabelSpace(item.id)}
-                    color="purple"
-                    style={{
-                      marginBottom: 4,
-                      padding: "4px 10px",
-                      fontSize: 13,
-                    }}
-                  >
-                    {item.name} ({item.taxon_id})
-                  </Tag>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Input Area */}
           <div

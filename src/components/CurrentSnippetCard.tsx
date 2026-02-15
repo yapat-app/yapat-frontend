@@ -9,7 +9,7 @@
  */
 
 import React from "react";
-import { Card, Tag, Space, Button, Divider } from "antd";
+import { Card, Tag, Space, Button, Divider, Tooltip } from "antd";
 import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
@@ -66,9 +66,27 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
               </Tag>
             </div>
           </div>
-
-          {/* Audio Player */}
-          <AudioPlayerPlaceholder />
+          {/* Audio Player & Navigation Buttons */}
+          <div className="flex w-full items-center justify-between  gap-2">
+            <Tooltip title="Previous Snippet">
+              <Button
+                className="w-12! h-12"
+                onClick={onPrevious}
+                disabled={!canGoPrevious}
+                icon={<ArrowLeftOutlined />}
+              ></Button>
+            </Tooltip>
+            <AudioPlayerPlaceholder />
+            <Tooltip title="Next Snippet">
+              <Button
+                className="w-12 h-12"
+                onClick={onNext}
+                disabled={!canGoNext}
+              >
+                <ArrowRightOutlined />
+              </Button>
+            </Tooltip>
+          </div>
         </div>
         {/* Label List */}
         <div className="w-[35%] h-[65vh]  ">
@@ -94,22 +112,6 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
           </div>
         )}
       </div>
-      {/* Action Buttons */}
-      {/* <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <Button
-            size="large"
-            onClick={onPrevious}
-            disabled={!canGoPrevious}
-            icon={<ArrowLeftOutlined />}
-          >
-            Previous
-          </Button>
-          <Button size="large" onClick={onNext} disabled={!canGoNext}>
-            Next <ArrowRightOutlined />
-          </Button>
-        </div>
-      </div> */}
     </Card>
   );
 };
