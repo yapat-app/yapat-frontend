@@ -34,6 +34,8 @@ import type {
   MessageResponse,
   Conversation,
   AllLabelSpace,
+  FreezeLabelSpaceResponse,
+  AddToLabelSpaceResponse,
   Taxonomy,
   AvailableTaxonomies,
 } from "../types";
@@ -343,7 +345,7 @@ export const customtaxonomyApi = {
     name: string;
     description: string;
     conversationId: number;
-  }): Promise<Conversation> => {
+  }): Promise<FreezeLabelSpaceResponse> => {
     const { name, description, conversationId } = params;
     const response = await api.post(
       `/api/taxonomy/chat/${conversationId}/freeze`,
@@ -400,7 +402,7 @@ export const customtaxonomyApi = {
     conversationId: number;
     messageId: number;
     indices: number[];
-  }): Promise<Conversation> => {
+  }): Promise<AddToLabelSpaceResponse> => {
     const { conversationId, messageId, indices } = params;
     const response = await api.post(
       `/api/taxonomy/chat/${conversationId}/add`,

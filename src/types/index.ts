@@ -229,6 +229,19 @@ export interface Conversation {
   messages: Message[] | [];
 }
 
+/** Response from POST /chat/{id}/freeze */
+export interface FreezeLabelSpaceResponse {
+  conversation: Conversation;
+  taxonomy: unknown;
+}
+
+/** Response from POST /chat/{id}/add (add to label space) */
+export interface AddToLabelSpaceResponse {
+  conversation: Conversation;
+  added_items: LabelSpaceItem[];
+  skipped_count: number;
+}
+
 export interface MessageResponse {
   message: Message;
   conversation: Conversation;

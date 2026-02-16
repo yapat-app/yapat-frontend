@@ -88,12 +88,15 @@ export const LabelSpace: React.FC = () => {
 
   const { currentSnippet } = useAppSelector((state: any) => state.snippet);
 
-  // Load conversation label space for taxonomy screen
+  // Load conversation label space once when entering pre-annotation screen
+  const [loadedConversationId, setLoadedConversationId] = useState<number | null>(null);
+  
   useEffect(() => {
-    if (pathname === "/pre-annotation" && conversation?.id) {
+    if (pathname === "/pre-annotation" && conversation?.id && conversation.id !== loadedConversationId) {
       dispatch(getLabelSpace(conversation.id));
+      setLoadedConversationId(conversation.id);
     }
-  }, [pathname, conversation?.id, dispatch]);
+  }, [pathname, conversation?.id, dispatch, loadedConversationId]);
 
   // Load saved/custom taxonomies for annotate screen
   useEffect(() => {

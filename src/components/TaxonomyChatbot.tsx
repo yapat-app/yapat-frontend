@@ -98,6 +98,7 @@ const TaxonomyChatbot: React.FC = () => {
     messageLoading,
     messageSent,
     labelAdded,
+    lastAddWasDuplicates,
     conversationFreezed,
   } = useAppSelector((state) => state.customTaxonomy);
 
@@ -135,13 +136,6 @@ const TaxonomyChatbot: React.FC = () => {
     };
   }, []); // Run once on mount
 
-  // ✅ Fetch conversation updates periodically
-  useEffect(() => {
-    if (conversation?.id) {
-      dispatch(getConversation(conversation.id));
-    }
-  }, [conversation?.id]);
-
   // Scroll to top when a new response arrives
   useEffect(() => {
     if (conversation?.messages?.length) {
@@ -169,16 +163,22 @@ const TaxonomyChatbot: React.FC = () => {
 
   useEffect(() => {
     if (labelAdded) {
-      message.success(`Label Added`, undefined, () => {
-        dispatch(resetAddLabel());
-      });
+      if (lastAddWasDuplicates) {
+        message.info("Already in label space", undefined, () => {
+          dispatch(resetAddLabel());
+        });
+      } else {
+        message.success("Label Added", undefined, () => {
+          dispatch(resetAddLabel());
+        });
+      }
 
       if (conversation?.id) {
         dispatch(getConversation(conversation.id));
         dispatch(getLabelSpace(conversation.id));
       }
     }
-  }, [labelAdded]);
+  }, [labelAdded, lastAddWasDuplicates]);
 
   // useEffect(() => {
   //   if (labelRemoved) {
