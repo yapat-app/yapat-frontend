@@ -100,7 +100,7 @@ export const DatasetFolderStructure: React.FC = () => {
 
     dispatch(
       fetchActiveLearningSuggestions({
-        species_name: speciesName.toLowerCase(),
+        species_name: speciesName,
         snippet_set_id: snippetSetId,
         dataset_id: Number(datasetId),
         strategy: "uncertainty",
@@ -138,7 +138,7 @@ export const DatasetFolderStructure: React.FC = () => {
 
       dispatch(
         fetchActiveLearningSuggestions({
-          species_name: selectedSpecies.toLowerCase(),
+          species_name: selectedSpecies,
           snippet_set_id: snippetSetId,
           dataset_id: Number(datasetId),
           strategy: "uncertainty",
