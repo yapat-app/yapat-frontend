@@ -1,7 +1,5 @@
-import React, {
-  useEffect,
+import {
   useState,
-  useCallback,
   // useMemo
 } from "react";
 import {
@@ -9,29 +7,17 @@ import {
   Select,
   Slider,
   InputNumber,
-  Switch,
   Button,
   Modal,
   Collapse,
-  Input,
 } from "antd";
 const { Option } = Select;
 const { Panel } = Collapse;
-import { useAppDispatch, useAppSelector } from "../hooks";
 import { useNavigate } from "react-router-dom";
 
-const embeddingModelList = [
-  {
-    name: "birdnet",
-    value: "birdnet",
-  },
-];
-
 export const GenerateWssed = () => {
-  const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [model, setModel] = useState("embedding");
 
   const showModal = async () => {
     setIsModalOpen(true);
@@ -61,25 +47,11 @@ export const GenerateWssed = () => {
         onCancel={handleCancel}
         // footer={null}
       >
-        <Form layout="vertical" className="max-h-[65vh] overflow-y-auto">
+        <Form
+          layout="vertical"
+          className="max-h-[65vh] overflow-y-auto font-ibm-sans"
+        >
           <h3 className="text-lg font-semibold mb-2">Training Settings</h3>
-          <Form.Item
-            label="Model"
-            name="model"
-            rules={[{ required: true, message: "Please select a model" }]}
-            tooltip="Select the base embedding model used for training and inference"
-          >
-            <Select
-              placeholder="Select a model"
-              onChange={(value: string) => setModel(value)}
-            >
-              {embeddingModelList.map((model) => (
-                <Option key={model.name} value={model.name}>
-                  {model.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
 
           <Form.Item
             label="Pooling Method"
@@ -174,16 +146,6 @@ export const GenerateWssed = () => {
                 tooltip="Step size between FFT windows"
               >
                 <InputNumber min={64} max={2048} style={{ width: "100%" }} />
-              </Form.Item>
-
-              <Form.Item
-                label="Normalize Embeddings"
-                name="normalize"
-                valuePropName="checked"
-                initialValue={true}
-                tooltip="Applies L2 normalization to embedding vectors"
-              >
-                <Switch />
               </Form.Item>
             </Panel>
           </Collapse>

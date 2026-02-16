@@ -22,10 +22,7 @@ import {
   MessageOutlined,
   CloseOutlined,
   CheckOutlined,
-  CloseCircleOutlined,
   SendOutlined,
-  DeleteOutlined,
-  ExportOutlined,
   MinusOutlined,
   RobotOutlined,
   UserOutlined,
@@ -45,84 +42,21 @@ import {
   removeLabels,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
+import type { Message, LabelSpaceItem } from "../types";
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
-
-interface TaxonomyNode {
-  id: string;
-  name: string;
-  rank: string;
-  scientific_name: string;
-  metadata: {
-    iri: string;
-    tool: string;
-    score: null | number;
-    source: string;
-    description: null | string;
-  };
-}
-
-interface MessageMetadata {
-  taxonomy_data?: {
-    nodes: TaxonomyNode[];
-    metadata: {
-      model: string;
-      prompt: string;
-      source: string;
-      tools_called: string[];
-      total_species: number;
-    };
-  };
-  generation_metadata?: {
-    model: string;
-    prompt: string;
-    server: string;
-  };
-  action?: string;
-  item_ids?: string[];
-}
-
-interface ConversationMessage {
-  id: number;
-  conversation_id: number;
-  role: "user" | "assistant" | "system";
-  content: string;
-  message_metadata: MessageMetadata | null;
-}
-
-interface LabelSpaceItem {
-  id: string;
-  name: string;
-  scientific_name: string;
-  taxon_id: string;
-  metadata: {
-    iri: string;
-    rank: string;
-    tool: string;
-    score: null | number;
-    family: null | string;
-    source: string;
-    kingdom: null | string;
-    description: null | string;
-  };
-  added_at: string;
-}
 
 interface AIAssistantTaxonomyProps {
   onExport?: (taxonomies: LabelSpaceItem[]) => void;
   onClear?: () => void;
 }
 
-const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
-  onExport,
-  onClear,
-}) => {
+const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -275,11 +209,10 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
 
   //send Message
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || messageLoading) return;
+    if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
     setInputValue(""); // Clear input immediately for better UX
-    setIsLoading(true);
 
     dispatch(
       sendMessage({
@@ -335,7 +268,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     handleAddToLabelSpace(messageId, [index + 1]);
   };
 
-  const handleRemoveFromLabelSpace = async (itemId: number) => {
+  const handleRemoveFromLabelSpace = async (itemId: number | string) => {
     if (!conversation?.id) {
       message.error("No active conversation");
       return;
@@ -354,33 +287,6 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     );
   };
 
-  const handleExportLabelSpace = () => {
-    if (!labelSpace || labelSpace.length === 0) {
-      message.warning("No items in label space to export");
-      return;
-    }
-
-    message.success(`Exporting ${conversation.label_space.length} items`);
-  };
-
-  const handleClearLabelSpace = async () => {
-    if (!conversation?.label_space || conversation.label_space.length === 0) {
-      message.warning("Label space is already empty");
-      return;
-    }
-
-    try {
-      // Remove all items from label space
-      for (const item of conversation.label_space) {
-        await handleRemoveFromLabelSpace(item.id);
-      }
-      message.success("Label space cleared");
-    } catch (error) {
-      message.error("Failed to clear label space");
-      console.error("Error:", error);
-    }
-  };
-
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -388,7 +294,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     }
   };
 
-  const renderMessage = (msg: ConversationMessage) => {
+  const renderMessage = (msg: Message) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>

@@ -34,8 +34,13 @@ import type {
   MessageResponse,
   Conversation,
   AllLabelSpace,
-  Taxonomy,
+  DatasetResponse,
   AvailableTaxonomies,
+  ActiveLearningResponse,
+  ActiveLearningLabel,
+  SnippetSet,
+  retrainActiveLearningBody,
+  PredictionHistogram,
 } from "../types";
 
 // ============================================================================
@@ -200,6 +205,11 @@ export const embeddingApi = {
     const response = await api.get(`api/datasets/${datasetId}/embeddings`);
     return response.data;
   },
+
+  allSnippetSets: async (datasetId: number | null): Promise<SnippetSet[]> => {
+    const response = await api.get(`api/datasets/${datasetId}/snippet-sets`);
+    return response.data;
+  },
 };
 
 // ============================================================================
@@ -361,7 +371,7 @@ export const customtaxonomyApi = {
   },
 
   removeItem: async (params: {
-    itemId: number;
+    itemId: number | string;
     conversationId: number;
   }): Promise<Conversation> => {
     const { itemId, conversationId } = params;
@@ -442,6 +452,57 @@ export const recordingApi = {
 };
 
 // ============================================================================
+// WSSED API
+// ============================================================================
+
+export const wssedApi = {
+  suggestions: async (params: {
+    snippet_set_id: number;
+    species_name: string;
+    dataset_id: number;
+    strategy: string;
+    k: number;
+    device: string;
+    seed: number;
+  }): Promise<ActiveLearningResponse> => {
+    const response = await api.post("/api/wssed/active-learning/suggestions", {
+      ...params,
+    });
+    return response.data;
+  },
+
+  submitLabel: async (params: ActiveLearningLabel): Promise<void> => {
+    const { device, epochs, lr, ...body } = params;
+    const response = await api.post("/api/wssed/active-learning/labels", body, {
+      params: { device, epochs, lr },
+    });
+    return response.data;
+  },
+
+  retrain: async (params: retrainActiveLearningBody): Promise<void> => {
+    const response = await api.post(
+      "/api/wssed/active-learning/retrain",
+      params,
+      {
+        params: params,
+      },
+    );
+    return response.data;
+  },
+
+  histogram: async (params: {
+    model_id: number;
+    snippet_set_id: number;
+  }): Promise<PredictionHistogram> => {
+    const response = await api.get(
+      `/api/wssed/species-models/${params.model_id}/histogram`,
+      { params },
+    );
+    return response.data;
+  },
+};
+
+// ============================================================================
 // Dataset API
 // ============================================================================
 
@@ -460,6 +521,11 @@ export const datasetApi = {
 
   getById: async (datasetId: number): Promise<Dataset> => {
     const response = await api.get(`/api/datasets/${datasetId}`);
+    return response.data;
+  },
+
+  explorer: async (datasetId: number): Promise<DatasetResponse> => {
+    const response = await api.get(`/api/datasets/${datasetId}/explorer`);
     return response.data;
   },
 };

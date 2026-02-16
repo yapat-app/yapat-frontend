@@ -4,7 +4,6 @@
  */
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
 import { getErrorMessage, customtaxonomyApi } from "../../services/api";
 import type { Conversation, LabelSpaceItem } from "../../types";
 
@@ -147,7 +146,7 @@ export const removeLabels = createAsyncThunk(
   async (
     params: {
       conversationId: number;
-      itemId: number;
+      itemId: number | string;
     },
     { rejectWithValue },
   ) => {
@@ -227,7 +226,7 @@ export const customtaxonomySlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(freezeConversation.fulfilled, (state, action) => {
+      .addCase(freezeConversation.fulfilled, (state) => {
         state.loading = false;
         state.conversationFreezed = true;
       })
@@ -236,7 +235,7 @@ export const customtaxonomySlice = createSlice({
         state.messageLoading = true;
         state.error = null;
       })
-      .addCase(sendMessage.fulfilled, (state, action) => {
+      .addCase(sendMessage.fulfilled, (state) => {
         state.messageLoading = false;
         state.messageSent = true;
       })
@@ -265,7 +264,7 @@ export const customtaxonomySlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(removeLabels.fulfilled, (state, action) => {
+      .addCase(removeLabels.fulfilled, (state) => {
         state.loading = false;
         state.labelRemoved = true;
       })

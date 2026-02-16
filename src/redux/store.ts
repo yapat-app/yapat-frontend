@@ -9,6 +9,7 @@ import taxonomyReducer from "./features/taxonomySlice";
 import embeddingReducer from "./features/embeddingSlice";
 import feedReducer from "./features/feedSlice";
 import customTaxonomyReducer from "./features/customTaxonomySlice";
+import wssedReducer from "./features/wssedSlice";
 
 const store = configureStore({
   reducer: {
@@ -22,6 +23,7 @@ const store = configureStore({
     customTaxonomy: customTaxonomyReducer,
     embedding: embeddingReducer,
     feed: feedReducer,
+    wssed: wssedReducer,
   },
 });
 

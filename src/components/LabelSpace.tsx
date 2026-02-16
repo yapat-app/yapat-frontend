@@ -1,6 +1,6 @@
 import { List, Tag, Tooltip } from "antd";
 import { useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 export const LabelSpace: React.FC = () => {
   const [search, setSearch] = useState("");
@@ -409,15 +409,6 @@ export const LabelSpace: React.FC = () => {
     return Array.from(new Set([...ranks1, ...ranks2])).sort();
   };
 
-  const anatologies = [
-    {
-      name: "GBIF",
-    },
-    {
-      name: "ENVO",
-    },
-  ];
-
   const filteredLabels = labels.filter((label) =>
     label.canonical_name.toLowerCase().includes(search.toLowerCase()),
   );
@@ -490,7 +481,7 @@ export const LabelSpace: React.FC = () => {
 
         <div className="border border-gray-200 rounded-md px-3 py-4 flex flex-col h-full">
           {/* Search bar */}
-          <div className="mb-2 flex-shrink-0">
+          <div className="mb-2 shrink-0">
             <input
               placeholder="Search labels"
               value={search}
@@ -507,7 +498,7 @@ export const LabelSpace: React.FC = () => {
               split={false}
               renderItem={(item) => (
                 <List.Item
-                  key={item.value}
+                  key={item.taxon_id}
                   className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 rounded"
                 >
                   {renderLabelItem(item)}

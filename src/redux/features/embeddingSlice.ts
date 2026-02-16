@@ -6,6 +6,7 @@ import type {
   CreateEmbedding,
   EmbeddingMethod,
   EmbeddingJob,
+  SnippetSet,
 } from "../../types";
 
 export interface EmbeddingState {
@@ -13,6 +14,7 @@ export interface EmbeddingState {
   embeddingMethods: EmbeddingMethod[] | null;
   selectedEmbeddedMethodId: number | null;
   datasetEmbeddings: EmbeddingJob[] | null;
+  snippetSets: SnippetSet[] | [];
   loading: boolean;
   embeddingLoading: boolean;
   error: string | null;
@@ -25,6 +27,7 @@ const initialState: EmbeddingState = {
   datasetEmbeddings: null,
   loading: false,
   embeddingLoading: false,
+  snippetSets: [],
   error: null,
 };
 
@@ -78,6 +81,17 @@ export const getAllDatasetEmbeddings = createAsyncThunk(
   },
 );
 
+export const getAllDatasetSnippetSets = createAsyncThunk(
+  "embedding/allSnippetSets",
+  async (datasetId: number, { rejectWithValue }) => {
+    try {
+      return await embeddingApi.allSnippetSets(datasetId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 // ============================================================================
 // Slice
 // ============================================================================
@@ -111,6 +125,19 @@ export const embeddingSlice = createSlice({
         state.embeddingLoading = false;
         state.error = action.payload as string;
         state.embeddingCreated = null;
+      })
+      .addCase(getAllDatasetSnippetSets.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllDatasetSnippetSets.fulfilled, (state, action) => {
+        state.loading = false;
+        state.snippetSets = action.payload;
+      })
+      .addCase(getAllDatasetSnippetSets.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.snippetSets = [];
       })
       // get all dataset embeddings
       .addCase(getAllDatasetEmbeddings.pending, (state) => {

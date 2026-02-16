@@ -14,7 +14,6 @@ import {
 } from "antd";
 import {
   MessageOutlined,
-  CloseOutlined,
   CheckOutlined,
   SendOutlined,
   RobotOutlined,
@@ -23,7 +22,6 @@ import {
 import type { InputRef } from "antd";
 import {
   startNewConversation,
-  cancelConversation,
   getConversation,
   sendMessage,
   addLabels,
@@ -35,74 +33,14 @@ import {
   removeLabels,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
+import type { Message } from "../types";
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
 
-interface TaxonomyNode {
-  id: string;
-  name: string;
-  rank: string;
-  scientific_name: string;
-  metadata: {
-    iri: string;
-    tool: string;
-    score: null | number;
-    source: string;
-    description: null | string;
-  };
-}
-
-interface MessageMetadata {
-  taxonomy_data?: {
-    nodes: TaxonomyNode[];
-    metadata: {
-      model: string;
-      prompt: string;
-      source: string;
-      tools_called: string[];
-      total_species: number;
-    };
-  };
-  generation_metadata?: {
-    model: string;
-    prompt: string;
-    server: string;
-  };
-  action?: string;
-  item_ids?: string[];
-}
-
-interface ConversationMessage {
-  id: number;
-  conversation_id: number;
-  role: "user" | "assistant" | "system";
-  content: string;
-  message_metadata: MessageMetadata | null;
-}
-
-interface LabelSpaceItem {
-  id: string;
-  name: string;
-  scientific_name: string;
-  taxon_id: string;
-  metadata: {
-    iri: string;
-    rank: string;
-    tool: string;
-    score: null | number;
-    family: null | string;
-    source: string;
-    kingdom: null | string;
-    description: null | string;
-  };
-  added_at: string;
-}
-
 const TaxonomyChatbot: React.FC = () => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -221,11 +159,10 @@ const TaxonomyChatbot: React.FC = () => {
   }, [conversationFreezed]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || messageLoading) return;
+    if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
     setInputValue("");
-    setIsLoading(true);
 
     dispatch(
       sendMessage({
@@ -272,7 +209,7 @@ const TaxonomyChatbot: React.FC = () => {
     handleAddToLabelSpace(messageId, [index + 1]);
   };
 
-  const handleRemoveFromLabelSpace = async (itemId: number) => {
+  const handleRemoveFromLabelSpace = async (itemId: number | string) => {
     if (!conversation?.id) {
       message.error("No active conversation");
       return;
@@ -293,7 +230,7 @@ const TaxonomyChatbot: React.FC = () => {
     }
   };
 
-  const renderMessage = (msg: ConversationMessage) => {
+  const renderMessage = (msg: Message) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>

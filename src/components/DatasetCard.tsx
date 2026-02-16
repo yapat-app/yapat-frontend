@@ -3,7 +3,6 @@ import { ExportAnnotationButton } from "./ExportAnnotation";
 import { GenerateFeedModal } from "./GenerateFeed";
 import { useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
-import { GenerateWssed } from "./GenerateWssed";
 
 type DatasetCardProps = {
   dataset: Dataset;

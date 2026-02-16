@@ -1,12 +1,13 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
-import type { Dataset, ExportAnnotation } from "../../types";
-import { teamApi } from "../../services/api";
+import type { Dataset, ExportAnnotation, DatasetResponse } from "../../types";
+import { teamApi, datasetApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
-  allDatasets: Dataset[];
+  allDatasets: Dataset[] | [];
+  datasetDirectories: DatasetResponse | null;
   annotationExported: boolean;
   selectedDatasetId: number | null;
   loading: boolean;
@@ -18,6 +19,7 @@ interface AnnotationState {
 
 const initialState: DatasetState = {
   allDatasets: [],
+  datasetDirectories: null,
   annotationExported: false,
   selectedDatasetId: null,
   loading: false,
@@ -36,6 +38,17 @@ export const fetchAllTeamDatasets = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       return await teamApi.getAllTeamDatasets();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const exploreDatasetDirectory = createAsyncThunk(
+  "dataset/exploreDirectory",
+  async ({ datasetId }: { datasetId: number }, { rejectWithValue }) => {
+    try {
+      return await datasetApi.explorer(datasetId);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -101,6 +114,17 @@ export const datasetSlice = createSlice({
     builder.addCase(fetchAllTeamDatasets.rejected, (state) => {
       state.loading = false;
       state.allDatasets = [];
+    });
+    builder.addCase(exploreDatasetDirectory.pending, (state) => {
+      state.loading = true;
+    });
+    builder.addCase(exploreDatasetDirectory.fulfilled, (state, action) => {
+      state.datasetDirectories = action.payload;
+      state.loading = false;
+    });
+    builder.addCase(exploreDatasetDirectory.rejected, (state) => {
+      state.loading = false;
+      state.datasetDirectories = null;
     });
   },
 });

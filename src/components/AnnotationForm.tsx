@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Modal, Select, Form, Button, message, Alert } from "antd";
+import { Select, Form, Button, message, Alert } from "antd";
 import { SpeciesAutocomplete } from "./SpeciesAutocomplete";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {

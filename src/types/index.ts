@@ -150,6 +150,9 @@ export interface Metadata {
   score: number | null;
   source: string;
   description: string | null;
+  rank?: string;
+  family?: string | null;
+  kingdom?: string | null;
 }
 
 export interface Node {
@@ -179,7 +182,9 @@ export interface TaxonomyData {
 }
 
 export interface MessageMetadata {
-  taxonomy_data: TaxonomyData;
+  taxonomy_data?: TaxonomyData;
+  action?: string;
+  item_ids?: string[];
 }
 
 export interface LabelSpaceItem {
@@ -194,7 +199,7 @@ export interface LabelSpaceItem {
 export interface Message {
   id: number;
   conversation_id: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   message_metadata: MessageMetadata | null;
 }
@@ -288,6 +293,17 @@ export interface SnippetCreate {
   file_path?: string;
 }
 
+export interface SnippetSet {
+  id: number;
+  dataset_id: number;
+  embedding_model_id: number;
+  window_size: number;
+  step_size: number;
+  overlap: number;
+  status: string;
+  created_at: string;
+}
+
 // ============================================================================
 // Recording Types
 // ============================================================================
@@ -336,6 +352,25 @@ export interface DatasetCreate {
   team_id?: number;
 }
 
+export interface DatasetFile {
+  filename: string;
+  file_path: string;
+  size: number;
+}
+
+export interface DatasetSpecies {
+  name: string;
+  file_count: number;
+  files: DatasetFile[];
+}
+
+export interface DatasetResponse {
+  dataset_id: number;
+  dataset_name: string;
+  source_uri: string;
+  species: DatasetSpecies[];
+}
+
 // ============================================================================
 // User Types
 // ============================================================================
@@ -365,6 +400,80 @@ export interface PaginatedResponse<T> {
   total: number;
   skip: number;
   limit: number;
+}
+
+// ============================================================================
+// WSSED Types
+// ============================================================================
+
+export interface ModelInfo {
+  species_model_id: number;
+  species_name: string;
+  metric_type: string;
+  prediction_level: string;
+  model_version: string;
+}
+
+export interface SuggestionItem {
+  snippet_id: number;
+  predicted_probability: number;
+}
+
+export interface PredictionHistogram {
+  species_model_id: number;
+  species_name: string;
+  snippet_set_id: number | null;
+  bin_edges: number[];
+  counts: number[];
+  total_snippets: number;
+}
+
+export interface ActiveLearningResponse {
+  snippet_ids: number[];
+  probs: number[];
+  n_labeled: number;
+  model_info: ModelInfo;
+  suggestions: SuggestionItem[];
+}
+
+export interface getActiveLearningSuggestionsParams {
+  snippet_set_id: number;
+  species_name: string;
+  dataset_id: number;
+  strategy: string;
+  k: number;
+  device: string;
+  seed: number;
+}
+
+export interface retrainActiveLearningBody {
+  snippet_set_id: number;
+  species_name?: string;
+  dataset_id: number;
+  label?: number;
+  device?: string;
+  epochs?: number;
+  lr?: number;
+}
+
+export interface ActiveLearningLabelBody {
+  snippet_set_id: number;
+  species_name: string;
+  dataset_id: number;
+  snippet_id: number;
+  label: number;
+}
+
+export interface ActiveLearningLabelParams {
+  device?: string;
+  epochs?: number;
+  lr?: number;
+}
+
+export interface ActiveLearningLabel extends ActiveLearningLabelBody {
+  device?: string;
+  epochs?: number;
+  lr?: number;
 }
 
 // ============================================================================

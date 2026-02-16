@@ -41,7 +41,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
           <div
             key={snippet.id}
             className={`
-              flex-shrink-0 p-3 border-2 rounded-lg min-w-[78px] text-center cursor-pointer
+              shrink-0 p-3 border-2 rounded-lg min-w-19.5 text-center cursor-pointer
               transition-all duration-200
               ${
                 snippet.id === currentSnippetId
@@ -68,7 +68,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               setMaxVisible(snippets.length);
               setExpanded(true);
             }}
-            className="flex-shrink-0 p-3 text-gray-400 flex items-center"
+            className="shrink-0 p-3 text-gray-400 flex items-center"
           >
             +{remainingCount} more
           </div>
@@ -79,7 +79,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               setMaxVisible(15);
               setExpanded(false);
             }}
-            className="flex-shrink-0 p-3 text-gray-400 flex items-center"
+            className="shrink-0 p-3 text-gray-400 flex items-center"
           >
             show less
           </div>
