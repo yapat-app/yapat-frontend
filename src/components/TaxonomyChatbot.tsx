@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   Input,
-  List,
   Space,
   Tag,
   Typography,
@@ -11,19 +10,23 @@ import {
   message,
   Modal,
   Divider,
+  Collapse,
+  Badge,
 } from "antd";
 import {
   MessageOutlined,
-  CloseOutlined,
   CheckOutlined,
   SendOutlined,
   RobotOutlined,
   UserOutlined,
+  InfoCircleOutlined,
+  LinkOutlined,
+  EnvironmentOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import {
   startNewConversation,
-  cancelConversation,
   getConversation,
   sendMessage,
   addLabels,
@@ -32,7 +35,6 @@ import {
   getLabelSpace,
   reset,
   freezeConversation,
-  removeLabels,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 
@@ -56,7 +58,7 @@ interface TaxonomyNode {
 interface MessageMetadata {
   taxonomy_data?: {
     nodes: TaxonomyNode[];
-    metadata: {
+    metadata?: {
       model: string;
       prompt: string;
       source: string;
@@ -81,28 +83,9 @@ interface ConversationMessage {
   message_metadata: MessageMetadata | null;
 }
 
-interface LabelSpaceItem {
-  id: string;
-  name: string;
-  scientific_name: string;
-  taxon_id: string;
-  metadata: {
-    iri: string;
-    rank: string;
-    tool: string;
-    score: null | number;
-    family: null | string;
-    source: string;
-    kingdom: null | string;
-    description: null | string;
-  };
-  added_at: string;
-}
-
 const TaxonomyChatbot: React.FC = () => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -114,9 +97,7 @@ const TaxonomyChatbot: React.FC = () => {
     conversation,
     messageLoading,
     messageSent,
-    labelSpace,
     labelAdded,
-    labelRemoved,
     conversationFreezed,
   } = useAppSelector((state) => state.customTaxonomy);
 
@@ -223,12 +204,11 @@ const TaxonomyChatbot: React.FC = () => {
   }, [conversationFreezed]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || messageLoading) return;
+    if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
     setPendingMessage(promptText);
     setInputValue("");
-    setIsLoading(true);
 
     dispatch(
       sendMessage({
@@ -281,6 +261,183 @@ const TaxonomyChatbot: React.FC = () => {
     }
   };
 
+  // Helper to clean and extract summary from response
+  const extractSummary = (content: string): string => {
+    // Remove markdown formatting and extract a clean summary
+    const lines = content.split('\n');
+    const summaryLines: string[] = [];
+    
+    for (const line of lines) {
+      const cleaned = line
+        .replace(/^#{1,6}\s+/, '') // Remove markdown headers
+        .replace(/\*\*/g, '') // Remove bold markers
+        .trim();
+      
+      // Skip technical lines with IDs, IRIs, etc
+      if (cleaned && 
+          !cleaned.startsWith('**') &&
+          !cleaned.includes('ID:**') &&
+          !cleaned.includes('IRI:**') &&
+          !cleaned.includes('Source:**') &&
+          !cleaned.includes('Description:**') &&
+          !cleaned.includes('Feel free') &&
+          cleaned.length > 10) {
+        summaryLines.push(cleaned);
+        if (summaryLines.length >= 2) break; // Get first 2 meaningful lines
+      }
+    }
+    
+    return summaryLines.join(' ') || 'Found relevant taxonomies for your query.';
+  };
+
+  const getSourceColor = (source: string): string => {
+    const colors: Record<string, string> = {
+      'gbif': '#1890ff',
+      'envo': '#52c41a',
+      'wikipedia': '#fa8c16',
+      'ols': '#722ed1',
+      'local': '#13c2c2',
+    };
+    return colors[source.toLowerCase()] || '#1890ff';
+  };
+
+  const getSourceIcon = (source: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      'gbif': <ExperimentOutlined />,
+      'envo': <EnvironmentOutlined />,
+      'wikipedia': <InfoCircleOutlined />,
+    };
+    return icons[source.toLowerCase()] || <InfoCircleOutlined />;
+  };
+
+  const renderTaxonomyCard = (item: TaxonomyNode, index: number, messageId: number) => {
+    const collapseItems = [
+      {
+        key: '1',
+        label: (
+          <Space size={4}>
+            <InfoCircleOutlined style={{ fontSize: 12 }} />
+            <span style={{ fontSize: 12 }}>Details</span>
+          </Space>
+        ),
+        children: (
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            {item.metadata.description && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Description:</Text>
+                <Paragraph 
+                  style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} 
+                  ellipsis={{ rows: 3, expandable: true, symbol: 'more' }}
+                >
+                  {item.metadata.description}
+                </Paragraph>
+              </div>
+            )}
+            {item.metadata.iri && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Reference:</Text>
+                <div style={{ marginTop: 4 }}>
+                  <a 
+                    href={item.metadata.iri} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 11, wordBreak: 'break-all' }}
+                  >
+                    <LinkOutlined /> {item.metadata.iri}
+                  </a>
+                </div>
+              </div>
+            )}
+            {item.id && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>ID: </Text>
+                <Text code style={{ fontSize: 11 }}>{item.id}</Text>
+              </div>
+            )}
+            {item.metadata.score && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Confidence: </Text>
+                <Tag color="blue" style={{ fontSize: 11 }}>
+                  {(item.metadata.score * 100).toFixed(0)}%
+                </Tag>
+              </div>
+            )}
+          </Space>
+        ),
+      },
+    ];
+
+    return (
+      <Card
+        key={index}
+        size="small"
+        style={{
+          marginBottom: 12,
+          borderRadius: 8,
+          border: '1px solid #f0f0f0',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        }}
+        bodyStyle={{ padding: '12px 16px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Space direction="vertical" size={6} style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Text strong style={{ fontSize: 15, color: '#262626' }}>
+                {item.name}
+              </Text>
+              <Badge 
+                count={getSourceIcon(item.metadata.source)} 
+                style={{ 
+                  backgroundColor: getSourceColor(item.metadata.source),
+                  fontSize: 10
+                }} 
+              />
+            </div>
+            
+            {item.scientific_name && item.scientific_name !== item.name && (
+              <Text italic type="secondary" style={{ fontSize: 13 }}>
+                {item.scientific_name}
+              </Text>
+            )}
+            
+            <Space size={4} wrap style={{ marginTop: 4 }}>
+              <Tag 
+                color={getSourceColor(item.metadata.source)} 
+                style={{ fontSize: 11, margin: 0 }}
+              >
+                {item.metadata.source.toUpperCase()}
+              </Tag>
+              {item.rank && (
+                <Tag color="default" style={{ fontSize: 11, margin: 0 }}>
+                  {item.rank}
+                </Tag>
+              )}
+            </Space>
+
+            {(item.metadata.description || item.metadata.iri || item.id) && (
+              <Collapse
+                ghost
+                size="small"
+                items={collapseItems}
+                style={{ marginTop: 4 }}
+              />
+            )}
+          </Space>
+
+          <Button
+            type="primary"
+            size="small"
+            icon={<CheckOutlined />}
+            onClick={() => handleAddSingleTaxonomy(messageId, index)}
+            style={{ marginLeft: 12, flexShrink: 0 }}
+          >
+            Add
+          </Button>
+        </div>
+      </Card>
+    );
+  };
+
   const renderMessage = (msg: ConversationMessage) => {
     if (msg.role === "user") {
       return (
@@ -318,6 +475,7 @@ const TaxonomyChatbot: React.FC = () => {
 
     if (msg.role === "assistant") {
       const taxonomies = msg.message_metadata?.taxonomy_data?.nodes || [];
+      const summary = extractSummary(msg.content);
 
       return (
         <div style={{ display: "flex", gap: 12 }}>
@@ -346,11 +504,19 @@ const TaxonomyChatbot: React.FC = () => {
               flex: 1,
             }}
           >
-            <Text style={{ fontSize: 15 }}>{msg.content}</Text>
+            {/* Clean summary instead of raw content */}
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Text style={{ fontSize: 15, lineHeight: 1.6 }}>{summary}</Text>
+              {taxonomies.length > 0 && (
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  Found {taxonomies.length} relevant {taxonomies.length === 1 ? 'taxonomy' : 'taxonomies'}
+                </Text>
+              )}
+            </Space>
 
             {taxonomies.length > 0 && (
               <div style={{ marginTop: 16 }}>
-                <Divider style={{ margin: "16px 0" }} />
+                <Divider style={{ margin: "16px 0 12px 0" }} />
                 <div
                   style={{
                     display: "flex",
@@ -359,9 +525,15 @@ const TaxonomyChatbot: React.FC = () => {
                     marginBottom: 12,
                   }}
                 >
-                  <Text strong style={{ fontSize: 14, color: "#666" }}>
-                    Suggested Taxonomies ({taxonomies.length}):
-                  </Text>
+                  <Space>
+                    <Text strong style={{ fontSize: 14, color: "#262626" }}>
+                      Suggested Taxonomies
+                    </Text>
+                    <Badge 
+                      count={taxonomies.length} 
+                      style={{ backgroundColor: '#52c41a' }} 
+                    />
+                  </Space>
                   <Button
                     type="primary"
                     size="small"
@@ -373,46 +545,12 @@ const TaxonomyChatbot: React.FC = () => {
                     Add All
                   </Button>
                 </div>
-                <List
-                  size="small"
-                  dataSource={taxonomies}
-                  style={{ marginTop: 12 }}
-                  renderItem={(item, index) => (
-                    <List.Item
-                      style={{
-                        padding: "12px 0",
-                        border: "none",
-                      }}
-                      actions={[
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<CheckOutlined />}
-                          onClick={() => handleAddSingleTaxonomy(msg.id, index)}
-                        >
-                          Add
-                        </Button>,
-                      ]}
-                    >
-                      <Space direction="vertical" size={4} style={{ flex: 1 }}>
-                        <Text strong style={{ fontSize: 15 }}>
-                          {item.name}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 13 }}>
-                          {item.scientific_name}
-                        </Text>
-                        <Space size={4} wrap>
-                          <Tag color="blue" style={{ fontSize: 11 }}>
-                            {item.id}
-                          </Tag>
-                          <Tag color="green" style={{ fontSize: 11 }}>
-                            {item.metadata.source}
-                          </Tag>
-                        </Space>
-                      </Space>
-                    </List.Item>
+                
+                <div>
+                  {taxonomies.map((item, index) => 
+                    renderTaxonomyCard(item, index, msg.id)
                   )}
-                />
+                </div>
               </div>
             )}
           </div>
@@ -528,12 +666,12 @@ const TaxonomyChatbot: React.FC = () => {
               </div>
             ) : (
               <>
-                {conversation.messages.map((msg) => (
+                {conversation?.messages?.map((msg) => (
                   <div key={msg.id} style={{ marginBottom: 20 }}>
                     {renderMessage(msg)}
                   </div>
                 ))}
-                {pendingMessage && (
+                {pendingMessage && conversation?.id && (
                   <div style={{ marginBottom: 20 }}>
                     {renderMessage({
                       id: -1,
