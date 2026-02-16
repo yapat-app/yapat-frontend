@@ -18,7 +18,7 @@ function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/datasets" element={<Datasets />} />
       <Route path="/teams" element={<Teams />} />
-      <Route path="/taxonomy" element={<Taxonomies />} />
+      <Route path="/pre-annotation" element={<Taxonomies />} />
       <Route path="/history" element={<FeedHistory />} />
       <Route path="/annotate" element={<AnnotationWorkflow />} />
       <Route path="/docs" element={<YapatUserManual />} />

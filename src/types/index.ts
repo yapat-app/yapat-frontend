@@ -86,6 +86,7 @@ export interface AnnotationCreate {
   snippet_id: number;
   species_name?: string; // User can type species name
   taxon_id?: string; // Or provide taxon_id directly
+  display_name?: string; // Human-readable name for wiki/envo/ols (e.g. from Taxonomy Assistant)
   extra_metadata?: Record<string, any>;
 }
 

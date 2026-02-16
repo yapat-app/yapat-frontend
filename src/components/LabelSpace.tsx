@@ -90,7 +90,7 @@ export const LabelSpace: React.FC = () => {
 
   // Load conversation label space for taxonomy screen
   useEffect(() => {
-    if (pathname === "/taxonomy" && conversation?.id) {
+    if (pathname === "/pre-annotation" && conversation?.id) {
       dispatch(getLabelSpace(conversation.id));
     }
   }, [pathname, conversation?.id, dispatch]);
@@ -139,7 +139,7 @@ export const LabelSpace: React.FC = () => {
 
   // Base list depends on the screen:
   // - /annotate uses saved custom taxonomies (allTaxonomies)
-  // - /taxonomy uses conversation label space (labelSpace)
+  // - /pre-annotation uses conversation label space (labelSpace)
   const baseCustomList: any[] = useMemo(() => {
     if (pathname === "/annotate")
       return allTaxonomies?.[0]?.taxonomy_data?.nodes ?? [];
@@ -204,6 +204,7 @@ export const LabelSpace: React.FC = () => {
       const annotationData: AnnotationCreate = {
         snippet_id: currentSnippet.id,
         taxon_id: label.taxon_id.toLowerCase(),
+        display_name: label.canonical_name || label.scientific_name || label.name,
       };
 
       await dispatch(createAnnotation(annotationData)).unwrap();
@@ -231,84 +232,104 @@ export const LabelSpace: React.FC = () => {
     );
   };
 
-  const renderLabelItem = (label: DisplayItem) => (
-    <div className="py-1.5 flex items-center justify-between w-full">
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <span className="font-ibm-sans text-sm! text-gray-900">
-              {label.canonical_name || label.scientific_name || label.name}
-            </span>
+  const renderLabelItem = (label: DisplayItem) => {
+    const handleRowClick = () => {
+      if (pathname === "/annotate") {
+        handleSubmit(label);
+      } else {
+        handleRemoveFromLabelSpace(label.id);
+      }
+    };
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleRowClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleRowClick();
+          }
+        }}
+        className="py-1.5 flex items-center justify-between w-full cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
+      >
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <span className="font-ibm-sans text-sm! text-gray-900">
+                {label.canonical_name || label.scientific_name || label.name}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {/* Show source only while merged search results are active */}
+            {pathname === "/annotate" && showMerged && (
+              <span
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                  label.__source === "custom"
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-blue-100 text-blue-800"
+                }`}
+              >
+                {label.__source === "custom" ? "Custom" : "Suggested"}
+              </span>
+            )}
+
+            {label.metadata?.rank && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                {label.metadata.rank}
+              </span>
+            )}
+
+            {label.metadata?.kingdom && (
+              <span className="text-xs text-gray-600">
+                {label.metadata.kingdom}
+              </span>
+            )}
+
+            {label.status && label.status !== "ACCEPTED" && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 capitalize">
+                {label.status}
+              </span>
+            )}
+
+            {label.scientific_name &&
+              label.canonical_name &&
+              label.scientific_name !== label.canonical_name && (
+                <span className="text-xs text-blue-600 italic">
+                  {label.scientific_name}
+                </span>
+              )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {/* Show source only while merged search results are active */}
-          {pathname === "/annotate" && showMerged && (
+        {pathname !== "/pre-annotation" ? (
+          <Tooltip title="Annotate (or click anywhere on row)">
             <span
-              className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                label.__source === "custom"
-                  ? "bg-purple-100 text-purple-800"
-                  : "bg-blue-100 text-blue-800"
-              }`}
+              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300 rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              aria-hidden
             >
-              {label.__source === "custom" ? "Custom" : "Suggested"}
-            </span>
-          )}
-
-          {label.metadata?.rank && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-              {label.metadata.rank}
-            </span>
-          )}
-
-          {label.metadata?.kingdom && (
-            <span className="text-xs text-gray-600">
-              {label.metadata.kingdom}
-            </span>
-          )}
-
-          {label.status && label.status !== "ACCEPTED" && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 capitalize">
-              {label.status}
-            </span>
-          )}
-
-          {label.scientific_name &&
-            label.canonical_name &&
-            label.scientific_name !== label.canonical_name && (
-              <span className="text-xs text-blue-600 italic">
-                {label.scientific_name}
-              </span>
-            )}
-        </div>
-      </div>
-
-      {pathname !== "/taxonomy" ? (
-        <Tooltip title="Annotate">
-          <button
-            onClick={() => handleSubmit(label)}
-            className="w-6 h-6 flex items-center justify-center bg-green-500 hover:bg-green-200 border border-green-300 rounded-md ml-3"
-          >
             <Tag key="green" color="green" variant="filled">
               ✓ Annotate
             </Tag>
-          </button>
-        </Tooltip>
-      ) : (
-        <Tooltip title="Remove">
-          <button
-            onClick={() => handleRemoveFromLabelSpace(label.id)}
-            className="w-6 h-6 flex items-center justify-center bg-green-500 hover:bg-green-200 border border-green-300 rounded-md ml-3"
-          >
+            </span>
+          </Tooltip>
+        ) : (
+          <Tooltip title="Remove (or click anywhere on row)">
+            <span
+              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300 rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              aria-hidden
+            >
             <Tag key="red" color="red" variant="filled">
               x
             </Tag>
-          </button>
-        </Tooltip>
-      )}
-    </div>
-  );
+            </span>
+          </Tooltip>
+        )}
+      </div>
+    );
+  };
 
   // Clear online suggestions when leaving annotate screen
   useEffect(() => {
@@ -318,11 +339,11 @@ export const LabelSpace: React.FC = () => {
   }, [pathname, dispatch]);
 
   return (
-    <div className="w-full flex flex-col h-full gap-10">
-      <div className="flex flex-col h-full">
-        <h3 className="text-m font-semibold mb-1 font-ibm-sans">Label Space</h3>
+    <div className="w-full flex flex-col h-full min-h-0">
+      <div className="flex flex-col h-full min-h-0">
+        <h3 className="text-m font-semibold mb-1 font-ibm-sans flex-shrink-0">Label Space</h3>
 
-        <div className="border border-gray-200 rounded-md px-3 py-4 flex flex-col h-full">
+        <div className="border border-gray-200 rounded-md px-3 py-4 flex flex-col flex-1 min-h-0">
           <div className="mb-2 flex-shrink-0">
             <input
               placeholder={
@@ -349,7 +370,7 @@ export const LabelSpace: React.FC = () => {
             )}
           </div>
 
-          <div className="overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <List
               dataSource={filteredItems}
               size="small"
@@ -363,7 +384,7 @@ export const LabelSpace: React.FC = () => {
               renderItem={(item) => (
                 <List.Item
                   key={`${item.__source}-${item.id}`}
-                  className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 rounded"
+                  className="border-b border-gray-100 last:border-b-0 rounded"
                 >
                   {renderLabelItem(item)}
                 </List.Item>
@@ -372,7 +393,7 @@ export const LabelSpace: React.FC = () => {
           </div>
         </div>
 
-        {pathname === "/taxonomy" && (labelSpace ?? []).length > 0 && (
+        {pathname === "/pre-annotation" && (labelSpace ?? []).length > 0 && (
           <div className="my-3">
             <FreezeLabelSpace labelSpace={labelSpace ?? []} />
           </div>

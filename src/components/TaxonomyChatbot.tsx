@@ -91,7 +91,7 @@ const TaxonomyChatbot: React.FC = () => {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const inputRef = useRef<InputRef>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
   const {
     conversation,
@@ -142,9 +142,11 @@ const TaxonomyChatbot: React.FC = () => {
     }
   }, [conversation?.id]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Scroll to top when a new response arrives
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (conversation?.messages?.length) {
+      messagesContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [conversation?.messages]);
 
   // Focus input when component mounts
@@ -287,7 +289,7 @@ const TaxonomyChatbot: React.FC = () => {
       }
     }
     
-    return summaryLines.join(' ') || 'Found relevant taxonomies for your query.';
+    return summaryLines.join(' ') || 'Found relevant candidates for your query.';
   };
 
   const getSourceColor = (source: string): string => {
@@ -509,7 +511,7 @@ const TaxonomyChatbot: React.FC = () => {
               <Text style={{ fontSize: 15, lineHeight: 1.6 }}>{summary}</Text>
               {taxonomies.length > 0 && (
                 <Text type="secondary" style={{ fontSize: 13 }}>
-                  Found {taxonomies.length} relevant {taxonomies.length === 1 ? 'taxonomy' : 'taxonomies'}
+                  Found {taxonomies.length} relevant candidates
                 </Text>
               )}
             </Space>
@@ -527,7 +529,7 @@ const TaxonomyChatbot: React.FC = () => {
                 >
                   <Space>
                     <Text strong style={{ fontSize: 14, color: "#262626" }}>
-                      Suggested Taxonomies
+                      Suggested Concepts
                     </Text>
                     <Badge 
                       count={taxonomies.length} 
@@ -635,6 +637,7 @@ const TaxonomyChatbot: React.FC = () => {
           </div>
 
           <div
+            ref={messagesContainerRef}
             style={{
               overflowY: "auto",
               height: "98%",
@@ -709,7 +712,6 @@ const TaxonomyChatbot: React.FC = () => {
               </div>
             )}
 
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Input Area */}
