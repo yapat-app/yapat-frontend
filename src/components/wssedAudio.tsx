@@ -123,7 +123,9 @@ export const WssedAudio = ({
     dispatch(
       retrainModel({
         snippet_set_id: Number(snippetSetId),
-        species_name: selectedSpecies?.toLowerCase(),
+        species_name: selectedSpecies
+          ? selectedSpecies.charAt(0).toUpperCase() + selectedSpecies.slice(1)
+          : "",
         dataset_id: Number(datasetIdFromDirectory),
         device: "cpu",
         epochs: 5,
@@ -276,7 +278,8 @@ export const WssedAudio = ({
     dispatch(
       submitLabel({
         snippet_set_id: Number(snippetSetId),
-        species_name: selectedSpecies.toLowerCase(),
+        species_name:
+          selectedSpecies.charAt(0).toUpperCase() + selectedSpecies.slice(1),
         dataset_id: Number(datasetIdFromDirectory),
         snippet_id: currentSnippetId,
         label: action === "accept" ? 1 : 0,
