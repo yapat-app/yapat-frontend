@@ -39,6 +39,7 @@ export interface wssedState {
   modelTraining: boolean;
 
   histogram: PredictionHistogram | null;
+  histogramLoading: boolean;
 }
 
 const initialState: wssedState = {
@@ -62,6 +63,7 @@ const initialState: wssedState = {
   modelTraining: false,
 
   histogram: null,
+  histogramLoading: false,
 };
 
 // ============================================================================
@@ -249,11 +251,17 @@ export const wssedSlice = createSlice({
         state.audioError = null;
       })
       //histogram
+      .addCase(getHistogram.pending, (state) => {
+        state.histogramLoading = true;
+        state.histogram = null;
+      })
       .addCase(getHistogram.fulfilled, (state, action) => {
         state.histogram = action.payload;
+        state.histogramLoading = false;
       })
       .addCase(getHistogram.rejected, (state) => {
         state.histogram = null;
+        state.histogramLoading = false;
       })
 
       //retrain

@@ -101,6 +101,7 @@ export const WssedAudio = ({
     submitLabelSuccess,
     modelTraining,
     histogram,
+    histogramLoading,
   } = useAppSelector((state) => state.wssed);
 
   const prevModelTrainingRef = useRef<boolean>(modelTraining);
@@ -380,7 +381,13 @@ export const WssedAudio = ({
           Audio snippet review
         </h4>
 
-        {histogram && <AudioPredictionHistogram histogram={histogram} />}
+        {histogramLoading ? (
+          <div className="w-full flex items-center justify-center">
+            <Spin />
+          </div>
+        ) : (
+          histogram && <AudioPredictionHistogram histogram={histogram} />
+        )}
 
         <div className="flex h-full gap-10">
           <div className="relative flex items-center justify-center gap-4 w-[65%]">

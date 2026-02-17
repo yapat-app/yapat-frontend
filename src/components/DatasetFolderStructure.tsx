@@ -56,7 +56,7 @@ export const DatasetFolderStructure: React.FC = () => {
   const datasetOptions = useMemo(() => {
     return (allDatasets ?? []).map((d: any) => ({
       value: d.id,
-      label: `${d.name}${d.recording_count != null ? ` (${d.recording_count})` : ""}`,
+      label: `${d.name}`,
     }));
   }, [allDatasets]);
 
@@ -221,7 +221,7 @@ export const DatasetFolderStructure: React.FC = () => {
             value={selectedDatasetId ?? undefined}
             onChange={(val) => {
               setSelectedDatasetId(val);
-              dispatch(getAllDatasetSnippetSets(val)); // ✅ load snippet sets for that dataset
+              dispatch(getAllDatasetSnippetSets(val));
             }}
             filterOption={(input, option) =>
               (option?.label ?? "")
