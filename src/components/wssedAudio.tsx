@@ -382,7 +382,7 @@ export const WssedAudio = ({
         </h4>
 
         {histogramLoading ? (
-          <div className="w-full flex items-center justify-center">
+          <div className="w-full h-[20vh] flex items-center justify-center">
             <Spin />
           </div>
         ) : (
