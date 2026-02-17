@@ -95,6 +95,9 @@ const TaxonomyChatbot: React.FC = () => {
 
   const inputRef = useRef<InputRef>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
+  const sentMessageRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(0);
   const dispatch = useAppDispatch();
   const {
     conversation,
@@ -139,11 +142,38 @@ const TaxonomyChatbot: React.FC = () => {
     };
   }, []); // Run once on mount
 
-  // Scroll to top when a new response arrives
+  // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {
-    if (conversation?.messages?.length) {
-      messagesContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    if (pendingMessage) {
+      setTimeout(
+        () =>
+          sentMessageRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        50
+      );
     }
+  }, [pendingMessage]);
+
+  // Scroll to the new message (sent prompt or assistant response) when message count increases
+  useEffect(() => {
+    const messages = conversation?.messages ?? [];
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+
+    // Scroll to new message (sent prompt or new assistant response) when message count increases
+    if (currentCount > prevCount && currentCount > 0) {
+      setTimeout(
+        () =>
+          lastMessageRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        50
+      );
+    }
+    prevMessageCountRef.current = currentCount;
   }, [conversation?.messages]);
 
   // Focus input when component mounts
@@ -716,13 +746,21 @@ const TaxonomyChatbot: React.FC = () => {
               </div>
             ) : (
               <>
-                {conversation?.messages?.map((msg) => (
-                  <div key={msg.id} style={{ marginBottom: 20 }}>
+                {conversation?.messages?.map((msg, index) => (
+                  <div
+                    key={msg.id}
+                    ref={
+                      index === (conversation?.messages?.length ?? 0) - 1
+                        ? lastMessageRef
+                        : undefined
+                    }
+                    style={{ marginBottom: 20 }}
+                  >
                     {renderMessage(msg)}
                   </div>
                 ))}
                 {pendingMessage && conversation?.id && (
-                  <div style={{ marginBottom: 20 }}>
+                  <div ref={sentMessageRef} style={{ marginBottom: 20 }}>
                     {renderMessage({
                       id: -1,
                       conversation_id: conversation.id,
