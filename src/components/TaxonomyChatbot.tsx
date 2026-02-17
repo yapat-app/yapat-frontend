@@ -41,6 +41,9 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
 
+const DEFAULT_SYSTEM_MESSAGE =
+  "I am configured for audio data in the domain of bioacoustics.\nThis session will define the label space for sound event detection.\nWhat target sound categories do you intend to include in your annotation schema?";
+
 interface TaxonomyNode {
   id: string;
   name: string;
@@ -645,6 +648,50 @@ const TaxonomyChatbot: React.FC = () => {
               background: "#f5f5f5",
             }}
           >
+            {/* Default system message */}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: "#8c8c8c",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "white",
+                  flexShrink: 0,
+                }}
+              >
+                <InfoCircleOutlined />
+              </div>
+              <div
+                style={{
+                  background: "#e6f7ff",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #91d5ff",
+                  maxWidth: "80%",
+                }}
+              >
+                <Text style={{ fontSize: 14, color: "#0958d9", whiteSpace: "pre-line" }}>
+                  {DEFAULT_SYSTEM_MESSAGE}
+                </Text>
+                <Paragraph
+                  type="secondary"
+                  style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
+                >
+                  Describe what you want to annotate below.
+                </Paragraph>
+              </div>
+            </div>
+
             {(!conversation?.messages || conversation.messages.length === 0) &&
             !pendingMessage ? (
               <div
@@ -664,7 +711,7 @@ const TaxonomyChatbot: React.FC = () => {
                   annotations.
                 </Paragraph>
                 <Paragraph type="secondary" style={{ fontSize: 11 }}>
-                  Example: "suggest me taxonomies to annotate birds"
+                  Example: "I want to annotate Panthera leo"
                 </Paragraph>
               </div>
             ) : (
@@ -728,7 +775,7 @@ const TaxonomyChatbot: React.FC = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Example: suggest me taxonomies to annotate birds..."
+                placeholder="I want to annotate Panthera leo"
                 autoSize={{ minRows: 1.5, maxRows: 4 }}
                 disabled={messageLoading}
                 style={{
