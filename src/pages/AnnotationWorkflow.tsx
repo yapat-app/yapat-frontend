@@ -8,8 +8,6 @@ import React, { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Spin, Empty, Alert } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
-import { AnnotationFormModal } from "../components/AnnotationFormModal";
-import { AnnotationForm } from "../components/AnnotationForm";
 import { AnnotationStatistics } from "../components/AnnotationStatistics";
 import { AnnotationProgress } from "../components/AnnotationProgress";
 import { CurrentSnippetCard } from "../components/CurrentSnippetCard";
@@ -18,7 +16,7 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [, setModalVisible] = useState(false);
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
   const datasetId = searchParams.get("dataset_id");
@@ -34,19 +32,12 @@ export const AnnotationWorkflow: React.FC = () => {
     annotations,
     annotatedCount,
     progressPercent,
-    handleAnnotationSuccess: handleWorkflowSuccess,
+    handleAnnotationSuccess: _handleWorkflowSuccess,
     handlePrevious,
     handleNext,
     canGoPrevious,
     canGoNext,
   } = useAnnotationWorkflow({ datasetId, limit: 50 });
-
-  //Handle successful annotation creation
-
-  const handleAnnotationSuccess = () => {
-    handleWorkflowSuccess();
-    setModalVisible(false);
-  };
 
   // Loading state
   if (loading && snippets.length === 0) {

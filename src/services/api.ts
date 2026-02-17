@@ -36,7 +36,6 @@ import type {
   AllLabelSpace,
   FreezeLabelSpaceResponse,
   AddToLabelSpaceResponse,
-  Taxonomy,
   AvailableTaxonomies,
 } from "../types";
 

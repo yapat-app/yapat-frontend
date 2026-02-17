@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
-import { useAppDispatch, useAppSelector } from "../hooks";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
 import { Card } from "antd";

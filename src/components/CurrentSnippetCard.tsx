@@ -13,11 +13,9 @@ import { Card, Tag, Space, Button, Tooltip } from "antd";
 import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
-  CheckCircleOutlined,
 } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
 import type { Snippet, Annotation } from "../types";
-import { AnnotationForm } from "./AnnotationForm";
 import { LabelSpace } from "./LabelSpace";
 
 interface CurrentSnippetCardProps {
@@ -35,7 +33,7 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   annotations,
   onPrevious,
   onNext,
-  onAddAnnotation,
+  onAddAnnotation: _onAddAnnotation,
   canGoPrevious,
   canGoNext,
 }) => {

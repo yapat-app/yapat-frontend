@@ -22,10 +22,7 @@ import {
   MessageOutlined,
   CloseOutlined,
   CheckOutlined,
-  CloseCircleOutlined,
   SendOutlined,
-  DeleteOutlined,
-  ExportOutlined,
   MinusOutlined,
   RobotOutlined,
   UserOutlined,
@@ -115,14 +112,14 @@ interface AIAssistantTaxonomyProps {
 }
 
 const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
-  onExport,
+  onExport: _onExport,
   onClear,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -275,7 +272,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
 
   //send Message
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || messageLoading) return;
+    if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
     setInputValue(""); // Clear input immediately for better UX
@@ -335,7 +332,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     handleAddToLabelSpace(messageId, [index + 1]);
   };
 
-  const handleRemoveFromLabelSpace = async (itemId: number) => {
+  const handleRemoveFromLabelSpace = async (itemId: number | string) => {
     if (!conversation?.id) {
       message.error("No active conversation");
       return;
@@ -349,37 +346,11 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     dispatch(
       removeLabels({
         conversationId: conversation.id,
-        itemId,
+        itemId: typeof itemId === "string" ? Number(itemId) : itemId,
       }),
     );
   };
 
-  const handleExportLabelSpace = () => {
-    if (!labelSpace || labelSpace.length === 0) {
-      message.warning("No items in label space to export");
-      return;
-    }
-
-    message.success(`Exporting ${conversation.label_space.length} items`);
-  };
-
-  const handleClearLabelSpace = async () => {
-    if (!conversation?.label_space || conversation.label_space.length === 0) {
-      message.warning("Label space is already empty");
-      return;
-    }
-
-    try {
-      // Remove all items from label space
-      for (const item of conversation.label_space) {
-        await handleRemoveFromLabelSpace(item.id);
-      }
-      message.success("Label space cleared");
-    } catch (error) {
-      message.error("Failed to clear label space");
-      console.error("Error:", error);
-    }
-  };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -388,7 +359,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     }
   };
 
-  const renderMessage = (msg: ConversationMessage) => {
+  const renderMessage = (msg: ConversationMessage | { id: number; role: string; content: string; message_metadata?: { taxonomy_data?: { nodes: TaxonomyNode[] } } | null }) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
