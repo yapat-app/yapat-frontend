@@ -36,11 +36,7 @@ import type {
   AllLabelSpace,
   DatasetResponse,
   AvailableTaxonomies,
-  ActiveLearningResponse,
-  ActiveLearningLabel,
   SnippetSet,
-  retrainActiveLearningBody,
-  PredictionHistogram,
 } from "../types";
 
 // ============================================================================
@@ -447,57 +443,6 @@ export const recordingApi = {
 
   create: async (data: RecordingCreate): Promise<Recording> => {
     const response = await api.post("/api/recordings/", data);
-    return response.data;
-  },
-};
-
-// ============================================================================
-// WSSED API
-// ============================================================================
-
-export const wssedApi = {
-  suggestions: async (params: {
-    snippet_set_id: number;
-    species_name: string;
-    dataset_id: number;
-    strategy: string;
-    k: number;
-    device: string;
-    seed: number;
-  }): Promise<ActiveLearningResponse> => {
-    const response = await api.post("/api/wssed/active-learning/suggestions", {
-      ...params,
-    });
-    return response.data;
-  },
-
-  submitLabel: async (params: ActiveLearningLabel): Promise<void> => {
-    const { device, epochs, lr, ...body } = params;
-    const response = await api.post("/api/wssed/active-learning/labels", body, {
-      params: { device, epochs, lr },
-    });
-    return response.data;
-  },
-
-  retrain: async (params: retrainActiveLearningBody): Promise<void> => {
-    const response = await api.post(
-      "/api/wssed/active-learning/retrain",
-      params,
-      {
-        params: params,
-      },
-    );
-    return response.data;
-  },
-
-  histogram: async (params: {
-    model_id: number;
-    snippet_set_id: number;
-  }): Promise<PredictionHistogram> => {
-    const response = await api.get(
-      `/api/wssed/species-models/${params.model_id}/histogram`,
-      { params },
-    );
     return response.data;
   },
 };

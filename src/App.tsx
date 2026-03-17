@@ -9,7 +9,7 @@ import { AnnotationWorkflow } from "./pages/AnnotationWorkflow";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
-import { Wssed } from "./pages/Wssed";
+import { ActiveLearning } from "./pages/ActiveLearning";
 
 function App() {
   return (
@@ -20,9 +20,9 @@ function App() {
       <Route path="/datasets" element={<Datasets />} />
       <Route path="/teams" element={<Teams />} />
       <Route path="/taxonomy" element={<Taxonomies />} />
-      <Route path="/wssed" element={<Wssed />} />
       <Route path="/history" element={<FeedHistory />} />
       <Route path="/annotate" element={<AnnotationWorkflow />} />
+      <Route path="/active-learning" element={<ActiveLearning />} />
       <Route path="/docs" element={<YapatUserManual />} />
     </Routes>
   );

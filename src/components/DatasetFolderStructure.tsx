@@ -5,17 +5,13 @@ import {
   UploadOutlined,
   DatabaseOutlined,
 } from "@ant-design/icons";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppSelector, useAppDispatch } from "../hooks";
 import {
   exploreDatasetDirectory,
   fetchAllDatasets,
   fetchAllTeamDatasets,
 } from "../redux/features/datasetSlice";
-import {
-  fetchActiveLearningSuggestions,
-  selectSpecies,
-} from "../redux/features/wssedSlice";
 import { getAllDatasetSnippetSets } from "../redux/features/embeddingSlice";
 
 const { Panel } = Collapse;
@@ -28,12 +24,6 @@ export const DatasetFolderStructure: React.FC = () => {
     (state) => state.dataset,
   );
 
-  const { snippetSets } = useAppSelector((state) => state.embedding);
-
-  const { selectedSpecies, modelTraining } = useAppSelector(
-    (state) => state.wssed,
-  );
-
   const [openUploadModal, setOpenUploadModal] = useState(false);
   const [openChooseModal, setOpenChooseModal] = useState(false);
 
@@ -42,8 +32,6 @@ export const DatasetFolderStructure: React.FC = () => {
     null,
   );
   const [selectingDataset, setSelectingDataset] = useState(false);
-
-  const prevModelTrainingRef = useRef<boolean>(modelTraining);
 
   useEffect(() => {
     if (user?.role === "admin") {
@@ -61,8 +49,6 @@ export const DatasetFolderStructure: React.FC = () => {
   }, [allDatasets]);
 
   const hasDirectory = !!datasetDirectories?.species?.length;
-
-  const datasetIdFromDirectory = datasetDirectories?.dataset_id ?? null;
 
   const handleConfirmSelectDataset = async () => {
     if (!selectedDatasetId) {
@@ -85,79 +71,6 @@ export const DatasetFolderStructure: React.FC = () => {
       setSelectingDataset(false);
     }
   };
-
-  const speciesHandler = (speciesName: string) => {
-    const datasetId = datasetIdFromDirectory ?? selectedDatasetId;
-
-    if (!datasetId) {
-      message.warning("Dataset not selected yet");
-      return;
-    }
-
-    const snippetSetId = snippetSets?.[0]?.id ?? null;
-
-    dispatch(selectSpecies(speciesName));
-
-    dispatch(
-      fetchActiveLearningSuggestions({
-        species_name:
-          speciesName.charAt(0).toUpperCase() + speciesName.slice(1),
-        snippet_set_id: snippetSetId,
-        dataset_id: Number(datasetId),
-        strategy: "uncertainty",
-        k: 20,
-        device: "cpu",
-        seed: 0,
-      }),
-    );
-  };
-
-  useEffect(() => {
-    if (!hasDirectory) return;
-
-    const first = datasetDirectories?.species?.[0]?.name;
-    if (!selectedSpecies && first) {
-      speciesHandler(first);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasDirectory, datasetDirectories]);
-
-  // When model training finishes, automatically fetch new suggestions
-  useEffect(() => {
-    const wasTraining = prevModelTrainingRef.current;
-    const isTraining = modelTraining;
-
-    // update ref for next render
-    prevModelTrainingRef.current = isTraining;
-
-    // only run when training finishes (true -> false)
-    if (wasTraining && !isTraining) {
-      const datasetId = datasetIdFromDirectory ?? selectedDatasetId;
-      const snippetSetId = snippetSets?.[0]?.id ?? null;
-
-      if (!datasetId || !snippetSetId || !selectedSpecies) return;
-
-      dispatch(
-        fetchActiveLearningSuggestions({
-          species_name:
-            selectedSpecies.charAt(0).toUpperCase() + selectedSpecies.slice(1),
-          snippet_set_id: snippetSetId,
-          dataset_id: Number(datasetId),
-          strategy: "uncertainty",
-          k: 20,
-          device: "cpu",
-          seed: 0,
-        }),
-      );
-    }
-  }, [
-    modelTraining,
-    dispatch,
-    selectedSpecies,
-    datasetIdFromDirectory,
-    selectedDatasetId,
-    snippetSets,
-  ]);
 
   return (
     <div className="h-full">
@@ -250,17 +163,10 @@ export const DatasetFolderStructure: React.FC = () => {
                   key={sp.name ?? index}
                   header={
                     <div
-                      onClick={() => speciesHandler(sp.name)}
                       className="flex items-center gap-2 text-sm font-medium"
                     >
                       <FolderOpenOutlined className="text-blue-500" />
-                      <span
-                        className={`truncate rounded-lg font-ibm-mono transition-all duration-200 cursor-pointer ${
-                          selectedSpecies === sp.name
-                            ? "font-semibold text-blue-900"
-                            : "font-normal"
-                        }`}
-                      >
+                      <span className="truncate rounded-lg font-ibm-mono transition-all duration-200 cursor-pointer font-normal">
                         {sp.name}
                       </span>
                       <span className="ml-auto text-xs text-gray-400">

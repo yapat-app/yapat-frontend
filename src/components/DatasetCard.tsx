@@ -3,6 +3,9 @@ import { ExportAnnotationButton } from "./ExportAnnotation";
 import { GenerateFeedModal } from "./GenerateFeed";
 import { useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
+import { Button } from "antd";
+import { ThunderboltOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -13,6 +16,12 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
     (state: any) => state.annotation,
   );
   const { user } = useAppSelector((state) => state.auth);
+  const navigate = useNavigate();
+
+  const handleStartAL = () => {
+    navigate(`/active-learning?dataset_id=${dataset.id}`);
+  };
+
   return (
     <div className="rounded-lg border border-amber-50 bg-white shadow-sm p-4 flex flex-col gap-4">
       {/* Header: name + description + Generate feed */}
@@ -37,7 +46,16 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   <GenerateEmbeddings dataset={dataset} />
                 )}
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
-                {/* <GenerateWssed /> */}
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  size="small"
+                  type="primary"
+                  style={{ backgroundColor: "#1e40af", borderColor: "#1e40af" }}
+                  onClick={handleStartAL}
+                  title="Start PAM Active Learning"
+                >
+                  Active Learning
+                </Button>
               </div>
             </div>
             <div
