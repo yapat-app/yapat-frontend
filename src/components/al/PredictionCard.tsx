@@ -11,6 +11,16 @@ import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { snippetApi } from "../../services/api";
 import type { PAMPrediction } from "../../types/al";
+import { Collapse } from "antd";
+import type { CollapseProps } from "antd";
+
+const items: CollapseProps["items"] = [
+  {
+    key: "1",
+    label: "This is panel header 1",
+    children: <p>{"Hello"}</p>,
+  },
+];
 
 interface Props {
   prediction: PAMPrediction;
@@ -22,7 +32,9 @@ const confidenceColor = (c: number) =>
 
 export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const dispatch = useAppDispatch();
-  const selectedSnippetId = useAppSelector((state) => state.al.selectedSnippetId);
+  const selectedSnippetId = useAppSelector(
+    (state) => state.al.selectedSnippetId,
+  );
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
   const isSelected = selectedSnippetId === prediction.snippet_id;
   const hasFeedback = !!feedbacks[prediction.id];
@@ -81,24 +93,34 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1">
-            <SoundOutlined />
-            #{prediction.snippet_id}
+            <SoundOutlined />#{prediction.snippet_id}
           </span>
-          <Tooltip title={`Confidence: ${(prediction.confidence * 100).toFixed(0)}%`}>
+          <Tooltip
+            title={`Confidence: ${(prediction.confidence * 100).toFixed(0)}%`}
+          >
             <div
               className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: confidenceColor(prediction.confidence) }}
+              style={{
+                backgroundColor: confidenceColor(prediction.confidence),
+              }}
             />
           </Tooltip>
         </div>
       </div>
 
       {/* ── Spectrogram + audio player (SpectrogramPlayer handles both) ── */}
-      <div onClick={(e) => e.stopPropagation()} className="border-t border-gray-100">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="border-t border-gray-100"
+      >
         {/* Loading skeleton — shown until the blob URL is ready */}
         {!audioBlobUrl && !audioError && (
           <div className="px-4 py-3">
-            <Skeleton.Input active block style={{ height: 260, borderRadius: 6 }} />
+            <Skeleton.Input
+              active
+              block
+              style={{ height: 260, borderRadius: 6 }}
+            />
           </div>
         )}
 
@@ -128,7 +150,10 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
       </div>
 
       {/* ── Feedback buttons ── */}
-      <div onClick={(e) => e.stopPropagation()} className="px-4 py-3 border-t border-gray-100">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="px-4 py-3 border-t border-gray-100"
+      >
         <FeedbackButtons prediction={prediction} />
       </div>
     </div>

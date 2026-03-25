@@ -56,11 +56,11 @@ export const PredictionFeed: React.FC = () => {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Label Space ── sits above the scrollable card list */}
-      <ALLabelSpacePanel />
+      {/* <ALLabelSpacePanel /> */}
 
       {/* ── Scrollable card list ── */}
       <div className="flex-1 overflow-y-auto px-3 py-3 gap-3 flex flex-col">
-        <p className="text-xs text-gray-400 font-ibm-sans sticky top-0 bg-[#f7fafc] py-1 z-10">
+        <p className="text-xs text-gray-400 font-ibm-sans  top-0 bg-[#f7fafc] py-1 z-10">
           {predictions.length} predictions
         </p>
 
@@ -78,7 +78,7 @@ export const PredictionFeed: React.FC = () => {
           </div>
         )}
 
-        <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-3">
+        <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
           <RetrainControl />
         </div>
       </div>

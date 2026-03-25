@@ -52,7 +52,9 @@ export const RetrainControl: React.FC = () => {
     } as const;
     return (
       <Tag color={colorMap[lastRetrainJob.status]}>
-        {lastRetrainJob.status === "RUNNING" && <Spin size="small" className="mr-1" />}
+        {lastRetrainJob.status === "RUNNING" && (
+          <Spin size="small" className="mr-1" />
+        )}
         Model: {lastRetrainJob.status}
       </Tag>
     );
@@ -60,7 +62,7 @@ export const RetrainControl: React.FC = () => {
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-4">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 ">
         <span className="text-sm font-semibold font-ibm-mono text-gray-700 flex items-center gap-1">
           <ThunderboltOutlined className="text-amber-500" />
           Retrain Model
@@ -94,7 +96,11 @@ export const RetrainControl: React.FC = () => {
       </Button>
       {lastRetrainJob?.result_metrics?.accuracy !== undefined && (
         <p className="text-xs text-gray-400 mt-2 text-center">
-          Last accuracy: {((lastRetrainJob.result_metrics.accuracy as number) * 100).toFixed(1)}%
+          Last accuracy:{" "}
+          {((lastRetrainJob.result_metrics.accuracy as number) * 100).toFixed(
+            1,
+          )}
+          %
         </p>
       )}
     </div>

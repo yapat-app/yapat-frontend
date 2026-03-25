@@ -10,11 +10,13 @@ import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
 import { ActiveLearning } from "./pages/ActiveLearning";
+import HomePage from "./pages/HomePage";
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
+      <Route path="/home" element={<HomePage />} />
       <Route path="/signUp" element={<SignUp />} />
       <Route path="/home" element={<Home />} />
       <Route path="/datasets" element={<Datasets />} />

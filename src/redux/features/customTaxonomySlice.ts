@@ -10,11 +10,14 @@ import type { Conversation, LabelSpaceItem } from "../../types";
 export interface CustomTaxonomyState {
   conversation: Conversation | null;
   labelSpace: LabelSpaceItem[] | [];
+  allTaxonomies: any[] | [];
   messageSent: boolean;
   conversationFreezed: boolean;
   labelRemoved: boolean;
   messageLoading: boolean;
   labelAdded: boolean;
+  /** True when last add succeeded but all items were already in label space (duplicates) */
+  lastAddWasDuplicates: boolean;
   loading: boolean;
   error: string | null;
   lastQuery: string;
@@ -26,8 +29,10 @@ const initialState: CustomTaxonomyState = {
   messageLoading: false,
   conversationFreezed: false,
   labelRemoved: false,
+  allTaxonomies: [],
   labelSpace: [],
   labelAdded: false,
+  lastAddWasDuplicates: false,
   loading: false,
   error: null,
   lastQuery: "",
@@ -146,12 +151,23 @@ export const removeLabels = createAsyncThunk(
   async (
     params: {
       conversationId: number;
-      itemId: number | string;
+      itemId: number;
     },
     { rejectWithValue },
   ) => {
     try {
       return await customtaxonomyApi.removeItem(params);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const getAllTaxonomies = createAsyncThunk(
+  "taxonomy/getAllTaxonomies",
+  async (teamId: number, { rejectWithValue }) => {
+    try {
+      return await customtaxonomyApi.allTaxonomies(teamId);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -168,6 +184,7 @@ export const customtaxonomySlice = createSlice({
   reducers: {
     resetAddLabel: (state) => {
       state.labelAdded = false;
+      state.lastAddWasDuplicates = false;
     },
     resetSentMessage: (state) => {
       state.messageSent = false;
@@ -175,6 +192,9 @@ export const customtaxonomySlice = createSlice({
     reset: (state) => {
       state.conversationFreezed = false;
       state.labelRemoved = false;
+    },
+    setLabelSpace: (state, action) => {
+      state.labelSpace = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -210,7 +230,9 @@ export const customtaxonomySlice = createSlice({
       .addCase(getConversation.fulfilled, (state, action) => {
         state.loading = false;
         state.conversation = action.payload;
-        state.labelSpace = action.payload.label_space;
+        if (Array.isArray(action.payload.label_space)) {
+          state.labelSpace = action.payload.label_space;
+        }
       })
       //get Label space for conversation
       .addCase(getLabelSpace.pending, (state) => {
@@ -219,16 +241,30 @@ export const customtaxonomySlice = createSlice({
       })
       .addCase(getLabelSpace.fulfilled, (state, action) => {
         state.loading = false;
-        state.labelSpace = action.payload.items;
+        if (Array.isArray(action.payload.items)) {
+          state.labelSpace = action.payload.items;
+        }
+      })
+      //get all taxonomies for team
+      .addCase(getAllTaxonomies.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllTaxonomies.fulfilled, (state, action) => {
+        state.loading = false;
+        state.allTaxonomies = action.payload.taxonomies;
       })
       //freeze Conversation
       .addCase(freezeConversation.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(freezeConversation.fulfilled, (state) => {
+      .addCase(freezeConversation.fulfilled, (state, action) => {
         state.loading = false;
         state.conversationFreezed = true;
+        if (action.payload?.conversation) {
+          state.conversation = action.payload.conversation;
+        }
       })
       //send Message
       .addCase(sendMessage.pending, (state) => {
@@ -239,9 +275,9 @@ export const customtaxonomySlice = createSlice({
         state.messageLoading = false;
         state.messageSent = true;
       })
-      .addCase(sendMessage.rejected, (state, action) => {
+      .addCase(sendMessage.rejected, (state, { payload }) => {
         state.messageLoading = false;
-        state.error = action.payload as string;
+        state.error = payload as string;
         state.labelAdded = false;
       })
       //add labels
@@ -251,8 +287,14 @@ export const customtaxonomySlice = createSlice({
       })
       .addCase(addLabels.fulfilled, (state, action) => {
         state.loading = false;
-        state.labelSpace = action.payload.label_space;
+        // Add API returns { conversation, added_items, skipped_count } — use conversation.label_space
+        const nextLabelSpace = action.payload.conversation?.label_space;
+        state.labelSpace = Array.isArray(nextLabelSpace)
+          ? nextLabelSpace
+          : state.labelSpace;
         state.labelAdded = true;
+        state.lastAddWasDuplicates =
+          (action.payload.added_items?.length ?? 0) === 0;
       })
       .addCase(addLabels.rejected, (state, action) => {
         state.loading = false;
@@ -268,14 +310,14 @@ export const customtaxonomySlice = createSlice({
         state.loading = false;
         state.labelRemoved = true;
       })
-      .addCase(removeLabels.rejected, (state, action) => {
+      .addCase(removeLabels.rejected, (state, { payload }) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error = payload as string;
         state.labelRemoved = false;
       });
   },
 });
 
-export const { resetAddLabel, resetSentMessage, reset } =
+export const { resetAddLabel, resetSentMessage, reset, setLabelSpace } =
   customtaxonomySlice.actions;
 export default customtaxonomySlice.reducer;

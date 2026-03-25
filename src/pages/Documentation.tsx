@@ -1,7 +1,7 @@
 import React from "react";
 import { Tabs, Collapse, Typography } from "antd";
-import { NavigationBar } from "../components/NavigationBar";
 import "../styles/docs.css";
+import { HomeNavBar } from "../components/HomeNavbar";
 
 const { Title, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -211,7 +211,7 @@ export const YapatUserManual: React.FC<YapatUserManualProps> = ({
 }) => {
   return (
     <div>
-      <NavigationBar />
+      <HomeNavBar />
 
       <section className="yapat-manual">
         {/* Header */}
