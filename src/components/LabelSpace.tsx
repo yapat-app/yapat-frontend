@@ -261,7 +261,7 @@ export const LabelSpace: React.FC = () => {
             handleRowClick();
           }
         }}
-        className=" w-fit py-1.5 flex items-center justify-between  cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
+        className=" w-full py-1.5 flex items-center justify-between  cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
       >
         <div>
           <div className="flex items-center justify-between">
@@ -328,7 +328,7 @@ export const LabelSpace: React.FC = () => {
         ) : (
           <Tooltip title="Remove (or click anywhere on row)">
             <span
-              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300  rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              className="w-6 h-6 flex items-center justify-center   rounded-md ml-3 flex-shrink-0 pointer-events-none"
               aria-hidden
             >
               <Tag key="red" color="red" variant="filled">

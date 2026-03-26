@@ -1,32 +1,77 @@
 import { NavigationBar } from "../components/NavigationBar";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
-import { Card } from "antd";
+import { Card, Button } from "antd";
+import { useEffect } from "react";
+import { fetchAllteams } from "../redux/features/teamSlice";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import { useNavigate } from "react-router-dom";
 
 export const Taxonomies = () => {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { allTeams } = useAppSelector((state) => state.team);
+
+  useEffect(() => {
+    dispatch(fetchAllteams());
+  }, []);
+
   return (
     <div>
       <NavigationBar />
-      <div className="w-full flex pt-10 justify-center flex-col items-center">
-        <h1 className="w-[80%] text-xl font-semibold text-gray-800 mb-0 pb-2">
-          Pre-Annotation
-        </h1>
-        <div className="w-[80%] py-3 border-b border-gray-200">
-          <p className="text-gray-600 text-center text-sm m-0">
-            Create custom taxonomies and get suggested concepts for your annotations—chat below, then add them to your label space.
-          </p>
+      {allTeams && allTeams.length < 0 ? (
+        <div className="w-full flex pt-10 justify-center flex-col items-center">
+          <Card
+            className="my-4 w-[80%] h-[80vh] flex items-center justify-center"
+            bordered={false}
+            style={{ backgroundColor: "#FFFFFF" }}
+          >
+            <div className="flex flex-col items-center justify-center text-center">
+              <p className="text-lg font-semibold text-gray-700 mb-2 font-ibm-mono">
+                No Teams Found
+              </p>
+
+              <p className="text-gray-500 mb-4 max-w-md font-ibm-sans">
+                You don’t have any teams yet. Create one to get started with
+                collaboration and pre-annotation workflows.
+              </p>
+
+              <Button
+                type="link"
+                className="mt-2"
+                onClick={() => navigate("/teams")}
+              >
+                Go to Teams Page
+              </Button>
+            </div>
+          </Card>
         </div>
-        <Card className="my-4 w-[80%] h-[80vh] ">
-          <div className="flex gap-4 w-full h-[75vh] ">
-            <div className="flex w-[60%] h-full">
-              <TaxonomyChatbot />
-            </div>
-            <div className="h-inherit  w-[40%] h-inherit">
-              <LabelSpace />
-            </div>
+      ) : (
+        <div className="w-full flex pt-10 justify-center flex-col items-center ">
+          <h1 className="w-[80%] text-xl font-semibold text-gray-800 mb-0 pb-2">
+            Pre-Annotation
+          </h1>
+
+          <div className="w-[80%] py-3 border-gray-200">
+            <p className="text-gray-600 text-center text-sm m-0">
+              Create custom taxonomies and get suggested concepts for your
+              annotations—chat below, then add them to your label space.
+            </p>
           </div>
-        </Card>
-      </div>
+
+          <Card className="my-4 w-[80%] h-[80vh] ">
+            <div className="flex gap-4 w-full h-[75vh]">
+              <div className="flex w-[60%] h-full">
+                <TaxonomyChatbot />
+              </div>
+
+              <div className="w-[40%] h-inherit">
+                <LabelSpace />
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
