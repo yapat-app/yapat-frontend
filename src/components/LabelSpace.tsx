@@ -89,10 +89,16 @@ export const LabelSpace: React.FC = () => {
   const { currentSnippet } = useAppSelector((state: any) => state.snippet);
 
   // Load conversation label space once when entering pre-annotation screen
-  const [loadedConversationId, setLoadedConversationId] = useState<number | null>(null);
-  
+  const [loadedConversationId, setLoadedConversationId] = useState<
+    number | null
+  >(null);
+
   useEffect(() => {
-    if (pathname === "/pre-annotation" && conversation?.id && conversation.id !== loadedConversationId) {
+    if (
+      pathname === "/pre-annotation" &&
+      conversation?.id &&
+      conversation.id !== loadedConversationId
+    ) {
       dispatch(getLabelSpace(conversation.id));
       setLoadedConversationId(conversation.id);
     }
@@ -207,7 +213,8 @@ export const LabelSpace: React.FC = () => {
       const annotationData: AnnotationCreate = {
         snippet_id: currentSnippet.id,
         taxon_id: label.taxon_id.toLowerCase(),
-        display_name: label.canonical_name || label.scientific_name || label.name,
+        display_name:
+          label.canonical_name || label.scientific_name || label.name,
       };
 
       await dispatch(createAnnotation(annotationData)).unwrap();
@@ -254,7 +261,7 @@ export const LabelSpace: React.FC = () => {
             handleRowClick();
           }
         }}
-        className="py-1.5 flex items-center justify-between w-full cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
+        className=" w-fit py-1.5 flex items-center justify-between  cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
       >
         <div>
           <div className="flex items-center justify-between">
@@ -265,7 +272,7 @@ export const LabelSpace: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <div className="flex items-center gap-2 mt-1 flex-wrap ">
             {/* Show source only while merged search results are active */}
             {pathname === "/annotate" && showMerged && (
               <span
@@ -310,23 +317,23 @@ export const LabelSpace: React.FC = () => {
         {pathname !== "/pre-annotation" ? (
           <Tooltip title="Annotate (or click anywhere on row)">
             <span
-              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300 rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              className="w-6 h-6 flex items-center justify-center rounded-md ml-3 flex-shrink-0 pointer-events-none"
               aria-hidden
             >
-            <Tag key="green" color="green" variant="filled">
-              ✓ Annotate
-            </Tag>
+              <Tag key="green" color="green" variant="filled">
+                ✓ Annotate
+              </Tag>
             </span>
           </Tooltip>
         ) : (
           <Tooltip title="Remove (or click anywhere on row)">
             <span
-              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300 rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              className="w-6 h-6 flex items-center justify-center bg-green-500 border border-green-300  rounded-md ml-3 flex-shrink-0 pointer-events-none"
               aria-hidden
             >
-            <Tag key="red" color="red" variant="filled">
-              x
-            </Tag>
+              <Tag key="red" color="red" variant="filled">
+                x
+              </Tag>
             </span>
           </Tooltip>
         )}
@@ -344,7 +351,9 @@ export const LabelSpace: React.FC = () => {
   return (
     <div className="w-full flex flex-col h-full min-h-0">
       <div className="flex flex-col h-full min-h-0">
-        <h3 className="text-m font-semibold mb-1 font-ibm-sans flex-shrink-0">Label Space</h3>
+        <h3 className="text-m font-semibold mb-1 font-ibm-sans flex-shrink-0">
+          Label Space
+        </h3>
 
         <div className="border border-gray-200 rounded-md px-3 py-4 flex flex-col flex-1 min-h-0">
           <div className="mb-2 flex-shrink-0">
