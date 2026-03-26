@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
+import { reset } from "./customTaxonomySlice";
 
 export interface TeamState {
   status: "idle" | "loading" | "succeeded" | "failed";
@@ -41,7 +42,14 @@ export const fetchTeamDatasets = createAsyncThunk(
 export const teamSlice = createSlice({
   name: "team",
   initialState,
-  reducers: {},
+  reducers: {
+    resetCreateTeam: () => {
+      return {
+        ...initialState,
+        teamCreated: false,
+      };
+    },
+  },
   extraReducers: (builder) => {
     builder.addCase(fetchAllteams.fulfilled, (state, action) => {
       state.allTeams = action.payload;
@@ -52,4 +60,5 @@ export const teamSlice = createSlice({
   },
 });
 
+export const { resetCreateTeam } = teamSlice.actions;
 export default teamSlice.reducer;

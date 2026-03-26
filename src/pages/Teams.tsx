@@ -5,9 +5,22 @@ import {
   fetchAllDatasets,
   fetchAllTeamDatasets,
 } from "../redux/features/datasetSlice";
-import { Space, Table, Card, Modal, Button, Input, Select } from "antd";
+import {
+  Space,
+  Table,
+  Card,
+  Modal,
+  Button,
+  Input,
+  Select,
+  message,
+} from "antd";
 import type { TableProps } from "antd";
-import { fetchAllteams, createTeam } from "../redux/features/teamSlice";
+import {
+  fetchAllteams,
+  createTeam,
+  resetCreateTeam,
+} from "../redux/features/teamSlice";
 import { InviteTeamModal } from "../components/InviteTeamModal";
 
 export const Teams = () => {
@@ -55,7 +68,6 @@ export const Teams = () => {
   };
 
   const createNewTeam = () => {
-    console.log(teamInfo);
     dispatch(
       createTeam({
         name: teamInfo.name,
@@ -63,12 +75,6 @@ export const Teams = () => {
       }),
     );
   };
-
-  useEffect(() => {
-    if (teamCreated) {
-      setIsModalOpen(false);
-    }
-  }, [teamCreated]);
 
   const columns: TableProps<DataType>["columns"] = [
     {
@@ -103,6 +109,12 @@ export const Teams = () => {
 
   useEffect(() => {
     dispatch(fetchAllteams());
+    if (teamCreated) {
+      setIsModalOpen(false);
+      message.success("Team Created", undefined, () =>
+        dispatch(resetCreateTeam()),
+      );
+    }
   }, [teamCreated]);
 
   useEffect(() => {}, [allTeams]);
@@ -223,12 +235,14 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
-              <InviteTeamModal />
-              {user && user.role === "team_owner" && (
-                <Button type="primary" onClick={showModal}>
-                  Create Team
-                </Button>
-              )}
+              {/* <InviteTeamModal /> */}
+              {/* {user && user.role === "team_owner" && ( */}
+
+              {/* Allow admin to create team */}
+              <Button type="primary" onClick={showModal}>
+                Create Team
+              </Button>
+              {/* )} */}
             </div>
             {allTeams && allTeams.length > 0 ? (
               <Table<DataType> columns={columns} dataSource={allTeams} />
