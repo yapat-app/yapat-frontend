@@ -75,8 +75,8 @@ export const NavigationBar = () => {
 
           <Button
             onClick={userlogout}
-            className="!bg-[#E8EDF5]"
-            icon={<TbLogout className="h-[20px] w-[20px]" />}
+            className="bg-[#E8EDF5]!"
+            icon={<TbLogout className="h-5 w-5" />}
           ></Button>
           {/* <TbLogout className="h-[20px] w-[20px] " /> */}
           {/* </Button> */}

@@ -1,4 +1,4 @@
-import { HomeNavBar } from "../components/HomeNavbar";
+import { HomeNavbar } from "../components/HomeNavbar";
 import { Button, Card } from "antd";
 import { IoBookSharp, IoBarChart, IoPricetag } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
@@ -48,7 +48,7 @@ export const HomePage = () => {
 
   return (
     <div>
-      <HomeNavBar />
+      <HomeNavbar />
       <section className="pt-32 pb-20 px-6">
         <div className="container mx-auto max-w-4xl text-center">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-black mb-6 text-balance font-ibm-mono ">

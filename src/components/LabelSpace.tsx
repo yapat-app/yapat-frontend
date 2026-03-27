@@ -1,4 +1,4 @@
-import { List, Tag, Tooltip, message } from "antd";
+import { Button, List, Tag, Tooltip, message } from "antd";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { debounce } from "lodash";
@@ -18,6 +18,7 @@ import {
   getSuggestions,
   clearSuggestions,
 } from "../redux/features/taxonomySlice";
+import { useNavigate } from "react-router-dom";
 
 interface LabelSpaceItem {
   id: string;
@@ -76,7 +77,7 @@ export const LabelSpace: React.FC = () => {
   const [search, setSearch] = useState("");
   const dispatch = useAppDispatch();
   const { pathname } = useLocation();
-
+  const navigate = useNavigate();
   // Custom taxonomy sources
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
@@ -317,7 +318,7 @@ export const LabelSpace: React.FC = () => {
         {pathname !== "/pre-annotation" ? (
           <Tooltip title="Annotate (or click anywhere on row)">
             <span
-              className="w-6 h-6 flex items-center justify-center rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              className="w-6 h-6 flex items-center justify-center rounded-md ml-3 shrink-0 pointer-events-none"
               aria-hidden
             >
               <Tag key="green" color="green" variant="filled">
@@ -328,7 +329,7 @@ export const LabelSpace: React.FC = () => {
         ) : (
           <Tooltip title="Remove (or click anywhere on row)">
             <span
-              className="w-6 h-6 flex items-center justify-center   rounded-md ml-3 flex-shrink-0 pointer-events-none"
+              className="w-6 h-6 flex items-center justify-center   rounded-md ml-3 shrink-0 pointer-events-none"
               aria-hidden
             >
               <Tag key="red" color="red" variant="filled">
@@ -351,12 +352,12 @@ export const LabelSpace: React.FC = () => {
   return (
     <div className="w-full flex flex-col h-full min-h-0">
       <div className="flex flex-col h-full min-h-0">
-        <h3 className="text-m font-semibold mb-1 font-ibm-sans flex-shrink-0">
+        <h3 className="text-m font-semibold mb-1 font-ibm-sans shrink-0">
           Label Space
         </h3>
 
         <div className="border border-gray-200 rounded-md px-3 py-4 flex flex-col flex-1 min-h-0">
-          <div className="mb-2 flex-shrink-0">
+          <div className="mb-2 shrink-0">
             <input
               placeholder={
                 pathname === "/annotate"
@@ -404,12 +405,23 @@ export const LabelSpace: React.FC = () => {
             />
           </div>
         </div>
-
-        {pathname === "/pre-annotation" && (labelSpace ?? []).length > 0 && (
-          <div className="my-3">
-            <FreezeLabelSpace labelSpace={labelSpace ?? []} />
-          </div>
-        )}
+        {pathname === "/pre-annotation" &&
+          ((labelSpace ?? []).length > 0 ? (
+            <div className="my-3">
+              <FreezeLabelSpace labelSpace={labelSpace ?? []} />
+            </div>
+          ) : (
+            <div className="my-3">
+              <Button
+                onClick={() => navigate("/annotate")}
+                className="w-full!"
+                size="middle"
+                type="primary"
+              >
+                Label Space already created, Start Annotating?
+              </Button>
+            </div>
+          ))}
       </div>
     </div>
   );

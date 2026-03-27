@@ -11,7 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /* ----------------------------------
  Component

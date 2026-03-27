@@ -2,8 +2,10 @@ import React from "react";
 import { Tabs, Collapse, Typography } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
 import "../styles/docs.css";
+import { HomeNavbar } from "../components/HomeNavbar";
+import { useAppSelector } from "../hooks";
 
-const { Title, Paragraph } = Typography;
+const { Paragraph } = Typography;
 const { Panel } = Collapse;
 
 /* ----------------------------------
@@ -209,9 +211,10 @@ export const YapatUserManual: React.FC<YapatUserManualProps> = ({
   title = "User Manual",
   subtitle = "A complete guide to using YAPAT for PAM dataset management, AI-assisted annotation, and eco-acoustic analysis.",
 }) => {
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   return (
     <div>
-      <NavigationBar />
+      {isAuthenticated ? <NavigationBar /> : <HomeNavbar />}
 
       <section className="yapat-manual">
         {/* Header */}

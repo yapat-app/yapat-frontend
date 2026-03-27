@@ -24,11 +24,9 @@ import {
   resetCreateTeam,
   createInvitationLink,
 } from "../redux/features/teamSlice";
-import { InviteTeamModal } from "../components/InviteTeamModal";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
-  const baseUrl = window.location.origin;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
@@ -67,7 +65,7 @@ export const Teams = () => {
     });
   };
 
-  const handleChangeDataset = (value: string) => {
+  const handleChangeDataset = (value: string[]) => {
     setTeamInfo((prev: any) => ({
       ...prev,
       dataset_ids: value,
@@ -202,7 +200,8 @@ export const Teams = () => {
               okText="Create Team"
               onCancel={handleCancel}
               okButtonProps={{
-                disabled: !teamInfo.name?.trim(),
+                disabled:
+                  !teamInfo.name?.trim() || !teamInfo.dataset_ids?.length,
               }}
             >
               <>
@@ -264,9 +263,9 @@ export const Teams = () => {
                       Choose Dataset
                     </p>
 
-                    <Select<string>
-                      mode="multiple" // multiple selection
-                      value={teamInfo.dataset_ids} // bind to string[]
+                    <Select<string[]>
+                      mode="multiple"
+                      value={teamInfo.dataset_ids}
                       style={{
                         width: "100%",
                         height: "fit-content",

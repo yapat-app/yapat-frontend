@@ -1,13 +1,13 @@
 import { Button } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { getLoggedInUser, logout } from "../redux/features/authSlice";
+import { getLoggedInUser } from "../redux/features/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 
 // import React from "react";
 
-export const HomeNavBar = () => {
+export const HomeNavbar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
   const { accessToken } = useAppSelector((state) => state.auth);

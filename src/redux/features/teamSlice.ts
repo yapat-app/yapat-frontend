@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
-import { reset } from "./customTaxonomySlice";
+// import { reset } from "./customTaxonomySlice";
 import { teamApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 import type { Invitation } from "../../types";
