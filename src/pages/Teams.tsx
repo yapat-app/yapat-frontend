@@ -147,7 +147,7 @@ export const Teams = () => {
     <div>
       <NavigationBar />
       <div className="w-full h-full flex justify-center">
-        <div className="w-[60%]">
+        <div className="w-[85%]">
           <div className="my-6">
             <h1 className="text-2xl font-bold font-ibm-mono">Teams</h1>
             <Modal
@@ -170,7 +170,7 @@ export const Teams = () => {
               {invitation && invitation.token && (
                 <Space>
                   <a
-                    href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/?token=${invitation.token}&&target_role=${invitation.target_role}`}
+                    href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
                     target="_blank"
                   >
                     Invitation Link
@@ -182,7 +182,7 @@ export const Teams = () => {
                       icon={<CopyOutlined />}
                       onClick={() => {
                         navigator.clipboard.writeText(
-                          `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/?token=${invitation.token}&&target_role=${invitation.target_role}`,
+                          `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
                         );
                         message.success("Invitation link copied!");
                       }}

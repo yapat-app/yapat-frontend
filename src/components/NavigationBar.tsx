@@ -21,7 +21,7 @@ export const NavigationBar = () => {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigator("/");
+      navigator("/login");
     }
   }, [isAuthenticated]);
 
@@ -32,7 +32,7 @@ export const NavigationBar = () => {
   }, [accessToken]);
   const userlogout = () => {
     dispatch(logout());
-    navigator("/");
+    navigator("/login");
   };
   return (
     <div className="flex w-full items-center justify-between py-2  px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">

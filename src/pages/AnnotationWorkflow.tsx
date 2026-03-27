@@ -97,8 +97,8 @@ export const AnnotationWorkflow: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
-      <div className="w-full flex justify-center p-6">
-        <div className="w-full max-w-6xl">
+      <div className="w-full  flex justify-center p-6">
+        <div className=" w-[85%]">
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-3xl font-bold font-ibm-mono mb-2">

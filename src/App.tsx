@@ -9,15 +9,16 @@ import { AnnotationWorkflow } from "./pages/AnnotationWorkflow";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
+import HomePage from "./pages/HomePage";
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/signUp" element={<SignUp />} />
-      <Route path="/home" element={<Home />} />
       <Route path="/datasets" element={<Datasets />} />
       <Route path="/teams" element={<Teams />} />
+      <Route path="/" element={<HomePage />} />
       <Route path="/pre-annotation" element={<Taxonomies />} />
       <Route path="/history" element={<FeedHistory />} />
       <Route path="/annotate" element={<AnnotationWorkflow />} />

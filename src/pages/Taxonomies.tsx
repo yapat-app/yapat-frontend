@@ -22,7 +22,7 @@ export const Taxonomies = () => {
       {allTeams && allTeams.length < 0 ? (
         <div className="w-full flex pt-10 justify-center flex-col items-center">
           <Card
-            className="my-4 w-[80%] h-[80vh] flex items-center justify-center"
+            className="my-4 w-[85%] h-[80vh] flex items-center justify-center"
             bordered={false}
             style={{ backgroundColor: "#FFFFFF" }}
           >
@@ -48,12 +48,12 @@ export const Taxonomies = () => {
         </div>
       ) : (
         <div className="w-full flex pt-10 justify-center flex-col items-center ">
-          <h1 className="w-[80%] text-xl font-semibold text-gray-800 mb-0 pb-2">
+          <h1 className="w-[80%] text-xl font-semibold font-ibm-mono text-gray-800 mb-0 ">
             Pre-Annotation
           </h1>
 
-          <div className="w-[80%] py-3 border-gray-200">
-            <p className="text-gray-600 text-center text-sm m-0">
+          <div className="w-[80%] py-2  border-gray-200">
+            <p className="sub_description_text">
               Create custom taxonomies and get suggested concepts for your
               annotations—chat below, then add them to your label space.
             </p>
@@ -61,7 +61,7 @@ export const Taxonomies = () => {
 
           <Card className="my-4 w-[80%] h-[80vh] ">
             <div className="flex gap-4 w-full h-[75vh]">
-              <div className="flex w-[60%] h-full">
+              <div className="flex w-[85%] h-full">
                 <TaxonomyChatbot />
               </div>
 

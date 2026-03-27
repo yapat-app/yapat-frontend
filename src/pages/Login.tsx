@@ -39,9 +39,9 @@ export const Login = () => {
       navigator("/datasets");
     }
     if (registerSuccess) {
-      navigator("/");
+      navigator("/login");
       setRole("");
-      message.success("Registration successful! Try logging in now.");
+      message.success("Registration successful! Try logging in.");
       dispatch(resetAuth());
     }
   }, [loginSuccess, registerSuccess]);
