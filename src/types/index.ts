@@ -361,6 +361,23 @@ export interface DatasetCreate {
 }
 
 // ============================================================================
+// Invitations Types
+// ============================================================================
+
+export interface Invitation {
+  id: number;
+  team_id: number;
+  invited_by: number;
+  token: string;
+  target_role: string;
+  expires_at: string;
+  is_active: boolean;
+  max_uses: number;
+  used_count: number;
+  created_at: string;
+}
+
+// ============================================================================
 // User Types
 // ============================================================================
 

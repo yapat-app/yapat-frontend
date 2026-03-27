@@ -37,6 +37,7 @@ import type {
   FreezeLabelSpaceResponse,
   AddToLabelSpaceResponse,
   AvailableTaxonomies,
+  Invitation,
 } from "../types";
 
 // ============================================================================
@@ -479,6 +480,14 @@ export const teamApi = {
 
   getAllTeamDatasets: async (): Promise<Dataset[]> => {
     const response = await api.get(`/api/teams/available-datasets`);
+    return response.data;
+  },
+
+  createInvitation: async (body: any): Promise<Invitation> => {
+    const response = await api.post(
+      `/api/teams/${body.teamId}/invitations`,
+      body,
+    );
     return response.data;
   },
 };

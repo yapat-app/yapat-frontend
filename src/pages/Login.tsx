@@ -7,6 +7,7 @@ import {
   clearError,
   loginAsync,
   registerAsync,
+  resetAuth,
 } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
@@ -15,7 +16,9 @@ export const Login = () => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitationToken = searchParams.get("invitation_token");
+  const invitationToken = searchParams.get("token");
+  const targetRole = searchParams.get("target_role");
+
   const { loginSuccess, registerSuccess, loginLoading, error } = useAppSelector(
     (state: any) => state.auth,
   );
@@ -26,8 +29,8 @@ export const Login = () => {
 
   useEffect(() => {
     if (invitationToken) {
-      console.log("invitationToken", invitationToken);
-      setRole("team_owner");
+      console.log("invitationToken", invitationToken, targetRole);
+      setRole(targetRole || "user");
     }
   }, [invitationToken]);
 
@@ -37,6 +40,9 @@ export const Login = () => {
     }
     if (registerSuccess) {
       navigator("/");
+      setRole("");
+      message.success("Registration successful! Try logging in now.");
+      dispatch(resetAuth());
     }
   }, [loginSuccess, registerSuccess]);
 
@@ -74,7 +80,7 @@ export const Login = () => {
         username: username,
         password: password,
         role: role,
-        invitation_token: invitationToken,
+        team_invitation_token: invitationToken,
       }),
     );
   };

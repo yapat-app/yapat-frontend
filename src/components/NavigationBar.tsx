@@ -11,7 +11,7 @@ import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 export const NavigationBar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
-  const { accessToken, isAuthenticated } = useAppSelector(
+  const { accessToken, isAuthenticated, user } = useAppSelector(
     (state) => state.auth,
   );
 
@@ -53,10 +53,15 @@ export const NavigationBar = () => {
           <div className="nav_tabs" onClick={() => navigateTab("/history")}>
             Feed History
           </div>
-          <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
-            Teams
-          </div>
-          <div className="nav_tabs" onClick={() => navigateTab("/pre-annotation")}>
+          {user && user.role != "user" && (
+            <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
+              Teams
+            </div>
+          )}
+          <div
+            className="nav_tabs"
+            onClick={() => navigateTab("/pre-annotation")}
+          >
             Pre annotation
           </div>
           <div className="nav_tabs" onClick={() => navigateTab("/docs")}>

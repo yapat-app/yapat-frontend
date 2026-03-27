@@ -55,7 +55,7 @@ export const registerAsync = createAsyncThunk<
     username: string;
     password: string;
     role: string;
-    invitation_token: string | null;
+    team_invitation_token: string | null;
   } // argument type
 >(
   // argument passed in
@@ -99,6 +99,10 @@ export const authSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    resetAuth: (state) => {
+      state.loginSuccess = false;
+      state.registerSuccess = false;
     },
   },
   extraReducers: (builder) => {
@@ -151,5 +155,5 @@ export const authSlice = createSlice({
 });
 
 // Export actions and reducer
-export const { logout, clearError } = authSlice.actions;
+export const { logout, clearError, resetAuth } = authSlice.actions;
 export default authSlice.reducer;
