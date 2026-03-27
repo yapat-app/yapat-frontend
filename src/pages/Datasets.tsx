@@ -24,7 +24,7 @@ export const Datasets = () => {
   }, []);
 
   useEffect(() => {
-    if (user && user?.role === "admin") {
+    if ((user && user?.role === "admin") || user?.role === "user") {
       dispatch(fetchAllDatasets());
     } else if (user && user?.role === "team_owner") {
       dispatch(fetchAllTeamDatasets());

@@ -12,7 +12,6 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   const { datasetAnnotations } = useAppSelector(
     (state: any) => state.annotation,
   );
-  const { user } = useAppSelector((state) => state.auth);
   return (
     <div className="rounded-lg border border-amber-50 bg-white shadow-sm p-4 flex flex-col gap-4">
       {/* Header: name + description + Generate feed */}
@@ -33,9 +32,8 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     disabled={d.annotated_snippets < 1}
                   />
                 )}
-                {user && user.role === "admin" && (
-                  <GenerateEmbeddings dataset={dataset} />
-                )}
+                <GenerateEmbeddings dataset={dataset} />
+
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
               </div>
             </div>
