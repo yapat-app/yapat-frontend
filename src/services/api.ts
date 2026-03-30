@@ -327,10 +327,8 @@ export const customtaxonomyApi = {
    * Ask AI agent to suggest taxonomies for annotating
    */
 
-  startConversation: async (teamId: number): Promise<Conversation> => {
-    const response = await api.post("/api/taxonomy/chat/start", {
-      team_id: teamId,
-    });
+  startConversation: async (): Promise<Conversation> => {
+    const response = await api.post("/api/taxonomy/chat/start", {});
     return response.data;
   },
 

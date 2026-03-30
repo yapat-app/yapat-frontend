@@ -45,9 +45,9 @@ const initialState: CustomTaxonomyState = {
 //Start a new conversation
 export const startNewConversation = createAsyncThunk(
   "taxonomy/startConversation",
-  async (teamId: number, { rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      return await customtaxonomyApi.startConversation(teamId);
+      return await customtaxonomyApi.startConversation();
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -206,6 +206,7 @@ export const customtaxonomySlice = createSlice({
       })
       .addCase(startNewConversation.fulfilled, (state, action) => {
         state.loading = false;
+        state.error = null;
         state.conversation = action.payload;
       })
       .addCase(startNewConversation.rejected, (state, action) => {
@@ -289,9 +290,12 @@ export const customtaxonomySlice = createSlice({
         state.loading = false;
         // Add API returns { conversation, added_items, skipped_count } — use conversation.label_space
         const nextLabelSpace = action.payload.conversation?.label_space;
-        state.labelSpace = Array.isArray(nextLabelSpace) ? nextLabelSpace : state.labelSpace;
+        state.labelSpace = Array.isArray(nextLabelSpace)
+          ? nextLabelSpace
+          : state.labelSpace;
         state.labelAdded = true;
-        state.lastAddWasDuplicates = (action.payload.added_items?.length ?? 0) === 0;
+        state.lastAddWasDuplicates =
+          (action.payload.added_items?.length ?? 0) === 0;
       })
       .addCase(addLabels.rejected, (state, action) => {
         state.loading = false;
