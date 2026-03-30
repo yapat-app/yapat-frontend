@@ -37,7 +37,7 @@ export const Teams = () => {
     useAppSelector((state) => state.team);
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
-
+  const baseUrl = window.location.origin;
   const canDeleteTeam =
     user && (user.role === "admin" || user.role === "team_owner");
 
