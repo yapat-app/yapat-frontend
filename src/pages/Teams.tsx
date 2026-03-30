@@ -33,6 +33,7 @@ export const Teams = () => {
   const { allTeams, teamCreated, invitation } = useAppSelector(
     (state) => state.team,
   );
+  const baseUrl = window.location.origin;
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
 
@@ -168,7 +169,7 @@ export const Teams = () => {
               {invitation && invitation.token && (
                 <Space>
                   <a
-                    href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
+                    href={`${baseUrl}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
                     target="_blank"
                   >
                     Invitation Link
@@ -180,7 +181,7 @@ export const Teams = () => {
                       icon={<CopyOutlined />}
                       onClick={() => {
                         navigator.clipboard.writeText(
-                          `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
+                          `${baseUrl}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
                         );
                         message.success("Invitation link copied!");
                       }}
