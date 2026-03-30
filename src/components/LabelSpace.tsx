@@ -1,4 +1,4 @@
-import { Button, List, Tag, Tooltip, message } from "antd";
+import { List, Tag, Tooltip, message } from "antd";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { debounce } from "lodash";
@@ -18,7 +18,6 @@ import {
   getSuggestions,
   clearSuggestions,
 } from "../redux/features/taxonomySlice";
-import { useNavigate } from "react-router-dom";
 
 interface LabelSpaceItem {
   id: string;
@@ -77,7 +76,6 @@ export const LabelSpace: React.FC = () => {
   const [search, setSearch] = useState("");
   const dispatch = useAppDispatch();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   // Custom taxonomy sources
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
