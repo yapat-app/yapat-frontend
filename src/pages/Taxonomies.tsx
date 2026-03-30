@@ -11,6 +11,7 @@ export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { allTeams } = useAppSelector((state) => state.team);
+  const firstTeamId: number | undefined = (allTeams as any[])?.[0]?.id;
 
   useEffect(() => {
     dispatch(fetchAllteams());
@@ -19,7 +20,7 @@ export const Taxonomies = () => {
   return (
     <div>
       <NavigationBar />
-      {allTeams && allTeams.length < 0 ? (
+      {allTeams && allTeams.length === 0 ? (
         <div className="w-full flex pt-10 justify-center flex-col items-center">
           <Card
             className="my-4 w-[85%] h-[80vh] flex items-center justify-center"
@@ -62,7 +63,7 @@ export const Taxonomies = () => {
           <Card className="my-4 w-[80%] h-[80vh] ">
             <div className="flex gap-4 w-full h-[75vh]">
               <div className="flex w-[85%] h-full">
-                <TaxonomyChatbot />
+                {firstTeamId !== undefined && <TaxonomyChatbot teamId={firstTeamId} />}
               </div>
 
               <div className="w-[40%] h-inherit">
