@@ -18,6 +18,7 @@ import {
   getSuggestions,
   clearSuggestions,
 } from "../redux/features/taxonomySlice";
+
 interface LabelSpaceItem {
   id: string;
   name: string;

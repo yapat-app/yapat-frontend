@@ -240,9 +240,9 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
       conversation &&
       (conversation.is_frozen === true || conversation.status === "cancelled")
     ) {
-      dispatch(startNewConversation(1));
+      dispatch(startNewConversation());
     } else if (!conversation) {
-      dispatch(startNewConversation(1));
+      dispatch(startNewConversation());
     }
   };
 
@@ -351,7 +351,6 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     );
   };
 
-
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -359,7 +358,18 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     }
   };
 
-  const renderMessage = (msg: ConversationMessage | { id: number; role: string; content: string; message_metadata?: { taxonomy_data?: { nodes: TaxonomyNode[] } } | null }) => {
+  const renderMessage = (
+    msg:
+      | ConversationMessage
+      | {
+          id: number;
+          role: string;
+          content: string;
+          message_metadata?: {
+            taxonomy_data?: { nodes: TaxonomyNode[] };
+          } | null;
+        },
+  ) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>

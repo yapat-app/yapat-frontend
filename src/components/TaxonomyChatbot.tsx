@@ -110,6 +110,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
     labelAdded,
     lastAddWasDuplicates,
     conversationFreezed,
+    error,
   } = useAppSelector((state) => state.customTaxonomy);
 
   const handleFreeze = () => {
@@ -126,8 +127,17 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
 
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
-    dispatch(startNewConversation(teamId));
+    // Start a new conversation if there isn't one, or if it's frozen/cancelled
+    // if (
+    //   conversation &&
+    //   (conversation.is_frozen === true || conversation.status === "cancelled")
+    // ) {
+    dispatch(startNewConversation());
+    // } else if (!conversation) {
+    //   dispatch(startNewConversation(1));
+    // }
 
+    // Optional cleanup when component unmounts
     return () => {
       // cleanup on unmount if needed
     };
@@ -142,7 +152,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             behavior: "smooth",
             block: "start",
           }),
-        50
+        50,
       );
     }
   }, [pendingMessage]);
@@ -161,7 +171,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             behavior: "smooth",
             block: "start",
           }),
-        50
+        50,
       );
     }
     prevMessageCountRef.current = currentCount;
@@ -184,6 +194,12 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
       }
     }
   }, [messageSent]);
+
+  useEffect(() => {
+    if (error) {
+      message.error(error);
+    }
+  }, [error]);
 
   useEffect(() => {
     if (labelAdded) {
@@ -290,56 +306,64 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
   // Helper to clean and extract summary from response
   const extractSummary = (content: string): string => {
     // Remove markdown formatting and extract a clean summary
-    const lines = content.split('\n');
+    const lines = content.split("\n");
     const summaryLines: string[] = [];
-    
+
     for (const line of lines) {
       const cleaned = line
-        .replace(/^#{1,6}\s+/, '') // Remove markdown headers
-        .replace(/\*\*/g, '') // Remove bold markers
+        .replace(/^#{1,6}\s+/, "") // Remove markdown headers
+        .replace(/\*\*/g, "") // Remove bold markers
         .trim();
-      
+
       // Skip technical lines with IDs, IRIs, etc
-      if (cleaned && 
-          !cleaned.startsWith('**') &&
-          !cleaned.includes('ID:**') &&
-          !cleaned.includes('IRI:**') &&
-          !cleaned.includes('Source:**') &&
-          !cleaned.includes('Description:**') &&
-          !cleaned.includes('Feel free') &&
-          cleaned.length > 10) {
+      if (
+        cleaned &&
+        !cleaned.startsWith("**") &&
+        !cleaned.includes("ID:**") &&
+        !cleaned.includes("IRI:**") &&
+        !cleaned.includes("Source:**") &&
+        !cleaned.includes("Description:**") &&
+        !cleaned.includes("Feel free") &&
+        cleaned.length > 10
+      ) {
         summaryLines.push(cleaned);
         if (summaryLines.length >= 2) break; // Get first 2 meaningful lines
       }
     }
-    
-    return summaryLines.join(' ') || 'Found relevant candidates for your query.';
+
+    return (
+      summaryLines.join(" ") || "Found relevant candidates for your query."
+    );
   };
 
   const getSourceColor = (source: string): string => {
     const colors: Record<string, string> = {
-      'gbif': '#1890ff',
-      'envo': '#52c41a',
-      'wikipedia': '#fa8c16',
-      'ols': '#722ed1',
-      'local': '#13c2c2',
+      gbif: "#1890ff",
+      envo: "#52c41a",
+      wikipedia: "#fa8c16",
+      ols: "#722ed1",
+      local: "#13c2c2",
     };
-    return colors[source.toLowerCase()] || '#1890ff';
+    return colors[source.toLowerCase()] || "#1890ff";
   };
 
   const getSourceIcon = (source: string) => {
     const icons: Record<string, React.ReactNode> = {
-      'gbif': <ExperimentOutlined />,
-      'envo': <EnvironmentOutlined />,
-      'wikipedia': <InfoCircleOutlined />,
+      gbif: <ExperimentOutlined />,
+      envo: <EnvironmentOutlined />,
+      wikipedia: <InfoCircleOutlined />,
     };
     return icons[source.toLowerCase()] || <InfoCircleOutlined />;
   };
 
-  const renderTaxonomyCard = (item: TaxonomyNode, index: number, messageId: number) => {
+  const renderTaxonomyCard = (
+    item: TaxonomyNode,
+    index: number,
+    messageId: number,
+  ) => {
     const collapseItems = [
       {
-        key: '1',
+        key: "1",
         label: (
           <Space size={4}>
             <InfoCircleOutlined style={{ fontSize: 12 }} />
@@ -347,13 +371,15 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
           </Space>
         ),
         children: (
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Space direction="vertical" size={8} style={{ width: "100%" }}>
             {item.metadata.description && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>Description:</Text>
-                <Paragraph 
-                  style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }} 
-                  ellipsis={{ rows: 3, expandable: true, symbol: 'more' }}
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Description:
+                </Text>
+                <Paragraph
+                  style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }}
+                  ellipsis={{ rows: 3, expandable: true, symbol: "more" }}
                 >
                   {item.metadata.description}
                 </Paragraph>
@@ -361,13 +387,15 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             )}
             {item.metadata.iri && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>Reference:</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Reference:
+                </Text>
                 <div style={{ marginTop: 4 }}>
-                  <a 
-                    href={item.metadata.iri} 
-                    target="_blank" 
+                  <a
+                    href={item.metadata.iri}
+                    target="_blank"
                     rel="noopener noreferrer"
-                    style={{ fontSize: 11, wordBreak: 'break-all' }}
+                    style={{ fontSize: 11, wordBreak: "break-all" }}
                   >
                     <LinkOutlined /> {item.metadata.iri}
                   </a>
@@ -376,13 +404,19 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             )}
             {item.id && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>ID: </Text>
-                <Text code style={{ fontSize: 11 }}>{item.id}</Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  ID:{" "}
+                </Text>
+                <Text code style={{ fontSize: 11 }}>
+                  {item.id}
+                </Text>
               </div>
             )}
             {item.metadata.score && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>Confidence: </Text>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Confidence:{" "}
+                </Text>
                 <Tag color="blue" style={{ fontSize: 11 }}>
                   {(item.metadata.score * 100).toFixed(0)}%
                 </Tag>
@@ -400,35 +434,41 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
         style={{
           marginBottom: 12,
           borderRadius: 8,
-          border: '1px solid #f0f0f0',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          border: "1px solid #f0f0f0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
         }}
-        bodyStyle={{ padding: '12px 16px' }}
+        bodyStyle={{ padding: "12px 16px" }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
           <Space direction="vertical" size={6} style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Text strong style={{ fontSize: 15, color: '#262626' }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Text strong style={{ fontSize: 15, color: "#262626" }}>
                 {item.name}
               </Text>
-              <Badge 
-                count={getSourceIcon(item.metadata.source)} 
-                style={{ 
+              <Badge
+                count={getSourceIcon(item.metadata.source)}
+                style={{
                   backgroundColor: getSourceColor(item.metadata.source),
-                  fontSize: 10
-                }} 
+                  fontSize: 10,
+                }}
               />
             </div>
-            
+
             {item.scientific_name && item.scientific_name !== item.name && (
               <Text italic type="secondary" style={{ fontSize: 13 }}>
                 {item.scientific_name}
               </Text>
             )}
-            
+
             <Space size={4} wrap style={{ marginTop: 4 }}>
-              <Tag 
-                color={getSourceColor(item.metadata.source)} 
+              <Tag
+                color={getSourceColor(item.metadata.source)}
                 style={{ fontSize: 11, margin: 0 }}
               >
                 {item.metadata.source.toUpperCase()}
@@ -531,7 +571,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             }}
           >
             {/* Clean summary instead of raw content */}
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space direction="vertical" size={4} style={{ width: "100%" }}>
               <Text style={{ fontSize: 15, lineHeight: 1.6 }}>{summary}</Text>
               {taxonomies.length > 0 && (
                 <Text type="secondary" style={{ fontSize: 13 }}>
@@ -555,9 +595,9 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                     <Text strong style={{ fontSize: 14, color: "#262626" }}>
                       Suggested Concepts
                     </Text>
-                    <Badge 
-                      count={taxonomies.length} 
-                      style={{ backgroundColor: '#52c41a' }} 
+                    <Badge
+                      count={taxonomies.length}
+                      style={{ backgroundColor: "#52c41a" }}
                     />
                   </Space>
                   <Button
@@ -571,10 +611,10 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                     Add All
                   </Button>
                 </div>
-                
+
                 <div>
-                  {taxonomies.map((item, index) => 
-                    renderTaxonomyCard(item, index, msg.id)
+                  {taxonomies.map((item, index) =>
+                    renderTaxonomyCard(item, index, msg.id),
                   )}
                 </div>
               </div>
@@ -701,7 +741,13 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                   maxWidth: "80%",
                 }}
               >
-                <Text style={{ fontSize: 14, color: "#0958d9", whiteSpace: "pre-line" }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#0958d9",
+                    whiteSpace: "pre-line",
+                  }}
+                >
                   {DEFAULT_SYSTEM_MESSAGE}
                 </Text>
                 <Paragraph
@@ -787,7 +833,6 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 </div>
               </div>
             )}
-
           </div>
 
           {/* Input Area */}
