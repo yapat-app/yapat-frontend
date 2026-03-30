@@ -1,6 +1,7 @@
 import { Button } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { freezeConversation } from "../redux/features/customTaxonomySlice";
+import { useNavigate } from "react-router-dom";
 
 interface LabelSpaceItem {
   id: string;
@@ -31,7 +32,10 @@ const defaultFreezeDescription = () => "Frozen from pre-annotation";
 
 export const FreezeLabelSpace = ({ labelSpace }: FreezeLabelSpaceProps) => {
   const dispatch = useAppDispatch();
-  const { conversation, conversationFreezed } = useAppSelector((state) => state.customTaxonomy);
+  const navigate = useNavigate();
+  const { conversation, conversationFreezed } = useAppSelector(
+    (state) => state.customTaxonomy,
+  );
 
   const isFrozen = conversation?.is_frozen === true || conversationFreezed;
 
@@ -48,15 +52,28 @@ export const FreezeLabelSpace = ({ labelSpace }: FreezeLabelSpaceProps) => {
 
   return (
     <div>
-      <Button
-        className="w-full!"
-        size="middle"
-        type="primary"
-        onClick={handleFreeze}
-        disabled={labelSpace.length === 0 || isFrozen}
-      >
-        Add To label space list
-      </Button>
+      {isFrozen ? (
+        <div className="my-3">
+          <Button
+            onClick={() => navigate("/annotate")}
+            className="w-full!"
+            size="middle"
+            type="primary"
+          >
+            Label Space created, Start Annotating?
+          </Button>
+        </div>
+      ) : (
+        <Button
+          className="w-full!"
+          size="middle"
+          type="primary"
+          onClick={handleFreeze}
+          disabled={labelSpace.length === 0 || isFrozen}
+        >
+          Add To label space list
+        </Button>
+      )}
     </div>
   );
 };

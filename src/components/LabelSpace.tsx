@@ -405,23 +405,11 @@ export const LabelSpace: React.FC = () => {
             />
           </div>
         </div>
-        {pathname === "/pre-annotation" &&
-          ((labelSpace ?? []).length > 0 ? (
-            <div className="my-3">
-              <FreezeLabelSpace labelSpace={labelSpace ?? []} />
-            </div>
-          ) : (
-            <div className="my-3">
-              <Button
-                onClick={() => navigate("/annotate")}
-                className="w-full!"
-                size="middle"
-                type="primary"
-              >
-                Label Space already created, Start Annotating?
-              </Button>
-            </div>
-          ))}
+        {pathname === "/pre-annotation" && (labelSpace ?? []).length > 0 && (
+          <div className="my-3">
+            <FreezeLabelSpace labelSpace={labelSpace ?? []} />
+          </div>
+        )}
       </div>
     </div>
   );
