@@ -476,8 +476,6 @@ export const datasetApi = {
 // ============================================================================
 
 export const teamApi = {
-  //Get single dataset by ID
-
   getAllTeamDatasets: async (): Promise<Dataset[]> => {
     const response = await api.get(`/api/teams/available-datasets`);
     return response.data;
@@ -489,6 +487,10 @@ export const teamApi = {
       body,
     );
     return response.data;
+  },
+
+  deleteTeam: async (teamId: number): Promise<void> => {
+    await api.delete(`/api/teams/${teamId}`);
   },
 };
 
