@@ -87,7 +87,7 @@ interface ConversationMessage {
 }
 
 interface TaxonomyChatbotProps {
-  teamId: number;
+  teamId?: number;
 }
 
 const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
