@@ -86,7 +86,11 @@ interface ConversationMessage {
   message_metadata: MessageMetadata | null;
 }
 
-const TaxonomyChatbot: React.FC = () => {
+interface TaxonomyChatbotProps {
+  teamId?: number;
+}
+
+const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
@@ -135,13 +139,9 @@ const TaxonomyChatbot: React.FC = () => {
 
     // Optional cleanup when component unmounts
     return () => {
-      // You can add cleanup logic here if needed
-      // For example, cancel conversation on unmount:
-      // if (conversation?.id) {
-      //   dispatch(cancelConversation(conversation.id));
-      // }
+      // cleanup on unmount if needed
     };
-  }, []); // Run once on mount
+  }, [teamId]); // Re-run if teamId changes
 
   // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {

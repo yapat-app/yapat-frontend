@@ -5,7 +5,7 @@ import {
   fetchAllDatasets,
   fetchAllTeamDatasets,
 } from "../redux/features/datasetSlice";
-import { CopyOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   Space,
   Table,
@@ -16,6 +16,7 @@ import {
   Select,
   Tooltip,
   message,
+  Popconfirm,
 } from "antd";
 import type { TableProps } from "antd";
 import {
@@ -23,6 +24,8 @@ import {
   createTeam,
   resetCreateTeam,
   createInvitationLink,
+  deleteTeam,
+  resetDeleteTeam,
 } from "../redux/features/teamSlice";
 
 export const Teams = () => {
@@ -30,12 +33,13 @@ export const Teams = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
-  const { allTeams, teamCreated, invitation } = useAppSelector(
-    (state) => state.team,
-  );
-  const baseUrl = window.location.origin;
+  const { allTeams, teamCreated, teamDeleted, invitation, error } =
+    useAppSelector((state) => state.team);
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
+
+  const canDeleteTeam =
+    user && (user.role === "admin" || user.role === "team_owner");
 
   const [teamInfo, setTeamInfo] = useState<{
     name: string;
@@ -46,6 +50,7 @@ export const Teams = () => {
     description: "",
     dataset_ids: [],
   });
+
   interface DataType {
     id: string;
     name: string;
@@ -83,6 +88,10 @@ export const Teams = () => {
     );
   };
 
+  const handleDeleteTeam = (teamId: number) => {
+    dispatch(deleteTeam(teamId));
+  };
+
   const columns: TableProps<DataType>["columns"] = [
     {
       title: "Name",
@@ -90,7 +99,6 @@ export const Teams = () => {
       key: "name",
       render: (text) => <a>{text}</a>,
     },
-
     {
       title: "Action",
       key: "action",
@@ -104,6 +112,25 @@ export const Teams = () => {
           >
             Invite People
           </a>
+          {canDeleteTeam && (
+            <Popconfirm
+              title="Delete team"
+              description={`Are you sure you want to delete "${(record as any).name}"? Datasets will be unassigned but not deleted.`}
+              onConfirm={() => handleDeleteTeam(Number(record.id))}
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+              cancelText="Cancel"
+            >
+              <Tooltip title="Delete team">
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  size="small"
+                />
+              </Tooltip>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -140,6 +167,19 @@ export const Teams = () => {
     }
   }, [teamCreated]);
 
+  useEffect(() => {
+    if (teamDeleted) {
+      message.success("Team deleted successfully");
+      dispatch(resetDeleteTeam());
+    }
+    if (error) {
+      message.error(
+        typeof error === "string" ? error : "Failed to delete team",
+      );
+      dispatch(resetDeleteTeam());
+    }
+  }, [teamDeleted, error]);
+
   useEffect(() => {}, [allTeams, invitation]);
 
   return (
@@ -152,14 +192,12 @@ export const Teams = () => {
             <Modal
               width={600}
               centered
-              title="Create Team"
+              title="Invite People"
               closable={{ "aria-label": "Custom Close Button" }}
               open={isDatasetModalOpen}
               onOk={createTeamMemberInvitationLink}
-              // loading={invitationLoading}
               okText="Create Invitation Link"
               onCancel={handleDatasetCancel}
-              // footer={invitationCreated ? null : undefined}
             >
               <p className="text-base font-ibm-sans  my-3 mb-6">
                 Pressing the button will create an invitation link that can be
@@ -277,7 +315,7 @@ export const Teams = () => {
                         backgroundColor: "#F7FBFF",
                         color: "#8897AD",
                       }}
-                      onChange={handleChangeDataset} // value: string[]
+                      onChange={handleChangeDataset}
                       options={allDatasets.map((dataset) => ({
                         value: dataset.id,
                         label: dataset.name,
@@ -296,14 +334,9 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
-              {/* <InviteTeamModal /> */}
-              {/* {user && user.role === "team_owner" && ( */}
-
-              {/* Allow admin to create team */}
               <Button type="primary" onClick={showModal}>
                 Create Team
               </Button>
-              {/* )} */}
             </div>
             {allTeams && allTeams.length > 0 ? (
               <Table<DataType> columns={columns} dataSource={allTeams} />
