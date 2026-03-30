@@ -7,19 +7,21 @@ import type { Invitation } from "../../types";
 
 export interface TeamState {
   status: "idle" | "loading" | "succeeded" | "failed";
-  allTeams: [] | null;
+  allTeams: any[] | null;
   loading: boolean;
   teamCreated: boolean;
+  teamDeleted: boolean;
   invitation: Invitation | null;
-  allTeamDatasets: [];
+  allTeamDatasets: any[];
   error: any;
 }
 
 const initialState: TeamState = {
-  allTeams: [],
+  allTeams: [] as any[],
   loading: false,
-  allTeamDatasets: [],
+  allTeamDatasets: [] as any[],
   teamCreated: false,
+  teamDeleted: false,
   invitation: null,
   status: "idle",
   error: null,
@@ -46,6 +48,18 @@ export const fetchTeamDatasets = createAsyncThunk(
   },
 );
 
+export const deleteTeam = createAsyncThunk(
+  "team/delete",
+  async (teamId: number, { rejectWithValue }) => {
+    try {
+      await teamApi.deleteTeam(teamId);
+      return teamId;
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 export const createInvitationLink = createAsyncThunk(
   "team/invite",
   async (body: any, { rejectWithValue }) => {
@@ -67,6 +81,10 @@ export const teamSlice = createSlice({
         teamCreated: false,
       };
     },
+    resetDeleteTeam: (state) => {
+      state.teamDeleted = false;
+      state.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(fetchAllteams.fulfilled, (state, action) => {
@@ -74,6 +92,20 @@ export const teamSlice = createSlice({
     });
     builder.addCase(createTeam.fulfilled, (state) => {
       state.teamCreated = true;
+    });
+    builder.addCase(deleteTeam.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(deleteTeam.fulfilled, (state, action) => {
+      state.loading = false;
+      state.teamDeleted = true;
+      state.allTeams =
+        state.allTeams?.filter((t: any) => t.id !== action.payload) ?? null;
+    });
+    builder.addCase(deleteTeam.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
     });
     builder.addCase(createInvitationLink.pending, (state) => {
       state.loading = true;
@@ -89,5 +121,5 @@ export const teamSlice = createSlice({
   },
 });
 
-export const { resetCreateTeam } = teamSlice.actions;
+export const { resetCreateTeam, resetDeleteTeam } = teamSlice.actions;
 export default teamSlice.reducer;
