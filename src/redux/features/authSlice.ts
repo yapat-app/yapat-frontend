@@ -55,7 +55,7 @@ export const registerAsync = createAsyncThunk<
     username: string;
     password: string;
     role: string;
-    invitation_token: string | null;
+    team_invitation_token: string | null;
   } // argument type
 >(
   // argument passed in
@@ -97,6 +97,13 @@ export const authSlice = createSlice({
       state.isAuthenticated = false;
       localStorage.removeItem("accessToken");
     },
+    clearError: (state) => {
+      state.error = null;
+    },
+    resetAuth: (state) => {
+      state.loginSuccess = false;
+      state.registerSuccess = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -119,10 +126,10 @@ export const authSlice = createSlice({
         // state.name = action.payload.name;
         // state.password = action.payload.password;
       })
-      .addCase(loginAsync.rejected, (state, action) => {
+      .addCase(loginAsync.rejected, (state, action: any) => {
         state.loginLoading = false;
         state.status = "failed";
-        state.error = action.error.message ?? "Unknown error";
+        state.error = action.payload.detail ?? "Unknown error";
         state.loginSuccess = false;
       })
       .addCase(registerAsync.pending, (state) => {
@@ -148,5 +155,5 @@ export const authSlice = createSlice({
 });
 
 // Export actions and reducer
-export const { logout } = authSlice.actions;
+export const { logout, clearError, resetAuth } = authSlice.actions;
 export default authSlice.reducer;

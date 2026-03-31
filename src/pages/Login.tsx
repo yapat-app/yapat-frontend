@@ -1,9 +1,14 @@
-import { Input, Button } from "antd";
+import { Input, Button, message } from "antd";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 // import { useDispatch, useSelector } from "react-redux";
-import { loginAsync, registerAsync } from "../redux/features/authSlice";
+import {
+  clearError,
+  loginAsync,
+  registerAsync,
+  resetAuth,
+} from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 
@@ -11,8 +16,10 @@ export const Login = () => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitationToken = searchParams.get("invitation_token");
-  const { loginSuccess, registerSuccess } = useAppSelector(
+  const invitationToken = searchParams.get("token");
+  const targetRole = searchParams.get("target_role");
+
+  const { loginSuccess, registerSuccess, loginLoading, error } = useAppSelector(
     (state: any) => state.auth,
   );
 
@@ -22,8 +29,8 @@ export const Login = () => {
 
   useEffect(() => {
     if (invitationToken) {
-      console.log("invitationToken", invitationToken);
-      setRole("team_owner");
+      console.log("invitationToken", invitationToken, targetRole);
+      setRole(targetRole || "user");
     }
   }, [invitationToken]);
 
@@ -32,9 +39,20 @@ export const Login = () => {
       navigator("/datasets");
     }
     if (registerSuccess) {
-      navigator("/");
+      navigator("/login");
+      setRole("");
+      message.success("Registration successful! Try logging in.");
+      dispatch(resetAuth());
     }
   }, [loginSuccess, registerSuccess]);
+
+  useEffect(() => {
+    if (error) {
+      message.error(error, undefined, () => {
+        dispatch(clearError());
+      });
+    }
+  }, [error]);
 
   const onValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -62,7 +80,7 @@ export const Login = () => {
         username: username,
         password: password,
         role: role,
-        invitation_token: invitationToken,
+        team_invitation_token: invitationToken,
       }),
     );
   };
@@ -138,6 +156,7 @@ export const Login = () => {
             </div>
           )}
           <Button
+            loading={loginLoading}
             htmlType="submit"
             style={{
               width: "100%",

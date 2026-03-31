@@ -6,12 +6,13 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { taxonomyApi, getErrorMessage } from "../../services/api";
-import type { TaxonSuggestion, TaxonDetails } from "../../types";
+import type { TaxonSuggestion, TaxonDetails, Taxonomy } from "../../types";
 
 export interface TaxonomyState {
   suggestions: TaxonSuggestion[];
   searchResults: TaxonDetails[];
   selectedTaxon: TaxonDetails | null;
+  taxonomies: Taxonomy[];
   loading: boolean;
   error: string | null;
   lastQuery: string;
@@ -19,6 +20,7 @@ export interface TaxonomyState {
 
 const initialState: TaxonomyState = {
   suggestions: [],
+  taxonomies: [],
   searchResults: [],
   selectedTaxon: null,
   loading: false,
@@ -43,7 +45,18 @@ export const getSuggestions = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
+);
+
+export const getAvailableTaxonomies = createAsyncThunk(
+  "taxonomy/available",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await taxonomyApi.available();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
 );
 
 //Full-text search with detailed results
@@ -52,14 +65,14 @@ export const searchSpecies = createAsyncThunk(
   "taxonomy/search",
   async (
     params: { q: string; limit?: number; rank?: string; status?: string },
-    { rejectWithValue }
+    { rejectWithValue },
   ) => {
     try {
       return await taxonomyApi.search(params);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 //Resolve a taxon ID to detailed information
@@ -72,7 +85,7 @@ export const resolveTaxon = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 //Fuzzy match a species name
@@ -85,7 +98,7 @@ export const matchSpeciesName = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
-  }
+  },
 );
 
 // ============================================================================
@@ -152,7 +165,22 @@ export const taxonomySlice = createSlice({
         state.error = action.payload as string;
         state.suggestions = [];
       })
-      
+
+      //Get available taxonomies
+      .addCase(getAvailableTaxonomies.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAvailableTaxonomies.fulfilled, (state, action) => {
+        state.loading = false;
+        state.taxonomies = action.payload.taxonomies;
+      })
+      .addCase(getAvailableTaxonomies.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.taxonomies = [];
+      })
+
       // Search species
       .addCase(searchSpecies.pending, (state) => {
         state.loading = true;
@@ -167,7 +195,7 @@ export const taxonomySlice = createSlice({
         state.error = action.payload as string;
         state.searchResults = [];
       })
-      
+
       // Resolve taxon
       .addCase(resolveTaxon.pending, (state) => {
         state.loading = true;
@@ -181,7 +209,7 @@ export const taxonomySlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      
+
       // Match species name
       .addCase(matchSpeciesName.pending, (state) => {
         state.loading = true;
@@ -208,4 +236,3 @@ export const {
 } = taxonomySlice.actions;
 
 export default taxonomySlice.reducer;
-

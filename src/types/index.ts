@@ -86,6 +86,7 @@ export interface AnnotationCreate {
   snippet_id: number;
   species_name?: string; // User can type species name
   taxon_id?: string; // Or provide taxon_id directly
+  display_name?: string; // Human-readable name for wiki/envo/ols (e.g. from Taxonomy Assistant)
   extra_metadata?: Record<string, any>;
 }
 
@@ -112,6 +113,21 @@ export interface CommonName {
   language: string;
 }
 
+export interface AvailableTaxonomies {
+  total: number;
+  taxonomies: Taxonomy[];
+}
+
+export interface Taxonomy {
+  taxonomy_id: string;
+  name: string;
+  type: string;
+  description: string;
+  team_id: number;
+  is_global: boolean;
+  status?: string;
+}
+
 export interface TaxonDetails extends TaxonSuggestion {
   phylum?: string;
   class?: string;
@@ -123,6 +139,112 @@ export interface TaxonDetails extends TaxonSuggestion {
   taxonomic_status?: string;
   match_type?: string;
   confidence?: number;
+}
+
+// ============================================================================
+// Custom Taxonomy Types
+// ============================================================================
+
+export interface Metadata {
+  iri: string;
+  tool: string;
+  score: number | null;
+  source: string;
+  description: string | null;
+}
+
+export interface Node {
+  id: string;
+  name: string;
+  rank: string;
+  metadata: Metadata;
+  scientific_name: string;
+}
+
+export interface GenerationMetadata {
+  model: string;
+  prompt: string;
+  server: string;
+}
+
+export interface AllLabelSpace {
+  conversation_id: number;
+  is_frozen: boolean;
+  items: LabelSpaceItem[];
+  total: number;
+}
+
+export interface TaxonomyData {
+  nodes: Node[];
+  generation_metadata: GenerationMetadata;
+}
+
+export interface MessageMetadata {
+  taxonomy_data: TaxonomyData;
+}
+
+export interface LabelSpaceItem {
+  id: string;
+  name: string;
+  scientific_name: string;
+  canonical_name: string;
+  taxon_id: string;
+  metadata: {
+    iri: string;
+    rank: string;
+    tool: string;
+    score: null | number;
+    family: null | string;
+    source: string;
+    kingdom: null | string;
+    description: null | string;
+  };
+  added_at: string;
+}
+
+export interface Message {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant";
+  content: string;
+  message_metadata: MessageMetadata | null;
+}
+
+export interface MessageResponse {
+  message: Message;
+  conversation: Conversation;
+}
+
+// Conversation type
+export interface Conversation {
+  id: number;
+  team_id: number;
+  user_id: number;
+  custom_taxonomy_id: number | null;
+  status: "in_progress" | string; // Add other status values as needed
+  label_space: LabelSpaceItem[] | []; // Specify the actual type if known
+  is_frozen: boolean;
+  created_at: string; // Use Date if you'll parse it
+  updated_at: string; // Use Date if you'll parse it
+  messages: Message[] | [];
+}
+
+/** Response from POST /chat/{id}/freeze */
+export interface FreezeLabelSpaceResponse {
+  conversation: Conversation;
+  taxonomy: unknown;
+}
+
+/** Response from POST /chat/{id}/add (add to label space) */
+export interface AddToLabelSpaceResponse {
+  conversation: Conversation;
+  added_items: LabelSpaceItem[];
+  skipped_count: number;
+}
+
+export interface MessageResponse {
+  message: Message;
+  conversation: Conversation;
 }
 
 // ============================================================================
@@ -236,6 +358,23 @@ export interface DatasetCreate {
   description?: string;
   source_uri?: string;
   team_id?: number;
+}
+
+// ============================================================================
+// Invitations Types
+// ============================================================================
+
+export interface Invitation {
+  id: number;
+  team_id: number;
+  invited_by: number;
+  token: string;
+  target_role: string;
+  expires_at: string;
+  is_active: boolean;
+  max_uses: number;
+  used_count: number;
+  created_at: string;
 }
 
 // ============================================================================
