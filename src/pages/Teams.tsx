@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
@@ -24,20 +23,24 @@ import {
   createTeam,
   resetCreateTeam,
   createInvitationLink,
+  resetTeamDeleted,
 } from "../redux/features/teamSlice";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [selectedTeamIsReady, setSelectedTeamIsReady] = useState<boolean>(false);
+  const [selectedTeamIsReady, setSelectedTeamIsReady] = useState(false);
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
-  const { allTeams, teamCreated, invitation } = useAppSelector(
-    (state) => state.team,
-  );
+  const { allTeams, teamCreated, teamDeleted, invitation, error } =
+    useAppSelector((state) => state.team);
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
+  const baseUrl =
+    import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
+  const isInvitingTeamMembers =
+    (invitation?.target_role || (selectedTeamIsReady ? "user" : "owner")) ===
+    "user";
 
   const [teamInfo, setTeamInfo] = useState<{
     name: string;
@@ -48,6 +51,7 @@ export const Teams = () => {
     description: "",
     dataset_ids: [],
   });
+
   interface DataType {
     id: string;
     name: string;
@@ -86,10 +90,6 @@ export const Teams = () => {
     );
   };
 
-  const currentInvitationRole =
-    invitation?.target_role || (selectedTeamIsReady ? "user" : "owner");
-  const isInvitingTeamMembers = currentInvitationRole === "user";
-
   const columns: TableProps<DataType>["columns"] = [
     {
       title: "Name",
@@ -97,28 +97,20 @@ export const Teams = () => {
       key: "name",
       render: (text) => <a>{text}</a>,
     },
-
     {
       title: "Action",
       key: "action",
       render: (_, record) => (
         <Space size="middle">
-          {/* Team owners go to the full manage page */}
-          {user && user.role === "team_owner" && (
-            <a onClick={() => navigate(`/teams/${record.id}`)}>Manage Team</a>
-          )}
-          {/* Admins can still generate invitation links inline */}
-          {user && user.role === "admin" && (
-            <a
-              onClick={() => {
-                setSelectedTeamId(record.id);
-                setSelectedTeamIsReady(record.is_ready);
-                setIsDatasetModalOpen(true);
-              }}
-            >
-              {record.is_ready ? "Invite Team Members" : "Invite Team Owner"}
-            </a>
-          )}
+          <a
+            onClick={() => {
+              setSelectedTeamId(record.id);
+              setSelectedTeamIsReady(record.is_ready);
+              setIsDatasetModalOpen(true);
+            }}
+          >
+            Invite People
+          </a>
         </Space>
       ),
     },
@@ -155,6 +147,19 @@ export const Teams = () => {
     }
   }, [teamCreated]);
 
+  useEffect(() => {
+    if (teamDeleted) {
+      message.success("Team deleted successfully");
+      dispatch(resetTeamDeleted());
+    }
+    if (error) {
+      message.error(
+        typeof error === "string" ? error : "Failed to delete team",
+      );
+      dispatch(resetTeamDeleted());
+    }
+  }, [teamDeleted, error]);
+
   useEffect(() => {}, [allTeams, invitation]);
 
   return (
@@ -167,18 +172,12 @@ export const Teams = () => {
             <Modal
               width={600}
               centered
-              title={
-                isInvitingTeamMembers
-                  ? "Invite Team Member"
-                  : "Invite Team Owner"
-              }
+              title="Create Team"
               closable={{ "aria-label": "Custom Close Button" }}
               open={isDatasetModalOpen}
               onOk={createTeamMemberInvitationLink}
-              // loading={invitationLoading}
               okText="Create Invitation Link"
               onCancel={handleDatasetCancel}
-              // footer={invitationCreated ? null : undefined}
             >
               {invitation && invitation.token ? (
                 isInvitingTeamMembers ? (
@@ -210,7 +209,7 @@ export const Teams = () => {
               {invitation && invitation.token && (
                 <Space>
                   <a
-                    href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
+                    href={`${baseUrl}/login/?token=${invitation.token}&target_role=${invitation.target_role}`}
                     target="_blank"
                   >
                     Invitation Link
@@ -222,7 +221,7 @@ export const Teams = () => {
                       icon={<CopyOutlined />}
                       onClick={() => {
                         navigator.clipboard.writeText(
-                          `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
+                          `${baseUrl}/login/?token=${invitation.token}&target_role=${invitation.target_role}`,
                         );
                         message.success("Invitation link copied!");
                       }}
@@ -318,7 +317,7 @@ export const Teams = () => {
                         backgroundColor: "#F7FBFF",
                         color: "#8897AD",
                       }}
-                      onChange={handleChangeDataset} // value: string[]
+                      onChange={handleChangeDataset}
                       options={allDatasets.map((dataset) => ({
                         value: dataset.id,
                         label: dataset.name,
@@ -337,14 +336,9 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
-              {/* <InviteTeamModal /> */}
-              {/* {user && user.role === "team_owner" && ( */}
-
-              {/* Allow admin to create team */}
               <Button type="primary" onClick={showModal}>
                 Create Team
               </Button>
-              {/* )} */}
             </div>
             {allTeams && allTeams.length > 0 ? (
               <Table<DataType> columns={columns} dataSource={allTeams} />

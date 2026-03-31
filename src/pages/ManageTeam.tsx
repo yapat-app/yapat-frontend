@@ -46,6 +46,8 @@ export const ManageTeam = () => {
   const { currentTeam, teamMembers, loading, teamUpdated, teamDeleted, invitation } =
     useAppSelector((state) => state.team);
   useAppSelector((state: any) => state.auth);
+  const frontendBaseUrl =
+    import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
@@ -430,7 +432,7 @@ export const ManageTeam = () => {
         {invitation && invitation.token && (
           <Space>
             <a
-              href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
+              href={`${frontendBaseUrl}/login/?token=${invitation.token}&target_role=${invitation.target_role}`}
               target="_blank"
               rel="noreferrer"
             >
@@ -442,7 +444,7 @@ export const ManageTeam = () => {
                 icon={<CopyOutlined />}
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
+                    `${frontendBaseUrl}/login/?token=${invitation.token}&target_role=${invitation.target_role}`,
                   );
                   message.success("Invitation link copied!");
                 }}
