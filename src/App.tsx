@@ -4,6 +4,7 @@ import { Login } from "./pages/Login";
 import { SignUp } from "./pages/SignUp";
 import { Datasets } from "./pages/Datasets";
 import { Teams } from "./pages/Teams";
+import { ManageTeam } from "./pages/ManageTeam";
 import { AnnotationWorkflow } from "./pages/AnnotationWorkflow";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
@@ -17,6 +18,7 @@ function App() {
       <Route path="/signUp" element={<SignUp />} />
       <Route path="/datasets" element={<Datasets />} />
       <Route path="/teams" element={<Teams />} />
+      <Route path="/teams/:teamId" element={<ManageTeam />} />
       <Route path="/" element={<HomePage />} />
       <Route path="/pre-annotation" element={<Taxonomies />} />
       <Route path="/history" element={<FeedHistory />} />

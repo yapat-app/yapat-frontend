@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   fetchAllDatasets,
   fetchAllTeamDatasets,
 } from "../redux/features/datasetSlice";
-import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
+import { CopyOutlined } from "@ant-design/icons";
 import {
   Space,
   Table,
@@ -16,7 +17,6 @@ import {
   Select,
   Tooltip,
   message,
-  Popconfirm,
 } from "antd";
 import type { TableProps } from "antd";
 import {
@@ -24,22 +24,20 @@ import {
   createTeam,
   resetCreateTeam,
   createInvitationLink,
-  deleteTeam,
-  resetDeleteTeam,
 } from "../redux/features/teamSlice";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedTeamIsReady, setSelectedTeamIsReady] = useState<boolean>(false);
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
-  const { allTeams, teamCreated, teamDeleted, invitation, error } =
-    useAppSelector((state) => state.team);
+  const { allTeams, teamCreated, invitation } = useAppSelector(
+    (state) => state.team,
+  );
   const { user } = useAppSelector((state: any) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
-  const baseUrl = window.location.origin;
-  const canDeleteTeam =
-    user && (user.role === "admin" || user.role === "team_owner");
 
   const [teamInfo, setTeamInfo] = useState<{
     name: string;
@@ -50,10 +48,10 @@ export const Teams = () => {
     description: "",
     dataset_ids: [],
   });
-
   interface DataType {
     id: string;
     name: string;
+    is_ready: boolean;
   }
 
   useEffect(() => {
@@ -88,9 +86,9 @@ export const Teams = () => {
     );
   };
 
-  const handleDeleteTeam = (teamId: number) => {
-    dispatch(deleteTeam(teamId));
-  };
+  const currentInvitationRole =
+    invitation?.target_role || (selectedTeamIsReady ? "user" : "owner");
+  const isInvitingTeamMembers = currentInvitationRole === "user";
 
   const columns: TableProps<DataType>["columns"] = [
     {
@@ -99,37 +97,27 @@ export const Teams = () => {
       key: "name",
       render: (text) => <a>{text}</a>,
     },
+
     {
       title: "Action",
       key: "action",
       render: (_, record) => (
         <Space size="middle">
-          <a
-            onClick={() => {
-              setSelectedTeamId(record.id);
-              setIsDatasetModalOpen(true);
-            }}
-          >
-            Invite People
-          </a>
-          {canDeleteTeam && (
-            <Popconfirm
-              title="Delete team"
-              description={`Are you sure you want to delete "${(record as any).name}"? Datasets will be unassigned but not deleted.`}
-              onConfirm={() => handleDeleteTeam(Number(record.id))}
-              okText="Delete"
-              okButtonProps={{ danger: true }}
-              cancelText="Cancel"
+          {/* Team owners go to the full manage page */}
+          {user && user.role === "team_owner" && (
+            <a onClick={() => navigate(`/teams/${record.id}`)}>Manage Team</a>
+          )}
+          {/* Admins can still generate invitation links inline */}
+          {user && user.role === "admin" && (
+            <a
+              onClick={() => {
+                setSelectedTeamId(record.id);
+                setSelectedTeamIsReady(record.is_ready);
+                setIsDatasetModalOpen(true);
+              }}
             >
-              <Tooltip title="Delete team">
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  size="small"
-                />
-              </Tooltip>
-            </Popconfirm>
+              {record.is_ready ? "Invite Team Members" : "Invite Team Owner"}
+            </a>
           )}
         </Space>
       ),
@@ -152,7 +140,7 @@ export const Teams = () => {
     dispatch(
       createInvitationLink({
         teamId: selectedTeamId,
-        target_role: "user",
+        target_role: selectedTeamIsReady ? "user" : "owner",
       }),
     );
   };
@@ -167,19 +155,6 @@ export const Teams = () => {
     }
   }, [teamCreated]);
 
-  useEffect(() => {
-    if (teamDeleted) {
-      message.success("Team deleted successfully");
-      dispatch(resetDeleteTeam());
-    }
-    if (error) {
-      message.error(
-        typeof error === "string" ? error : "Failed to delete team",
-      );
-      dispatch(resetDeleteTeam());
-    }
-  }, [teamDeleted, error]);
-
   useEffect(() => {}, [allTeams, invitation]);
 
   return (
@@ -192,22 +167,50 @@ export const Teams = () => {
             <Modal
               width={600}
               centered
-              title="Invite People"
+              title={
+                isInvitingTeamMembers
+                  ? "Invite Team Member"
+                  : "Invite Team Owner"
+              }
               closable={{ "aria-label": "Custom Close Button" }}
               open={isDatasetModalOpen}
               onOk={createTeamMemberInvitationLink}
+              // loading={invitationLoading}
               okText="Create Invitation Link"
               onCancel={handleDatasetCancel}
+              // footer={invitationCreated ? null : undefined}
             >
-              <p className="text-base font-ibm-sans  my-3 mb-6">
-                Pressing the button will create an invitation link that can be
-                send to your colleagues to register.
-              </p>
+              {invitation && invitation.token ? (
+                isInvitingTeamMembers ? (
+                  <p className="text-base font-ibm-sans my-3 mb-6">
+                    Invitation link created for <strong>team members</strong>.
+                    Share this link with users who should join the team.
+                  </p>
+                ) : (
+                  <p className="text-base font-ibm-sans my-3 mb-6">
+                    Invitation link created for a <strong>team owner</strong>.
+                    Share this link so the owner can register and take ownership
+                    of the team.
+                  </p>
+                )
+              ) : isInvitingTeamMembers ? (
+                <p className="text-base font-ibm-sans my-3 mb-6">
+                  This team already has an owner. Pressing the button will
+                  create an invitation link for a{" "}
+                  <strong>team member (user)</strong> to join the team.
+                </p>
+              ) : (
+                <p className="text-base font-ibm-sans my-3 mb-6">
+                  This team has no owner yet. Pressing the button will create
+                  an invitation link for a <strong>team owner</strong> to
+                  register and take ownership of the team.
+                </p>
+              )}
 
               {invitation && invitation.token && (
                 <Space>
                   <a
-                    href={`${baseUrl}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
+                    href={`${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`}
                     target="_blank"
                   >
                     Invitation Link
@@ -219,7 +222,7 @@ export const Teams = () => {
                       icon={<CopyOutlined />}
                       onClick={() => {
                         navigator.clipboard.writeText(
-                          `${baseUrl}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
+                          `${import.meta.env.VITE_YAPAT_FRONTEND_URL}/login/?token=${invitation.token}&&target_role=${invitation.target_role}`,
                         );
                         message.success("Invitation link copied!");
                       }}
@@ -315,7 +318,7 @@ export const Teams = () => {
                         backgroundColor: "#F7FBFF",
                         color: "#8897AD",
                       }}
-                      onChange={handleChangeDataset}
+                      onChange={handleChangeDataset} // value: string[]
                       options={allDatasets.map((dataset) => ({
                         value: dataset.id,
                         label: dataset.name,
@@ -334,9 +337,14 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
+              {/* <InviteTeamModal /> */}
+              {/* {user && user.role === "team_owner" && ( */}
+
+              {/* Allow admin to create team */}
               <Button type="primary" onClick={showModal}>
                 Create Team
               </Button>
+              {/* )} */}
             </div>
             {allTeams && allTeams.length > 0 ? (
               <Table<DataType> columns={columns} dataSource={allTeams} />

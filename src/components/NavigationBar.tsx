@@ -53,7 +53,7 @@ export const NavigationBar = () => {
           <div className="nav_tabs" onClick={() => navigateTab("/history")}>
             Feed History
           </div>
-          {user && user.role != "user" && (
+          {user && (user.role === "admin" || user.role === "team_owner") && (
             <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
               Teams
             </div>

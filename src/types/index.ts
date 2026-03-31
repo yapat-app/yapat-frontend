@@ -338,6 +338,28 @@ export interface RecordingCreate {
 }
 
 // ============================================================================
+// Team Types
+// ============================================================================
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  is_ready: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TeamMember {
+  membership_id: number;
+  user_id: number;
+  username: string;
+  full_name?: string;
+  role: "owner" | "user";
+  joined_at: string;
+}
+
+// ============================================================================
 // Dataset Types
 // ============================================================================
 

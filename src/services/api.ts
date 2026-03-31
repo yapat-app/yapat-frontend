@@ -479,6 +479,29 @@ export const teamApi = {
     return response.data;
   },
 
+  getTeamById: async (teamId: string | number): Promise<import("../types").Team> => {
+    const response = await api.get(`/api/teams/${teamId}`);
+    return response.data;
+  },
+
+  updateTeam: async (teamId: string | number, body: { name?: string; description?: string }): Promise<import("../types").Team> => {
+    const response = await api.patch(`/api/teams/${teamId}`, body);
+    return response.data;
+  },
+
+  deleteTeam: async (teamId: string | number): Promise<void> => {
+    await api.delete(`/api/teams/${teamId}`);
+  },
+
+  getTeamMembers: async (teamId: string | number): Promise<import("../types").TeamMember[]> => {
+    const response = await api.get(`/api/teams/${teamId}/members`);
+    return response.data;
+  },
+
+  removeMember: async (teamId: string | number, userId: number): Promise<void> => {
+    await api.delete(`/api/teams/${teamId}/members/${userId}`);
+  },
+
   createInvitation: async (body: any): Promise<Invitation> => {
     const response = await api.post(
       `/api/teams/${body.teamId}/invitations`,
