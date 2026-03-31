@@ -510,9 +510,6 @@ export const teamApi = {
     return response.data;
   },
 
-  deleteTeam: async (teamId: number): Promise<void> => {
-    await api.delete(`/api/teams/${teamId}`);
-  },
 };
 
 // ============================================================================

@@ -45,7 +45,7 @@ export const ManageTeam = () => {
 
   const { currentTeam, teamMembers, loading, teamUpdated, teamDeleted, invitation } =
     useAppSelector((state) => state.team);
-  const { user } = useAppSelector((state: any) => state.auth);
+  useAppSelector((state: any) => state.auth);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
