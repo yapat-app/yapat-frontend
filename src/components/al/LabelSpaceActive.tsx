@@ -208,8 +208,10 @@ export const LabelSpaceActive: React.FC = () => {
       const annotationData: AnnotationCreate = {
         snippet_id: currentSnippet.id,
         taxon_id: label.taxon_id.toLowerCase(),
-        display_name:
-          label.canonical_name || label.scientific_name || label.name,
+        extra_metadata: {
+          display_name:
+            label.canonical_name || label.scientific_name || label.name,
+        },
       };
 
       await dispatch(createAnnotation(annotationData)).unwrap();

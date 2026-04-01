@@ -151,7 +151,7 @@ export const removeLabels = createAsyncThunk(
   async (
     params: {
       conversationId: number;
-      itemId: number;
+      itemId: number | string;
     },
     { rejectWithValue },
   ) => {
@@ -262,9 +262,7 @@ export const customtaxonomySlice = createSlice({
       .addCase(freezeConversation.fulfilled, (state, action) => {
         state.loading = false;
         state.conversationFreezed = true;
-        if (action.payload?.conversation) {
-          state.conversation = action.payload.conversation;
-        }
+        state.conversation = action.payload;
       })
       //send Message
       .addCase(sendMessage.pending, (state) => {

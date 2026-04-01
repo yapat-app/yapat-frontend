@@ -39,6 +39,12 @@ import type {
   SnippetSet,
 } from "../types";
 
+type AddToLabelSpaceResponse = {
+  conversation: Conversation;
+  added_items: unknown[];
+  skipped_count: number;
+};
+
 // ============================================================================
 // Snippet API
 // ============================================================================
@@ -401,7 +407,7 @@ export const customtaxonomyApi = {
     conversationId: number;
     messageId: number;
     indices: number[];
-  }): Promise<Conversation> => {
+  }): Promise<AddToLabelSpaceResponse> => {
     const { conversationId, messageId, indices } = params;
     const response = await api.post(
       `/api/taxonomy/chat/${conversationId}/add`,
@@ -410,6 +416,15 @@ export const customtaxonomyApi = {
         indices: indices,
       },
     );
+    return response.data;
+  },
+
+  allTaxonomies: async (
+    teamId: number,
+  ): Promise<{ taxonomies: unknown[]; total: number }> => {
+    const response = await api.get("/api/taxonomy/custom", {
+      params: { team_id: teamId },
+    });
     return response.data;
   },
 };

@@ -1,6 +1,6 @@
 import { Button } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { getLoggedInUser, logout } from "../redux/features/authSlice";
+import { getLoggedInUser } from "../redux/features/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
@@ -10,9 +10,7 @@ import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
 export const HomeNavBar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
-  const { accessToken, isAuthenticated } = useAppSelector(
-    (state) => state.auth,
-  );
+  const { accessToken } = useAppSelector((state) => state.auth);
 
   const navigateTab = (url: string) => {
     navigator(url);
@@ -22,11 +20,7 @@ export const HomeNavBar = () => {
     if (accessToken) {
       dispatch(getLoggedInUser());
     }
-  }, [accessToken]);
-  const userlogout = () => {
-    dispatch(logout());
-    navigator("/");
-  };
+  }, [accessToken, dispatch]);
   return (
     <div className="flex w-full items-center justify-between py-2  px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
       <div>

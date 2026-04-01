@@ -68,8 +68,7 @@ export const HomePage = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
               onClick={() => navigator("/docs")}
-              asChild
-              variant="outline"
+              variant="outlined"
               className="border-primary text-primary hover:bg-primary/10 font-ibm-sans"
             >
               <IoBookSharp className="mr-2 h-5 w-5" />

@@ -11,16 +11,6 @@ import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { snippetApi } from "../../services/api";
 import type { PAMPrediction } from "../../types/al";
-import { Collapse } from "antd";
-import type { CollapseProps } from "antd";
-
-const items: CollapseProps["items"] = [
-  {
-    key: "1",
-    label: "This is panel header 1",
-    children: <p>{"Hello"}</p>,
-  },
-];
 
 interface Props {
   prediction: PAMPrediction;

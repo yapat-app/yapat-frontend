@@ -3,11 +3,10 @@
  */
 
 import React, { useState } from "react";
-import { Button, Popover, Input, Tag, Spin, message } from "antd";
+import { Button, Popover, Tag, Spin, message } from "antd";
 import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { submitFeedback } from "../../redux/features/alSlice";
-import type { LabelSpaceItem } from "../../types";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { LabelSpaceActive } from "./LabelSpaceActive";
 
@@ -20,7 +19,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
   const labelSpace = useAppSelector((state) => state.customTaxonomy.labelSpace);
   const [modifyOpen, setModifyOpen] = useState(false);
-  const [customLabel, setCustomLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const existingFeedback = feedbacks[prediction.id];
@@ -94,7 +92,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
     } finally {
       setSubmitting(false);
       setModifyOpen(false);
-      setCustomLabel("");
     }
   };
 

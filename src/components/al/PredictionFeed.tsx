@@ -7,7 +7,6 @@ import { Spin, Empty, Alert } from "antd";
 import { useAppSelector } from "../../hooks";
 import { PredictionCard } from "./PredictionCard";
 import { RetrainControl } from "./RetrainControl";
-import { ALLabelSpacePanel } from "./ALLabelSpacePanel";
 import { useALSync } from "../../hooks/useALSync";
 
 export const PredictionFeed: React.FC = () => {
