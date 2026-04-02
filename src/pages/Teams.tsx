@@ -76,7 +76,7 @@ export const Teams = () => {
   const handleChangeDataset = (value: string[]) => {
     setTeamInfo((prev: any) => ({
       ...prev,
-      dataset_ids: value,
+      dataset_ids: [value],
     }));
   };
 
@@ -200,9 +200,9 @@ export const Teams = () => {
                 </p>
               ) : (
                 <p className="text-base font-ibm-sans my-3 mb-6">
-                  This team has no owner yet. Pressing the button will create
-                  an invitation link for a <strong>team owner</strong> to
-                  register and take ownership of the team.
+                  This team has no owner yet. Pressing the button will create an
+                  invitation link for a <strong>team owner</strong> to register
+                  and take ownership of the team.
                 </p>
               )}
 
@@ -305,7 +305,6 @@ export const Teams = () => {
                     </p>
 
                     <Select<string[]>
-                      mode="multiple"
                       value={teamInfo.dataset_ids}
                       style={{
                         width: "100%",
