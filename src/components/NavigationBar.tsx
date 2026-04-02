@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button, Tooltip } from "antd";
 import { TbLogout } from "react-icons/tb";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
@@ -73,13 +73,31 @@ export const NavigationBar = () => {
             <img className="nav_logo_dfki" src={DFKI_logo}></img>
           </div>
 
+          <div className="h-8 w-px bg-gray-300"></div>
+          {user && (
+            <div className="flex flex-col items-start justify-center leading-tight">
+              {user.username.length > 10 ? (
+                <Tooltip title={user.username} placement="top">
+                  <span className="text-sm font-semibold text-gray-800 capitalize max-w-30 truncate cursor-pointer">
+                    {user.username.length > 10
+                      ? user.username.substring(0, 10) + "…"
+                      : user.username}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className="text-sm font-semibold text-gray-800 capitalize max-w-30 truncate ">
+                  {user.username}
+                </span>
+              )}
+
+              <span className="text-xs text-gray-500">{user.role}</span>
+            </div>
+          )}
           <Button
             onClick={userlogout}
             className="bg-[#E8EDF5]!"
             icon={<TbLogout className="h-5 w-5" />}
           ></Button>
-          {/* <TbLogout className="h-[20px] w-[20px] " /> */}
-          {/* </Button> */}
         </div>
       </div>
     </div>
