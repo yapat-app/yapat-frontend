@@ -56,6 +56,10 @@ export const Teams = () => {
     id: string;
     name: string;
     is_ready: boolean;
+    datasets?: {
+      id: number;
+      name: string;
+    }[];
   }
 
   useEffect(() => {
@@ -96,6 +100,16 @@ export const Teams = () => {
       dataIndex: "name",
       key: "name",
       render: (text) => <a>{text}</a>,
+    },
+    {
+      title: "Dataset",
+      key: "dataset",
+      render: (_, record) => {
+        const datasetNames =
+          record.datasets?.map((d) => d.name).join(", ") || "—";
+
+        return <span>{datasetNames}</span>;
+      },
     },
     {
       title: "Action",
