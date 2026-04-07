@@ -37,7 +37,6 @@ import {
   freezeConversation,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
 
@@ -90,7 +89,7 @@ interface TaxonomyChatbotProps {
   teamId?: number;
 }
 
-const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
+const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = () => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
@@ -112,6 +111,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
     conversationFreezed,
     error,
   } = useAppSelector((state) => state.customTaxonomy);
+  const { user } = useAppSelector((state) => state.auth);
 
   const handleFreeze = () => {
     if (conversation?.id)
@@ -127,12 +127,18 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
 
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
+    console.log(user?.team_ids?.length ? user.team_ids[0] : 333);
     // Start a new conversation if there isn't one, or if it's frozen/cancelled
     // if (
     //   conversation &&
     //   (conversation.is_frozen === true || conversation.status === "cancelled")
     // ) {
-    dispatch(startNewConversation());
+    if (user?.team_ids?.length) {
+      dispatch(startNewConversation(user.team_ids[0]));
+    } else {
+      dispatch(startNewConversation(null));
+    }
+
     // } else if (!conversation) {
     //   dispatch(startNewConversation(1));
     // }
@@ -141,7 +147,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
     return () => {
       // cleanup on unmount if needed
     };
-  }, [teamId]); // Re-run if teamId changes
+  }, [user]); // Re-run if teamId changes
 
   // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {
@@ -683,21 +689,21 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
         >
           {/* Header */}
           <div
+            className="gap-2 flex items-center"
             style={{
               padding: "15px 20px",
-              background: "#1990FF",
+              background: "#F7FAFC",
               color: "white",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
             }}
           >
-            <Space>
-              <MessageOutlined style={{ fontSize: 22 }} />
-              <Text strong style={{ color: "white", fontSize: 12 }}>
-                Taxonomy Assistant
-              </Text>
-            </Space>
+            <MessageOutlined style={{ color: "#4A709C", fontSize: 24 }} />
+            <Text
+              strong
+              className="font-ibm-sans!"
+              style={{ color: "#4A709C", fontSize: 14 }}
+            >
+              Taxonomy Assistant
+            </Text>
           </div>
 
           <div
@@ -722,7 +728,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                   width: 36,
                   height: 36,
                   borderRadius: "50%",
-                  background: "#8c8c8c",
+                  background: "#F7FAFC",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -730,27 +736,29 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                   flexShrink: 0,
                 }}
               >
-                <InfoCircleOutlined />
+                <InfoCircleOutlined style={{ color: "#4A709C" }} />
               </div>
               <div
                 style={{
-                  background: "#e6f7ff",
+                  background: "#F7FAFC",
                   padding: "12px 16px",
                   borderRadius: "12px",
-                  border: "1px solid #91d5ff",
+                  border: "1px solid #4A709C",
                   maxWidth: "80%",
                 }}
               >
                 <Text
+                  className="font-ibm-sans!"
                   style={{
                     fontSize: 14,
-                    color: "#0958d9",
+                    color: "#4A709C",
                     whiteSpace: "pre-line",
                   }}
                 >
                   {DEFAULT_SYSTEM_MESSAGE}
                 </Text>
                 <Paragraph
+                  className="font-ibm-sans!"
                   type="secondary"
                   style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
                 >

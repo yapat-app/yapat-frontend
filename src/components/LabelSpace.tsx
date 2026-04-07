@@ -79,7 +79,7 @@ export const LabelSpace: React.FC = () => {
   // Custom taxonomy sources
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
-
+  const { user } = useAppSelector((state) => state.auth);
   // Online suggestions (GBIF etc.)
   const { suggestions, loading: suggestionsLoading } = useAppSelector(
     (state) => state.taxonomy,
@@ -106,7 +106,9 @@ export const LabelSpace: React.FC = () => {
   // Load saved/custom taxonomies for annotate screen
   useEffect(() => {
     if (pathname === "/annotate") {
-      dispatch(getAllTaxonomies(1));
+      dispatch(
+        getAllTaxonomies(user?.team_ids?.length ? user?.team_ids[0] : 1),
+      );
     }
   }, [pathname, dispatch]);
 
