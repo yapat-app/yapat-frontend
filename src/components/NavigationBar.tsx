@@ -90,7 +90,9 @@ export const NavigationBar = () => {
                 </span>
               )}
 
-              <span className="text-xs text-gray-500">{user.role}</span>
+              <span className="text-xs text-gray-500">
+                {user.role === "team_owner" ? "Team owner" : user.role}
+              </span>
             </div>
           )}
           <Button

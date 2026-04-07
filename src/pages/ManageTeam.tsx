@@ -31,7 +31,6 @@ import {
   DeleteOutlined,
   UserDeleteOutlined,
   CopyOutlined,
-  ArrowLeftOutlined,
   SaveOutlined,
   CloseOutlined,
 } from "@ant-design/icons";
@@ -43,8 +42,14 @@ export const ManageTeam = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const { currentTeam, teamMembers, loading, teamUpdated, teamDeleted, invitation } =
-    useAppSelector((state) => state.team);
+  const {
+    currentTeam,
+    teamMembers,
+    loading,
+    teamUpdated,
+    teamDeleted,
+    invitation,
+  } = useAppSelector((state) => state.team);
   useAppSelector((state: any) => state.auth);
   const frontendBaseUrl =
     import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
@@ -125,16 +130,15 @@ export const ManageTeam = () => {
     dispatch(createInvitationLink({ teamId, target_role: targetRole }));
   };
 
-  const invitationRole = invitation?.target_role ?? (currentTeam?.is_ready ? "user" : "owner");
+  const invitationRole =
+    invitation?.target_role ?? (currentTeam?.is_ready ? "user" : "owner");
   const isInvitingMembers = invitationRole === "user";
 
   const memberColumns: TableProps<TeamMember>["columns"] = [
     {
       title: "Name",
       key: "name",
-      render: (_, record) => (
-        <span>{record.full_name || record.username}</span>
-      ),
+      render: (_, record) => <span>{record.full_name || record.username}</span>,
     },
     {
       title: "Username",
@@ -172,7 +176,9 @@ export const ManageTeam = () => {
             cancelText="Cancel"
             disabled={isOwner}
           >
-            <Tooltip title={isOwner ? "Owners cannot be removed" : "Remove member"}>
+            <Tooltip
+              title={isOwner ? "Owners cannot be removed" : "Remove member"}
+            >
               <Button
                 type="text"
                 danger
@@ -215,15 +221,8 @@ export const ManageTeam = () => {
         <div className="w-[85%]">
           {/* Header */}
           <div className="my-6 flex items-center gap-3">
-            <Button
-              type="text"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate("/teams")}
-            />
             <div>
-              <h1 className="text-2xl font-bold font-ibm-mono">
-                Manage Team
-              </h1>
+              <h1 className="text-2xl font-bold font-ibm-mono">Manage Team</h1>
               <p className="sub_description_text">
                 View and manage your team settings, members, and access.
               </p>
@@ -234,9 +233,7 @@ export const ManageTeam = () => {
             {/* ── Section 1: About the Team ── */}
             <Card
               variant="borderless"
-              title={
-                <span className="card_heading_text">About the Team</span>
-              }
+              title={<span className="card_heading_text">About the Team</span>}
               extra={
                 !isEditing ? (
                   <Button
@@ -247,10 +244,7 @@ export const ManageTeam = () => {
                   </Button>
                 ) : (
                   <Space>
-                    <Button
-                      icon={<CloseOutlined />}
-                      onClick={handleCancelEdit}
-                    >
+                    <Button icon={<CloseOutlined />} onClick={handleCancelEdit}>
                       Cancel
                     </Button>
                     <Button
@@ -274,7 +268,10 @@ export const ManageTeam = () => {
                     <Input
                       value={editForm.name}
                       onChange={(e) =>
-                        setEditForm((prev) => ({ ...prev, name: e.target.value }))
+                        setEditForm((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
                       }
                       style={{
                         backgroundColor: "#F7FBFF",
@@ -283,7 +280,9 @@ export const ManageTeam = () => {
                       }}
                     />
                   ) : (
-                    <p className="font-ibm-sans text-base">{currentTeam.name}</p>
+                    <p className="font-ibm-sans text-base">
+                      {currentTeam.name}
+                    </p>
                   )}
                 </div>
 
@@ -313,19 +312,18 @@ export const ManageTeam = () => {
                     </p>
                   )}
                 </div>
-
               </div>
             </Card>
 
             {/* ── Section 2: Team Members ── */}
             <Card
               variant="borderless"
-              title={
-                <span className="card_heading_text">Team Members</span>
-              }
+              title={<span className="card_heading_text">Team Members</span>}
               extra={
                 <Button type="primary" onClick={handleOpenInvite}>
-                  {currentTeam.is_ready ? "Invite Team Members" : "Invite Team Owner"}
+                  {currentTeam.is_ready
+                    ? "Invite Team Members"
+                    : "Invite Team Owner"}
                 </Button>
               }
             >
@@ -342,16 +340,15 @@ export const ManageTeam = () => {
             </Card>
 
             {/* ── Section 3: Delete Team ── */}
-            <Card
-              variant="borderless"
-              style={{ borderColor: "#ffa39e" }}
-            >
+            <Card variant="borderless" style={{ borderColor: "#ffa39e" }}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-ibm-sans font-semibold">Delete this team</p>
+                  <p className="font-ibm-sans font-semibold">
+                    Delete this team
+                  </p>
                   <p className="font-ibm-sans text-gray-500 text-sm">
-                    All datasets will be unassigned. Members and invitations will
-                    be permanently removed. This action cannot be undone.
+                    All datasets will be unassigned. Members and invitations
+                    will be permanently removed. This action cannot be undone.
                   </p>
                 </div>
                 <Button
@@ -379,10 +376,9 @@ export const ManageTeam = () => {
         cancelText="Cancel"
       >
         <p className="font-ibm-sans my-3">
-          Are you sure you want to delete{" "}
-          <strong>{currentTeam.name}</strong>? This will permanently remove all
-          memberships and invitations. Datasets will be unassigned but not
-          deleted.
+          Are you sure you want to delete <strong>{currentTeam.name}</strong>?
+          This will permanently remove all memberships and invitations. Datasets
+          will be unassigned but not deleted.
         </p>
         <p className="font-ibm-sans text-red-500 font-semibold">
           This action cannot be undone.

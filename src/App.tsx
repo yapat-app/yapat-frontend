@@ -10,6 +10,7 @@ import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
 import HomePage from "./pages/HomePage";
+import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 
 function App() {
   return (
@@ -17,7 +18,15 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signUp" element={<SignUp />} />
       <Route path="/datasets" element={<Datasets />} />
-      <Route path="/teams" element={<Teams />} />
+      <Route
+        path="/teams"
+        element={
+          <TeamOwnerRedirect>
+            <Teams />
+          </TeamOwnerRedirect>
+        }
+      />
+
       <Route path="/teams/:teamId" element={<ManageTeam />} />
       <Route path="/" element={<HomePage />} />
       <Route path="/pre-annotation" element={<Taxonomies />} />
