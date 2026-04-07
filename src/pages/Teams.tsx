@@ -5,7 +5,7 @@ import {
   fetchAllDatasets,
   fetchAllTeamDatasets,
 } from "../redux/features/datasetSlice";
-import { CopyOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   Space,
   Table,
@@ -24,10 +24,13 @@ import {
   resetCreateTeam,
   createInvitationLink,
   resetTeamDeleted,
+  deleteTeam,
 } from "../redux/features/teamSlice";
+import { useNavigate } from "react-router-dom";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedTeamIsReady, setSelectedTeamIsReady] = useState(false);
@@ -70,6 +73,19 @@ export const Teams = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (teamDeleted) {
+      message.success("Team deleted successfully");
+      dispatch(resetTeamDeleted());
+    }
+    if (error) {
+      message.error(
+        typeof error === "string" ? error : "Failed to delete team",
+      );
+      dispatch(resetTeamDeleted());
+    }
+  }, [teamDeleted, error]);
+
   const onValueChange = (name: string, value: any) => {
     setTeamInfo((prev) => {
       const updated = { ...prev, [name]: value };
@@ -99,7 +115,16 @@ export const Teams = () => {
       title: "Name",
       dataIndex: "name",
       key: "name",
-      render: (text) => <a>{text}</a>,
+      render: (_, record) => (
+        <Space size="middle">
+          {user && user.role === "team_owner" && (
+            <a onClick={() => navigate(`/teams/${record.id}`)}>{record.name}</a>
+          )}
+          {user && user.role === "admin" && (
+            <a onClick={() => navigate(`/teams/${record.id}`)}>{record.name}</a>
+          )}
+        </Space>
+      ),
     },
     {
       title: "Dataset",
@@ -125,6 +150,23 @@ export const Teams = () => {
           >
             Invite People
           </a>
+        </Space>
+      ),
+    },
+    {
+      title: "Delete",
+      key: "delete",
+      render: (_, record) => (
+        <Space>
+          <Tooltip title="Delete Team">
+            <a
+              onClick={() => {
+                dispatch(deleteTeam(record.id));
+              }}
+            >
+              <DeleteOutlined style={{ color: "red" }} />
+            </a>
+          </Tooltip>
         </Space>
       ),
     },
@@ -155,7 +197,7 @@ export const Teams = () => {
     dispatch(fetchAllteams());
     if (teamCreated) {
       setIsModalOpen(false);
-      message.success("Team Created", undefined, () =>
+      message.success("New team created", undefined, () =>
         dispatch(resetCreateTeam()),
       );
     }
@@ -163,8 +205,9 @@ export const Teams = () => {
 
   useEffect(() => {
     if (teamDeleted) {
-      message.success("Team deleted successfully");
+      message.success("Team deleted");
       dispatch(resetTeamDeleted());
+      dispatch(fetchAllteams());
     }
     if (error) {
       message.error(

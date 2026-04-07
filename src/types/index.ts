@@ -412,6 +412,7 @@ export interface User {
   full_name?: string;
   is_active?: boolean;
   accessToken?: string;
+  team_ids?: number[];
 }
 
 // ============================================================================
