@@ -2,7 +2,7 @@
  * PredictionCard — single card showing a PAM prediction.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { Tag, Tooltip, Skeleton } from "antd";
 import { SoundOutlined } from "@ant-design/icons";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
@@ -10,6 +10,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks";
 import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { snippetApi } from "../../services/api";
+import { useInViewport } from "../../hooks/useInViewport";
 import type { PAMPrediction } from "../../types/al";
 
 interface Props {
@@ -29,30 +30,69 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const isSelected = selectedSnippetId === prediction.snippet_id;
   const hasFeedback = !!feedbacks[prediction.id];
 
+  const localRef = useRef<HTMLDivElement | null>(null);
+  const setRefs = useCallback(
+    (el: HTMLDivElement | null) => {
+      localRef.current = el;
+      if (cardRef) cardRef(el);
+    },
+    [cardRef],
+  );
+
+  const inView = useInViewport(localRef.current, { rootMargin: "600px 0px" });
+
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
 
-  // Fetch audio via axios
+  // Simple in-memory cache so scrolling back doesn't re-download audio.
+  // We keep object URLs for the session; a small LRU prevents unbounded growth.
+  const cachedUrl = useMemo(() => audioUrlCache.get(prediction.snippet_id) ?? null, [prediction.snippet_id]);
+
+  useEffect(() => {
+    if (cachedUrl) {
+      setAudioError(false);
+      setAudioBlobUrl(cachedUrl);
+    } else {
+      setAudioBlobUrl(null);
+    }
+  }, [cachedUrl]);
+
+  // Fetch audio lazily when card is near viewport (or selected).
   // SpectrogramPlayer computes the spectrogram client-side from the same blob URL.
   useEffect(() => {
-    let objectUrl: string | null = null;
+    if (!inView && !isSelected) return;
+    if (audioUrlCache.has(prediction.snippet_id)) return;
+    if (inFlight.has(prediction.snippet_id)) return;
+
+    const controller = new AbortController();
     setAudioError(false);
-    setAudioBlobUrl(null);
-    snippetApi
-      .getSnippetAudio(prediction.snippet_id)
+
+    const p = snippetApi
+      .getSnippetAudio(prediction.snippet_id, controller.signal)
       .then((url) => {
-        objectUrl = url;
+        audioUrlCacheSet(prediction.snippet_id, url);
         setAudioBlobUrl(url);
+        return url;
       })
-      .catch(() => setAudioError(true));
+      .catch((e: any) => {
+        // Ignore cancellations from fast scrolling.
+        if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return null;
+        setAudioError(true);
+        return null;
+      })
+      .finally(() => {
+        inFlight.delete(prediction.snippet_id);
+      });
+
+    inFlight.set(prediction.snippet_id, p);
     return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      controller.abort();
     };
-  }, [prediction.snippet_id]);
+  }, [prediction.snippet_id, inView, isSelected]);
 
   return (
     <div
-      ref={cardRef}
+      ref={setRefs}
       onClick={() => dispatch(setSelectedSnippet(prediction.snippet_id))}
       className={[
         "rounded-lg border bg-white shadow-sm cursor-pointer transition-all duration-200",
@@ -104,13 +144,20 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
         className="border-t border-gray-100"
       >
         {/* Loading skeleton — shown until the blob URL is ready */}
-        {!audioBlobUrl && !audioError && (
+        {!audioBlobUrl && !audioError && (inView || isSelected) && (
           <div className="px-4 py-3">
             <Skeleton.Input
               active
               block
               style={{ height: 260, borderRadius: 6 }}
             />
+          </div>
+        )}
+
+        {/* Not loading yet (lazy) */}
+        {!audioBlobUrl && !audioError && !(inView || isSelected) && (
+          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ height: 260 }}>
+            Scroll to load audio
           </div>
         )}
 
@@ -149,3 +196,30 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
     </div>
   );
 };
+
+// ── Audio cache (module-level) ────────────────────────────────────────────────
+
+const audioUrlCache = new Map<number, string>();
+const inFlight = new Map<number, Promise<string | null>>();
+const LRU: number[] = [];
+const MAX_CACHE = 40;
+
+function audioUrlCacheSet(snippetId: number, url: string) {
+  if (!audioUrlCache.has(snippetId)) {
+    LRU.push(snippetId);
+  } else {
+    const idx = LRU.indexOf(snippetId);
+    if (idx >= 0) LRU.splice(idx, 1);
+    LRU.push(snippetId);
+  }
+
+  audioUrlCache.set(snippetId, url);
+
+  while (LRU.length > MAX_CACHE) {
+    const evict = LRU.shift();
+    if (evict === undefined) break;
+    const old = audioUrlCache.get(evict);
+    if (old) URL.revokeObjectURL(old);
+    audioUrlCache.delete(evict);
+  }
+}

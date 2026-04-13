@@ -107,9 +107,13 @@ export const snippetApi = {
   /**
    * Get snippet audio for snippet playback
    */
-  getSnippetAudio: async (snippetId: number): Promise<string> => {
+  getSnippetAudio: async (
+    snippetId: number,
+    signal?: AbortSignal,
+  ): Promise<string> => {
     const response = await api.get(`/api/snippets/${snippetId}/audio`, {
       responseType: "blob",
+      signal,
     });
     const url = URL.createObjectURL(response.data);
     // return seriazable audio url

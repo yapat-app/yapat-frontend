@@ -9,7 +9,7 @@
  * Snapshot updates only after model retraining (uses projectionPredictions).
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
 import { Select, Tooltip, Tag } from "antd";
 import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
@@ -23,8 +23,8 @@ import {
 import { getPropertyByKey } from "../../constants/alProperties";
 import { resolveColor } from "../../utils/alColors";
 import { ALFilterPanel } from "./ALFilterPanel";
-import { DUMMY_PREDICTIONS, enrichWithDevScores } from "../../dev/dummyPredictions";
-import type { SamplingMethod, PAMPrediction, SampleScores } from "../../types/al";
+import { visualisationsApi } from "../../services/visualisationsApi";
+import type { SamplingMethod, SampleScores } from "../../types/al";
 
 const { Option } = Select;
 
@@ -32,33 +32,6 @@ const { Option } = Select;
 const DEFAULT_COLOR = "#6366f1";
 const SELECTED_COLOR = "#facc15";
 const HIDDEN_COLOR = "#d1d5db";
-
-// ── Dummy 2-D coordinate generator (fallback when no real embeddings) ─────────
-
-const seedRandom = (seed: number) => {
-  let s = seed;
-  return () => {
-    s = (s * 16807 + 0) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-};
-
-const dummyCoords = (predictions: PAMPrediction[]): [number, number][] => {
-  const rand = seedRandom(42);
-  const labelOffsets = new Map<string, [number, number]>();
-  let idx = 0;
-  predictions.forEach((p) => {
-    if (!labelOffsets.has(p.predicted_label)) {
-      const angle = (idx / Math.max(1, predictions.length)) * 2 * Math.PI;
-      labelOffsets.set(p.predicted_label, [Math.cos(angle) * 3, Math.sin(angle) * 3]);
-      idx++;
-    }
-  });
-  return predictions.map((p) => {
-    const [ox, oy] = labelOffsets.get(p.predicted_label) ?? [0, 0];
-    return [ox + (rand() - 0.5) * 2, oy + (rand() - 0.5) * 2];
-  });
-};
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -72,29 +45,79 @@ export const ProjectionView: React.FC = () => {
     alFilters,
     lastRetrainJob,
     retrainLoading,
+    selectedDatasetId,
+    modelFamilyName,
   } = useAppSelector((state) => state.al);
+
+  const [method, setMethod] = useState<"pca" | "umap" | "tsne" | "isomap">("umap");
+  const [fpvLoading, setFpvLoading] = useState(false);
+  const [fpvError, setFpvError] = useState<string | null>(null);
+  const [fpvCoordsBySnippet, setFpvCoordsBySnippet] = useState<Record<number, [number, number]> | null>(null);
 
   // ── Source predictions (retrain snapshot if available, else live, else dummy) ─
   const rawSource = projectionPredictions.length > 0
     ? projectionPredictions
     : predictions;
 
-  // Fall back to dummy data only when no real predictions exist yet
-  const isDummy = rawSource.length === 0;
-  // Enrich real predictions that are missing scores with deterministic dev scores
-  const sourcePredictions = isDummy
-    ? DUMMY_PREDICTIONS
-    : enrichWithDevScores(rawSource);
+  const hasPredictions = rawSource.length > 0;
+  const sourcePredictions = rawSource;
 
-  const hasReal2D = sourcePredictions.some(
-    (p) => p.embedding_2d && (p.embedding_2d[0] !== 0 || p.embedding_2d[1] !== 0),
-  );
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFPV() {
+      if (!selectedDatasetId || !modelFamilyName) return;
+      if (!hasPredictions) return;
+
+      setFpvLoading(true);
+      setFpvError(null);
+      try {
+        const params = { dataset_id: selectedDatasetId, model_family_name: modelFamilyName, run_3d: false };
+        let fpv;
+        try {
+          fpv = await visualisationsApi.getFPV(params);
+        } catch (e: any) {
+          const msg = String(e?.response?.data?.detail ?? e?.message ?? "");
+          // Backend asks to generate first — do that automatically.
+          if (msg.toLowerCase().includes("generate projections first")) {
+            fpv = await visualisationsApi.generateFPV(params);
+          } else {
+            throw e;
+          }
+        }
+
+        const proj = fpv.projections_2d?.[method];
+        if (!proj || proj.x.length !== fpv.points.length || proj.y.length !== fpv.points.length) {
+          throw new Error(`Invalid FPV response for method '${method}'.`);
+        }
+
+        const map: Record<number, [number, number]> = {};
+        for (let i = 0; i < fpv.points.length; i++) {
+          map[fpv.points[i].snippet_id] = [proj.x[i], proj.y[i]];
+        }
+        if (!cancelled) setFpvCoordsBySnippet(map);
+      } catch (e: any) {
+        if (!cancelled) {
+          setFpvCoordsBySnippet(null);
+          setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."));
+        }
+      } finally {
+        if (!cancelled) setFpvLoading(false);
+      }
+    }
+
+    loadFPV();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDatasetId, modelFamilyName, method, hasPredictions]);
 
   const coords: [number, number][] = useMemo(() => {
-    if (hasReal2D)
-      return sourcePredictions.map((p) => p.embedding_2d ?? [0, 0] as [number, number]);
-    return dummyCoords(sourcePredictions);
-  }, [sourcePredictions, hasReal2D]);
+    if (fpvCoordsBySnippet) {
+      return sourcePredictions.map((p) => fpvCoordsBySnippet[p.snippet_id] ?? ([0, 0] as [number, number]));
+    }
+    // No server projection yet: keep points at origin rather than simulating.
+    return sourcePredictions.map(() => [0, 0] as [number, number]);
+  }, [sourcePredictions, fpvCoordsBySnippet]);
 
   // ── Collect categorical values for dynamic palettes / legends ─────────────
   const allCategoricalValues = useMemo(() => {
@@ -239,15 +262,42 @@ export const ProjectionView: React.FC = () => {
           </Select>
         </div>
 
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-400 font-ibm-sans">Projection</span>
+          <Select
+            size="small"
+            value={method}
+            onChange={(v) => setMethod(v)}
+            style={{ width: 120 }}
+          >
+            <Option value="umap">UMAP</Option>
+            <Option value="pca">PCA</Option>
+            <Option value="tsne">t-SNE</Option>
+            <Option value="isomap">Isomap</Option>
+          </Select>
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap ml-auto">
           <span className="text-xs text-gray-400 font-ibm-sans">
             <strong>{visibleCount}</strong> / <strong>{sourcePredictions.length}</strong> visible
           </span>
 
-          {!hasReal2D && sourcePredictions.length > 0 && (
-            <span className="text-xs text-amber-500 font-ibm-sans italic">
-              ⚠ Simulated layout
-            </span>
+          {hasPredictions && fpvLoading && (
+            <Tag icon={<SyncOutlined spin />} color="processing" className="text-xs">
+              Loading projection…
+            </Tag>
+          )}
+          {hasPredictions && fpvError && (
+            <Tooltip title={fpvError}>
+              <Tag color="red" className="text-xs">
+                Projection unavailable
+              </Tag>
+            </Tooltip>
+          )}
+          {hasPredictions && !fpvLoading && !fpvError && (
+            <Tag color="blue" className="text-xs">
+              {method.toUpperCase()}
+            </Tag>
           )}
 
           {lastRetrainJob && (
@@ -274,23 +324,24 @@ export const ProjectionView: React.FC = () => {
 
       {/* ── Plot area ─────────────────────────────────────────────────── */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Dev-mode notice */}
-        {isDummy && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
-            <ExperimentOutlined className="text-amber-500" />
-            Preview mode — dummy data · run inference to replace
-          </div>
-        )}
-        {!isDummy && rawSource.some((p) => !p.scores) && (
+        {hasPredictions && rawSource.some((p) => !p.scores) && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
             <ExperimentOutlined className="text-blue-400" />
-            Filter scores are dummy — backend scores not yet available
+            Filter scores are missing — backend scores not yet available
           </div>
         )}
 
-        {visibleCount === 0 ? (
+        {!hasPredictions ? (
+          <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
+            Run inference to see the projection.
+          </div>
+        ) : visibleCount === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
             No points in selected range — adjust the visibility filter
+          </div>
+        ) : fpvError ? (
+          <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
+            Projection not available yet — generate it via Visualisations (FPV) on the backend.
           </div>
         ) : (
           <Plot
