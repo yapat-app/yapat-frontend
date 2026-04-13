@@ -15,7 +15,8 @@ import type {
   FeedbackPayload,
   FeedbackResponse,
   PAMRetrainRequest,
-  PAMRetrainJobResponse,
+  PAMRetrainJobDispatch,
+  PAMRetrainJobStatus,
   ALColorBy,
   SamplingMethod,
   PAMRunInferenceRequest,
@@ -31,10 +32,35 @@ interface PersistedFeed {
   modelInfo: Record<string, unknown>;
   totalScored: number;
   modelCheckpointId: number | null;
+  modelFamilyName: string | null;
+  usedCheckpointId: number | null;
   snippetSetId: number | null;
   inferenceK: number;
   selectedDatasetId: number | null;
   lastInferenceAt: string;
+}
+
+function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
+  return rows.map((r) => {
+    const probs = r.predicted_probabilities ?? undefined;
+    let bestLabel = r.predicted_labels?.[0] ?? "—";
+    let bestProb = 0;
+    if (probs && typeof probs === "object") {
+      for (const [label, p] of Object.entries(probs)) {
+        if (typeof p === "number" && p > bestProb) {
+          bestProb = p;
+          bestLabel = label;
+        }
+      }
+    }
+    const confidence = Number.isFinite(bestProb) && bestProb > 0 ? bestProb : r.confidence ?? 0;
+    return {
+      ...r,
+      predicted_label: r.predicted_label ?? bestLabel,
+      confidence,
+      ranking_score: r.ranking_score ?? r.composite_score ?? null,
+    };
+  });
 }
 
 function saveFeed(state: ALState): void {
@@ -44,6 +70,8 @@ function saveFeed(state: ALState): void {
       modelInfo: state.modelInfo,
       totalScored: state.totalScored,
       modelCheckpointId: state.modelCheckpointId,
+      modelFamilyName: state.modelFamilyName,
+      usedCheckpointId: state.usedCheckpointId,
       snippetSetId: state.snippetSetId,
       inferenceK: state.inferenceK,
       selectedDatasetId: state.selectedDatasetId,
@@ -69,6 +97,8 @@ const saved = loadFeed();
 
 const initialState: ALState = {
   modelCheckpointId: saved?.modelCheckpointId ?? null,
+  modelFamilyName: saved?.modelFamilyName ?? null,
+  usedCheckpointId: saved?.usedCheckpointId ?? null,
   snippetSetId: saved?.snippetSetId ?? null,
   inferenceK: saved?.inferenceK ?? 20,
   predictions: saved?.predictions ?? [],
@@ -87,6 +117,7 @@ const initialState: ALState = {
     visibility: { propertyKey: null, range: [0, 1] },
     color: { propertyKey: null },
   },
+  lastRetrainDispatch: null,
   lastRetrainJob: null,
   inferenceLoading: false,
   feedbackLoading: false,
@@ -130,6 +161,17 @@ export const triggerRetrain = createAsyncThunk(
   },
 );
 
+export const pollRetrainJob = createAsyncThunk(
+  "al/pollRetrainJob",
+  async (jobId: number, { rejectWithValue }) => {
+    try {
+      return await alApi.getRetrainJob(jobId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 // ── Slice ─────────────────────────────────────────────────────────────────
 
 const alSlice = createSlice({
@@ -153,18 +195,22 @@ const alSlice = createSlice({
       state.projectionPredictions = [];
       state.feedbacks = {};
       state.feedbackCount = 0;
+      state.lastRetrainDispatch = null;
       state.lastRetrainJob = null;
       state.selectedSnippetId = null;
       state.selectedPredictionId = null;
       state.modelCheckpointId = null;
+      state.modelFamilyName = null;
+      state.usedCheckpointId = null;
       state.snippetSetId = null;
       state.error = null;
     },
     setInferenceConfig: (
       state,
-      action: PayloadAction<{ modelCheckpointId: number; snippetSetId: number; k?: number }>,
+      action: PayloadAction<{ modelCheckpointId: number; modelFamilyName: string; snippetSetId: number; k?: number }>,
     ) => {
       state.modelCheckpointId = action.payload.modelCheckpointId;
+      state.modelFamilyName = action.payload.modelFamilyName;
       state.snippetSetId = action.payload.snippetSetId;
       if (action.payload.k !== undefined) state.inferenceK = action.payload.k;
     },
@@ -194,6 +240,7 @@ const alSlice = createSlice({
       state.totalScored = 0;
       state.feedbacks = {};
       state.feedbackCount = 0;
+      state.usedCheckpointId = null;
       state.lastInferenceAt = null;
       localStorage.removeItem(STORAGE_KEY);
     },
@@ -207,14 +254,22 @@ const alSlice = createSlice({
       runInference.fulfilled,
       (state, action: PayloadAction<PAMInferenceResult>) => {
         state.inferenceLoading = false;
-        state.predictions = action.payload.predictions;
-        state.modelInfo = action.payload.model_info;
-        state.totalScored = action.payload.total_scored;
+        state.modelFamilyName = action.payload.model_family_name;
+        state.usedCheckpointId = action.payload.used_checkpoint_id;
+        state.modelInfo = {
+          mode: action.payload.mode,
+          suggestion_strategy: action.payload.suggestion_strategy,
+          returned_count: action.payload.returned_count,
+          total_predictions: action.payload.total_predictions,
+          used_checkpoint_id: action.payload.used_checkpoint_id,
+        };
+        state.totalScored = action.payload.total_predictions;
+        state.predictions = withDisplayFields(action.payload.rows);
         state.lastInferenceAt = new Date().toISOString();
         // Update projection snapshot: on first inference OR after retrain
         // (lastRetrainJob is set by triggerRetrain.fulfilled before this runs)
         if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
-          state.projectionPredictions = action.payload.predictions;
+          state.projectionPredictions = state.predictions;
         }
         saveFeed(state);
       },
@@ -232,7 +287,7 @@ const alSlice = createSlice({
       (state, action: PayloadAction<FeedbackResponse>) => {
         state.feedbackLoading = false;
         const fb = action.payload;
-        state.feedbacks[fb.prediction_id] = fb;
+        state.feedbacks[fb.snippet_id] = fb;
         state.feedbackCount = fb.feedback_count_since_retrain;
       },
     );
@@ -246,21 +301,26 @@ const alSlice = createSlice({
     });
     builder.addCase(
       triggerRetrain.fulfilled,
-      (state, action: PayloadAction<PAMRetrainJobResponse>) => {
+      (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
         state.retrainLoading = false;
-        state.lastRetrainJob = action.payload;
-        if (action.payload.new_checkpoint_id) {
-          state.modelCheckpointId = action.payload.new_checkpoint_id;
-        }
+        state.lastRetrainDispatch = action.payload;
+        state.lastRetrainJob = null;
         state.feedbackCount = 0;
         state.feedbacks = {};
         // Snapshot current predictions into projection — will be updated
-        // again after the follow-up inference triggered by useAutoRetrain
+        // again after retrain completes + inference reruns
         state.projectionPredictions = state.predictions;
       },
     );
     builder.addCase(triggerRetrain.rejected, (state, action) => {
       state.retrainLoading = false;
+      state.error = action.payload as string;
+    });
+
+    builder.addCase(pollRetrainJob.fulfilled, (state, action: PayloadAction<PAMRetrainJobStatus>) => {
+      state.lastRetrainJob = action.payload;
+    });
+    builder.addCase(pollRetrainJob.rejected, (state, action) => {
       state.error = action.payload as string;
     });
   },

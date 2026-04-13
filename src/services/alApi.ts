@@ -10,16 +10,17 @@ import type {
   FeedbackPayload,
   FeedbackResponse,
   PAMRetrainRequest,
-  PAMRetrainJobResponse,
+  PAMRetrainJobDispatch,
+  PAMRetrainJobStatus,
   PAMCheckpoint,
 } from "../types/al";
 
 const BASE = "/api/pam-al";
 
 export const alApi = {
-  /** POST /api/pam-al/inference — run classifier, get ranked predictions */
+  /** POST /api/pam-al/inference/get-or-create — run classifier or return cached predictions */
   runInference: async (body: PAMRunInferenceRequest): Promise<PAMInferenceResult> => {
-    const response = await api.post(`${BASE}/inference`, body);
+    const response = await api.post(`${BASE}/inference/get-or-create`, body);
     return response.data;
   },
 
@@ -37,9 +38,15 @@ export const alApi = {
     return response.data;
   },
 
-  /** POST /api/pam-al/retrain */
-  triggerRetrain: async (body: PAMRetrainRequest): Promise<PAMRetrainJobResponse> => {
-    const response = await api.post(`${BASE}/retrain`, body);
+  /** POST /api/pam-al/retrain/manual — dispatch manual retrain job */
+  triggerRetrain: async (body: PAMRetrainRequest): Promise<PAMRetrainJobDispatch> => {
+    const response = await api.post(`${BASE}/retrain/manual`, body);
+    return response.data;
+  },
+
+  /** GET /api/pam-al/retrain/jobs/{job_id} — poll job status */
+  getRetrainJob: async (jobId: number): Promise<PAMRetrainJobStatus> => {
+    const response = await api.get(`${BASE}/retrain/jobs/${jobId}`);
     return response.data;
   },
 };

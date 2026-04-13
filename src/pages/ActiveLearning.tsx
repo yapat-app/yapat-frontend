@@ -42,6 +42,7 @@ export const ActiveLearning: React.FC = () => {
   const {
     selectedDatasetId,
     modelCheckpointId,
+    modelFamilyName,
     snippetSetId,
     inferenceK,
     predictions,
@@ -59,6 +60,7 @@ export const ActiveLearning: React.FC = () => {
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
   const [localCkpt, setLocalCkpt] = useState<number | null>(modelCheckpointId);
+  const [localFamily, setLocalFamily] = useState<string | null>(modelFamilyName);
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
 
@@ -92,9 +94,14 @@ export const ActiveLearning: React.FC = () => {
   );
 
   const handleRunInference = () => {
-    if (localCkpt === null || localSS === null) return;
-    dispatch(setInferenceConfig({ modelCheckpointId: localCkpt, snippetSetId: localSS, k: localK }));
-    dispatch(runInference({ model_checkpoint_id: localCkpt, snippet_set_id: localSS, k: localK }));
+    if (selectedDatasetId === null || localCkpt === null || localSS === null) return;
+    const family =
+      localFamily ??
+      checkpoints.find((c) => c.id === localCkpt)?.model_family_name ??
+      null;
+    if (!family) return;
+    dispatch(setInferenceConfig({ modelCheckpointId: localCkpt, modelFamilyName: family, snippetSetId: localSS, k: localK }));
+    dispatch(runInference({ model_family_name: family, dataset_id: selectedDatasetId, snippet_set_id: localSS, k: localK }));
     setConfigOpen(false);
   };
 
@@ -148,6 +155,7 @@ export const ActiveLearning: React.FC = () => {
             loading={inferenceLoading}
             onClick={() => {
               setLocalCkpt(modelCheckpointId);
+              setLocalFamily(modelFamilyName);
               setLocalSS(snippetSetId);
               setLocalK(inferenceK);
               setConfigOpen(true);
@@ -264,12 +272,16 @@ export const ActiveLearning: React.FC = () => {
             <Select
               placeholder="Select checkpoint"
               value={localCkpt ?? undefined}
-              onChange={setLocalCkpt}
+              onChange={(id: number) => {
+                setLocalCkpt(id);
+                const fam = checkpoints.find((c) => c.id === id)?.model_family_name ?? null;
+                setLocalFamily(fam);
+              }}
               style={{ width: "100%" }}
             >
               {checkpoints.map((c) => (
                 <Option key={c.id} value={c.id}>
-                  {c.name} — v{c.version} {c.is_base ? "(base)" : ""}
+                  {c.model_family_name} — {c.version} {c.is_base ? "(base)" : ""}
                 </Option>
               ))}
             </Select>

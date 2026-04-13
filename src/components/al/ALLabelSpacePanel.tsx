@@ -24,12 +24,16 @@ export const ALLabelSpacePanel: React.FC = () => {
   const [search, setSearch] = useState("");
 
   const { labelSpace, loading } = useAppSelector((s) => s.customTaxonomy);
-  const { selectedPredictionId, feedbacks } = useAppSelector((s) => s.al);
+  const { selectedSnippetId, feedbacks, selectedDatasetId, modelFamilyName } = useAppSelector((s) => s.al);
 
-  const alreadyFeedback = selectedPredictionId !== null
-    ? !!feedbacks[selectedPredictionId]
+  const alreadyFeedback = selectedSnippetId !== null
+    ? !!feedbacks[selectedSnippetId]
     : false;
-  const canAnnotate = selectedPredictionId !== null && !alreadyFeedback;
+  const canAnnotate =
+    selectedSnippetId !== null &&
+    selectedDatasetId !== null &&
+    modelFamilyName !== null &&
+    !alreadyFeedback;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -56,9 +60,11 @@ export const ALLabelSpacePanel: React.FC = () => {
     if (!canAnnotate) return;
     dispatch(
       submitFeedback({
-        prediction_id: selectedPredictionId!,
+        dataset_id: selectedDatasetId!,
+        model_family_name: modelFamilyName!,
+        snippet_id: selectedSnippetId!,
         action: "MODIFY",
-        modified_label: label.name,
+        labels: [label.name],
       }),
     );
   };
@@ -82,7 +88,7 @@ export const ALLabelSpacePanel: React.FC = () => {
             {labelSpace.length}
           </Tag>
         )}
-        {selectedPredictionId === null && (
+        {selectedSnippetId === null && (
           <span className="text-[10px] text-gray-400 font-ibm-sans italic ml-1">
             select a point to annotate
           </span>
@@ -184,7 +190,7 @@ export const ALLabelSpacePanel: React.FC = () => {
                     title={
                       canAnnotate
                         ? `Apply "${label.name}" as corrected label`
-                        : selectedPredictionId === null
+                        : selectedSnippetId === null
                         ? "Select a prediction point first"
                         : "Already reviewed"
                     }

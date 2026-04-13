@@ -20,8 +20,9 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   const labelSpace = useAppSelector((state) => state.customTaxonomy.labelSpace);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { selectedDatasetId, modelFamilyName } = useAppSelector((state) => state.al);
 
-  const existingFeedback = feedbacks[prediction.id];
+  const existingFeedback = feedbacks[prediction.snippet_id];
   const isDone = !!existingFeedback;
 
   const modifyContent = (
@@ -78,13 +79,19 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   );
 
   const submit = async (action: FeedbackAction, modifiedLabel?: string) => {
+    if (selectedDatasetId === null || modelFamilyName === null) {
+      message.error("Select a dataset and run inference first");
+      return;
+    }
     setSubmitting(true);
     try {
       await dispatch(
         submitFeedback({
-          prediction_id: prediction.id,
+          dataset_id: selectedDatasetId,
+          model_family_name: modelFamilyName,
+          snippet_id: prediction.snippet_id,
           action,
-          ...(modifiedLabel ? { modified_label: modifiedLabel } : {}),
+          ...(modifiedLabel ? { labels: [modifiedLabel] } : {}),
         }),
       ).unwrap();
     } catch {
@@ -104,7 +111,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
     const labelMap: Record<FeedbackAction, string> = {
       ACCEPT: "Accepted",
       REJECT: "Rejected",
-      MODIFY: `Modified → ${existingFeedback.modified_label ?? ""}`,
+      MODIFY: `Modified → ${(existingFeedback.final_labels ?? []).join(", ")}`,
     };
     return (
       <div className="flex gap-3">

@@ -6,18 +6,19 @@ import React from "react";
 import { Button, Progress, Tag, Tooltip, Spin } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { triggerRetrain, runInference } from "../../redux/features/alSlice";
+import { triggerRetrain, runInference, pollRetrainJob } from "../../redux/features/alSlice";
 
 export const RetrainControl: React.FC = () => {
   const dispatch = useAppDispatch();
   const {
     feedbackCount,
     retrainThreshold,
-    modelCheckpointId,
+    modelFamilyName,
     snippetSetId,
     inferenceK,
     retrainLoading,
     lastRetrainJob,
+    selectedDatasetId,
   } = useAppSelector((state) => state.al);
 
   const progressPercent = Math.min(
@@ -26,20 +27,34 @@ export const RetrainControl: React.FC = () => {
   );
 
   const handleManualRetrain = async () => {
-    if (!modelCheckpointId) return;
+    if (selectedDatasetId === null || modelFamilyName === null) return;
     const result = await dispatch(
-      triggerRetrain({ model_checkpoint_id: modelCheckpointId }),
+      triggerRetrain({ dataset_id: selectedDatasetId, model_family_name: modelFamilyName }),
     );
-    if (triggerRetrain.fulfilled.match(result) && snippetSetId !== null) {
-      const newCkpt = result.payload.new_checkpoint_id ?? modelCheckpointId;
-      dispatch(
-        runInference({
-          model_checkpoint_id: newCkpt!,
-          snippet_set_id: snippetSetId,
-          k: inferenceK,
-        }),
-      );
+    if (!triggerRetrain.fulfilled.match(result) || snippetSetId === null) return;
+    const jobId = result.payload.job_id;
+
+    // poll job status and refresh inference when completed
+    for (let i = 0; i < 120; i++) {
+      const statusResult = await dispatch(pollRetrainJob(jobId));
+      if (pollRetrainJob.fulfilled.match(statusResult)) {
+        const status = statusResult.payload.status;
+        if (status === "COMPLETED" || status === "FAILED") break;
+      } else {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
     }
+
+    dispatch(
+      runInference({
+        model_family_name: modelFamilyName,
+        dataset_id: selectedDatasetId,
+        snippet_set_id: snippetSetId,
+        k: inferenceK,
+        force_refresh: true,
+      }),
+    );
   };
 
   const statusTag = () => {
@@ -88,7 +103,7 @@ export const RetrainControl: React.FC = () => {
         icon={<ReloadOutlined />}
         size="small"
         loading={retrainLoading}
-        disabled={retrainLoading || !modelCheckpointId}
+        disabled={retrainLoading || selectedDatasetId === null || modelFamilyName === null}
         onClick={handleManualRetrain}
         className="w-full"
       >

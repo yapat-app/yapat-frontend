@@ -92,6 +92,12 @@ export const DUMMY_PREDICTIONS: PAMPrediction[] = (() => {
       model_checkpoint_id: 0,
       snippet_id: 9000 + i,
       predicted_label: SPECIES[speciesIdx],
+      predicted_labels: [SPECIES[speciesIdx]],
+      predicted_probabilities: { [SPECIES[speciesIdx]]: uncertainty },
+      uncertainty,
+      diversity,
+      density,
+      composite_score: composite,
       confidence: uncertainty,         // reuse uncertainty as confidence proxy
       ranking_score: composite,
       created_at: new Date().toISOString(),
