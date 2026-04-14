@@ -339,6 +339,7 @@ export interface Dataset {
   description?: string;
   source_uri?: string;
   team_id?: number;
+  default_snippet_set_id?: number | null;
   created_at?: string;
   updated_at?: string;
   is_ready_for_feed?: boolean;

@@ -56,12 +56,19 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
     }
   }, [embeddingCreated]);
 
+  const isDatasetReady = Boolean(dataset.default_snippet_set_id && dataset.is_ready_for_feed);
+
   return (
     <div>
-      {dataset.is_ready_for_feed ? (
-        <Tag key={"green"} color={"green"} variant={"filled"}>
-          ✓ Embeddings Generated
-        </Tag>
+      {!isDatasetReady ? (
+        <Button
+          color="default"
+          variant="filled"
+          disabled
+          title="Waiting for dataset scan + snippet generation to finish"
+        >
+          Processing dataset…
+        </Button>
       ) : (
         <div>
           <Modal
@@ -141,7 +148,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
           <Button
             color="danger"
             variant="filled"
-            disabled={dataset.is_ready_for_feed}
+            disabled={!isDatasetReady}
             onClick={showModal}
           >
             Generate Embeddings
