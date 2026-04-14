@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Dataset } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { Select, Modal, Button, Tag, Form, message } from "antd";
+import { Select, Modal, Button, Form, message } from "antd";
 import {
   getAllEmbeddingMethods,
   createEmbedding,
