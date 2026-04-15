@@ -10,6 +10,7 @@ import type {
   FeedbackPayload,
   FeedbackResponse,
   PAMRetrainRequest,
+  PAMTrainFromScratchRequest,
   PAMRetrainJobDispatch,
   PAMRetrainJobStatus,
   PAMCheckpoint,
@@ -41,6 +42,12 @@ export const alApi = {
   /** POST /api/pam-al/retrain/manual — dispatch manual retrain job */
   triggerRetrain: async (body: PAMRetrainRequest): Promise<PAMRetrainJobDispatch> => {
     const response = await api.post(`${BASE}/retrain/manual`, body);
+    return response.data;
+  },
+
+  /** POST /api/pam-al/train-from-scratch — dispatch cold-start training job */
+  trainFromScratch: async (body: PAMTrainFromScratchRequest): Promise<PAMRetrainJobDispatch> => {
+    const response = await api.post(`${BASE}/train-from-scratch`, body);
     return response.data;
   },
 

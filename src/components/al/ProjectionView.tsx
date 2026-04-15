@@ -185,7 +185,7 @@ export const ProjectionView: React.FC = () => {
     }>();
 
     visible.forEach(({ p, coord }) => {
-      const label = p.predicted_label;
+      const label = p.predicted_label ?? "—";
       if (!byLabel.has(label)) byLabel.set(label, { xs: [], ys: [], ids: [], colors: [], sizes: [] });
       const g = byLabel.get(label)!;
       g.xs.push(coord[0]);

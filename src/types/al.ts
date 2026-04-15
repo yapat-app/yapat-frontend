@@ -78,7 +78,7 @@ export interface PAMRunInferenceRequest {
 }
 
 export interface PAMPrediction {
-  id: number;
+  id: number | null;
   model_checkpoint_id: number | null;
   snippet_id: number;
   /**
@@ -86,7 +86,7 @@ export interface PAMPrediction {
    * UI still expects a primary label + confidence, so we also keep
    * `predicted_label` + `confidence` as derived display helpers.
    */
-  predicted_labels: string[];
+  predicted_labels: string[] | null;
   predicted_probabilities?: Record<string, number> | null;
   uncertainty?: number | null;
   diversity?: number | null;
@@ -94,10 +94,10 @@ export interface PAMPrediction {
   composite_score?: number | null;
 
   /** Derived for display / grouping */
-  predicted_label: string;
-  confidence: number;
+  predicted_label: string | null;
+  confidence: number | null;
   ranking_score: number | null; // typically composite_score
-  created_at: string;
+  created_at: string | null;
   embedding_2d?: [number, number];
   /** Sampler + metadata scores attached by the backend */
   scores?: SampleScores;
@@ -141,6 +141,26 @@ export interface FeedbackResponse {
 export interface PAMRetrainRequest {
   dataset_id: number;
   model_family_name: string;
+  epochs?: number;
+  learning_rate?: number;
+  batch_size?: number;
+  hidden_dim?: number;
+  dropout?: number;
+  device?: string;
+  run_inference?: boolean;
+}
+
+export interface PAMTrainFromScratchRequest {
+  dataset_id: number;
+  snippet_set_id?: number | null;
+  embedding_model_id: number;
+  metadata_path: string;
+  label_config_path: string;
+  min_samples_per_class?: number;
+  max_samples_per_class?: number | null;
+  model_family_name: string;
+  version?: string;
+  model_type?: string;
   epochs?: number;
   learning_rate?: number;
   batch_size?: number;

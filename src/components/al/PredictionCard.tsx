@@ -28,7 +28,11 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   );
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
   const isSelected = selectedSnippetId === prediction.snippet_id;
-  const hasFeedback = !!feedbacks[prediction.id];
+  // feedbacks are keyed by snippet_id
+  const hasFeedback = !!feedbacks[prediction.snippet_id];
+
+  const labelText = prediction.predicted_label ?? "—";
+  const conf = prediction.confidence ?? null;
 
   const localRef = useRef<HTMLDivElement | null>(null);
   const setRefs = useCallback(
@@ -106,19 +110,19 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
-            {prediction.predicted_label}
+            {labelText}
           </span>
           <Tag
             color={
-              prediction.confidence >= 0.75
+              (conf ?? 0) >= 0.75
                 ? "success"
-                : prediction.confidence >= 0.5
+                : (conf ?? 0) >= 0.5
                   ? "warning"
                   : "error"
             }
             className="text-xs flex-shrink-0"
           >
-            {(prediction.confidence * 100).toFixed(0)}%
+            {conf === null ? "—" : `${(conf * 100).toFixed(0)}%`}
           </Tag>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -126,12 +130,12 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
             <SoundOutlined />#{prediction.snippet_id}
           </span>
           <Tooltip
-            title={`Confidence: ${(prediction.confidence * 100).toFixed(0)}%`}
+            title={conf === null ? "Confidence: —" : `Confidence: ${(conf * 100).toFixed(0)}%`}
           >
             <div
               className="w-2.5 h-2.5 rounded-full"
               style={{
-                backgroundColor: confidenceColor(prediction.confidence),
+                backgroundColor: confidenceColor(conf ?? 0),
               }}
             />
           </Tooltip>

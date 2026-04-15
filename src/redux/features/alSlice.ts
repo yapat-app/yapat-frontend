@@ -20,6 +20,7 @@ import type {
   ALColorBy,
   SamplingMethod,
   PAMRunInferenceRequest,
+  PAMTrainFromScratchRequest,
 } from "../../types/al";
 
 const RETRAIN_THRESHOLD = 5;
@@ -155,6 +156,17 @@ export const triggerRetrain = createAsyncThunk(
   async (body: PAMRetrainRequest, { rejectWithValue }) => {
     try {
       return await alApi.triggerRetrain(body);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const trainFromScratch = createAsyncThunk(
+  "al/trainFromScratch",
+  async (body: PAMTrainFromScratchRequest, { rejectWithValue }) => {
+    try {
+      return await alApi.trainFromScratch(body);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -313,6 +325,26 @@ const alSlice = createSlice({
       },
     );
     builder.addCase(triggerRetrain.rejected, (state, action) => {
+      state.retrainLoading = false;
+      state.error = action.payload as string;
+    });
+
+    builder.addCase(trainFromScratch.pending, (state) => {
+      state.retrainLoading = true;
+      state.error = null;
+    });
+    builder.addCase(
+      trainFromScratch.fulfilled,
+      (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
+        state.retrainLoading = false;
+        state.lastRetrainDispatch = action.payload;
+        state.lastRetrainJob = null;
+        // Cold-start creates an active checkpoint on completion; clear counters for a fresh run
+        state.feedbackCount = 0;
+        state.feedbacks = {};
+      },
+    );
+    builder.addCase(trainFromScratch.rejected, (state, action) => {
       state.retrainLoading = false;
       state.error = action.payload as string;
     });

@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from "react";
-import { Button, Popover, Tag, Spin, message } from "antd";
+import { Button, Popover, Tag, Spin, message, Tooltip } from "antd";
 import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { submitFeedback } from "../../redux/features/alSlice";
@@ -20,10 +20,12 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   const labelSpace = useAppSelector((state) => state.customTaxonomy.labelSpace);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { selectedDatasetId, modelFamilyName } = useAppSelector((state) => state.al);
+  const { selectedDatasetId, modelFamilyName, usedCheckpointId } = useAppSelector((state) => state.al);
 
   const existingFeedback = feedbacks[prediction.snippet_id];
   const isDone = !!existingFeedback;
+  const hasCheckpoint = usedCheckpointId !== null;
+  const feedbackDisabled = submitting || !hasCheckpoint;
 
   const modifyContent = (
     <div className="flex flex-col gap-2 w-80">
@@ -83,6 +85,10 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
       message.error("Select a dataset and run inference first");
       return;
     }
+    if (!hasCheckpoint) {
+      message.info("No model checkpoint yet. Train/register a checkpoint before submitting feedback.");
+      return;
+    }
     setSubmitting(true);
     try {
       await dispatch(
@@ -136,25 +142,35 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   return (
     <div className="flex gap-1 items-center">
       {submitting && <Spin size="small" />}
-      <Button
-        size="small"
-        type="primary"
-        icon={<CheckOutlined />}
-        style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
-        disabled={submitting}
-        onClick={() => submit("ACCEPT")}
+      <Tooltip
+        title={
+          hasCheckpoint
+            ? null
+            : "Bootstrap mode: no checkpoint available yet. Train/register a checkpoint to enable feedback."
+        }
       >
-        Accept
-      </Button>
-      <Button
-        size="small"
-        danger
-        icon={<CloseOutlined />}
-        disabled={submitting}
-        onClick={() => submit("REJECT")}
-      >
-        Reject
-      </Button>
+        <span className="inline-flex gap-1 items-center">
+          <Button
+            size="small"
+            type="primary"
+            icon={<CheckOutlined />}
+            style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
+            disabled={feedbackDisabled}
+            onClick={() => submit("ACCEPT")}
+          >
+            Accept
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<CloseOutlined />}
+            disabled={feedbackDisabled}
+            onClick={() => submit("REJECT")}
+          >
+            Reject
+          </Button>
+        </span>
+      </Tooltip>
       {/* <Popover
         content={modifyContent}
         title="Modify label"

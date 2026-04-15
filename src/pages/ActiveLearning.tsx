@@ -5,7 +5,7 @@
 
 import React, { useEffect, useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input, Switch } from "antd";
+import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input, Switch, message } from "antd";
 import {
   DatabaseOutlined,
   BulbOutlined,
@@ -13,6 +13,7 @@ import {
   PlayCircleOutlined,
   HistoryOutlined,
   DeleteOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { ProjectionView } from "../components/al/ProjectionView";
@@ -23,7 +24,10 @@ import {
   setInferenceConfig,
   runInference,
   clearSavedFeed,
+  trainFromScratch,
+  pollRetrainJob,
 } from "../redux/features/alSlice";
+import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { embeddingApi } from "../services/api";
 import { alApi } from "../services/alApi";
@@ -39,6 +43,7 @@ export const ActiveLearning: React.FC = () => {
 
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const { user } = useAppSelector((state) => state.auth);
+  const { embeddingMethods, loading: embeddingMethodsLoading } = useAppSelector((state) => state.embedding);
   const {
     selectedDatasetId,
     modelCheckpointId,
@@ -57,6 +62,7 @@ export const ActiveLearning: React.FC = () => {
 
   // Local config state for the "Run Inference" modal
   const [configOpen, setConfigOpen] = useState(false);
+  const [trainOpen, setTrainOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
   const [localCkpt, setLocalCkpt] = useState<number | null>(modelCheckpointId);
@@ -64,6 +70,15 @@ export const ActiveLearning: React.FC = () => {
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
+
+  // Local state for Train-from-scratch (cold-start) modal
+  const [trainFamily, setTrainFamily] = useState<string>(modelFamilyName ?? "cold_start_base");
+  const [trainSS, setTrainSS] = useState<number | null>(snippetSetId);
+  const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(1);
+  const [trainMetadataPath, setTrainMetadataPath] = useState<string>("");
+  const [trainLabelConfigPath, setTrainLabelConfigPath] = useState<string>("");
+  const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
+  const [trainRunInference, setTrainRunInference] = useState<boolean>(false);
 
   // Load datasets
   useEffect(() => {
@@ -145,6 +160,69 @@ export const ActiveLearning: React.FC = () => {
     setConfigOpen(false);
   };
 
+  const handleTrainFromScratch = async () => {
+    if (selectedDatasetId === null) return;
+    const fam = trainFamily.trim();
+    if (!fam) return;
+    if (!trainEmbeddingModelId || !Number.isFinite(trainEmbeddingModelId)) return;
+    if (!trainMetadataPath.trim() || !trainLabelConfigPath.trim()) return;
+
+    const result = await dispatch(
+      trainFromScratch({
+        dataset_id: selectedDatasetId,
+        model_family_name: fam,
+        snippet_set_id: trainSS ?? undefined,
+        embedding_model_id: trainEmbeddingModelId,
+        metadata_path: trainMetadataPath.trim(),
+        label_config_path: trainLabelConfigPath.trim(),
+        device: trainDevice,
+        run_inference: trainRunInference,
+      }),
+    );
+
+    if (!trainFromScratch.fulfilled.match(result)) {
+      message.error("Failed to dispatch training job");
+      return;
+    }
+
+    const jobId = result.payload.job_id;
+    const checkpointId = result.payload.checkpoint_id;
+    message.success(`Training job ${jobId} dispatched`);
+    setTrainOpen(false);
+
+    // Poll until completion; then refresh checkpoints so user can select it.
+    for (let i = 0; i < 240; i++) {
+      const statusResult = await dispatch(pollRetrainJob(jobId));
+      if (pollRetrainJob.fulfilled.match(statusResult)) {
+        const status = statusResult.payload.status;
+        if (status === "COMPLETED") {
+          message.success("Cold-start training completed");
+          break;
+        }
+        if (status === "FAILED") {
+          message.error("Cold-start training failed");
+          break;
+        }
+      } else {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    // Refresh checkpoint list and preselect the new checkpoint if present
+    try {
+      const updated = await alApi.getCheckpoints(selectedDatasetId);
+      setCheckpoints(updated);
+      const found = updated.find((c) => c.id === checkpointId) ?? null;
+      if (found) {
+        setLocalCkpt(found.id);
+        setLocalFamily(found.model_family_name);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const retrainTag = lastRetrainJob ? (
     <Tag
       color={{ PENDING: "default", RUNNING: "processing", COMPLETED: "success", FAILED: "error" }[lastRetrainJob.status]}
@@ -189,22 +267,40 @@ export const ActiveLearning: React.FC = () => {
         </div>
 
         {selectedDatasetId !== null && (
-          <Button
-            type="primary"
-            icon={<PlayCircleOutlined />}
-            loading={inferenceLoading}
-            onClick={() => {
-              setLocalCkpt(modelCheckpointId);
-              setLocalFamily(modelFamilyName);
-              setLocalSS(snippetSetId);
-              setLocalK(inferenceK);
-              setLocalTopKOnly(true);
-              setConfigOpen(true);
-            }}
-            style={{ backgroundColor: "#1e40af", color: "#fff" }}
-          >
-            Run Inference
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={inferenceLoading}
+              onClick={() => {
+                setLocalCkpt(modelCheckpointId);
+                setLocalFamily(modelFamilyName);
+                setLocalSS(snippetSetId);
+                setLocalK(inferenceK);
+                setLocalTopKOnly(true);
+                setConfigOpen(true);
+              }}
+              style={{ backgroundColor: "#1e40af", color: "#fff" }}
+            >
+              Run Inference
+            </Button>
+            <Button
+              icon={<ExperimentOutlined />}
+              onClick={() => {
+                dispatch(getAllEmbeddingMethods());
+                setTrainFamily(modelFamilyName ?? "cold_start_base");
+                setTrainSS(snippetSetId);
+                setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
+                setTrainMetadataPath("");
+                setTrainLabelConfigPath("");
+                setTrainDevice("cpu");
+                setTrainRunInference(false);
+                setTrainOpen(true);
+              }}
+            >
+              Train from scratch
+            </Button>
+          </div>
         )}
 
         {predictions.length > 0 && (
@@ -391,8 +487,106 @@ export const ActiveLearning: React.FC = () => {
               <Switch checked={localTopKOnly} onChange={setLocalTopKOnly} />
             </div>
             <div className="text-xs text-gray-400 mt-1">
-              When disabled, the backend returns all predictions for the selected snippet set.
+              When disabled, the system returns all predictions for the selected snippet set.
             </div>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* ── Train From Scratch Modal ───────────────────────────────────── */}
+      <Modal
+        title="Train from scratch (cold start)"
+        open={trainOpen}
+        onCancel={() => setTrainOpen(false)}
+        onOk={handleTrainFromScratch}
+        okText="Start training"
+        okButtonProps={{
+          disabled:
+            selectedDatasetId === null ||
+            !trainFamily.trim() ||
+            !Number.isFinite(trainEmbeddingModelId) ||
+            !trainMetadataPath.trim() ||
+            !trainLabelConfigPath.trim(),
+          style: { backgroundColor: "#1e40af", color: "#fff" },
+        }}
+      >
+        <Form layout="vertical" className="mt-4">
+          <Alert
+            type="info"
+            showIcon
+            className="mb-3"
+            message="This creates the first checkpoint for a model family."
+            description="Provide ground-truth metadata and a label config. The job runs asynchronously; you can keep using the UI and come back later."
+          />
+
+          <Form.Item label="Model family name" required>
+            <Input value={trainFamily} onChange={(e) => setTrainFamily(e.target.value)} />
+          </Form.Item>
+
+          <Form.Item label="Snippet set (optional)">
+            <Select
+              placeholder="Use dataset default snippet set"
+              allowClear
+              value={trainSS ?? undefined}
+              onChange={(v) => setTrainSS(v ?? null)}
+              style={{ width: "100%" }}
+            >
+              {snippetSets.map((s) => (
+                <Option key={s.id} value={s.id}>
+                  Set #{s.id} — {s.status}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item label="Embedding model" required>
+            <Select
+              placeholder={embeddingMethodsLoading ? "Loading embedding models…" : "Select embedding model"}
+              loading={embeddingMethodsLoading}
+              value={trainEmbeddingModelId}
+              onChange={(v: number) => setTrainEmbeddingModelId(v)}
+              style={{ width: "100%" }}
+              optionFilterProp="children"
+              showSearch
+            >
+              {(embeddingMethods ?? []).map((m) => (
+                <Option key={m.id} value={m.id}>
+                  {m.name} — {m.version}
+                </Option>
+              ))}
+            </Select>
+            {!embeddingMethodsLoading && (!embeddingMethods || embeddingMethods.length === 0) && (
+              <div className="text-xs text-amber-500 mt-1">
+                No embedding models found.
+              </div>
+            )}
+          </Form.Item>
+
+          <Form.Item label="Metadata path (ground truth)" required>
+            <Input
+              placeholder='e.g. "pam/FNJV/metadata.csv"'
+              value={trainMetadataPath}
+              onChange={(e) => setTrainMetadataPath(e.target.value)}
+            />
+          </Form.Item>
+
+          <Form.Item label="Label config path" required>
+            <Input
+              placeholder='e.g. "pam/FNJV/labels.json"'
+              value={trainLabelConfigPath}
+              onChange={(e) => setTrainLabelConfigPath(e.target.value)}
+            />
+          </Form.Item>
+
+          <Form.Item label="Device">
+            <Select value={trainDevice} onChange={(v) => setTrainDevice(v)} style={{ width: "100%" }}>
+              <Option value="cpu">cpu</Option>
+              <Option value="cuda">cuda</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item label="Run inference automatically after training">
+            <Switch checked={trainRunInference} onChange={setTrainRunInference} />
           </Form.Item>
         </Form>
       </Modal>
