@@ -54,8 +54,11 @@ export const useAutoRetrain = () => {
                 model_family_name: modelFamilyName,
                 dataset_id: selectedDatasetId,
                 snippet_set_id: snippetSetId,
-                k: inferenceK,
                 force_refresh: true,
+                // Keep payload small (Top‑K suggestions), same as UI default.
+                sample_suggestion: true,
+                suggestion_strategy: "uncertainty",
+                k: inferenceK,
               }),
             );
           };
