@@ -62,9 +62,10 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
     }
   }, [embeddingCreated]);
 
-  const isDatasetReady = Boolean(
-    dataset.default_snippet_set_id && dataset.is_ready_for_feed,
-  );
+  // "Ready for embeddings" is different from "ready for feed":
+  // - embeddings are the step that creates snippet_sets/snippets (and later makes is_ready_for_feed true)
+  // - so here we only require that dataset processing/discovery has produced recordings
+  const isDatasetReady = Boolean((dataset.recording_count ?? 0) > 0);
 
   useEffect(() => {
     if (!isDatasetReady) {
@@ -109,7 +110,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
           color="default"
           variant="filled"
           disabled
-          title="Waiting for dataset scan + snippet generation to finish"
+          title="Waiting for dataset scan/discovery to finish (recordings not available yet)"
         >
           Processing dataset…
         </Button>

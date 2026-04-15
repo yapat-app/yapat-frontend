@@ -36,6 +36,7 @@ interface PersistedFeed {
   modelFamilyName: string | null;
   usedCheckpointId: number | null;
   snippetSetId: number | null;
+  embeddingModelId: number | null;
   inferenceK: number;
   selectedDatasetId: number | null;
   lastInferenceAt: string;
@@ -74,6 +75,7 @@ function saveFeed(state: ALState): void {
       modelFamilyName: state.modelFamilyName,
       usedCheckpointId: state.usedCheckpointId,
       snippetSetId: state.snippetSetId,
+      embeddingModelId: state.embeddingModelId,
       inferenceK: state.inferenceK,
       selectedDatasetId: state.selectedDatasetId,
       lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
@@ -101,6 +103,7 @@ const initialState: ALState = {
   modelFamilyName: saved?.modelFamilyName ?? null,
   usedCheckpointId: saved?.usedCheckpointId ?? null,
   snippetSetId: saved?.snippetSetId ?? null,
+  embeddingModelId: saved?.embeddingModelId ?? null,
   inferenceK: saved?.inferenceK ?? 20,
   predictions: saved?.predictions ?? [],
   projectionPredictions: saved?.predictions ?? [],  // start with saved feed if available
@@ -215,15 +218,23 @@ const alSlice = createSlice({
       state.modelFamilyName = null;
       state.usedCheckpointId = null;
       state.snippetSetId = null;
+      state.embeddingModelId = null;
       state.error = null;
     },
     setInferenceConfig: (
       state,
-      action: PayloadAction<{ modelCheckpointId: number | null; modelFamilyName: string; snippetSetId: number; k?: number }>,
+      action: PayloadAction<{
+        modelCheckpointId: number | null;
+        modelFamilyName: string;
+        snippetSetId: number;
+        embeddingModelId: number;
+        k?: number;
+      }>,
     ) => {
       state.modelCheckpointId = action.payload.modelCheckpointId;
       state.modelFamilyName = action.payload.modelFamilyName;
       state.snippetSetId = action.payload.snippetSetId;
+      state.embeddingModelId = action.payload.embeddingModelId;
       if (action.payload.k !== undefined) state.inferenceK = action.payload.k;
     },
     setColorBy: (state, action: PayloadAction<ALColorBy>) => {

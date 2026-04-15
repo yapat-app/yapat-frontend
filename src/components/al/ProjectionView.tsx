@@ -11,7 +11,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Plot from "react-plotly.js";
-import { Select, Tooltip, Tag } from "antd";
+import { Button, Select, Tooltip, Tag } from "antd";
 import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
@@ -25,6 +25,9 @@ import { resolveColor } from "../../utils/alColors";
 import { ALFilterPanel } from "./ALFilterPanel";
 import { visualisationsApi } from "../../services/visualisationsApi";
 import type { SamplingMethod, SampleScores } from "../../types/al";
+import type { FPVResponse } from "../../types/visualisation";
+import { embeddingApi } from "../../services/api";
+import type { SnippetSet } from "../../types";
 
 const { Option } = Select;
 
@@ -46,13 +49,15 @@ export const ProjectionView: React.FC = () => {
     lastRetrainJob,
     retrainLoading,
     selectedDatasetId,
-    modelFamilyName,
+    embeddingModelId,
   } = useAppSelector((state) => state.al);
 
   const [method, setMethod] = useState<"pca" | "umap" | "tsne" | "isomap">("umap");
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
-  const [fpvCoordsBySnippet, setFpvCoordsBySnippet] = useState<Record<number, [number, number]> | null>(null);
+  const [fpvData, setFpvData] = useState<FPVResponse | null>(null);
+  const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
+  const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
 
   // ── Source predictions (retrain snapshot if available, else live, else dummy) ─
   const rawSource = projectionPredictions.length > 0
@@ -64,40 +69,45 @@ export const ProjectionView: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    async function deriveEmbeddingModel() {
+      if (!selectedDatasetId) {
+        setDerivedEmbeddingModelId(null);
+        return;
+      }
+      try {
+        const sets: SnippetSet[] = await embeddingApi.allSnippetSets(selectedDatasetId);
+        // Prefer a READY snippet set if available; otherwise fall back to the first one.
+        const ready = sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
+        setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
+      } catch {
+        if (!cancelled) setDerivedEmbeddingModelId(null);
+      }
+    }
+    // Only derive when not already set by inference config.
+    if (!embeddingModelId) deriveEmbeddingModel();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDatasetId, embeddingModelId]);
+
+  const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
+
+  useEffect(() => {
+    let cancelled = false;
     async function loadFPV() {
-      if (!selectedDatasetId || !modelFamilyName) return;
-      if (!hasPredictions) return;
+      // Dataset-level projections are keyed by dataset + embedding model, and should be
+      // prepared during dataset preparation (embeddings stage), not during inference.
+      if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
 
       setFpvLoading(true);
       setFpvError(null);
       try {
-        const params = { dataset_id: selectedDatasetId, model_family_name: modelFamilyName, run_3d: false };
-        let fpv;
-        try {
-          fpv = await visualisationsApi.getFPV(params);
-        } catch (e: any) {
-          const msg = String(e?.response?.data?.detail ?? e?.message ?? "");
-          // Backend asks to generate first — do that automatically.
-          if (msg.toLowerCase().includes("generate projections first")) {
-            fpv = await visualisationsApi.generateFPV(params);
-          } else {
-            throw e;
-          }
-        }
-
-        const proj = fpv.projections_2d?.[method];
-        if (!proj || proj.x.length !== fpv.points.length || proj.y.length !== fpv.points.length) {
-          throw new Error(`Invalid FPV response for method '${method}'.`);
-        }
-
-        const map: Record<number, [number, number]> = {};
-        for (let i = 0; i < fpv.points.length; i++) {
-          map[fpv.points[i].snippet_id] = [proj.x[i], proj.y[i]];
-        }
-        if (!cancelled) setFpvCoordsBySnippet(map);
+        const params = { dataset_id: selectedDatasetId, embedding_model_id: effectiveEmbeddingModelId, run_3d: false };
+        const fpv = await visualisationsApi.getFPVDataset(params);
+        if (!cancelled) setFpvData(fpv);
       } catch (e: any) {
         if (!cancelled) {
-          setFpvCoordsBySnippet(null);
+          setFpvData(null);
           setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."));
         }
       } finally {
@@ -109,7 +119,39 @@ export const ProjectionView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, modelFamilyName, method, hasPredictions]);
+  }, [selectedDatasetId, effectiveEmbeddingModelId]);
+
+  const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
+  const isMissingProjection =
+    (fpvError ?? "").toLowerCase().includes("generate projections first") ||
+    (fpvError ?? "").toLowerCase().includes("no dataset-level feature projection rows found");
+
+  const handleGenerateNow = async () => {
+    if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
+    setFpvGenerateLoading(true);
+    setFpvError(null);
+    try {
+      const body = { dataset_id: selectedDatasetId, embedding_model_id: effectiveEmbeddingModelId, run_3d: false };
+      const fpv = await visualisationsApi.generateFPVDataset(body);
+      setFpvData(fpv);
+    } catch (e: any) {
+      setFpvData(null);
+      setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to generate projection."));
+    } finally {
+      setFpvGenerateLoading(false);
+    }
+  };
+
+  const fpvCoordsBySnippet: Record<number, [number, number]> | null = useMemo(() => {
+    if (!fpvData) return null;
+    const proj = fpvData.projections_2d?.[method];
+    if (!proj || proj.x.length !== fpvData.points.length || proj.y.length !== fpvData.points.length) return null;
+    const map: Record<number, [number, number]> = {};
+    for (let i = 0; i < fpvData.points.length; i++) {
+      map[fpvData.points[i].snippet_id] = [proj.x[i], proj.y[i]];
+    }
+    return map;
+  }, [fpvData, method]);
 
   const coords: [number, number][] = useMemo(() => {
     if (fpvCoordsBySnippet) {
@@ -160,7 +202,22 @@ export const ProjectionView: React.FC = () => {
   const colorKey = alFilters.color.propertyKey;
 
   const traces = useMemo(() => {
-    if (filtered.length === 0) return [];
+    const backgroundTrace = fpvData && fpvData.projections_2d?.[method]
+      ? {
+          type: "scatter" as const,
+          mode: "markers" as const,
+          name: "Dataset",
+          showlegend: false,
+          x: fpvData.projections_2d[method].x,
+          y: fpvData.projections_2d[method].y,
+          // Make dataset background clearly visible even before inference.
+          marker: { color: "#64748b", size: 4, opacity: 0.35, line: { width: 0 } },
+          hoverinfo: "skip" as const,
+        }
+      : null;
+
+    // If inference hasn't been run yet, still show the dataset background projection (if available).
+    if (filtered.length === 0) return backgroundTrace ? [backgroundTrace] : [];
 
     const hidden = filtered.filter((f) => !f.visible);
     const visible = filtered.filter((f) => f.visible);
@@ -214,8 +271,9 @@ export const ProjectionView: React.FC = () => {
       hovertemplate: `<b>${label}</b><br>Snippet #%{customdata}<extra></extra>`,
     }));
 
-    return hiddenTrace ? [hiddenTrace, ...visibleTraces] : visibleTraces;
-  }, [filtered, selectedSnippetId, colorKey, allCategoricalValues]);
+    const base = hiddenTrace ? [hiddenTrace, ...visibleTraces] : visibleTraces;
+    return backgroundTrace ? [backgroundTrace, ...base] : base;
+  }, [filtered, selectedSnippetId, colorKey, allCategoricalValues, fpvData, method]);
 
   const handlePlotClick = (event: any) => {
     const pt = event.points?.[0];
@@ -226,6 +284,7 @@ export const ProjectionView: React.FC = () => {
 
   const visibleCount = filtered.filter((f) => f.visible).length;
   const isWaitingForRetrain = predictions.length > 0 && projectionPredictions.length === 0;
+  const hasAnyTraces = traces.length > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -300,6 +359,18 @@ export const ProjectionView: React.FC = () => {
             </Tag>
           )}
 
+          {isMissingProjection && canGenerateNow && (
+            <Tooltip title="Normally generated after embeddings finish. Use this to generate immediately (may take time).">
+              <Button
+                size="small"
+                onClick={handleGenerateNow}
+                loading={fpvGenerateLoading}
+              >
+                Generate projection now
+              </Button>
+            </Tooltip>
+          )}
+
           {lastRetrainJob && (
             <Tooltip title={`Retrain completed at ${lastRetrainJob.completed_at ?? "?"}`}>
               <Tag icon={<ExperimentOutlined />} color="green" className="text-xs">
@@ -331,17 +402,21 @@ export const ProjectionView: React.FC = () => {
           </div>
         )}
 
-        {!hasPredictions ? (
+        {!hasAnyTraces ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
-            Run inference to see the projection.
+            {fpvLoading
+              ? "Loading projection…"
+              : fpvError
+              ? "Projection not available yet — it’s prepared after embeddings finish (or generate it now)."
+              : "Select a dataset and generate embeddings to see the projection."}
           </div>
-        ) : visibleCount === 0 ? (
+        ) : hasPredictions && visibleCount === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
             No points in selected range — adjust the visibility filter
           </div>
         ) : fpvError ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
-            Projection not available yet — generate it via Visualisations (FPV) on the backend.
+            Projection not available yet — it will appear once the embedding job finishes (FPV is cached).
           </div>
         ) : (
           <Plot

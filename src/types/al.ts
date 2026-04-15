@@ -214,6 +214,7 @@ export interface ALState {
   usedCheckpointId: number | null;  // last checkpoint actually used by backend
 
   snippetSetId: number | null;
+  embeddingModelId: number | null;  // embedding space used for dataset-level projections
   inferenceK: number;
   predictions: PAMPrediction[];
   projectionPredictions: PAMPrediction[];  // snapshot updated only after retrain

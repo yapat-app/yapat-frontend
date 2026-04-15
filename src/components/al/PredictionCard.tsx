@@ -35,15 +35,18 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const conf = prediction.confidence ?? null;
 
   const localRef = useRef<HTMLDivElement | null>(null);
+  // Keep the actual element in state so viewport logic re-runs when ref is set.
+  const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null);
   const setRefs = useCallback(
     (el: HTMLDivElement | null) => {
       localRef.current = el;
+      setCardEl(el);
       if (cardRef) cardRef(el);
     },
     [cardRef],
   );
 
-  const inView = useInViewport(localRef.current, { rootMargin: "600px 0px" });
+  const inView = useInViewport(cardEl, { rootMargin: "600px 0px" });
 
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);

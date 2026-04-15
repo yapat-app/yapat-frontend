@@ -3,7 +3,7 @@
  * Uses /api/pam-al/inference to load predictions.
  */
 
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input, Switch, message } from "antd";
 import {
@@ -56,6 +56,7 @@ export const ActiveLearning: React.FC = () => {
     retrainThreshold,
     lastRetrainJob,
     lastInferenceAt,
+    lastRetrainDispatch,
   } = useAppSelector((state) => state.al);
 
   useAutoRetrain();
@@ -139,11 +140,17 @@ export const ActiveLearning: React.FC = () => {
       (localCkpt !== null ? checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? "" : "");
     if (!family) return;
 
+    const embeddingModelId =
+      snippetSets.find((s) => s.id === localSS)?.embedding_model_id ??
+      embeddingMethods?.[0]?.id ??
+      1;
+
     dispatch(
       setInferenceConfig({
         modelCheckpointId: localCkpt,
         modelFamilyName: family,
         snippetSetId: localSS,
+        embeddingModelId,
         k: localK,
       }),
     );
@@ -186,42 +193,53 @@ export const ActiveLearning: React.FC = () => {
     }
 
     const jobId = result.payload.job_id;
-    const checkpointId = result.payload.checkpoint_id;
     message.success(`Training job ${jobId} dispatched`);
     setTrainOpen(false);
-
-    // Poll until completion; then refresh checkpoints so user can select it.
-    for (let i = 0; i < 240; i++) {
-      const statusResult = await dispatch(pollRetrainJob(jobId));
-      if (pollRetrainJob.fulfilled.match(statusResult)) {
-        const status = statusResult.payload.status;
-        if (status === "COMPLETED") {
-          message.success("Cold-start training completed");
-          break;
-        }
-        if (status === "FAILED") {
-          message.error("Cold-start training failed");
-          break;
-        }
-      } else {
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-
-    // Refresh checkpoint list and preselect the new checkpoint if present
-    try {
-      const updated = await alApi.getCheckpoints(selectedDatasetId);
-      setCheckpoints(updated);
-      const found = updated.find((c) => c.id === checkpointId) ?? null;
-      if (found) {
-        setLocalCkpt(found.id);
-        setLocalFamily(found.model_family_name);
-      }
-    } catch {
-      // ignore
-    }
   };
+
+  // Background polling + persistent UI indication for training/retrain jobs.
+  // This ensures users can see status even after closing the modal.
+  const lastNotifiedJobIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!selectedDatasetId) return;
+    const stableDatasetId: number = selectedDatasetId;
+    const jobId = lastRetrainDispatch?.job_id;
+    if (jobId === undefined || jobId === null) return;
+    const stableJobId: number = jobId;
+
+    let cancelled = false;
+    let timer: number | null = null;
+
+    async function tick() {
+      if (cancelled) return;
+      const r = await dispatch(pollRetrainJob(stableJobId));
+      if (!pollRetrainJob.fulfilled.match(r)) return;
+
+      const status = r.payload.status;
+      if (status === "COMPLETED" || status === "FAILED") {
+        if (lastNotifiedJobIdRef.current !== stableJobId) {
+          lastNotifiedJobIdRef.current = stableJobId;
+          if (status === "COMPLETED") message.success("Training completed — checkpoint is ready");
+          else message.error("Training failed — check backend logs");
+        }
+        try {
+          const updated = await alApi.getCheckpoints(stableDatasetId);
+          setCheckpoints(updated);
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      timer = window.setTimeout(tick, 2000);
+    }
+
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [dispatch, lastRetrainDispatch, selectedDatasetId]);
 
   const retrainTag = lastRetrainJob ? (
     <Tag

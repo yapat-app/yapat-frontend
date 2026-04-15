@@ -4,6 +4,12 @@ export type FPVRequest = {
   run_3d?: boolean;
 };
 
+export type FPVDatasetRequest = {
+  dataset_id: number;
+  embedding_model_id: number;
+  run_3d?: boolean;
+};
+
 export type FPVPointMetadata = {
   snippet_id: number;
   predicted_labels: string[];
@@ -26,8 +32,9 @@ export type FPVProjection3D = {
 
 export type FPVResponse = {
   dataset_id: number;
-  model_family_name: string;
-  model_checkpoint_id: number;
+  model_family_name?: string | null;
+  model_checkpoint_id?: number | null;
+  embedding_model_id?: number | null;
   points: FPVPointMetadata[];
   projections_2d: Record<string, FPVProjection2D>;
   projections_3d?: Record<string, FPVProjection3D> | null;
