@@ -71,22 +71,28 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
     const controller = new AbortController();
     setAudioError(false);
 
-    const p = snippetApi
-      .getSnippetAudio(prediction.snippet_id, controller.signal)
-      .then((url) => {
+    const p = (async () => {
+      // Limit concurrent audio downloads to avoid stalls when many cards enter the viewport.
+      const release = await audioDownloadAcquire(controller.signal);
+      try {
+        const url = await snippetApi.getSnippetAudio(
+          prediction.snippet_id,
+          controller.signal,
+        );
         audioUrlCacheSet(prediction.snippet_id, url);
         setAudioBlobUrl(url);
         return url;
-      })
-      .catch((e: any) => {
+      } catch (e: any) {
         // Ignore cancellations from fast scrolling.
         if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return null;
         setAudioError(true);
         return null;
-      })
-      .finally(() => {
-        inFlight.delete(prediction.snippet_id);
-      });
+      } finally {
+        release();
+      }
+    })().finally(() => {
+      inFlight.delete(prediction.snippet_id);
+    });
 
     inFlight.set(prediction.snippet_id, p);
     return () => {
@@ -207,6 +213,38 @@ const audioUrlCache = new Map<number, string>();
 const inFlight = new Map<number, Promise<string | null>>();
 const LRU: number[] = [];
 const MAX_CACHE = 40;
+
+// ── Simple concurrency limiter for audio downloads ───────────────────────────
+const MAX_CONCURRENT_AUDIO = 2;
+let activeDownloads = 0;
+const downloadWaiters: Array<() => void> = [];
+
+async function audioDownloadAcquire(signal?: AbortSignal): Promise<() => void> {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  if (activeDownloads < MAX_CONCURRENT_AUDIO) {
+    activeDownloads += 1;
+    return () => audioDownloadRelease();
+  }
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      signal?.removeEventListener("abort", onAbort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+    downloadWaiters.push(() => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      resolve();
+    });
+  });
+  activeDownloads += 1;
+  return () => audioDownloadRelease();
+}
+
+function audioDownloadRelease() {
+  activeDownloads = Math.max(0, activeDownloads - 1);
+  const next = downloadWaiters.shift();
+  if (next) next();
+}
 
 function audioUrlCacheSet(snippetId: number, url: string) {
   if (!audioUrlCache.has(snippetId)) {

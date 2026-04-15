@@ -65,7 +65,7 @@ export const PredictionFeed: React.FC = () => {
 
         {predictions.map((p) => (
           <PredictionCard
-            key={p.id}
+            key={p.id ?? p.snippet_id}
             prediction={p}
             cardRef={setCardRef(p.snippet_id)}
           />
