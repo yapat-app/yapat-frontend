@@ -13,6 +13,7 @@ import {
   selectDataset,
 } from "../redux/features/datasetSlice";
 import type { EmbeddingMethod } from "../types";
+import { embeddingApi } from "../services/api";
 const { Option } = Select;
 
 type DatasetEmbeddingProps = {
@@ -24,6 +25,8 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hasExistingEmbeddings, setHasExistingEmbeddings] = useState(false);
+  const [embeddingStatusLoading, setEmbeddingStatusLoading] = useState(false);
   const {
     embeddingMethods,
     selectedEmbeddedMethodId,
@@ -32,10 +35,13 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   } = useAppSelector((state) => state.embedding);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
 
+  const datasetIdNumber =
+    typeof dataset.id === "string" ? Number(dataset.id) : dataset.id;
+
   const showModal = async () => {
     setIsModalOpen(true);
     dispatch(getAllEmbeddingMethods());
-    dispatch(selectDataset(dataset.id ? Number(dataset.id) : null));
+    dispatch(selectDataset(Number.isFinite(datasetIdNumber) ? datasetIdNumber : null));
   };
 
   const handleCancel = () => {
@@ -56,7 +62,45 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
     }
   }, [embeddingCreated]);
 
-  const isDatasetReady = Boolean(dataset.default_snippet_set_id && dataset.is_ready_for_feed);
+  const isDatasetReady = Boolean(
+    dataset.default_snippet_set_id && dataset.is_ready_for_feed,
+  );
+
+  useEffect(() => {
+    if (!isDatasetReady) {
+      setHasExistingEmbeddings(false);
+      setEmbeddingStatusLoading(false);
+      return;
+    }
+    if (!Number.isFinite(datasetIdNumber)) return;
+
+    const abortController = new AbortController();
+    setEmbeddingStatusLoading(true);
+
+    (async () => {
+      try {
+        const jobs = await embeddingApi.allDatasetEmbeddingList(datasetIdNumber);
+        const exists = (jobs ?? []).some((job) => {
+          const status = (job.status ?? "").toString().toUpperCase();
+          return (
+            Boolean(job.completed_at) ||
+            status === "SUCCESS" ||
+            status === "COMPLETED" ||
+            status === "DONE" ||
+            status === "READY"
+          );
+        });
+        if (!abortController.signal.aborted) setHasExistingEmbeddings(exists);
+      } catch {
+        // If we can't fetch status (auth/network), fall back to showing the action.
+        if (!abortController.signal.aborted) setHasExistingEmbeddings(false);
+      } finally {
+        if (!abortController.signal.aborted) setEmbeddingStatusLoading(false);
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [isDatasetReady, datasetIdNumber]);
 
   return (
     <div>
@@ -68,6 +112,14 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
           title="Waiting for dataset scan + snippet generation to finish"
         >
           Processing dataset…
+        </Button>
+      ) : embeddingStatusLoading ? (
+        <Button color="default" variant="filled" disabled>
+          Checking embeddings…
+        </Button>
+      ) : hasExistingEmbeddings ? (
+        <Button color="default" variant="filled" disabled>
+          Embeddings ready
         </Button>
       ) : (
         <div>

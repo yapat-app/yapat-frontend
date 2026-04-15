@@ -333,12 +333,15 @@ export interface RecordingCreate {
 // Dataset Types
 // ============================================================================
 
+export type DatasetType = "PAM" | "FOCAL_RECORDINGS";
+
 export interface Dataset {
   id: number | string;
   name: string;
   description?: string;
   source_uri?: string;
   team_id?: number;
+  dataset_type?: DatasetType;
   default_snippet_set_id?: number | null;
   created_at?: string;
   updated_at?: string;
@@ -351,6 +354,7 @@ export interface DatasetCreate {
   description?: string;
   source_uri?: string;
   team_id?: number;
+  dataset_type?: DatasetType;
 }
 
 export interface DatasetFile {
