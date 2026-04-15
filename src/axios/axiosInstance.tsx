@@ -21,6 +21,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
+    // Re-resolve baseURL on every request so runtime config changes
+    // (e.g. regenerated /config.js in Docker) take effect without a full refresh.
+    config.baseURL = getBaseURL();
+
     const state = store.getState();
     const token = state.auth.accessToken;
     if (token) {
