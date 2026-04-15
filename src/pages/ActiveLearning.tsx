@@ -5,7 +5,7 @@
 
 import React, { useEffect, useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert } from "antd";
+import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input } from "antd";
 import {
   DatabaseOutlined,
   BulbOutlined,
@@ -85,6 +85,29 @@ export const ActiveLearning: React.FC = () => {
     embeddingApi.allSnippetSets(selectedDatasetId).then(setSnippetSets).catch(() => {});
   }, [selectedDatasetId]);
 
+  // When checkpoints load, ensure local selection is consistent
+  useEffect(() => {
+    // Bootstrap mode: no checkpoints => ensure we have a family name for the backend
+    if (checkpoints.length === 0) {
+      if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
+      setLocalCkpt(null);
+      return;
+    }
+
+    // Normal mode: if a checkpoint is selected, keep family in sync; otherwise preselect the newest
+    if (localCkpt !== null) {
+      const fam = checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? null;
+      if (fam && fam !== localFamily) setLocalFamily(fam);
+      return;
+    }
+
+    const first = checkpoints[0];
+    if (first) {
+      setLocalCkpt(first.id);
+      setLocalFamily(first.model_family_name ?? null);
+    }
+  }, [checkpoints]);
+
   const handleDatasetChange = useCallback(
     (value: number) => {
       dispatch(setSelectedDataset(value));
@@ -94,13 +117,20 @@ export const ActiveLearning: React.FC = () => {
   );
 
   const handleRunInference = () => {
-    if (selectedDatasetId === null || localCkpt === null || localSS === null) return;
-    const family =
-      localFamily ??
-      checkpoints.find((c) => c.id === localCkpt)?.model_family_name ??
-      null;
+    if (selectedDatasetId === null || localSS === null) return;
+
+    const family = (localFamily ?? "").trim() ||
+      (localCkpt !== null ? checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? "" : "");
     if (!family) return;
-    dispatch(setInferenceConfig({ modelCheckpointId: localCkpt, modelFamilyName: family, snippetSetId: localSS, k: localK }));
+
+    dispatch(
+      setInferenceConfig({
+        modelCheckpointId: localCkpt,
+        modelFamilyName: family,
+        snippetSetId: localSS,
+        k: localK,
+      }),
+    );
     dispatch(runInference({ model_family_name: family, dataset_id: selectedDatasetId, snippet_set_id: localSS, k: localK }));
     setConfigOpen(false);
   };
@@ -265,32 +295,51 @@ export const ActiveLearning: React.FC = () => {
         onCancel={() => setConfigOpen(false)}
         onOk={handleRunInference}
         okText="Run Inference"
-        okButtonProps={{ disabled: !localCkpt || !localSS, style: { backgroundColor: "#1e40af" } }}
+        okButtonProps={{
+          disabled:
+            !localSS ||
+            (checkpoints.length === 0 ? !(localFamily && localFamily.trim().length > 0) : !localCkpt),
+          style: { backgroundColor: "#1e40af" },
+        }}
       >
         <Form layout="vertical" className="mt-4">
-          <Form.Item label="Model Checkpoint" required>
-            <Select
-              placeholder="Select checkpoint"
-              value={localCkpt ?? undefined}
-              onChange={(id: number) => {
-                setLocalCkpt(id);
-                const fam = checkpoints.find((c) => c.id === id)?.model_family_name ?? null;
-                setLocalFamily(fam);
-              }}
-              style={{ width: "100%" }}
-            >
-              {checkpoints.map((c) => (
-                <Option key={c.id} value={c.id}>
-                  {c.model_family_name} — {c.version} {c.is_base ? "(base)" : ""}
-                </Option>
-              ))}
-            </Select>
-            {checkpoints.length === 0 && (
-              <p className="text-xs text-amber-500 mt-1">
-                No checkpoints found. Register one via POST /api/pam-al/checkpoints.
-              </p>
-            )}
-          </Form.Item>
+          {checkpoints.length > 0 ? (
+            <Form.Item label="Model Checkpoint" required>
+              <Select
+                placeholder="Select checkpoint"
+                value={localCkpt ?? undefined}
+                onChange={(id: number) => {
+                  setLocalCkpt(id);
+                  const fam = checkpoints.find((c) => c.id === id)?.model_family_name ?? null;
+                  setLocalFamily(fam);
+                }}
+                style={{ width: "100%" }}
+              >
+                {checkpoints.map((c) => (
+                  <Option key={c.id} value={c.id}>
+                    {c.model_family_name} — {c.version} {c.is_base ? "(base)" : ""}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          ) : (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                message="No checkpoints found — using bootstrap mode"
+                description="Inference will return random snippet suggestions until a checkpoint is trained/registered. Choose a model family name to namespace future checkpoints for this dataset."
+                className="mb-3"
+              />
+              <Form.Item label="Model family name" required>
+                <Input
+                  placeholder="e.g. birdnet, yamnet, default"
+                  value={localFamily ?? ""}
+                  onChange={(e) => setLocalFamily(e.target.value)}
+                />
+              </Form.Item>
+            </>
+          )}
 
           <Form.Item label="Snippet Set" required>
             <Select

@@ -79,7 +79,7 @@ export interface PAMRunInferenceRequest {
 
 export interface PAMPrediction {
   id: number;
-  model_checkpoint_id: number;
+  model_checkpoint_id: number | null;
   snippet_id: number;
   /**
    * Backend is multi-label.
@@ -106,7 +106,7 @@ export interface PAMPrediction {
 export interface PAMInferenceResult {
   mode: PAMSuggestionMode;
   model_family_name: string;
-  used_checkpoint_id: number;
+  used_checkpoint_id: number | null;
   total_predictions: number;
   returned_count: number;
   suggestion_strategy: PAMSuggestionStrategy;

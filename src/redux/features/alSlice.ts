@@ -207,7 +207,7 @@ const alSlice = createSlice({
     },
     setInferenceConfig: (
       state,
-      action: PayloadAction<{ modelCheckpointId: number; modelFamilyName: string; snippetSetId: number; k?: number }>,
+      action: PayloadAction<{ modelCheckpointId: number | null; modelFamilyName: string; snippetSetId: number; k?: number }>,
     ) => {
       state.modelCheckpointId = action.payload.modelCheckpointId;
       state.modelFamilyName = action.payload.modelFamilyName;
