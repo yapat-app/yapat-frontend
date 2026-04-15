@@ -5,7 +5,7 @@
 
 import React, { useEffect, useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input } from "antd";
+import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input, Switch } from "antd";
 import {
   DatabaseOutlined,
   BulbOutlined,
@@ -63,6 +63,7 @@ export const ActiveLearning: React.FC = () => {
   const [localFamily, setLocalFamily] = useState<string | null>(modelFamilyName);
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
+  const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
 
   // Load datasets
   useEffect(() => {
@@ -131,7 +132,16 @@ export const ActiveLearning: React.FC = () => {
         k: localK,
       }),
     );
-    dispatch(runInference({ model_family_name: family, dataset_id: selectedDatasetId, snippet_set_id: localSS, k: localK }));
+    dispatch(
+      runInference({
+        model_family_name: family,
+        dataset_id: selectedDatasetId,
+        snippet_set_id: localSS,
+        ...(localTopKOnly
+          ? { sample_suggestion: true, suggestion_strategy: "uncertainty", k: localK }
+          : { sample_suggestion: false }),
+      }),
+    );
     setConfigOpen(false);
   };
 
@@ -188,9 +198,10 @@ export const ActiveLearning: React.FC = () => {
               setLocalFamily(modelFamilyName);
               setLocalSS(snippetSetId);
               setLocalK(inferenceK);
+              setLocalTopKOnly(true);
               setConfigOpen(true);
             }}
-            style={{ backgroundColor: "#1e40af" }}
+            style={{ backgroundColor: "#1e40af", color: "#fff" }}
           >
             Run Inference
           </Button>
@@ -299,7 +310,7 @@ export const ActiveLearning: React.FC = () => {
           disabled:
             !localSS ||
             (checkpoints.length === 0 ? !(localFamily && localFamily.trim().length > 0) : !localCkpt),
-          style: { backgroundColor: "#1e40af" },
+          style: { backgroundColor: "#1e40af", color: "#fff" },
         }}
       >
         <Form layout="vertical" className="mt-4">
@@ -368,7 +379,20 @@ export const ActiveLearning: React.FC = () => {
               value={localK}
               onChange={(v) => setLocalK(v ?? 20)}
               style={{ width: "100%" }}
+              disabled={!localTopKOnly}
             />
+          </Form.Item>
+
+          <Form.Item label="Mode">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-gray-600">
+                Return only Top‑K suggestions
+              </div>
+              <Switch checked={localTopKOnly} onChange={setLocalTopKOnly} />
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              When disabled, the backend returns all predictions for the selected snippet set.
+            </div>
           </Form.Item>
         </Form>
       </Modal>

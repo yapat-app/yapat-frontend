@@ -140,7 +140,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
         size="small"
         type="primary"
         icon={<CheckOutlined />}
-        style={{ backgroundColor: "#16a34a", borderColor: "#16a34a" }}
+        style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
         disabled={submitting}
         onClick={() => submit("ACCEPT")}
       >

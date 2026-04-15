@@ -57,7 +57,11 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   icon={<ThunderboltOutlined />}
                   size="small"
                   type="primary"
-                  style={{ backgroundColor: "#1e40af", borderColor: "#1e40af" }}
+                  style={{
+                    backgroundColor: "#1e40af",
+                    borderColor: "#1e40af",
+                    color: "#fff",
+                  }}
                   onClick={handleStartAL}
                   title="Start PAM Active Learning"
                 >
