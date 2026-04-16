@@ -89,11 +89,16 @@ export const ActiveLearning: React.FC = () => {
 
   // Sync dataset_id from URL
   useEffect(() => {
-    const urlId = searchParams.get("dataset_id");
-    if (urlId && !selectedDatasetId) {
-      dispatch(setSelectedDataset(parseInt(urlId, 10)));
+    const raw = searchParams.get("dataset_id");
+    if (!raw) return;
+
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isNaN(parsed)) return;
+
+    if (parsed !== selectedDatasetId) {
+      dispatch(setSelectedDataset(parsed));
     }
-  }, [searchParams]);
+  }, [dispatch, searchParams, selectedDatasetId]);
 
   // When dataset changes, load checkpoints + snippet sets
   useEffect(() => {
