@@ -9,7 +9,7 @@
  */
 
 import React from "react";
-import { Card, Tag, Space, Button, Divider } from "antd";
+import { Card, Tag, Space, Button } from "antd";
 import { ArrowRightOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
 import type { Snippet, Annotation } from "../types";
