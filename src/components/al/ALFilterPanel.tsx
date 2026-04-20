@@ -52,6 +52,8 @@ interface ALFilterPanelProps {
   onColorKeyChange: (key: string | null) => void;
   /** All categorical values per property key — needed for dynamic legends */
   allCategoricalValues?: Record<string, string[]>;
+  /** Real min/max/step fetched from backend — overrides the static property definition */
+  visibilityRangeOverride?: { min: number; max: number; step: number };
 }
 
 export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
@@ -60,6 +62,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   onVisibilityRangeChange,
   onColorKeyChange,
   allCategoricalValues = {},
+  visibilityRangeOverride,
 }) => {
   const visProp = filters.visibility.propertyKey
     ? getPropertyByKey(filters.visibility.propertyKey)
@@ -69,10 +72,15 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     ? getPropertyByKey(filters.color.propertyKey)
     : null;
 
+  // Prefer the API-fetched range; fall back to the static property definition.
+  const effectivePropMin = visibilityRangeOverride?.min ?? visProp?.range?.[0];
+  const effectivePropMax = visibilityRangeOverride?.max ?? visProp?.range?.[1];
+  const effectivePropStep = visibilityRangeOverride?.step;
+
   // ── Slider configuration ──────────────────────────────────────────────────
   const sliderConfig = useMemo(() => {
-    if (!visProp || !visProp.range) return null;
-    const [propMin, propMax] = visProp.range;
+    if (!visProp || effectivePropMin === undefined || effectivePropMax === undefined) return null;
+    const [propMin, propMax] = [effectivePropMin, effectivePropMax];
     const span = propMax - propMin;
 
     // Convert normalised [0,1] back to domain values for the slider
@@ -109,20 +117,19 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     return {
       min: propMin,
       max: propMax,
-      step: 0.01,
+      step: effectivePropStep ?? 0.01,
       value: [domainLo, domainHi] as [number, number],
       marks: { [propMin]: propMin.toFixed(1), [propMax]: propMax.toFixed(1) },
       tipFormatter: (v?: number) => (v !== undefined ? v.toFixed(2) : ""),
     };
-  }, [visProp, filters.visibility.range]);
+  }, [visProp, filters.visibility.range, effectivePropMin, effectivePropMax, effectivePropStep]);
 
   const handleSliderChange = (vals: number[]) => {
-    if (!visProp?.range) return;
-    const [propMin, propMax] = visProp.range;
-    const span = propMax - propMin;
+    if (effectivePropMin === undefined || effectivePropMax === undefined) return;
+    const span = effectivePropMax - effectivePropMin;
     onVisibilityRangeChange([
-      (vals[0] - propMin) / span,
-      (vals[1] - propMin) / span,
+      (vals[0] - effectivePropMin) / span,
+      (vals[1] - effectivePropMin) / span,
     ]);
   };
 

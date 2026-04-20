@@ -3,7 +3,7 @@
  */
 
 import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { Tag, Tooltip, Skeleton } from "antd";
+import { Skeleton } from "antd";
 import { SoundOutlined } from "@ant-design/icons";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAppDispatch, useAppSelector } from "../../hooks";
@@ -18,9 +18,6 @@ interface Props {
   cardRef?: (el: HTMLDivElement | null) => void;
 }
 
-const confidenceColor = (c: number) =>
-  c >= 0.75 ? "#16a34a" : c >= 0.5 ? "#d97706" : "#dc2626";
-
 export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const dispatch = useAppDispatch();
   const selectedSnippetId = useAppSelector(
@@ -32,7 +29,6 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const hasFeedback = !!feedbacks[prediction.snippet_id];
 
   const labelText = prediction.predicted_label ?? "—";
-  const conf = prediction.confidence ?? null;
 
   const localRef = useRef<HTMLDivElement | null>(null);
   // Keep the actual element in state so viewport logic re-runs when ref is set.
@@ -121,33 +117,11 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
           <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
             {labelText}
           </span>
-          <Tag
-            color={
-              (conf ?? 0) >= 0.75
-                ? "success"
-                : (conf ?? 0) >= 0.5
-                  ? "warning"
-                  : "error"
-            }
-            className="text-xs flex-shrink-0"
-          >
-            {conf === null ? "—" : `${(conf * 100).toFixed(0)}%`}
-          </Tag>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1">
             <SoundOutlined />#{prediction.snippet_id}
           </span>
-          <Tooltip
-            title={conf === null ? "Confidence: —" : `Confidence: ${(conf * 100).toFixed(0)}%`}
-          >
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{
-                backgroundColor: confidenceColor(conf ?? 0),
-              }}
-            />
-          </Tooltip>
         </div>
       </div>
 

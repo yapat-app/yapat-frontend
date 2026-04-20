@@ -13,7 +13,7 @@ import { Card, Tag, Space, Button, Divider } from "antd";
 import { ArrowRightOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { AudioPlayerPlaceholder } from "./AudioPlayerPlaceholder";
 import type { Snippet, Annotation } from "../types";
-import { LabelSpace } from "./LabelSpace";
+import { LabelSpaceActive } from "./al/LabelSpaceActive";
 
 interface CurrentSnippetCardProps {
   snippet: Snippet;
@@ -35,7 +35,7 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   return (
     <Card className="flex flex-col mb-4 gap-1 shadow-md h-fit">
       <div className="flex flex-1 gap-4  ">
-        <div className="w-[65%]  ">
+        <div className="w-[65%] flex flex-col">
           <div className="flex justify-between items-start mb-4 h-fit ">
             <div>
               <h3 className="text-xl font-semibold mb-1 font-ibm-sans">
@@ -60,19 +60,8 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             </div>
           </div>
 
-          {/* Audio Player */}
-          <AudioPlayerPlaceholder />
-        </div>
-        {/* Label List */}
-        <div className="w-[35%] h-[65vh]  ">
-          <LabelSpace />
-        </div>
-      </div>
-      {/* Existing Annotations */}
-      {annotations.length > 0 && (
-        <>
-          <Divider />
-          <div className="flex  gap-4   w-full">
+          {/* Existing Annotations — show near the top */}
+          {annotations.length > 0 && (
             <div className="mb-4 p-4 bg-green-50 rounded-lg  border-green-200">
               <h4 className="font-semibold mb-2 text-green-900">
                 Existing Annotations ({annotations.length}):
@@ -86,9 +75,16 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
                 ))}
               </Space>
             </div>
-          </div>
-        </>
-      )}
+          )}
+
+          {/* Audio Player */}
+          <AudioPlayerPlaceholder />
+        </div>
+        {/* Label List */}
+        <div className="w-[35%] h-[65vh]  ">
+          <LabelSpaceActive />
+        </div>
+      </div>
       {/* Action Buttons */}
       <div className="flex justify-between items-center">
         <div className="flex gap-2">

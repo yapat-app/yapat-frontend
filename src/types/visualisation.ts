@@ -4,6 +4,14 @@ export type FPVRequest = {
   run_3d?: boolean;
 };
 
+export type FPVVisibilityRangeResponse = {
+  field: string;
+  min_value: number;
+  max_value: number;
+  step: number;
+  label: string;
+};
+
 export type FPVDatasetRequest = {
   dataset_id: number;
   embedding_model_id: number;

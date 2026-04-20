@@ -71,7 +71,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             </div>
             <div
               key={d.dataset_id}
-              className="grid grid-cols-4 gap-3 text-center"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center"
             >
               <div className="rounded-md bg-gray-50 px-3 py-2">
                 <p className="text-xs text-gray-500">Audio files</p>
@@ -80,21 +80,15 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 </p>
               </div>
               <div className="rounded-md bg-gray-50 px-3 py-2">
-                <p className="text-xs text-gray-500">Annotated</p>
-                <p className="text-lg font-semibold text-emerald-600">
-                  {d.annotated_snippets}
+                <p className="text-xs text-gray-500">Total snippets</p>
+                <p className="text-lg font-semibold text-gray-700">
+                  {d.total_snippets}
                 </p>
               </div>
               <div className="rounded-md bg-gray-50 px-3 py-2">
-                <p className="text-xs text-gray-500">Not annotated</p>
-                <p className="text-lg font-semibold text-rose-600">
-                  {d.not_annotated_snippets}
-                </p>
-              </div>
-              <div className="rounded-md bg-gray-50 px-3 py-2">
-                <p className="text-xs text-gray-500">Completion</p>
-                <p className="text-lg font-semibold text-indigo-600">
-                  {d.annotation_percentage}%
+                <p className="text-xs text-gray-500">Annotated snippets</p>
+                <p className="text-lg font-semibold text-emerald-700">
+                  {d.annotated_snippets} / {d.total_snippets}
                 </p>
               </div>
             </div>

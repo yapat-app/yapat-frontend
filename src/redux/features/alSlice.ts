@@ -23,7 +23,8 @@ import type {
   PAMTrainFromScratchRequest,
 } from "../../types/al";
 
-const RETRAIN_THRESHOLD = 5;
+// Keep UI threshold aligned with backend RETRAIN_AFTER (active_learning/config.yaml)
+const RETRAIN_THRESHOLD = 9;
 const STORAGE_KEY = "yapat_al_last_feed";
 
 // ── Persistence helpers ───────────────────────────────────────────────────
@@ -56,11 +57,21 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
       }
     }
     const confidence = Number.isFinite(bestProb) && bestProb > 0 ? bestProb : r.confidence ?? 0;
+    const mergedScores = {
+      ...(r.scores ?? {}),
+      // Ensure sampler-suite keys always exist in `scores` so the filter/color system works
+      // even if the backend returns `scores: {}` and also provides these at top-level.
+      uncertainty: (r.uncertainty ?? (r.scores as any)?.uncertainty) ?? undefined,
+      diversity: (r.diversity ?? (r.scores as any)?.diversity) ?? undefined,
+      density: (r.density ?? (r.scores as any)?.density) ?? undefined,
+      composite: (r.composite_score ?? (r.scores as any)?.composite) ?? undefined,
+    };
     return {
       ...r,
       predicted_label: r.predicted_label ?? bestLabel,
       confidence,
       ranking_score: r.ranking_score ?? r.composite_score ?? null,
+      scores: mergedScores,
     };
   });
 }
@@ -312,11 +323,26 @@ const alSlice = createSlice({
         const fb = action.payload;
         state.feedbacks[fb.snippet_id] = fb;
         state.feedbackCount = fb.feedback_count_since_retrain;
+
+        // Backend is the source of truth for auto-retrain:
+        // when /feedback reports retrain_triggered, it has already created & dispatched a retrain job.
+        if (fb.retrain_triggered && fb.auto_retrain_job_id && fb.auto_retrain_checkpoint_id) {
+          state.retrainLoading = true;
+          state.lastRetrainDispatch = {
+            job_id: fb.auto_retrain_job_id,
+            checkpoint_id: fb.auto_retrain_checkpoint_id,
+            status: "PENDING",
+            message: `Auto-retrain job ${fb.auto_retrain_job_id} dispatched`,
+          };
+          state.lastRetrainJob = null;
+        }
       },
     );
-    builder.addCase(submitFeedback.rejected, (state, action) => {
+    builder.addCase(submitFeedback.rejected, (state) => {
       state.feedbackLoading = false;
-      state.error = action.payload as string;
+      // Feedback errors should not blank the entire prediction feed UI.
+      // (The card-level UI already shows a toast on failure.)
+      // Keep `state.error` reserved for inference/job failures.
     });
 
     builder.addCase(triggerRetrain.pending, (state) => {
@@ -362,6 +388,9 @@ const alSlice = createSlice({
 
     builder.addCase(pollRetrainJob.fulfilled, (state, action: PayloadAction<PAMRetrainJobStatus>) => {
       state.lastRetrainJob = action.payload;
+      if (action.payload.status === "COMPLETED" || action.payload.status === "FAILED") {
+        state.retrainLoading = false;
+      }
     });
     builder.addCase(pollRetrainJob.rejected, (state, action) => {
       state.error = action.payload as string;

@@ -58,6 +58,7 @@ export const ProjectionView: React.FC = () => {
   const [fpvData, setFpvData] = useState<FPVResponse | null>(null);
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
+  const [visRangeOverride, setVisRangeOverride] = useState<{ min: number; max: number; step: number } | null>(null);
 
   // ── Source predictions (retrain snapshot if available, else live, else dummy) ─
   const rawSource = projectionPredictions.length > 0
@@ -142,6 +143,22 @@ export const ProjectionView: React.FC = () => {
     }
   };
 
+  // ── Fetch actual min/max/step for the selected visibility filter from backend ─
+  const { propertyKey: visKey } = alFilters.visibility;
+  useEffect(() => {
+    if (!visKey) {
+      setVisRangeOverride(null);
+      return;
+    }
+    let cancelled = false;
+    visualisationsApi.getVisRange(visKey).then((r) => {
+      if (!cancelled) setVisRangeOverride({ min: r.min_value, max: r.max_value, step: r.step });
+    }).catch(() => {
+      if (!cancelled) setVisRangeOverride(null);
+    });
+    return () => { cancelled = true; };
+  }, [visKey]);
+
   const fpvCoordsBySnippet: Record<number, [number, number]> | null = useMemo(() => {
     if (!fpvData) return null;
     const proj = fpvData.projections_2d?.[method];
@@ -177,14 +194,19 @@ export const ProjectionView: React.FC = () => {
   }, [sourcePredictions]);
 
   // ── Apply visibility filter ───────────────────────────────────────────────
-  const { propertyKey: visKey, range: normRange } = alFilters.visibility;
+  const { range: normRange } = alFilters.visibility;
   const visProp = visKey ? getPropertyByKey(visKey) : null;
+
+  // Use the API-fetched range if available, otherwise fall back to the static property range.
+  const effectiveRange: [number, number] = visRangeOverride
+    ? [visRangeOverride.min, visRangeOverride.max]
+    : (visProp?.range ?? [0, 1]);
 
   const filtered = useMemo(() => {
     return sourcePredictions.map((p, i) => {
       let visible = true;
-      if (visProp && visProp.range) {
-        const [pMin, pMax] = visProp.range;
+      if (visProp) {
+        const [pMin, pMax] = effectiveRange;
         const domainLo = pMin + normRange[0] * (pMax - pMin);
         const domainHi = pMin + normRange[1] * (pMax - pMin);
         const raw = p.scores?.[visKey as keyof SampleScores] as number | undefined;
@@ -196,7 +218,8 @@ export const ProjectionView: React.FC = () => {
       }
       return { p, coord: coords[i], visible };
     });
-  }, [sourcePredictions, coords, visProp, visKey, normRange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourcePredictions, coords, visProp, visKey, normRange, effectiveRange]);
 
   // ── Build Plotly traces ───────────────────────────────────────────────────
   const colorKey = alFilters.color.propertyKey;
@@ -302,6 +325,7 @@ export const ProjectionView: React.FC = () => {
           dispatch(setColorFilter({ propertyKey: key }))
         }
         allCategoricalValues={allCategoricalValues}
+        visibilityRangeOverride={visRangeOverride ?? undefined}
       />
 
       {/* ── Secondary controls ────────────────────────────────────────── */}

@@ -131,11 +131,14 @@ export const LabelSpaceActive: React.FC = () => {
     [dispatch, pathname],
   );
 
+  // Enable online suggestions on both active learning + normal annotation flow.
+  const enableOnlineSuggestions = pathname === "/active-learning" || pathname === "/annotate";
+
   // Update search text and trigger online search
   const onSearchChange = (val: string) => {
     setSearch(val);
 
-    if (pathname === "/active-learning" && val.trim().length < 2) {
+    if (enableOnlineSuggestions && val.trim().length < 2) {
       dispatch(clearSuggestions());
     }
 
@@ -183,9 +186,8 @@ export const LabelSpaceActive: React.FC = () => {
     }));
   }, [suggestions]);
 
-  // Merge only when user is actually searching on /annotate
-  const showMerged =
-    pathname === "/active-learning" && search.trim().length >= 2;
+  // Merge only when user is actually searching (2+ chars)
+  const showMerged = enableOnlineSuggestions && search.trim().length >= 2;
 
   const listItems: DisplayItem[] = useMemo(() => {
     if (!showMerged) return customItems;
@@ -241,7 +243,7 @@ export const LabelSpaceActive: React.FC = () => {
 
   const renderLabelItem = (label: DisplayItem) => {
     const handleRowClick = () => {
-      if (pathname === "/active-learning") {
+      if (pathname === "/active-learning" || pathname === "/annotate") {
         handleSubmit(label);
       } else {
         handleRemoveFromLabelSpace(label.id);
@@ -325,12 +327,12 @@ export const LabelSpaceActive: React.FC = () => {
     );
   };
 
-  // Clear online suggestions when leaving annotate screen
+  // Clear online suggestions when leaving screens that use them
   useEffect(() => {
-    if (pathname !== "/active-learning") {
+    if (!enableOnlineSuggestions) {
       dispatch(clearSuggestions());
     }
-  }, [pathname, dispatch]);
+  }, [enableOnlineSuggestions, pathname, dispatch]);
 
   return (
     <div className="w-full flex flex-col h-full min-h-0 ">
@@ -343,7 +345,7 @@ export const LabelSpaceActive: React.FC = () => {
           <div className="mb-2 flex-shrink-0">
             <input
               placeholder={
-                pathname === "/active-learning"
+                enableOnlineSuggestions
                   ? "Search custom + online suggestions"
                   : "Search labels"
               }
@@ -352,15 +354,13 @@ export const LabelSpaceActive: React.FC = () => {
               className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
             />
 
-            {pathname === "/active-learning" &&
-              showMerged &&
-              suggestionsLoading && (
+            {enableOnlineSuggestions && showMerged && suggestionsLoading && (
                 <div className="text-xs text-gray-500 mt-1">
                   Searching online…
                 </div>
               )}
 
-            {pathname === "/active-learning" && !showMerged && (
+            {enableOnlineSuggestions && !showMerged && (
               <div className="text-xs text-gray-500 mt-1">
                 Showing custom taxonomies. Type 2+ characters to include online
                 suggestions.
@@ -375,7 +375,7 @@ export const LabelSpaceActive: React.FC = () => {
               split={false}
               locale={{
                 emptyText:
-                  pathname === "/active-learning"
+                  enableOnlineSuggestions
                     ? "No matching taxonomies found."
                     : "No labels found.",
               }}

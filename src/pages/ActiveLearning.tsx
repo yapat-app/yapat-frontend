@@ -31,7 +31,6 @@ import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { embeddingApi } from "../services/api";
 import { alApi } from "../services/alApi";
-import { useAutoRetrain } from "../hooks/useAutoRetrain";
 import type { PAMCheckpoint } from "../types/al";
 import type { SnippetSet } from "../types";
 
@@ -48,6 +47,7 @@ export const ActiveLearning: React.FC = () => {
     selectedDatasetId,
     modelCheckpointId,
     modelFamilyName,
+    samplingMethod,
     snippetSetId,
     inferenceK,
     predictions,
@@ -58,8 +58,6 @@ export const ActiveLearning: React.FC = () => {
     lastInferenceAt,
     lastRetrainDispatch,
   } = useAppSelector((state) => state.al);
-
-  useAutoRetrain();
 
   // Local config state for the "Run Inference" modal
   const [configOpen, setConfigOpen] = useState(false);
@@ -165,7 +163,7 @@ export const ActiveLearning: React.FC = () => {
         dataset_id: selectedDatasetId,
         snippet_set_id: localSS,
         ...(localTopKOnly
-          ? { sample_suggestion: true, suggestion_strategy: "uncertainty", k: localK }
+          ? { sample_suggestion: true, suggestion_strategy: samplingMethod, k: localK }
           : { sample_suggestion: false }),
       }),
     );
@@ -227,6 +225,26 @@ export const ActiveLearning: React.FC = () => {
           if (status === "COMPLETED") message.success("Training completed — checkpoint is ready");
           else message.error("Training failed — check backend logs");
         }
+        // After a successful retrain, refresh inference so the UI immediately shows the new model output.
+        // We keep the response small (Top‑K suggestions) as the default feed mode.
+        if (
+          status === "COMPLETED" &&
+          modelFamilyName !== null &&
+          snippetSetId !== null &&
+          selectedDatasetId !== null
+        ) {
+          dispatch(
+            runInference({
+              model_family_name: modelFamilyName,
+              dataset_id: selectedDatasetId,
+              snippet_set_id: snippetSetId,
+              force_refresh: true,
+              sample_suggestion: true,
+              suggestion_strategy: samplingMethod,
+              k: inferenceK,
+            }),
+          );
+        }
         try {
           const updated = await alApi.getCheckpoints(stableDatasetId);
           setCheckpoints(updated);
@@ -244,7 +262,7 @@ export const ActiveLearning: React.FC = () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [dispatch, lastRetrainDispatch, selectedDatasetId]);
+  }, [dispatch, lastRetrainDispatch, selectedDatasetId, modelFamilyName, snippetSetId, samplingMethod, inferenceK]);
 
   const retrainTag = lastRetrainJob ? (
     <Tag

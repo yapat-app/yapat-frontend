@@ -136,6 +136,9 @@ export interface FeedbackResponse {
   created_at: string;
   feedback_count_since_retrain: number;
   retrain_triggered: boolean;
+  /** Present when backend auto-retrain was dispatched from /feedback */
+  auto_retrain_checkpoint_id?: number | null;
+  auto_retrain_job_id?: number | null;
 }
 
 export interface PAMRetrainRequest {
