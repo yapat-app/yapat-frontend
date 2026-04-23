@@ -589,7 +589,17 @@ export const getErrorMessage = (error: any): string => {
       const parts = detail
         .map((d: any) => {
           const loc = Array.isArray(d?.loc) ? d.loc.join(".") : undefined;
-          const msg = typeof d?.msg === "string" ? d.msg : undefined;
+          let msg = typeof d?.msg === "string" ? d.msg : undefined;
+
+          // Pydantic sometimes prefixes custom ValueError messages with "Value error, "
+          if (msg?.startsWith("Value error, ")) {
+            msg = msg.slice("Value error, ".length).trim();
+          }
+
+          // For body field validation errors, prefer showing just the message
+          // (e.g. "Password must be at least 8 characters long")
+          if (msg && loc?.startsWith("body.")) return msg;
+
           if (loc && msg) return `${loc}: ${msg}`;
           return msg || loc;
         })
