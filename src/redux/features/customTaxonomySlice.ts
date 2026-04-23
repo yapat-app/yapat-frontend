@@ -267,6 +267,11 @@ export const customtaxonomySlice = createSlice({
           state.conversation = action.payload.conversation;
         }
       })
+      .addCase(freezeConversation.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.conversationFreezed = false;
+      })
       //send Message
       .addCase(sendMessage.pending, (state) => {
         state.messageLoading = true;

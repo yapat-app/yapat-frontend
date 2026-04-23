@@ -27,13 +27,16 @@ import {
   deleteTeam,
 } from "../redux/features/teamSlice";
 import { useNavigate } from "react-router-dom";
+import { teamApi } from "../services/api";
 
 export const Teams = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [selectedTeamIsReady, setSelectedTeamIsReady] = useState(false);
+  const [selectedTeamHasOwner, setSelectedTeamHasOwner] = useState<
+    boolean | null
+  >(null);
   const [isDatasetModalOpen, setIsDatasetModalOpen] = useState(false);
   const { allTeams, teamCreated, teamDeleted, invitation, error } =
     useAppSelector((state) => state.team);
@@ -41,9 +44,17 @@ export const Teams = () => {
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const baseUrl =
     import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
-  const isInvitingTeamMembers =
-    (invitation?.target_role || (selectedTeamIsReady ? "user" : "owner")) ===
-    "user";
+  const currentUserIsTeamOwner = user?.role === "team_owner";
+  const invitationTargetRole = invitation?.target_role;
+  const effectiveTargetRole = currentUserIsTeamOwner
+    ? "user"
+    : invitationTargetRole ||
+      (selectedTeamHasOwner === null
+        ? "user"
+        : selectedTeamHasOwner
+          ? "user"
+          : "owner");
+  const isInvitingTeamMembers = effectiveTargetRole === "user";
 
   const [teamInfo, setTeamInfo] = useState<{
     name: string;
@@ -58,7 +69,7 @@ export const Teams = () => {
   interface DataType {
     id: string;
     name: string;
-    is_ready: boolean;
+    is_ready?: boolean;
     datasets?: {
       id: number;
       name: string;
@@ -144,8 +155,18 @@ export const Teams = () => {
           <a
             onClick={() => {
               setSelectedTeamId(record.id);
-              setSelectedTeamIsReady(record.is_ready);
+              setSelectedTeamHasOwner(null);
               setIsDatasetModalOpen(true);
+              // Determine whether the team already has an owner.
+              // Backend Team schema doesn't include "has_owner", so we infer via members.
+              teamApi
+                .getTeamMembers(record.id)
+                .then((members) =>
+                  setSelectedTeamHasOwner(
+                    members?.some((m: any) => m.role === "owner") ?? false,
+                  ),
+                )
+                .catch(() => setSelectedTeamHasOwner(null));
             }}
           >
             Invite People
@@ -188,7 +209,11 @@ export const Teams = () => {
     dispatch(
       createInvitationLink({
         teamId: selectedTeamId,
-        target_role: selectedTeamIsReady ? "user" : "owner",
+        target_role: currentUserIsTeamOwner
+          ? "user"
+          : selectedTeamHasOwner === false
+            ? "owner"
+            : "user",
       }),
     );
   };
@@ -373,6 +398,11 @@ export const Teams = () => {
                         backgroundColor: "#F7FBFF",
                         color: "#8897AD",
                       }}
+                      placement="topLeft"
+                      dropdownStyle={{ maxHeight: 240, overflow: "auto" }}
+                      getPopupContainer={(triggerNode) =>
+                        (triggerNode.parentElement as HTMLElement) ?? document.body
+                      }
                       onChange={handleChangeDataset}
                       options={allDatasets.map((dataset) => ({
                         value: dataset.id,

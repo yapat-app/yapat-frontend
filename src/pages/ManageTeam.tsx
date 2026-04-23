@@ -50,7 +50,7 @@ export const ManageTeam = () => {
     teamDeleted,
     invitation,
   } = useAppSelector((state) => state.team);
-  useAppSelector((state: any) => state.auth);
+  const { user } = useAppSelector((state: any) => state.auth);
   const frontendBaseUrl =
     import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
 
@@ -126,12 +126,15 @@ export const ManageTeam = () => {
 
   const handleCreateInvite = () => {
     // Team is ready means it already has an owner → invite users
-    const targetRole = currentTeam?.is_ready ? "user" : "owner";
+    const targetRole =
+      user?.role === "team_owner" ? "user" : currentTeam?.is_ready ? "user" : "owner";
     dispatch(createInvitationLink({ teamId, target_role: targetRole }));
   };
 
   const invitationRole =
-    invitation?.target_role ?? (currentTeam?.is_ready ? "user" : "owner");
+    user?.role === "team_owner"
+      ? "user"
+      : invitation?.target_role ?? (currentTeam?.is_ready ? "user" : "owner");
   const isInvitingMembers = invitationRole === "user";
 
   const memberColumns: TableProps<TeamMember>["columns"] = [

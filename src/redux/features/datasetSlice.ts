@@ -2,7 +2,6 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
 import type { Dataset, ExportAnnotation } from "../../types";
-import { teamApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
@@ -26,7 +25,7 @@ const initialState: DatasetState = {
 export const fetchAllDatasets = createAsyncThunk(
   "dataset/fetchAllDatasets",
   async () => {
-    const response = await api.get("/api/datasets");
+    const response = await api.get("/api/datasets/");
     return response.data;
   },
 );
@@ -35,7 +34,10 @@ export const fetchAllTeamDatasets = createAsyncThunk(
   "dataset/teams",
   async (_, { rejectWithValue }) => {
     try {
-      return await teamApi.getAllTeamDatasets();
+      // Use the same datasets endpoint as admin/user.
+      // Backend should filter datasets based on the authenticated user's permissions.
+      const response = await api.get("/api/datasets/");
+      return response.data;
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }

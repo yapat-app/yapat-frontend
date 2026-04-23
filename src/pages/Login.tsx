@@ -27,10 +27,16 @@ export const Login = () => {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
 
+  const normalizeRole = (r: string | null | undefined) => {
+    if (!r) return "";
+    if (r === "owner") return "team_owner";
+    return r;
+  };
+
   useEffect(() => {
     if (invitationToken) {
       console.log("invitationToken", invitationToken, targetRole);
-      setRole(targetRole || "user");
+      setRole(normalizeRole(targetRole) || "user");
     }
   }, [invitationToken]);
 
@@ -115,7 +121,7 @@ export const Login = () => {
           </div>
           <div>
             <p className=" font-ibm-sans input_heading_text">Password</p>
-            <Input
+            <Input.Password
               style={{
                 height: "fit-content",
                 flex: 1,
@@ -127,10 +133,10 @@ export const Login = () => {
               }}
               name="password"
               id="password"
-              type="password"
               value={password}
               placeholder={"Enter Password"}
               onChange={onValueChange}
+              visibilityToggle
               // onChange={onValidationChange}
             />
           </div>

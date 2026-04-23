@@ -255,6 +255,10 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = () => {
     if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
+    if (promptText.length < 10) {
+      message.warning("Please enter at least 10 characters.");
+      return;
+    }
     setPendingMessage(promptText);
     setInputValue("");
 

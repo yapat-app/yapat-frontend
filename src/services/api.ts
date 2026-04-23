@@ -581,8 +581,22 @@ export const taskApi = {
 //Extract error message from API error response
 
 export const getErrorMessage = (error: any): string => {
-  if (error.response?.data?.detail) {
-    return error.response.data.detail;
+  const detail = error.response?.data?.detail;
+  if (detail) {
+    // FastAPI validation errors (422) often look like:
+    // { detail: [{ loc: ["body","prompt"], msg: "...", type: "..." }, ...] }
+    if (Array.isArray(detail)) {
+      const parts = detail
+        .map((d: any) => {
+          const loc = Array.isArray(d?.loc) ? d.loc.join(".") : undefined;
+          const msg = typeof d?.msg === "string" ? d.msg : undefined;
+          if (loc && msg) return `${loc}: ${msg}`;
+          return msg || loc;
+        })
+        .filter(Boolean);
+      if (parts.length > 0) return parts.join("\n");
+    }
+    if (typeof detail === "string") return detail;
   }
   if (error.message) {
     return error.message;
