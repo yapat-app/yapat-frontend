@@ -17,6 +17,8 @@ export const InviteTeamModal = () => {
     useAppSelector((state: any) => state.invitation);
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const { user } = useAppSelector((state: any) => state.auth);
+  const frontendBaseUrl =
+    import.meta.env.VITE_YAPAT_FRONTEND_URL || window.location.origin;
 
   const showModal = () => {
     setIsModalOpen(true);
@@ -66,9 +68,7 @@ export const InviteTeamModal = () => {
           <>
             <p>Invitation link created successfully</p>
             <a
-              href={`${
-                import.meta.env.VITE_YAPAT_FRONTEND_URL
-              }?invitation_token=${invitationLinkToken}`}
+              href={`${frontendBaseUrl}?invitation_token=${invitationLinkToken}`}
             >
               Invitation Link
             </a>

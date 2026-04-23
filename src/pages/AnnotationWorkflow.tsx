@@ -5,8 +5,8 @@
  */
 
 import React, { useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Spin, Empty, Alert } from "antd";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Spin, Empty, Alert, Button } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
 import { AnnotationStatistics } from "../components/AnnotationStatistics";
 import { AnnotationProgress } from "../components/AnnotationProgress";
@@ -16,6 +16,7 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [, setModalVisible] = useState(false);
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
@@ -71,27 +72,37 @@ export const AnnotationWorkflow: React.FC = () => {
   // No snippets state
   if (!currentSnippet && !loading) {
     return (
-      <div>
+      <div className="min-h-screen flex flex-col">
         <NavigationBar />
-        <div className="w-full h-screen flex items-center justify-center">
+
+        <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
           <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <div>
-                <p className="text-lg font-semibold mb-2">
+                <p className="text-2xl font-semibold mb-2 font-ibm-mono">
                   No Snippets Available
                 </p>
-                <p className="text-gray-500">
+                <p className="text-gray-500 mb-4 font-ibm-sans">
                   {datasetId
-                    ? `No unannotated snippets found for dataset ${datasetId}`
-                    : "No unannotated snippets found"}
+                    ? `No unannotated snippets found for dataset ${datasetId}.`
+                    : "Please generate a feed to start annotating snippets."}
                 </p>
+                <Button
+                  className="font-ibm-sans!"
+                  type="primary"
+                  size="large"
+                  onClick={() => navigate("/datasets")}
+                >
+                  View Datasets
+                </Button>
               </div>
             }
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         </div>
       </div>
     );
+    return null;
   }
 
   return (

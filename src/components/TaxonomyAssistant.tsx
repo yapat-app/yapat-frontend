@@ -147,6 +147,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     labelRemoved,
     conversationFreezed,
   } = useAppSelector((state) => state.customTaxonomy);
+  const { user } = useAppSelector((state) => state.auth);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -240,9 +241,14 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
       conversation &&
       (conversation.is_frozen === true || conversation.status === "cancelled")
     ) {
-      dispatch(startNewConversation());
+      console.log(user?.team_ids);
+      dispatch(
+        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+      );
     } else if (!conversation) {
-      dispatch(startNewConversation());
+      dispatch(
+        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+      );
     }
   };
 
