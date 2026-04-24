@@ -89,7 +89,7 @@ interface TaxonomyChatbotProps {
   teamId?: number;
 }
 
-const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = () => {
+const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
@@ -127,27 +127,33 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = () => {
 
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
-    console.log(user?.team_ids?.length ? user.team_ids[0] : 333);
-    // Start a new conversation if there isn't one, or if it's frozen/cancelled
-    // if (
-    //   conversation &&
-    //   (conversation.is_frozen === true || conversation.status === "cancelled")
-    // ) {
-    if (user?.team_ids?.length) {
-      dispatch(startNewConversation(user.team_ids[0]));
-    } else {
-      dispatch(startNewConversation(null));
-    }
+    // Prefer an explicit teamId from parent (e.g. admin selecting a target team),
+    // fall back to the user's first team membership.
+    const resolvedTeamId =
+      teamId ?? (user?.team_ids?.length ? user.team_ids[0] : null);
+    const shouldStartNew =
+      !conversation ||
+      conversation.is_frozen === true ||
+      conversation.status === "cancelled" ||
+      (conversation.team_id ?? null) !== resolvedTeamId;
 
-    // } else if (!conversation) {
-    //   dispatch(startNewConversation(1));
-    // }
+    if (shouldStartNew) {
+      dispatch(startNewConversation(resolvedTeamId));
+    }
 
     // Optional cleanup when component unmounts
     return () => {
       // cleanup on unmount if needed
     };
-  }, [user]); // Re-run if teamId changes
+  }, [
+    dispatch,
+    teamId,
+    user?.team_ids,
+    conversation?.id,
+    conversation?.is_frozen,
+    conversation?.status,
+    conversation?.team_id,
+  ]); // Re-run when selection/user teams/conversation state changes
 
   // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {

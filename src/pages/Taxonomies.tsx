@@ -1,15 +1,35 @@
 import { NavigationBar } from "../components/NavigationBar";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
-import { Card } from "antd";
-import { useEffect } from "react";
+import { Card, Select, Space, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 
 export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
-  const firstTeamId: number | undefined = (allTeams as any[])?.[0]?.id;
+  const teams = (allTeams as any[]) ?? [];
+  const firstTeamId: number | undefined = teams?.[0]?.id;
+  const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(
+    firstTeamId,
+  );
+
+  // Keep selection in sync when teams load/refresh
+  useEffect(() => {
+    if (selectedTeamId == null && firstTeamId != null) {
+      setSelectedTeamId(firstTeamId);
+    }
+  }, [firstTeamId, selectedTeamId]);
+
+  const teamOptions = useMemo(
+    () =>
+      teams.map((t: any) => ({
+        label: t?.name ?? `Team ${t?.id}`,
+        value: t?.id,
+      })),
+    [teams],
+  );
 
   useEffect(() => {
     dispatch(fetchAllteams());
@@ -31,9 +51,27 @@ export const Taxonomies = () => {
         </div>
 
         <Card className="my-4 w-[80%] h-[80vh] ">
+          <div style={{ marginBottom: 12 }}>
+            <Space align="center" size={12} wrap>
+              <Typography.Text strong>Target team</Typography.Text>
+              <Select
+                style={{ minWidth: 260 }}
+                placeholder="Select a team"
+                value={selectedTeamId}
+                options={teamOptions}
+                onChange={(v) => setSelectedTeamId(v)}
+                disabled={teamOptions.length === 0}
+                showSearch
+                optionFilterProp="label"
+              />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                This team will own the frozen label space taxonomy.
+              </Typography.Text>
+            </Space>
+          </div>
           <div className="flex gap-4 w-full h-[75vh]">
             <div className="flex w-[85%] h-full">
-              <TaxonomyChatbot teamId={firstTeamId} />
+              <TaxonomyChatbot teamId={selectedTeamId} />
             </div>
 
             <div className="w-[40%] h-inherit">
