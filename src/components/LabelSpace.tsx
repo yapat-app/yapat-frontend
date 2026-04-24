@@ -106,8 +106,12 @@ export const LabelSpace: React.FC = () => {
   // Load saved/custom taxonomies for annotate screen
   useEffect(() => {
     if (pathname === "/annotate") {
+      const storedTeamIdRaw = localStorage.getItem("preAnnotationTeamId");
+      const storedTeamId = storedTeamIdRaw ? Number(storedTeamIdRaw) : undefined;
       dispatch(
-        getAllTaxonomies(user?.team_ids?.length ? user?.team_ids[0] : 1),
+        getAllTaxonomies(
+          user?.team_ids?.length ? user?.team_ids[0] : (storedTeamId ?? 1),
+        ),
       );
     }
   }, [pathname, dispatch]);
@@ -405,7 +409,9 @@ export const LabelSpace: React.FC = () => {
             />
           </div>
         </div>
-        {pathname === "/pre-annotation" && (labelSpace ?? []).length > 0 && (
+        {pathname === "/pre-annotation" &&
+          (((labelSpace ?? []).length > 0) ||
+            conversation?.is_frozen === true) && (
           <div className="my-3">
             <FreezeLabelSpace labelSpace={labelSpace ?? []} />
           </div>

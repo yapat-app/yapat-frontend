@@ -22,6 +22,13 @@ export const Taxonomies = () => {
     }
   }, [firstTeamId, selectedTeamId]);
 
+  // Persist selection for other screens (e.g. annotate)
+  useEffect(() => {
+    if (selectedTeamId != null) {
+      localStorage.setItem("preAnnotationTeamId", String(selectedTeamId));
+    }
+  }, [selectedTeamId]);
+
   const teamOptions = useMemo(
     () =>
       teams.map((t: any) => ({
