@@ -33,7 +33,7 @@ import {
   resetSentMessage,
   resetAddLabel,
   getLabelSpace,
-  reset,
+  clearConversationFreezed,
   freezeConversation,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
@@ -251,7 +251,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
         `Label space Frozen, custom taxonomies can be viewed in the annotation panel`,
         undefined,
         () => {
-          dispatch(reset());
+          dispatch(clearConversationFreezed());
         },
       );
     }

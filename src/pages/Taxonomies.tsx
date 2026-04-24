@@ -9,6 +9,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
+  const { user } = useAppSelector((state) => state.auth);
   const teams = (allTeams as any[]) ?? [];
   const firstTeamId: number | undefined = teams?.[0]?.id;
   const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(
@@ -38,6 +39,8 @@ export const Taxonomies = () => {
     [teams],
   );
 
+  const showTeamPicker = teamOptions.length > 1 || user?.role === "admin";
+
   useEffect(() => {
     dispatch(fetchAllteams());
   }, []);
@@ -58,24 +61,26 @@ export const Taxonomies = () => {
         </div>
 
         <Card className="my-4 w-[80%] h-[80vh] ">
-          <div style={{ marginBottom: 12 }}>
-            <Space align="center" size={12} wrap>
-              <Typography.Text strong>Target team</Typography.Text>
-              <Select
-                style={{ minWidth: 260 }}
-                placeholder="Select a team"
-                value={selectedTeamId}
-                options={teamOptions}
-                onChange={(v) => setSelectedTeamId(v)}
-                disabled={teamOptions.length === 0}
-                showSearch
-                optionFilterProp="label"
-              />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                This team will own the frozen label space taxonomy.
-              </Typography.Text>
-            </Space>
-          </div>
+          {showTeamPicker && (
+            <div style={{ marginBottom: 12 }}>
+              <Space align="center" size={12} wrap>
+                <Typography.Text strong>Target team</Typography.Text>
+                <Select
+                  style={{ minWidth: 260 }}
+                  placeholder="Select a team"
+                  value={selectedTeamId}
+                  options={teamOptions}
+                  onChange={(v) => setSelectedTeamId(v)}
+                  disabled={teamOptions.length === 0}
+                  showSearch
+                  optionFilterProp="label"
+                />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  This team will own the frozen label space taxonomy.
+                </Typography.Text>
+              </Space>
+            </div>
+          )}
           <div className="flex gap-4 w-full h-[75vh]">
             <div className="flex w-[85%] h-full">
               <TaxonomyChatbot teamId={selectedTeamId} />

@@ -190,8 +190,10 @@ export const customtaxonomySlice = createSlice({
       state.messageSent = false;
     },
     reset: (state) => {
-      state.conversationFreezed = false;
       state.labelRemoved = false;
+    },
+    clearConversationFreezed: (state) => {
+      state.conversationFreezed = false;
     },
     setLabelSpace: (state, action) => {
       state.labelSpace = action.payload;
@@ -324,6 +326,12 @@ export const customtaxonomySlice = createSlice({
   },
 });
 
-export const { resetAddLabel, resetSentMessage, reset, setLabelSpace } =
+export const {
+  resetAddLabel,
+  resetSentMessage,
+  reset,
+  clearConversationFreezed,
+  setLabelSpace,
+} =
   customtaxonomySlice.actions;
 export default customtaxonomySlice.reducer;

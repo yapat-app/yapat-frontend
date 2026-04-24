@@ -38,6 +38,7 @@ import {
   resetAddLabel,
   getLabelSpace,
   reset,
+  clearConversationFreezed,
   freezeConversation,
   removeLabels,
 } from "../redux/features/customTaxonomySlice";
@@ -228,7 +229,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
         `Label space Frozen, custom taxonomies can be viewed in the annotation panel`,
         undefined,
         () => {
-          dispatch(reset());
+          dispatch(clearConversationFreezed());
         },
       );
       handleClose();
