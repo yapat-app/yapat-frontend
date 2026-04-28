@@ -28,6 +28,13 @@ export interface SampleScores {
   sound_type?: string;   // "Bio" | "Anthro" | "Geo"
   birdnet_label?: string;
   yamnet_label?: string;
+  /**
+   * Ground-truth / user label, joined client-side from
+   * /api/pam-al/snippet-labels. Used by the `actual_label` color filter.
+   * When a snippet has multiple labels, we pick the first sorted one so the
+   * categorical palette stays stable.
+   */
+  actual_label?: string;
 }
 
 export type FilterMode = "continuous" | "stepped" | "categorical";
@@ -49,9 +56,18 @@ export interface PropertyDefinition {
 }
 
 export interface VisibilityFilterState {
+  /** Single-property mode (legacy / phase 2.2). */
   propertyKey: string | null;
-  /** Normalised to [0, 1] — converted to domain units when applied */
+  /** Normalised to [0, 1] — converted to domain units when applied. */
   range: [number, number];
+  /**
+   * Multi-property mode (phase 3.2). When non-empty, the visualisation will
+   * AND-combine each property's [0,1] range against the live data.
+   * Single-property mode keeps using `propertyKey` + `range`; consumers should
+   * prefer `propertyKeys` when its length > 0.
+   */
+  propertyKeys?: string[];
+  ranges?: Record<string, [number, number]>;
 }
 
 export interface ColorFilterState {
@@ -194,6 +210,23 @@ export interface PAMRetrainJobStatus {
   started_at?: string | null;
   completed_at?: string | null;
   created_at: string;
+}
+
+export interface ALLabeledSnippetsResponse {
+  dataset_id: number;
+  snippet_set_id?: number | null;
+  snippet_ids: number[];
+}
+
+export interface ALSnippetLabel {
+  snippet_id: number;
+  labels: string[];
+}
+
+export interface ALSnippetLabelsResponse {
+  dataset_id: number;
+  snippet_set_id?: number | null;
+  items: ALSnippetLabel[];
 }
 
 export interface PAMCheckpoint {

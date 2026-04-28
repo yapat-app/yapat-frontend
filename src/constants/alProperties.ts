@@ -92,6 +92,18 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: false,
     supportsColor: true,
   },
+
+  // ── Ground-truth / user labels (study-mode helper) ─────────────────────────
+  // Resolved client-side by joining /api/pam-al/snippet-labels into the
+  // prediction set; used only as a color filter.
+  {
+    key: "actual_label",
+    label: "Actual label",
+    category: "metadata",
+    filterMode: "categorical",
+    supportsVisibility: false,
+    supportsColor: true,
+  },
 ];
 
 export const getPropertyByKey = (key: string): PropertyDefinition | undefined =>

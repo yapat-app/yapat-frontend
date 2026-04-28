@@ -11,22 +11,25 @@ import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
 import { ActiveLearning } from "./pages/ActiveLearning";
 import HomePage from "./pages/HomePage";
+import { StudyPhaseProvider } from "./studyPhases";
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Login />} />
-      <Route path="/home" element={<HomePage />} />
-      <Route path="/signUp" element={<SignUp />} />
-      <Route path="/home" element={<Home />} />
-      <Route path="/datasets" element={<Datasets />} />
-      <Route path="/teams" element={<Teams />} />
-      <Route path="/taxonomy" element={<Taxonomies />} />
-      <Route path="/history" element={<FeedHistory />} />
-      <Route path="/annotate" element={<AnnotationWorkflow />} />
-      <Route path="/active-learning" element={<ActiveLearning />} />
-      <Route path="/docs" element={<YapatUserManual />} />
-    </Routes>
+    <StudyPhaseProvider>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/home" element={<HomePage />} />
+        <Route path="/signUp" element={<SignUp />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/datasets" element={<Datasets />} />
+        <Route path="/teams" element={<Teams />} />
+        <Route path="/taxonomy" element={<Taxonomies />} />
+        <Route path="/history" element={<FeedHistory />} />
+        <Route path="/annotate" element={<AnnotationWorkflow />} />
+        <Route path="/active-learning" element={<ActiveLearning />} />
+        <Route path="/docs" element={<YapatUserManual />} />
+      </Routes>
+    </StudyPhaseProvider>
   );
 }
 

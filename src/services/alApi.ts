@@ -14,6 +14,8 @@ import type {
   PAMRetrainJobDispatch,
   PAMRetrainJobStatus,
   PAMCheckpoint,
+  ALLabeledSnippetsResponse,
+  ALSnippetLabelsResponse,
 } from "../types/al";
 
 const BASE = "/api/pam-al";
@@ -54,6 +56,36 @@ export const alApi = {
   /** GET /api/pam-al/retrain/jobs/{job_id} — poll job status */
   getRetrainJob: async (jobId: number): Promise<PAMRetrainJobStatus> => {
     const response = await api.get(`${BASE}/retrain/jobs/${jobId}`);
+    return response.data;
+  },
+
+  /** GET /api/pam-al/labeled-snippets — snippet IDs with at least one annotation */
+  getLabeledSnippets: async (
+    datasetId: number,
+    snippetSetId?: number,
+    scope: "any" | "user" = "any",
+  ): Promise<ALLabeledSnippetsResponse> => {
+    const response = await api.get(`${BASE}/labeled-snippets`, {
+      params: {
+        dataset_id: datasetId,
+        scope,
+        ...(snippetSetId !== undefined ? { snippet_set_id: snippetSetId } : {}),
+      },
+    });
+    return response.data;
+  },
+
+  /** GET /api/pam-al/snippet-labels — per-snippet ground-truth / user labels */
+  getSnippetLabels: async (
+    datasetId: number,
+    snippetSetId?: number,
+  ): Promise<ALSnippetLabelsResponse> => {
+    const response = await api.get(`${BASE}/snippet-labels`, {
+      params: {
+        dataset_id: datasetId,
+        ...(snippetSetId !== undefined ? { snippet_set_id: snippetSetId } : {}),
+      },
+    });
     return response.data;
   },
 };

@@ -1,5 +1,10 @@
 /**
- * PredictionFeed — scrollable list of PredictionCards (right half).
+ * PredictionFeed — phase-aware snippet feed.
+ *
+ * Behaviour is driven entirely by `phase.feed.mode`:
+ *   • "scrollable_topk"        → classic scrollable list of all predictions
+ *   • "single_card_on_select"  → only the snippet matching `selectedSnippetId`
+ *   • "hidden"                 → renders nothing
  */
 
 import React, { useRef, useCallback } from "react";
@@ -8,13 +13,16 @@ import { useAppSelector } from "../../hooks";
 import { PredictionCard } from "./PredictionCard";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
+import { usePhaseConfig } from "../../studyPhases";
 
 export const PredictionFeed: React.FC = () => {
-  const { predictions, inferenceLoading, error } = useAppSelector(
+  const { predictions, inferenceLoading, error, selectedSnippetId } = useAppSelector(
     (state) => state.al,
   );
+  const phase = usePhaseConfig();
 
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  // Scroll-into-view is only relevant for the scrollable variant.
   useALSync(cardRefs);
 
   const setCardRef = useCallback(
@@ -24,6 +32,8 @@ export const PredictionFeed: React.FC = () => {
     },
     [],
   );
+
+  if (phase.feed.mode === "hidden") return null;
 
   if (error) {
     return (
@@ -52,13 +62,43 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
+  // ── Single-card mode (Phase 2.x / 3.x) ───────────────────────────────────
+  if (phase.feed.mode === "single_card_on_select") {
+    const selected = selectedSnippetId !== null
+      ? predictions.find((p) => p.snippet_id === selectedSnippetId)
+      : undefined;
+
+    if (!selected) {
+      return (
+        <div className="flex items-center justify-center h-full px-6 text-center">
+          <Empty description="Click a point on the projection to inspect that snippet." />
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+          <PredictionCard
+            key={selected.id ?? selected.snippet_id}
+            prediction={selected}
+            cardRef={setCardRef(selected.snippet_id)}
+          />
+          {phase.ui.showRetrainControls && (
+            <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
+              <RetrainControl />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Scrollable top-K mode (Phase 1.x) ────────────────────────────────────
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Label Space ── sits above the scrollable card list */}
-      {/* <ALLabelSpacePanel /> */}
-
-      {/* ── Scrollable card list ── */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 gap-3 flex flex-col">
+      <div className="flex-1 overflow-y-auto px-3 py-3 gap-3 flex flex-col items-center">
+        <div className="w-full max-w-[980px] flex flex-col gap-3">
         <p className="text-xs text-gray-400 font-ibm-sans  top-0 bg-[#f7fafc] py-1 z-10">
           {predictions.length} predictions
         </p>
@@ -77,8 +117,11 @@ export const PredictionFeed: React.FC = () => {
           </div>
         )}
 
-        <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
-          <RetrainControl />
+        {phase.ui.showRetrainControls && (
+          <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
+            <RetrainControl />
+          </div>
+        )}
         </div>
       </div>
     </div>

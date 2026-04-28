@@ -33,12 +33,14 @@ import { embeddingApi } from "../services/api";
 import { alApi } from "../services/alApi";
 import type { PAMCheckpoint } from "../types/al";
 import type { SnippetSet } from "../types";
+import { usePhaseConfig } from "../studyPhases";
 
 const { Option } = Select;
 
 export const ActiveLearning: React.FC = () => {
   const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
+  const phase = usePhaseConfig();
 
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const { user } = useAppSelector((state) => state.auth);
@@ -51,6 +53,7 @@ export const ActiveLearning: React.FC = () => {
     snippetSetId,
     inferenceK,
     predictions,
+    modelInfo,
     inferenceLoading,
     feedbackCount,
     retrainThreshold,
@@ -58,6 +61,44 @@ export const ActiveLearning: React.FC = () => {
     lastInferenceAt,
     lastRetrainDispatch,
   } = useAppSelector((state) => state.al);
+
+  // If we enter a whole-dataset / click-to-inspect phase while the store still
+  // contains only top-K "suggestions", ensure we have the full prediction set
+  // so any clicked point can render its card on the right.
+  useEffect(() => {
+    const needsFullSet =
+      phase.feed.mode === "single_card_on_select" ||
+      phase.visualization.mode === "whole_dataset";
+    const isSuggestionsMode = (modelInfo as any)?.mode === "suggestions";
+
+    if (
+      needsFullSet &&
+      isSuggestionsMode &&
+      selectedDatasetId !== null &&
+      snippetSetId !== null &&
+      modelFamilyName !== null &&
+      !inferenceLoading
+    ) {
+      dispatch(
+        runInference({
+          model_family_name: modelFamilyName,
+          dataset_id: selectedDatasetId,
+          snippet_set_id: snippetSetId,
+          sample_suggestion: false,
+        }),
+      );
+    }
+  }, [
+    phase.id,
+    phase.feed.mode,
+    phase.visualization.mode,
+    modelInfo,
+    selectedDatasetId,
+    snippetSetId,
+    modelFamilyName,
+    inferenceLoading,
+    dispatch,
+  ]);
 
   // Local config state for the "Run Inference" modal
   const [configOpen, setConfigOpen] = useState(false);
@@ -148,13 +189,21 @@ export const ActiveLearning: React.FC = () => {
       embeddingMethods?.[0]?.id ??
       1;
 
+    // Phase-driven inference shape:
+    //   - feed.mode = scrollable_topk → ask for ranked top-K (cheap, exactly what feed needs)
+    //   - everything else             → ask for the full prediction set (whole-dataset color)
+    const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
+    const useTopK = phaseRequiresTopK ? true : localTopKOnly && phase.feed.mode !== "single_card_on_select" && phase.feed.mode !== "hidden";
+    const k = phaseRequiresTopK ? (phase.feed.topK ?? localK) : localK;
+    const strategy = phase.feed.samplingStrategy ?? samplingMethod;
+
     dispatch(
       setInferenceConfig({
         modelCheckpointId: localCkpt,
         modelFamilyName: family,
         snippetSetId: localSS,
         embeddingModelId,
-        k: localK,
+        k,
       }),
     );
     dispatch(
@@ -162,8 +211,8 @@ export const ActiveLearning: React.FC = () => {
         model_family_name: family,
         dataset_id: selectedDatasetId,
         snippet_set_id: localSS,
-        ...(localTopKOnly
-          ? { sample_suggestion: true, suggestion_strategy: samplingMethod, k: localK }
+        ...(useTopK
+          ? { sample_suggestion: true, suggestion_strategy: strategy, k }
           : { sample_suggestion: false }),
       }),
     );
@@ -233,15 +282,20 @@ export const ActiveLearning: React.FC = () => {
           snippetSetId !== null &&
           selectedDatasetId !== null
         ) {
+          const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
               force_refresh: true,
-              sample_suggestion: true,
-              suggestion_strategy: samplingMethod,
-              k: inferenceK,
+              ...(phaseRequiresTopK
+                ? {
+                    sample_suggestion: true,
+                    suggestion_strategy: phase.feed.samplingStrategy ?? samplingMethod,
+                    k: phase.feed.topK ?? inferenceK,
+                  }
+                : { sample_suggestion: false }),
             }),
           );
         }
@@ -262,7 +316,7 @@ export const ActiveLearning: React.FC = () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [dispatch, lastRetrainDispatch, selectedDatasetId, modelFamilyName, snippetSetId, samplingMethod, inferenceK]);
+  }, [dispatch, lastRetrainDispatch, selectedDatasetId, modelFamilyName, snippetSetId, samplingMethod, inferenceK, phase]);
 
   const retrainTag = lastRetrainJob ? (
     <Tag
@@ -305,6 +359,14 @@ export const ActiveLearning: React.FC = () => {
               </Option>
             ))}
           </Select>
+        </div>
+
+        {/* Study-phase selector — power user / facilitator switch.
+            For participant flows just hand them a `?phase=P2.1` URL. */}
+        <div className="flex items-center gap-2">
+          <Tooltip title={`Active study phase: ${phase.label}`}>
+            <Tag color="purple" className="text-xs">{phase.id}</Tag>
+          </Tooltip>
         </div>
 
         {selectedDatasetId !== null && (
@@ -403,7 +465,7 @@ export const ActiveLearning: React.FC = () => {
         />
       )}
 
-      {/* ── Split layout ───────────────────────────────────────────────── */}
+      {/* ── Phase-aware layout ─────────────────────────────────────────── */}
       {!selectedDatasetId && !isRestoredFeed ? (
         <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
           <DatabaseOutlined style={{ fontSize: 48 }} />
@@ -411,29 +473,7 @@ export const ActiveLearning: React.FC = () => {
           <p className="text-sm">Then click "Run Inference" to load predictions.</p>
         </div>
       ) : (
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left: Projection */}
-          <div className="w-1/2 flex flex-col border-r border-gray-200 overflow-hidden">
-            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
-              <p className="text-xs text-gray-400 font-ibm-sans">Click a point to jump to its card</p>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <ProjectionView />
-            </div>
-          </div>
-
-          {/* Right: Feed */}
-          <div className="w-1/2 flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Prediction Feed</h2>
-              <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <PredictionFeed />
-            </div>
-          </div>
-        </div>
+        <PhaseLayout />
       )}
 
       {/* ── Run Inference Modal ─────────────────────────────────────────── */}
@@ -633,4 +673,108 @@ export const ActiveLearning: React.FC = () => {
       </Modal>
     </div>
   );
+};
+
+/**
+ * Layout chosen from `(phase.feed.mode, phase.visualization.mode)`:
+ *   • feed=scrollable + vis=hidden            → full-width feed (Phase 1.1)
+ *   • feed=scrollable + vis=*                 → 50/50 split    (Phase 1.2)
+ *   • feed=single_card + vis=whole_dataset    → vis dominant + side panel (Phase 2/3)
+ *   • feed=hidden                             → vis only
+ */
+const PhaseLayout: React.FC = () => {
+  const phase = usePhaseConfig();
+  const feedMode = phase.feed.mode;
+  const visMode = phase.visualization.mode;
+
+  const showVis = visMode !== "hidden";
+  const showFeed = feedMode !== "hidden";
+
+  // Phase 1.1: feed only
+  if (showFeed && !showVis) {
+    return (
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Prediction Feed</h2>
+            <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <PredictionFeed />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Phase 1.2: 50/50 split (feed + limited vis)
+  if (showFeed && feedMode === "scrollable_topk" && showVis) {
+    return (
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-1/2 flex flex-col border-r border-gray-200 overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
+            <p className="text-xs text-gray-400 font-ibm-sans">Click a point to jump to its card</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ProjectionView />
+          </div>
+        </div>
+        <div className="w-1/2 flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Prediction Feed</h2>
+            <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <PredictionFeed />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Phase 2.x / 3.x: vis dominant; single-card panel slides in on selection
+  if (showVis && feedMode === "single_card_on_select") {
+    return (
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col border-r border-gray-200 overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
+            <p className="text-xs text-gray-400 font-ibm-sans">Click a point to inspect that snippet</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ProjectionView />
+          </div>
+        </div>
+        <div className="w-[420px] flex flex-col overflow-hidden bg-[#f7fafc]">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Selected Snippet</h2>
+            <p className="text-xs text-gray-400 font-ibm-sans">Click a point on the projection</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <PredictionFeed />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Vis-only fallback
+  if (showVis && !showFeed) {
+    return (
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ProjectionView />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No-op fallback
+  return null;
 };

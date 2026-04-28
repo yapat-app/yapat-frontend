@@ -129,7 +129,7 @@ const initialState: ALState = {
   colorBy: "prediction",
   samplingMethod: "uncertainty",
   alFilters: {
-    visibility: { propertyKey: null, range: [0, 1] },
+    visibility: { propertyKey: null, range: [0, 1], propertyKeys: [], ranges: {} },
     color: { propertyKey: null },
   },
   lastRetrainDispatch: null,
@@ -259,6 +259,27 @@ const alSlice = createSlice({
     },
     setColorFilter: (state, action: PayloadAction<Partial<ColorFilterState>>) => {
       state.alFilters.color = { ...state.alFilters.color, ...action.payload };
+    },
+    /** Multi-property visibility filter helpers (used in phase 3.2). */
+    setVisibilityKeys: (state, action: PayloadAction<string[]>) => {
+      state.alFilters.visibility.propertyKeys = action.payload;
+      state.alFilters.visibility.ranges = state.alFilters.visibility.ranges ?? {};
+      for (const key of action.payload) {
+        if (!state.alFilters.visibility.ranges[key]) {
+          state.alFilters.visibility.ranges[key] = [0, 1];
+        }
+      }
+    },
+    setVisibilityRangeFor: (
+      state,
+      action: PayloadAction<{ key: string; range: [number, number] }>,
+    ) => {
+      const { key, range } = action.payload;
+      state.alFilters.visibility.ranges = state.alFilters.visibility.ranges ?? {};
+      state.alFilters.visibility.ranges[key] = range;
+    },
+    resetVisibilityFilter: (state) => {
+      state.alFilters.visibility = { propertyKey: null, range: [0, 1], propertyKeys: [], ranges: {} };
     },
     resetFeedbacks: (state) => {
       state.feedbacks = {};
@@ -406,6 +427,9 @@ export const {
   setSamplingMethod,
   setVisibilityFilter,
   setColorFilter,
+  setVisibilityKeys,
+  setVisibilityRangeFor,
+  resetVisibilityFilter,
   resetFeedbacks,
   clearError,
   clearSavedFeed,

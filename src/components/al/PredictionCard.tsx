@@ -12,6 +12,7 @@ import { FeedbackButtons } from "./FeedbackButtons";
 import { snippetApi } from "../../services/api";
 import { useInViewport } from "../../hooks/useInViewport";
 import type { PAMPrediction } from "../../types/al";
+import { usePhaseConfig } from "../../studyPhases";
 
 interface Props {
   prediction: PAMPrediction;
@@ -20,6 +21,7 @@ interface Props {
 
 export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const dispatch = useAppDispatch();
+  const phase = usePhaseConfig();
   const selectedSnippetId = useAppSelector(
     (state) => state.al.selectedSnippetId,
   );
@@ -47,8 +49,10 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
 
+  const specHeight = phase.id.startsWith("P1.") ? 140 : 220;
+
   // Simple in-memory cache so scrolling back doesn't re-download audio.
-  // We keep object URLs for the session; a small LRU prevents unbounded growth.
+  // We keep object URLs for the session; 
   const cachedUrl = useMemo(() => audioUrlCache.get(prediction.snippet_id) ?? null, [prediction.snippet_id]);
 
   useEffect(() => {
@@ -106,7 +110,7 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
       className={[
         "rounded-lg border bg-white shadow-sm cursor-pointer transition-all duration-200",
         isSelected
-          ? "border-blue-500 ring-2 ring-blue-200 shadow-md"
+          ? "border-yellow-400 ring-2 ring-yellow-200 shadow-md"
           : "border-gray-200 hover:border-gray-300 hover:shadow",
         hasFeedback ? "opacity-60" : "",
       ].join(" ")}
@@ -136,14 +140,14 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
             <Skeleton.Input
               active
               block
-              style={{ height: 260, borderRadius: 6 }}
+              style={{ height: specHeight, borderRadius: 6 }}
             />
           </div>
         )}
 
         {/* Not loading yet (lazy) */}
         {!audioBlobUrl && !audioError && !(inView || isSelected) && (
-          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ height: 260 }}>
+          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ height: specHeight }}>
             Scroll to load audio
           </div>
         )}
@@ -152,7 +156,7 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
         {audioError && (
           <div
             className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-            style={{ height: 260 }}
+            style={{ height: specHeight }}
           >
             Audio unavailable
           </div>
@@ -160,16 +164,20 @@ export const PredictionCard: React.FC<Props> = ({ prediction, cardRef }) => {
 
         {/* Player — rendered once the blob URL is available */}
         {audioBlobUrl && (
-          <SpectrogramPlayer
-            key={audioBlobUrl}
-            src={audioBlobUrl}
-            sampleRate={16000}
-            specHeight={260}
-            navigator={false}
-            settings={false}
-            dark={false}
-            colormap="viridis"
-          />
+          <div className="px-4 py-3">
+            <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
+              <SpectrogramPlayer
+                key={audioBlobUrl}
+                src={audioBlobUrl}
+                sampleRate={16000}
+                specHeight={specHeight}
+                navigator={false}
+                settings={false}
+                dark={false}
+                colormap="viridis"
+              />
+            </div>
+          </div>
         )}
       </div>
 

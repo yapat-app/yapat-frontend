@@ -1,15 +1,19 @@
 /**
  * ALFilterPanel
  *
- * Two independent filter controls that sit above the scatter plot:
+ * Phase-aware filter controls. Driven by `phaseVisibilityMode` and
+ * `phaseColorMode` from the active study phase:
  *
- *   • Visibility Filter — range slider (continuous / stepped) to hide points
- *                         outside the chosen window. Categorical properties are
- *                         excluded here (range-filtering doesn't apply).
+ *   • visibility "disabled" → filter UI hidden
+ *   • visibility "single"   → existing single-property select + range slider
+ *   • visibility "multi"    → multi-select + one slider per chosen property
+ *                             (AND-combined by the consumer)
  *
- *   • Color Filter — maps any property (including categorical) to a colour.
+ *   • color "disabled"      → color filter hidden
+ *   • color "single"        → existing single-property color select + legend
  *
- * Both selects offer "None" as the first option to disable that filter.
+ * Each select is restricted to `allowedVisibilityProperties` /
+ * `allowedColorProperties` so phases can curate the property surface area.
  */
 
 import React, { useMemo } from "react";
@@ -21,11 +25,15 @@ import {
   colorProperties,
   getPropertyByKey,
 } from "../../constants/alProperties";
-import type { ALFilterState } from "../../types/al";
+import type {
+  ALFilterState,
+  PropertyDefinition,
+} from "../../types/al";
 import {
   continuousGradient,
   buildLegend,
 } from "../../utils/alColors";
+import type { FilterMode, AllowedProperty } from "../../studyPhases";
 
 const { Option, OptGroup } = Select;
 
@@ -44,46 +52,82 @@ const GRADIENT_BAR = (() => {
 
 interface ALFilterPanelProps {
   filters: ALFilterState;
-  /** Called when visibility property changes */
+
+  /** Phase-driven mode for the visibility filter. Default "single" preserves backwards behaviour. */
+  phaseVisibilityMode?: FilterMode;
+  /** Phase-driven mode for the color filter. */
+  phaseColorMode?: FilterMode;
+
+  /** Allowed properties per phase. Empty array = "no restriction". */
+  allowedVisibilityProperties?: AllowedProperty[];
+  allowedColorProperties?: AllowedProperty[];
+
+  /** Single-mode visibility callbacks (legacy / phase 2.2). */
   onVisibilityKeyChange: (key: string | null) => void;
-  /** Called when visibility range changes (normalised [0,1]) */
   onVisibilityRangeChange: (range: [number, number]) => void;
-  /** Called when color property changes */
+
+  /** Multi-mode visibility callbacks (phase 3.2). */
+  onMultiVisibilityChange?: (keys: string[]) => void;
+  onMultiVisibilityRangeChange?: (key: string, range: [number, number]) => void;
+
+  /** Color callbacks. */
   onColorKeyChange: (key: string | null) => void;
-  /** All categorical values per property key — needed for dynamic legends */
+
   allCategoricalValues?: Record<string, string[]>;
-  /** Real min/max/step fetched from backend — overrides the static property definition */
   visibilityRangeOverride?: { min: number; max: number; step: number };
 }
 
 export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   filters,
+  phaseVisibilityMode = "single",
+  phaseColorMode = "single",
+  allowedVisibilityProperties,
+  allowedColorProperties,
   onVisibilityKeyChange,
   onVisibilityRangeChange,
+  onMultiVisibilityChange,
+  onMultiVisibilityRangeChange,
   onColorKeyChange,
   allCategoricalValues = {},
   visibilityRangeOverride,
 }) => {
-  const visProp = filters.visibility.propertyKey
-    ? getPropertyByKey(filters.visibility.propertyKey)
-    : null;
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const filterProps = (
+    base: PropertyDefinition[],
+    allowed?: AllowedProperty[],
+  ): PropertyDefinition[] => {
+    if (!allowed || allowed.length === 0) return base;
+    const allowedSet = new Set<string>(allowed);
+    return base.filter((p) => allowedSet.has(p.key));
+  };
+
+  const visibilityList = useMemo(
+    () => filterProps(visibilityProperties(), allowedVisibilityProperties),
+    [allowedVisibilityProperties],
+  );
+  const colorList = useMemo(
+    () => filterProps(colorProperties(), allowedColorProperties),
+    [allowedColorProperties],
+  );
 
   const colorProp = filters.color.propertyKey
     ? getPropertyByKey(filters.color.propertyKey)
     : null;
 
-  // Prefer the API-fetched range; fall back to the static property definition.
+  // ── Single-property visibility setup (existing behaviour) ────────────────
+  const visProp = filters.visibility.propertyKey
+    ? getPropertyByKey(filters.visibility.propertyKey)
+    : null;
+
   const effectivePropMin = visibilityRangeOverride?.min ?? visProp?.range?.[0];
   const effectivePropMax = visibilityRangeOverride?.max ?? visProp?.range?.[1];
   const effectivePropStep = visibilityRangeOverride?.step;
 
-  // ── Slider configuration ──────────────────────────────────────────────────
   const sliderConfig = useMemo(() => {
     if (!visProp || effectivePropMin === undefined || effectivePropMax === undefined) return null;
     const [propMin, propMax] = [effectivePropMin, effectivePropMax];
     const span = propMax - propMin;
 
-    // Convert normalised [0,1] back to domain values for the slider
     const domainLo = propMin + filters.visibility.range[0] * span;
     const domainHi = propMin + filters.visibility.range[1] * span;
 
@@ -94,11 +138,9 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
         max: propMax,
         step,
         value: [domainLo, domainHi] as [number, number],
-        // For dense stepped properties (>12 steps) suppress all mark labels to
-        // avoid overlap — the tooltip + min/max extremes below the slider are enough.
         marks: (visProp.steps ?? 0) > 12
           ? visProp.stepLabels?.reduce<Record<number, string>>((acc, _label, i) => {
-              acc[propMin + i * step] = ""; // dot only, no text
+              acc[propMin + i * step] = "";
               return acc;
             }, {})
           : visProp.stepLabels?.reduce<Record<number, string>>((acc, label, i) => {
@@ -113,7 +155,6 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
       };
     }
 
-    // Continuous
     return {
       min: propMin,
       max: propMax,
@@ -133,21 +174,22 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     ]);
   };
 
-  // ── Legend entries ────────────────────────────────────────────────────────
   const legendEntries = useMemo(() => {
     if (!colorProp) return [];
     return buildLegend(colorProp.key, allCategoricalValues[colorProp.key]);
   }, [colorProp, allCategoricalValues]);
 
   // ── Select option groups (shared helper) ─────────────────────────────────
-  const makeOptions = (props: typeof AL_PROPERTIES) => {
+  const makeOptions = (props: PropertyDefinition[], includeNone: boolean) => {
     const samplers = props.filter((p) => p.category === "sampler");
     const meta = props.filter((p) => p.category === "metadata");
     return (
       <>
-        <Option value={NONE}>
-          <span className="italic text-gray-400">None</span>
-        </Option>
+        {includeNone && (
+          <Option value={NONE}>
+            <span className="italic text-gray-400">None</span>
+          </Option>
+        )}
         {samplers.length > 0 && (
           <OptGroup label="Sampler Suite">
             {samplers.map((p) => (
@@ -170,96 +212,191 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     );
   };
 
+  // ── Render ───────────────────────────────────────────────────────────────
+  const showVisibility = phaseVisibilityMode !== "disabled";
+  const showColor = phaseColorMode !== "disabled";
+
+  if (!showVisibility && !showColor) return null;
+
   return (
     <div className="flex flex-col gap-4 px-4 py-3 border-b border-gray-100 bg-white">
       <div className="flex flex-wrap gap-6 items-start">
+        {showVisibility && (
+          <div className="flex flex-col gap-2 min-w-[200px] flex-1">
+            <div className="flex items-center gap-1.5">
+              <EyeOutlined className="text-gray-400 text-xs" />
+              <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
+                Visibility Filter {phaseVisibilityMode === "multi" ? "(combine)" : ""}
+              </span>
+            </div>
 
-        {/* ── Visibility Filter ─────────────────────────────────────────── */}
-        <div className="flex flex-col gap-2 min-w-[200px] flex-1">
-          <div className="flex items-center gap-1.5">
-            <EyeOutlined className="text-gray-400 text-xs" />
-            <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
-              Visibility Filter
-            </span>
+            {phaseVisibilityMode === "single" ? (
+              <>
+                <Select
+                  size="small"
+                  value={filters.visibility.propertyKey ?? NONE}
+                  onChange={(v: string) => onVisibilityKeyChange(v === NONE ? null : v)}
+                  style={{ width: "100%" }}
+                >
+                  {makeOptions(visibilityList, true)}
+                </Select>
+
+                {visProp && sliderConfig && (
+                  <div className="px-1 pt-1">
+                    <Slider
+                      range
+                      min={sliderConfig.min}
+                      max={sliderConfig.max}
+                      step={sliderConfig.step}
+                      value={sliderConfig.value}
+                      marks={sliderConfig.marks}
+                      onChange={handleSliderChange}
+                      tooltip={{ formatter: sliderConfig.tipFormatter }}
+                      styles={{
+                        track: { backgroundColor: "#3b82f6" },
+                        handle: { borderColor: "#3b82f6" },
+                      }}
+                    />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-gray-400 font-ibm-mono">
+                        {sliderConfig.tipFormatter(sliderConfig.min)}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-ibm-mono">
+                        {sliderConfig.tipFormatter(sliderConfig.max)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <MultiVisibilityControls
+                filters={filters}
+                visibilityList={visibilityList}
+                onMultiVisibilityChange={onMultiVisibilityChange}
+                onMultiVisibilityRangeChange={onMultiVisibilityRangeChange}
+              />
+            )}
           </div>
+        )}
 
-          <Select
-            size="small"
-            value={filters.visibility.propertyKey ?? NONE}
-            onChange={(v: string) => onVisibilityKeyChange(v === NONE ? null : v)}
-            style={{ width: "100%" }}
-          >
-            {makeOptions(visibilityProperties())}
-          </Select>
+        {showVisibility && showColor && (
+          <div className="hidden sm:block w-px bg-gray-100 self-stretch" />
+        )}
 
-          {/* Range slider — shown only when a property is selected */}
-          {visProp && sliderConfig && (
-            <div className="px-1 pt-1">
+        {showColor && (
+          <div className="flex flex-col gap-2 min-w-[200px] flex-1">
+            <div className="flex items-center gap-1.5">
+              <BgColorsOutlined className="text-gray-400 text-xs" />
+              <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
+                Color Filter
+              </span>
+            </div>
+
+            <Select
+              size="small"
+              value={filters.color.propertyKey ?? NONE}
+              onChange={(v: string) => onColorKeyChange(v === NONE ? null : v)}
+              style={{ width: "100%" }}
+            >
+              {makeOptions(colorList, true)}
+            </Select>
+
+            {colorProp && legendEntries.length > 0 && (
+              <div className="mt-1">
+                {colorProp.filterMode === "continuous" ? (
+                  <ContinuousLegendBar
+                    minLabel={legendEntries[0].label}
+                    maxLabel={legendEntries[legendEntries.length - 1].label}
+                  />
+                ) : (
+                  <DiscreteLegendChips entries={legendEntries} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Multi-property visibility sub-component ──────────────────────────────────
+
+interface MultiVisibilityControlsProps {
+  filters: ALFilterState;
+  visibilityList: PropertyDefinition[];
+  onMultiVisibilityChange?: (keys: string[]) => void;
+  onMultiVisibilityRangeChange?: (key: string, range: [number, number]) => void;
+}
+
+const MultiVisibilityControls: React.FC<MultiVisibilityControlsProps> = ({
+  filters,
+  visibilityList,
+  onMultiVisibilityChange,
+  onMultiVisibilityRangeChange,
+}) => {
+  const selectedKeys = filters.visibility.propertyKeys ?? [];
+  const ranges = filters.visibility.ranges ?? {};
+
+  return (
+    <>
+      <Select
+        size="small"
+        mode="multiple"
+        allowClear
+        placeholder="Select one or more properties"
+        value={selectedKeys}
+        onChange={(v: string[]) => onMultiVisibilityChange?.(v)}
+        style={{ width: "100%" }}
+      >
+        {visibilityList.map((p) => (
+          <Option key={p.key} value={p.key}>
+            {p.label}
+          </Option>
+        ))}
+      </Select>
+
+      <div className="flex flex-col gap-3 mt-2">
+        {selectedKeys.map((key) => {
+          const prop = getPropertyByKey(key);
+          if (!prop || !prop.range) return null;
+          const [pMin, pMax] = prop.range;
+          const span = pMax - pMin;
+          const [normLo, normHi] = ranges[key] ?? [0, 1];
+          const domainLo = pMin + normLo * span;
+          const domainHi = pMin + normHi * span;
+          return (
+            <div key={key} className="px-1">
+              <div className="flex justify-between mb-0.5">
+                <span className="text-[10px] text-gray-500 font-ibm-mono">{prop.label}</span>
+                <span className="text-[10px] text-gray-400 font-ibm-mono">
+                  {domainLo.toFixed(2)} – {domainHi.toFixed(2)}
+                </span>
+              </div>
               <Slider
                 range
-                min={sliderConfig.min}
-                max={sliderConfig.max}
-                step={sliderConfig.step}
-                value={sliderConfig.value}
-                marks={sliderConfig.marks}
-                onChange={handleSliderChange}
-                tooltip={{ formatter: sliderConfig.tipFormatter }}
+                min={pMin}
+                max={pMax}
+                step={(span) / 100}
+                value={[domainLo, domainHi]}
+                onChange={(vals: number[]) => {
+                  if (span === 0) return;
+                  onMultiVisibilityRangeChange?.(key, [
+                    (vals[0] - pMin) / span,
+                    (vals[1] - pMin) / span,
+                  ]);
+                }}
+                tooltip={{ formatter: (v?: number) => (v !== undefined ? v.toFixed(2) : "") }}
                 styles={{
                   track: { backgroundColor: "#3b82f6" },
                   handle: { borderColor: "#3b82f6" },
                 }}
               />
-              {/* Extreme labels only — no hardcoded property names */}
-              <div className="flex justify-between mt-1">
-                <span className="text-[10px] text-gray-400 font-ibm-mono">
-                  {sliderConfig.tipFormatter(sliderConfig.min)}
-                </span>
-                <span className="text-[10px] text-gray-400 font-ibm-mono">
-                  {sliderConfig.tipFormatter(sliderConfig.max)}
-                </span>
-              </div>
             </div>
-          )}
-        </div>
-
-        {/* Divider */}
-        <div className="hidden sm:block w-px bg-gray-100 self-stretch" />
-
-        {/* ── Color Filter ──────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-2 min-w-[200px] flex-1">
-          <div className="flex items-center gap-1.5">
-            <BgColorsOutlined className="text-gray-400 text-xs" />
-            <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
-              Color Filter
-            </span>
-          </div>
-
-          <Select
-            size="small"
-            value={filters.color.propertyKey ?? NONE}
-            onChange={(v: string) => onColorKeyChange(v === NONE ? null : v)}
-            style={{ width: "100%" }}
-          >
-            {makeOptions(colorProperties())}
-          </Select>
-
-          {/* Legend */}
-          {colorProp && legendEntries.length > 0 && (
-            <div className="mt-1">
-              {colorProp.filterMode === "continuous" ? (
-                <ContinuousLegendBar
-                  minLabel={legendEntries[0].label}
-                  maxLabel={legendEntries[legendEntries.length - 1].label}
-                />
-              ) : (
-                <DiscreteLegendChips entries={legendEntries} />
-              )}
-            </div>
-          )}
-        </div>
-
+          );
+        })}
       </div>
-    </div>
+    </>
   );
 };
 
@@ -311,3 +448,6 @@ const DiscreteLegendChips: React.FC<{ entries: LegendEntry[] }> = ({ entries }) 
     ))}
   </div>
 );
+
+// (Suppress unused import warning for AL_PROPERTIES — kept for future refactors)
+void AL_PROPERTIES;
