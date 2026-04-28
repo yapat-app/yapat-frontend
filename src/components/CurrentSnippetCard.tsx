@@ -29,14 +29,33 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   annotations,
   onPrevious,
   onNext,
+  onAddAnnotation: _onAddAnnotation,
   canGoPrevious,
   canGoNext,
 }) => {
   return (
     <Card className="flex flex-col mb-4 gap-1 shadow-md h-fit">
-      <div className="flex flex-1 gap-4  ">
+      {/* Existing Annotations - at top */}
+      {annotations.length > 0 && (
+        <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+          <h4 className="font-semibold mb-2 text-green-900 text-sm">
+            Existing Annotations ({annotations.length})
+          </h4>
+          <Space wrap size={[6, 6]}>
+            {annotations.map((ann) => (
+              <Tag key={ann.id} color="green" className="text-sm py-0.5 px-2">
+                {ann.resolved_name_snapshot}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+      )}
+
+      {/* Main content: snippet/audio (left) and scrollable label list (right) */}
+      <div className="flex gap-4">
+        {/* Snippet / Audio – natural height based on content */}
         <div className="w-[65%] flex flex-col">
-          <div className="flex justify-between items-start mb-4 h-fit ">
+          <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="text-xl font-semibold mb-1 font-ibm-sans">
                 Snippet #{snippet.id}
@@ -52,10 +71,10 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             </div>
             <div>
               <Tag
-                color={snippet.is_annotated ? "green" : "orange"}
+                color={annotations.length > 0 ? "green" : "orange"}
                 className="text-sm"
               >
-                {snippet.is_annotated ? "✓ Annotated" : "Not Annotated"}
+                {annotations.length > 0 ? "✓ Annotated" : "Not Annotated"}
               </Tag>
             </div>
           </div>

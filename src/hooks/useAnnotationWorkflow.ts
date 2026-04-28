@@ -4,7 +4,7 @@
  * Manages data fetching and state management for the annotation workflow
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   moveToNextSnippet,
@@ -68,7 +68,7 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
 
   useEffect(() => {
     dispatch(clearEmbedding());
-  });
+  }, [dispatch]);
 
   useEffect(() => {
     dispatch(getFeedHistory());
@@ -81,21 +81,34 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
     }
   }, [feedHistory]);
 
+  const lastToastKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (snippetsFetched && datasetId) {
-      message.success(
-        `${snippets.length} snippets feed generated  ${
-          datasetId
-            ? `for dataset# ${datasetId}`
-            : `from Feed# ${selectedFeedId}`
-        }`,
-      );
-    } else if (snippetsFetched && !datasetId) {
-      message.success(`Viewing Feed #${selectedFeedId}`);
-    } else if (snippets.length > 0) {
+    if (!snippetsFetched) return;
+
+    const toastKey = datasetId
+      ? `snippets-fetched-dataset-${datasetId}`
+      : `snippets-fetched-feed-${selectedFeedId ?? "unknown"}`;
+
+    // Avoid duplicate toasts (React StrictMode / effect re-runs).
+    if (lastToastKeyRef.current === toastKey) return;
+    lastToastKeyRef.current = toastKey;
+
+    if (datasetId) {
+      message.open({
+        key: toastKey,
+        type: "success",
+        content: `${snippets.length} snippets feed generated for dataset# ${datasetId}`,
+      });
       return;
     }
-  }, [snippetsFetched]);
+
+    message.open({
+      key: toastKey,
+      type: "success",
+      content: `Viewing Feed #${selectedFeedId}`,
+    });
+  }, [snippetsFetched, datasetId, selectedFeedId, snippets.length]);
 
   //Load annotations for current snippet
   useEffect(() => {

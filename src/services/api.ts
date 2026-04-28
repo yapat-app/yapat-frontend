@@ -35,8 +35,10 @@ import type {
   Conversation,
   AllLabelSpace,
   DatasetResponse,
+  FreezeLabelSpaceResponse,
   AvailableTaxonomies,
   SnippetSet,
+  Invitation,
 } from "../types";
 
 type AddToLabelSpaceResponse = {
@@ -341,7 +343,7 @@ export const customtaxonomyApi = {
    * Ask AI agent to suggest taxonomies for annotating
    */
 
-  startConversation: async (teamId: number): Promise<Conversation> => {
+  startConversation: async (teamId: any): Promise<Conversation> => {
     const response = await api.post("/api/taxonomy/chat/start", {
       team_id: teamId,
     });
@@ -359,7 +361,7 @@ export const customtaxonomyApi = {
     name: string;
     description: string;
     conversationId: number;
-  }): Promise<Conversation> => {
+  }): Promise<FreezeLabelSpaceResponse> => {
     const { name, description, conversationId } = params;
     const response = await api.post(
       `/api/taxonomy/chat/${conversationId}/freeze`,
@@ -499,10 +501,49 @@ export const datasetApi = {
 // ============================================================================
 
 export const teamApi = {
-  //Get single dataset by ID
-
   getAllTeamDatasets: async (): Promise<Dataset[]> => {
     const response = await api.get(`/api/teams/available-datasets`);
+    return response.data;
+  },
+
+  getTeamById: async (
+    teamId: string | number,
+  ): Promise<import("../types").Team> => {
+    const response = await api.get(`/api/teams/${teamId}`);
+    return response.data;
+  },
+
+  updateTeam: async (
+    teamId: string | number,
+    body: { name?: string; description?: string },
+  ): Promise<import("../types").Team> => {
+    const response = await api.patch(`/api/teams/${teamId}`, body);
+    return response.data;
+  },
+
+  deleteTeam: async (teamId: string | number): Promise<void> => {
+    await api.delete(`/api/teams/${teamId}`);
+  },
+
+  getTeamMembers: async (
+    teamId: string | number,
+  ): Promise<import("../types").TeamMember[]> => {
+    const response = await api.get(`/api/teams/${teamId}/members`);
+    return response.data;
+  },
+
+  removeMember: async (
+    teamId: string | number,
+    userId: number,
+  ): Promise<void> => {
+    await api.delete(`/api/teams/${teamId}/members/${userId}`);
+  },
+
+  createInvitation: async (body: any): Promise<Invitation> => {
+    const response = await api.post(
+      `/api/teams/${body.teamId}/invitations`,
+      body,
+    );
     return response.data;
   },
 };
@@ -565,8 +606,32 @@ export const taskApi = {
 //Extract error message from API error response
 
 export const getErrorMessage = (error: any): string => {
-  if (error.response?.data?.detail) {
-    return error.response.data.detail;
+  const detail = error.response?.data?.detail;
+  if (detail) {
+    // FastAPI validation errors (422) often look like:
+    // { detail: [{ loc: ["body","prompt"], msg: "...", type: "..." }, ...] }
+    if (Array.isArray(detail)) {
+      const parts = detail
+        .map((d: any) => {
+          const loc = Array.isArray(d?.loc) ? d.loc.join(".") : undefined;
+          let msg = typeof d?.msg === "string" ? d.msg : undefined;
+
+          // Pydantic sometimes prefixes custom ValueError messages with "Value error, "
+          if (msg?.startsWith("Value error, ")) {
+            msg = msg.slice("Value error, ".length).trim();
+          }
+
+          // For body field validation errors, prefer showing just the message
+          // (e.g. "Password must be at least 8 characters long")
+          if (msg && loc?.startsWith("body.")) return msg;
+
+          if (loc && msg) return `${loc}: ${msg}`;
+          return msg || loc;
+        })
+        .filter(Boolean);
+      if (parts.length > 0) return parts.join("\n");
+    }
+    if (typeof detail === "string") return detail;
   }
   if (error.message) {
     return error.message;

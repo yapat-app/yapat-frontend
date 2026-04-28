@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   Input,
-  List,
   Space,
   Tag,
   Typography,
@@ -11,6 +10,8 @@ import {
   message,
   Modal,
   Divider,
+  Collapse,
+  Badge,
 } from "antd";
 import {
   MessageOutlined,
@@ -18,6 +19,10 @@ import {
   SendOutlined,
   RobotOutlined,
   UserOutlined,
+  InfoCircleOutlined,
+  LinkOutlined,
+  EnvironmentOutlined,
+  ExperimentOutlined,
 } from "@ant-design/icons";
 import type { InputRef } from "antd";
 import {
@@ -28,34 +33,85 @@ import {
   resetSentMessage,
   resetAddLabel,
   getLabelSpace,
-  reset,
+  clearConversationFreezed,
   freezeConversation,
-  removeLabels,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import type { Message } from "../types";
-
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
 
-const TaxonomyChatbot: React.FC = () => {
+const DEFAULT_SYSTEM_MESSAGE =
+  "I am configured for audio data in the domain of bioacoustics.\nThis session will define the label space for sound event detection.\nWhat target sound categories do you intend to include in your annotation schema?";
+
+interface TaxonomyNode {
+  id: string;
+  name: string;
+  rank: string;
+  scientific_name: string;
+  metadata: {
+    iri: string;
+    tool: string;
+    score: null | number;
+    source: string;
+    description: null | string;
+  };
+}
+
+interface MessageMetadata {
+  taxonomy_data?: {
+    nodes: TaxonomyNode[];
+    metadata?: {
+      model: string;
+      prompt: string;
+      source: string;
+      tools_called: string[];
+      total_species: number;
+    };
+  };
+  generation_metadata?: {
+    model: string;
+    prompt: string;
+    server: string;
+  };
+  action?: string;
+  item_ids?: string[];
+}
+
+interface ConversationMessage {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  message_metadata: MessageMetadata | null;
+}
+
+interface TaxonomyChatbotProps {
+  teamId?: number;
+}
+
+const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   const inputRef = useRef<InputRef>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
+  const sentMessageRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(0);
   const dispatch = useAppDispatch();
   const {
     conversation,
     messageLoading,
     messageSent,
-    labelSpace,
     labelAdded,
-    labelRemoved,
+    lastAddWasDuplicates,
     conversationFreezed,
+    error,
   } = useAppSelector((state) => state.customTaxonomy);
+  const { user } = useAppSelector((state) => state.auth);
 
   const handleFreeze = () => {
     if (conversation?.id)
@@ -71,36 +127,66 @@ const TaxonomyChatbot: React.FC = () => {
 
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
-    // Start a new conversation if there isn't one, or if it's frozen/cancelled
-    if (
-      conversation &&
-      (conversation.is_frozen === true || conversation.status === "cancelled")
-    ) {
-      dispatch(startNewConversation(1));
-    } else if (!conversation) {
-      dispatch(startNewConversation(1));
+    // Prefer an explicit teamId from parent (e.g. admin selecting a target team),
+    // fall back to the user's first team membership.
+    const resolvedTeamId =
+      teamId ?? (user?.team_ids?.length ? user.team_ids[0] : null);
+    const shouldStartNew =
+      !conversation ||
+      conversation.is_frozen === true ||
+      conversation.status === "cancelled" ||
+      (conversation.team_id ?? null) !== resolvedTeamId;
+
+    if (shouldStartNew) {
+      dispatch(startNewConversation(resolvedTeamId));
     }
 
     // Optional cleanup when component unmounts
     return () => {
-      // You can add cleanup logic here if needed
-      // For example, cancel conversation on unmount:
-      // if (conversation?.id) {
-      //   dispatch(cancelConversation(conversation.id));
-      // }
+      // cleanup on unmount if needed
     };
-  }, []); // Run once on mount
+  }, [
+    dispatch,
+    teamId,
+    user?.team_ids,
+    conversation?.id,
+    conversation?.is_frozen,
+    conversation?.status,
+    conversation?.team_id,
+  ]); // Re-run when selection/user teams/conversation state changes
 
-  // ✅ Fetch conversation updates periodically
+  // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {
-    if (conversation?.id) {
-      dispatch(getConversation(conversation.id));
+    if (pendingMessage) {
+      setTimeout(
+        () =>
+          sentMessageRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        50,
+      );
     }
-  }, [conversation?.id]);
+  }, [pendingMessage]);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Scroll to the new message (sent prompt or assistant response) when message count increases
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const messages = conversation?.messages ?? [];
+    const currentCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+
+    // Scroll to new message (sent prompt or new assistant response) when message count increases
+    if (currentCount > prevCount && currentCount > 0) {
+      setTimeout(
+        () =>
+          lastMessageRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          }),
+        50,
+      );
+    }
+    prevMessageCountRef.current = currentCount;
   }, [conversation?.messages]);
 
   // Focus input when component mounts
@@ -111,6 +197,7 @@ const TaxonomyChatbot: React.FC = () => {
   // handle message Success Popup
   useEffect(() => {
     if (messageSent) {
+      setPendingMessage(null);
       message.success("Message Sent Successfully", undefined, () => {
         dispatch(resetSentMessage());
       });
@@ -121,30 +208,42 @@ const TaxonomyChatbot: React.FC = () => {
   }, [messageSent]);
 
   useEffect(() => {
-    if (labelAdded) {
-      message.success(`Label Added`, undefined, () => {
-        dispatch(resetAddLabel());
-      });
-
-      if (conversation?.id) {
-        dispatch(getConversation(conversation.id));
-        dispatch(getLabelSpace(conversation.id));
-      }
+    if (error) {
+      message.error(error);
     }
-  }, [labelAdded]);
+  }, [error]);
 
   useEffect(() => {
-    if (labelRemoved) {
-      message.success(`Label Removed`, undefined, () => {
-        dispatch(reset());
-      });
+    if (labelAdded) {
+      if (lastAddWasDuplicates) {
+        message.info("Already in label space", undefined, () => {
+          dispatch(resetAddLabel());
+        });
+      } else {
+        message.success("Label Added", undefined, () => {
+          dispatch(resetAddLabel());
+        });
+      }
 
       if (conversation?.id) {
         dispatch(getConversation(conversation.id));
         dispatch(getLabelSpace(conversation.id));
       }
     }
-  }, [labelRemoved]);
+  }, [labelAdded, lastAddWasDuplicates]);
+
+  // useEffect(() => {
+  //   if (labelRemoved) {
+  //     message.success(`Label Removed`, undefined, () => {
+  //       dispatch(reset());
+  //     });
+
+  //     if (conversation?.id) {
+  //       dispatch(getConversation(conversation.id));
+  //       dispatch(getLabelSpace(conversation.id));
+  //     }
+  //   }
+  // }, [labelRemoved]);
 
   useEffect(() => {
     if (conversationFreezed) {
@@ -152,7 +251,7 @@ const TaxonomyChatbot: React.FC = () => {
         `Label space Frozen, custom taxonomies can be viewed in the annotation panel`,
         undefined,
         () => {
-          dispatch(reset());
+          dispatch(clearConversationFreezed());
         },
       );
     }
@@ -162,6 +261,11 @@ const TaxonomyChatbot: React.FC = () => {
     if (!inputValue.trim() || messageLoading || !conversation?.id) return;
 
     const promptText = inputValue.trim();
+    if (promptText.length < 10) {
+      message.warning("Please enter at least 10 characters.");
+      return;
+    }
+    setPendingMessage(promptText);
     setInputValue("");
 
     dispatch(
@@ -195,8 +299,7 @@ const TaxonomyChatbot: React.FC = () => {
         }),
       ).unwrap();
     } catch (error) {
-      message.error("Failed to add to label space. Please try again.");
-      console.error("API Error:", error);
+      console.log(error);
     }
   };
 
@@ -230,7 +333,208 @@ const TaxonomyChatbot: React.FC = () => {
     }
   };
 
-  const renderMessage = (msg: Message) => {
+  // Helper to clean and extract summary from response
+  const extractSummary = (content: string): string => {
+    // Remove markdown formatting and extract a clean summary
+    const lines = content.split("\n");
+    const summaryLines: string[] = [];
+
+    for (const line of lines) {
+      const cleaned = line
+        .replace(/^#{1,6}\s+/, "") // Remove markdown headers
+        .replace(/\*\*/g, "") // Remove bold markers
+        .trim();
+
+      // Skip technical lines with IDs, IRIs, etc
+      if (
+        cleaned &&
+        !cleaned.startsWith("**") &&
+        !cleaned.includes("ID:**") &&
+        !cleaned.includes("IRI:**") &&
+        !cleaned.includes("Source:**") &&
+        !cleaned.includes("Description:**") &&
+        !cleaned.includes("Feel free") &&
+        cleaned.length > 10
+      ) {
+        summaryLines.push(cleaned);
+        if (summaryLines.length >= 2) break; // Get first 2 meaningful lines
+      }
+    }
+
+    return (
+      summaryLines.join(" ") || "Found relevant candidates for your query."
+    );
+  };
+
+  const getSourceColor = (source: string): string => {
+    const colors: Record<string, string> = {
+      gbif: "#1890ff",
+      envo: "#52c41a",
+      wikipedia: "#fa8c16",
+      ols: "#722ed1",
+      local: "#13c2c2",
+    };
+    return colors[source.toLowerCase()] || "#1890ff";
+  };
+
+  const getSourceIcon = (source: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      gbif: <ExperimentOutlined />,
+      envo: <EnvironmentOutlined />,
+      wikipedia: <InfoCircleOutlined />,
+    };
+    return icons[source.toLowerCase()] || <InfoCircleOutlined />;
+  };
+
+  const renderTaxonomyCard = (
+    item: TaxonomyNode,
+    index: number,
+    messageId: number,
+  ) => {
+    const collapseItems = [
+      {
+        key: "1",
+        label: (
+          <Space size={4}>
+            <InfoCircleOutlined style={{ fontSize: 12 }} />
+            <span style={{ fontSize: 12 }}>Details</span>
+          </Space>
+        ),
+        children: (
+          <Space direction="vertical" size={8} style={{ width: "100%" }}>
+            {item.metadata.description && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Description:
+                </Text>
+                <Paragraph
+                  style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }}
+                  ellipsis={{ rows: 3, expandable: true, symbol: "more" }}
+                >
+                  {item.metadata.description}
+                </Paragraph>
+              </div>
+            )}
+            {item.metadata.iri && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Reference:
+                </Text>
+                <div style={{ marginTop: 4 }}>
+                  <a
+                    href={item.metadata.iri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 11, wordBreak: "break-all" }}
+                  >
+                    <LinkOutlined /> {item.metadata.iri}
+                  </a>
+                </div>
+              </div>
+            )}
+            {item.id && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  ID:{" "}
+                </Text>
+                <Text code style={{ fontSize: 11 }}>
+                  {item.id}
+                </Text>
+              </div>
+            )}
+            {item.metadata.score && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Confidence:{" "}
+                </Text>
+                <Tag color="blue" style={{ fontSize: 11 }}>
+                  {(item.metadata.score * 100).toFixed(0)}%
+                </Tag>
+              </div>
+            )}
+          </Space>
+        ),
+      },
+    ];
+
+    return (
+      <Card
+        key={index}
+        size="small"
+        style={{
+          marginBottom: 12,
+          borderRadius: 8,
+          border: "1px solid #f0f0f0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+        }}
+        bodyStyle={{ padding: "12px 16px" }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
+          <Space direction="vertical" size={6} style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Text strong style={{ fontSize: 15, color: "#262626" }}>
+                {item.name}
+              </Text>
+              <Badge
+                count={getSourceIcon(item.metadata.source)}
+                style={{
+                  backgroundColor: getSourceColor(item.metadata.source),
+                  fontSize: 10,
+                }}
+              />
+            </div>
+
+            {item.scientific_name && item.scientific_name !== item.name && (
+              <Text italic type="secondary" style={{ fontSize: 13 }}>
+                {item.scientific_name}
+              </Text>
+            )}
+
+            <Space size={4} wrap style={{ marginTop: 4 }}>
+              <Tag
+                color={getSourceColor(item.metadata.source)}
+                style={{ fontSize: 11, margin: 0 }}
+              >
+                {item.metadata.source.toUpperCase()}
+              </Tag>
+              {item.rank && (
+                <Tag color="default" style={{ fontSize: 11, margin: 0 }}>
+                  {item.rank}
+                </Tag>
+              )}
+            </Space>
+
+            {(item.metadata.description || item.metadata.iri || item.id) && (
+              <Collapse
+                ghost
+                size="small"
+                items={collapseItems}
+                style={{ marginTop: 4 }}
+              />
+            )}
+          </Space>
+
+          <Button
+            type="primary"
+            size="small"
+            icon={<CheckOutlined />}
+            onClick={() => handleAddSingleTaxonomy(messageId, index)}
+            style={{ marginLeft: 12, flexShrink: 0 }}
+          >
+            Add
+          </Button>
+        </div>
+      </Card>
+    );
+  };
+
+  const renderMessage = (msg: ConversationMessage) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
@@ -267,6 +571,7 @@ const TaxonomyChatbot: React.FC = () => {
 
     if (msg.role === "assistant") {
       const taxonomies = msg.message_metadata?.taxonomy_data?.nodes || [];
+      const summary = extractSummary(msg.content);
 
       return (
         <div style={{ display: "flex", gap: 12 }}>
@@ -295,11 +600,19 @@ const TaxonomyChatbot: React.FC = () => {
               flex: 1,
             }}
           >
-            <Text style={{ fontSize: 15 }}>{msg.content}</Text>
+            {/* Clean summary instead of raw content */}
+            <Space direction="vertical" size={4} style={{ width: "100%" }}>
+              <Text style={{ fontSize: 15, lineHeight: 1.6 }}>{summary}</Text>
+              {taxonomies.length > 0 && (
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  Found {taxonomies.length} relevant candidates
+                </Text>
+              )}
+            </Space>
 
             {taxonomies.length > 0 && (
               <div style={{ marginTop: 16 }}>
-                <Divider style={{ margin: "16px 0" }} />
+                <Divider style={{ margin: "16px 0 12px 0" }} />
                 <div
                   style={{
                     display: "flex",
@@ -308,9 +621,15 @@ const TaxonomyChatbot: React.FC = () => {
                     marginBottom: 12,
                   }}
                 >
-                  <Text strong style={{ fontSize: 14, color: "#666" }}>
-                    Suggested Taxonomies ({taxonomies.length}):
-                  </Text>
+                  <Space>
+                    <Text strong style={{ fontSize: 14, color: "#262626" }}>
+                      Suggested Concepts
+                    </Text>
+                    <Badge
+                      count={taxonomies.length}
+                      style={{ backgroundColor: "#52c41a" }}
+                    />
+                  </Space>
                   <Button
                     type="primary"
                     size="small"
@@ -322,46 +641,12 @@ const TaxonomyChatbot: React.FC = () => {
                     Add All
                   </Button>
                 </div>
-                <List
-                  size="small"
-                  dataSource={taxonomies}
-                  style={{ marginTop: 12 }}
-                  renderItem={(item, index) => (
-                    <List.Item
-                      style={{
-                        padding: "12px 0",
-                        border: "none",
-                      }}
-                      actions={[
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<CheckOutlined />}
-                          onClick={() => handleAddSingleTaxonomy(msg.id, index)}
-                        >
-                          Add
-                        </Button>,
-                      ]}
-                    >
-                      <Space direction="vertical" size={4} style={{ flex: 1 }}>
-                        <Text strong style={{ fontSize: 15 }}>
-                          {item.name}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 13 }}>
-                          {item.scientific_name}
-                        </Text>
-                        <Space size={4} wrap>
-                          <Tag color="blue" style={{ fontSize: 11 }}>
-                            {item.id}
-                          </Tag>
-                          <Tag color="green" style={{ fontSize: 11 }}>
-                            {item.metadata.source}
-                          </Tag>
-                        </Space>
-                      </Space>
-                    </List.Item>
+
+                <div>
+                  {taxonomies.map((item, index) =>
+                    renderTaxonomyCard(item, index, msg.id),
                   )}
-                />
+                </div>
               </div>
             )}
           </div>
@@ -374,7 +659,6 @@ const TaxonomyChatbot: React.FC = () => {
 
   return (
     <>
-      {/* Freeze Modal - Separate from main chat UI */}
       <Modal
         title="Freeze label space"
         centered
@@ -429,33 +713,86 @@ const TaxonomyChatbot: React.FC = () => {
         >
           {/* Header */}
           <div
+            className="gap-2 flex items-center"
             style={{
               padding: "15px 20px",
-              background: "#1990FF",
+              background: "#F7FAFC",
               color: "white",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
             }}
           >
-            <Space>
-              <MessageOutlined style={{ fontSize: 22 }} />
-              <Text strong style={{ color: "white", fontSize: 12 }}>
-                Taxonomy Assistant
-              </Text>
-            </Space>
+            <MessageOutlined style={{ color: "#4A709C", fontSize: 24 }} />
+            <Text
+              strong
+              className="font-ibm-sans!"
+              style={{ color: "#4A709C", fontSize: 14 }}
+            >
+              Taxonomy Assistant
+            </Text>
           </div>
 
-          {/* Messages Area */}
           <div
+            ref={messagesContainerRef}
             style={{
               overflowY: "auto",
-              height: "70%",
+              height: "98%",
               padding: "24px",
               background: "#f5f5f5",
             }}
           >
-            {!conversation?.messages || conversation.messages.length === 0 ? (
+            {/* Default system message */}
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  background: "#F7FAFC",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "white",
+                  flexShrink: 0,
+                }}
+              >
+                <InfoCircleOutlined style={{ color: "#4A709C" }} />
+              </div>
+              <div
+                style={{
+                  background: "#F7FAFC",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid #4A709C",
+                  maxWidth: "80%",
+                }}
+              >
+                <Text
+                  className="font-ibm-sans!"
+                  style={{
+                    fontSize: 14,
+                    color: "#4A709C",
+                    whiteSpace: "pre-line",
+                  }}
+                >
+                  {DEFAULT_SYSTEM_MESSAGE}
+                </Text>
+                <Paragraph
+                  className="font-ibm-sans!"
+                  type="secondary"
+                  style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
+                >
+                  Describe what you want to annotate below.
+                </Paragraph>
+              </div>
+            </div>
+
+            {(!conversation?.messages || conversation.messages.length === 0) &&
+            !pendingMessage ? (
               <div
                 className="flex flex-col justify-center items-center"
                 style={{
@@ -473,16 +810,35 @@ const TaxonomyChatbot: React.FC = () => {
                   annotations.
                 </Paragraph>
                 <Paragraph type="secondary" style={{ fontSize: 11 }}>
-                  Example: "suggest me taxonomies to annotate birds"
+                  Example: "I want to annotate Panthera leo"
                 </Paragraph>
               </div>
             ) : (
               <>
-                {conversation.messages.map((msg) => (
-                  <div key={msg.id} style={{ marginBottom: 20 }}>
+                {conversation?.messages?.map((msg, index) => (
+                  <div
+                    key={msg.id}
+                    ref={
+                      index === (conversation?.messages?.length ?? 0) - 1
+                        ? lastMessageRef
+                        : undefined
+                    }
+                    style={{ marginBottom: 20 }}
+                  >
                     {renderMessage(msg)}
                   </div>
                 ))}
+                {pendingMessage && conversation?.id && (
+                  <div ref={sentMessageRef} style={{ marginBottom: 20 }}>
+                    {renderMessage({
+                      id: -1,
+                      conversation_id: conversation.id,
+                      role: "user",
+                      content: pendingMessage,
+                      message_metadata: null,
+                    })}
+                  </div>
+                )}
               </>
             )}
 
@@ -509,61 +865,7 @@ const TaxonomyChatbot: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <div ref={messagesEndRef} />
           </div>
-
-          {/* Label Space */}
-          {labelSpace && labelSpace.length > 0 && (
-            <div
-              style={{
-                padding: "16px 24px",
-                background: "white",
-                borderTop: "1px solid #f0f0f0",
-                maxHeight: 220,
-                overflowY: "auto",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 12,
-                }}
-              >
-                <Text strong style={{ fontSize: 15 }}>
-                  Label Space ({labelSpace.length})
-                </Text>
-                <Space size="small">
-                  <Button
-                    size="middle"
-                    type="primary"
-                    onClick={() => setOpenFreeze(true)}
-                  >
-                    Add To label space list
-                  </Button>
-                </Space>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {labelSpace.map((item) => (
-                  <Tag
-                    key={item.id}
-                    closable
-                    onClose={() => handleRemoveFromLabelSpace(item.id)}
-                    color="purple"
-                    style={{
-                      marginBottom: 4,
-                      padding: "4px 10px",
-                      fontSize: 13,
-                    }}
-                  >
-                    {item.name} ({item.taxon_id})
-                  </Tag>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Input Area */}
           <div
@@ -579,7 +881,7 @@ const TaxonomyChatbot: React.FC = () => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Example: suggest me taxonomies to annotate birds..."
+                placeholder="I want to annotate Panthera leo"
                 autoSize={{ minRows: 1.5, maxRows: 4 }}
                 disabled={messageLoading}
                 style={{

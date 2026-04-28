@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
 import type { User } from "../../types";
+import { getErrorMessage } from "../../services/api";
 
 export interface Auth {
   name: string;
@@ -43,8 +44,8 @@ export const loginAsync = createAsyncThunk<
     try {
       const response = await api.post(`/api/auth/login`, body);
       return response.data;
-    } catch (error: JSON | any) {
-      return thunkApi.rejectWithValue(error.response.data);
+    } catch (error: any) {
+      return thunkApi.rejectWithValue(getErrorMessage(error));
     }
   },
 );
@@ -55,7 +56,7 @@ export const registerAsync = createAsyncThunk<
     username: string;
     password: string;
     role: string;
-    invitation_token: string | null;
+    team_invitation_token: string | null;
   } // argument type
 >(
   // argument passed in
@@ -64,8 +65,8 @@ export const registerAsync = createAsyncThunk<
     try {
       const response = await api.post(`/api/auth/register`, body);
       return response.data;
-    } catch (error: JSON | any) {
-      return thunkApi.rejectWithValue(error.response.data);
+    } catch (error: any) {
+      return thunkApi.rejectWithValue(getErrorMessage(error));
     }
   },
 );
@@ -100,6 +101,10 @@ export const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    resetAuth: (state) => {
+      state.loginSuccess = false;
+      state.registerSuccess = false;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -125,7 +130,7 @@ export const authSlice = createSlice({
       .addCase(loginAsync.rejected, (state, action: any) => {
         state.loginLoading = false;
         state.status = "failed";
-        state.error = action.payload.detail ?? "Unknown error";
+        state.error = action.payload ?? "Unknown error";
         state.loginSuccess = false;
       })
       .addCase(registerAsync.pending, (state) => {
@@ -144,12 +149,15 @@ export const authSlice = createSlice({
       .addCase(registerAsync.rejected, (state, action) => {
         state.loginLoading = false;
         state.status = "failed";
-        state.error = action.error.message ?? "Unknown error";
+        state.error =
+          (action.payload as string | undefined) ??
+          action.error.message ??
+          "Unknown error";
         state.registerSuccess = false;
       });
   },
 });
 
 // Export actions and reducer
-export const { logout, clearError } = authSlice.actions;
+export const { logout, clearError, resetAuth } = authSlice.actions;
 export default authSlice.reducer;

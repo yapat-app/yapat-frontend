@@ -11,7 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /* ----------------------------------
  Component
@@ -38,13 +38,12 @@ export const FeedHistory: React.FC = () => {
     <div>
       <NavigationBar />
       <div className="w-full h-full flex justify-center">
-        <div className="w-[60%]">
+        <div className="w-[85%]">
           <section style={{ padding: "24px" }}>
-            <Title level={2}>Feed History</Title>
-            <Text type="secondary">
+            <h1 className="text-2xl font-bold font-ibm-mono">Feed History</h1>
+            <p className="sub_description_text">
               Review previously generated feeds and their configuration.
-            </Text>
-
+            </p>
             <div
               className="flex flex-col gap-5 max-h-[70vh] overflow-auto"
               style={{ marginTop: 24 }}

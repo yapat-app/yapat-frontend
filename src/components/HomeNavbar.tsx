@@ -3,11 +3,11 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser } from "../redux/features/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
+import DFKI_logo from "../assets/react.svg";
 
 // import React from "react";
 
-export const HomeNavBar = () => {
+export const HomeNavbar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
   const { accessToken } = useAppSelector((state) => state.auth);
@@ -20,7 +20,7 @@ export const HomeNavBar = () => {
     if (accessToken) {
       dispatch(getLoggedInUser());
     }
-  }, [accessToken, dispatch]);
+  }, [accessToken]);
   return (
     <div className="flex w-full items-center justify-between py-2  px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
       <div>
@@ -38,7 +38,7 @@ export const HomeNavBar = () => {
         <div id="orgLogos" className="flex gap-4 items-center">
           <Button
             onClick={() => {
-              navigator("/");
+              navigator("/login");
             }}
             // asChild
             className="bg-primary hover:bg-primary/90 text-primary-foreground"

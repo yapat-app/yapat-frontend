@@ -86,6 +86,7 @@ export interface AnnotationCreate {
   snippet_id: number;
   species_name?: string; // User can type species name
   taxon_id?: string; // Or provide taxon_id directly
+  display_name?: string; // Human-readable name for wiki/envo/ols (e.g. from Taxonomy Assistant)
   extra_metadata?: Record<string, any>;
 }
 
@@ -191,8 +192,18 @@ export interface LabelSpaceItem {
   id: string;
   name: string;
   scientific_name: string;
+  canonical_name: string;
   taxon_id: string;
-  metadata: Metadata;
+  metadata: {
+    iri: string;
+    rank: string;
+    tool: string;
+    score: null | number;
+    family: null | string;
+    source: string;
+    kingdom: null | string;
+    description: null | string;
+  };
   added_at: string;
 }
 
@@ -221,6 +232,19 @@ export interface Conversation {
   created_at: string; // Use Date if you'll parse it
   updated_at: string; // Use Date if you'll parse it
   messages: Message[] | [];
+}
+
+/** Response from POST /chat/{id}/freeze */
+export interface FreezeLabelSpaceResponse {
+  conversation: Conversation;
+  taxonomy: unknown;
+}
+
+/** Response from POST /chat/{id}/add (add to label space) */
+export interface AddToLabelSpaceResponse {
+  conversation: Conversation;
+  added_items: LabelSpaceItem[];
+  skipped_count: number;
 }
 
 export interface MessageResponse {
@@ -330,6 +354,28 @@ export interface RecordingCreate {
 }
 
 // ============================================================================
+// Team Types
+// ============================================================================
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  is_ready: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TeamMember {
+  membership_id: number;
+  user_id: number;
+  username: string;
+  full_name?: string;
+  role: "owner" | "user";
+  joined_at: string;
+}
+
+// ============================================================================
 // Dataset Types
 // ============================================================================
 
@@ -377,6 +423,23 @@ export interface DatasetResponse {
 }
 
 // ============================================================================
+// Invitations Types
+// ============================================================================
+
+export interface Invitation {
+  id: number;
+  team_id: number;
+  invited_by: number;
+  token: string;
+  target_role: string;
+  expires_at: string;
+  is_active: boolean;
+  max_uses: number;
+  used_count: number;
+  created_at: string;
+}
+
+// ============================================================================
 // User Types
 // ============================================================================
 
@@ -389,6 +452,7 @@ export interface User {
   full_name?: string;
   is_active?: boolean;
   accessToken?: string;
+  team_ids?: number[];
 }
 
 // ============================================================================

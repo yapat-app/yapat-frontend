@@ -19,7 +19,7 @@ export const AudioPlayerPlaceholder: React.FC = () => {
   }, [currentSnippet?.id]);
 
   return (
-    <div className=" from-blue-50 to-indigo-50 rounded-lg mb-4 text-center  border-blue-200 ">
+    <div className=" from-blue-50 to-indigo-50 rounded-lg  text-center  border-blue-200  w-full">
       {currentSnippetAudio ? (
         <>
           <SpectrogramPlayer
@@ -29,6 +29,7 @@ export const AudioPlayerPlaceholder: React.FC = () => {
             specHeight={380}
             navHeight={60}
             dark={false}
+            specWidth={700}
             navigator={false} //  hide zoom / navigator UI
             settings={false} // settings
             colormap="viridis"
@@ -44,7 +45,6 @@ export const AudioPlayerPlaceholder: React.FC = () => {
             // onSuccess={handleAnnotationSuccess}
           />
         )} */}
-        <TaxonomyAssistant />
       </div>
     </div>
   );

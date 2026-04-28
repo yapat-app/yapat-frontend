@@ -38,6 +38,7 @@ import {
   resetAddLabel,
   getLabelSpace,
   reset,
+  clearConversationFreezed,
   freezeConversation,
   removeLabels,
 } from "../redux/features/customTaxonomySlice";
@@ -52,11 +53,15 @@ interface AIAssistantTaxonomyProps {
   onClear?: () => void;
 }
 
-const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
+const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
+  onExport: _onExport,
+  onClear,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -84,6 +89,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
     labelRemoved,
     conversationFreezed,
   } = useAppSelector((state) => state.customTaxonomy);
+  const { user } = useAppSelector((state) => state.auth);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -164,7 +170,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
         `Label space Frozen, custom taxonomies can be viewed in the annotation panel`,
         undefined,
         () => {
-          dispatch(reset());
+          dispatch(clearConversationFreezed());
         },
       );
       handleClose();
@@ -177,9 +183,14 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
       conversation &&
       (conversation.is_frozen === true || conversation.status === "cancelled")
     ) {
-      dispatch(startNewConversation(1));
+      console.log(user?.team_ids);
+      dispatch(
+        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+      );
     } else if (!conversation) {
-      dispatch(startNewConversation(1));
+      dispatch(
+        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+      );
     }
   };
 
@@ -282,7 +293,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
     dispatch(
       removeLabels({
         conversationId: conversation.id,
-        itemId,
+        itemId: typeof itemId === "string" ? Number(itemId) : itemId,
       }),
     );
   };
@@ -294,7 +305,18 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({ onClear }) => {
     }
   };
 
-  const renderMessage = (msg: Message) => {
+  const renderMessage = (
+    msg:
+      | ConversationMessage
+      | {
+          id: number;
+          role: string;
+          content: string;
+          message_metadata?: {
+            taxonomy_data?: { nodes: TaxonomyNode[] };
+          } | null;
+        },
+  ) => {
     if (msg.role === "user") {
       return (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>

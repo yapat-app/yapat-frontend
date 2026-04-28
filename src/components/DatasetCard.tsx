@@ -49,9 +49,8 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     disabled={d.annotated_snippets < 1}
                   />
                 )}
-                {user && user.role === "admin" && (
-                  <GenerateEmbeddings dataset={dataset} />
-                )}
+                <GenerateEmbeddings dataset={dataset} />
+
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
                 <Button
                   icon={<ThunderboltOutlined />}

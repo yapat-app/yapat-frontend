@@ -7,6 +7,7 @@ import {
   clearError,
   loginAsync,
   registerAsync,
+  resetAuth,
 } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
@@ -15,7 +16,9 @@ export const Login = () => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitationToken = searchParams.get("invitation_token");
+  const invitationToken = searchParams.get("token");
+  const targetRole = searchParams.get("target_role");
+
   const { loginSuccess, registerSuccess, loginLoading, error } = useAppSelector(
     (state: any) => state.auth,
   );
@@ -24,10 +27,16 @@ export const Login = () => {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
 
+  const normalizeRole = (r: string | null | undefined) => {
+    if (!r) return "";
+    if (r === "owner") return "team_owner";
+    return r;
+  };
+
   useEffect(() => {
     if (invitationToken) {
-      console.log("invitationToken", invitationToken);
-      setRole("team_owner");
+      console.log("invitationToken", invitationToken, targetRole);
+      setRole(normalizeRole(targetRole) || "user");
     }
   }, [invitationToken]);
 
@@ -36,7 +45,10 @@ export const Login = () => {
       navigator("/datasets");
     }
     if (registerSuccess) {
-      navigator("/");
+      navigator("/login");
+      setRole("");
+      message.success("Registration successful! Try logging in.");
+      dispatch(resetAuth());
     }
   }, [loginSuccess, registerSuccess]);
 
@@ -74,7 +86,7 @@ export const Login = () => {
         username: username,
         password: password,
         role: role,
-        invitation_token: invitationToken,
+        team_invitation_token: invitationToken,
       }),
     );
   };
@@ -109,7 +121,7 @@ export const Login = () => {
           </div>
           <div>
             <p className=" font-ibm-sans input_heading_text">Password</p>
-            <Input
+            <Input.Password
               style={{
                 height: "fit-content",
                 flex: 1,
@@ -121,10 +133,10 @@ export const Login = () => {
               }}
               name="password"
               id="password"
-              type="password"
               value={password}
               placeholder={"Enter Password"}
               onChange={onValueChange}
+              visibilityToggle
               // onChange={onValidationChange}
             />
           </div>

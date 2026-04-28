@@ -247,8 +247,6 @@ export const GenerateFeedModal = ({
             datasetEmbeddings &&
             datasetEmbeddings.length === 0 &&
             !embeddingCreated && (
-              // !embeddingCreated &&
-              // feedMethod === "similarity" &&
               <div>
                 <Form layout="vertical">
                   <Form.Item

@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
 import type { Dataset, ExportAnnotation, DatasetResponse } from "../../types";
-import { teamApi, datasetApi } from "../../services/api";
+import { datasetApi, teamApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
@@ -28,7 +28,7 @@ const initialState: DatasetState = {
 export const fetchAllDatasets = createAsyncThunk(
   "dataset/fetchAllDatasets",
   async () => {
-    const response = await api.get("/api/datasets");
+    const response = await api.get("/api/datasets/");
     return response.data;
   },
 );

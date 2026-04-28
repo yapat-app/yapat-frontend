@@ -1,9 +1,11 @@
 import React from "react";
 import { Tabs, Collapse, Typography } from "antd";
 import "../styles/docs.css";
-import { HomeNavBar } from "../components/HomeNavbar";
+import { HomeNavbar } from "../components/HomeNavbar";
+import { useAppSelector } from "../hooks";
+import { NavigationBar } from "../components/NavigationBar";
 
-const { Title, Paragraph } = Typography;
+const { Paragraph } = Typography;
 const { Panel } = Collapse;
 
 /* ----------------------------------
@@ -209,15 +211,17 @@ export const YapatUserManual: React.FC<YapatUserManualProps> = ({
   title = "User Manual",
   subtitle = "A complete guide to using YAPAT for PAM dataset management, AI-assisted annotation, and eco-acoustic analysis.",
 }) => {
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   return (
     <div>
-      <HomeNavBar />
+      {isAuthenticated ? <NavigationBar /> : <HomeNavbar />}
 
       <section className="yapat-manual">
         {/* Header */}
+
         <header className="yapat-manual__header">
-          <Title level={1}>📖 {title}</Title>
-          <Paragraph type="secondary">{subtitle}</Paragraph>
+          <h1 className="text-2xl font-bold font-ibm-mono py-2">📖 {title}</h1>
+          <p className="sub_description_text">{subtitle}</p>
         </header>
 
         {/* Tabs */}
@@ -233,13 +237,19 @@ export const YapatUserManual: React.FC<YapatUserManualProps> = ({
                     key={section.id}
                     header={
                       <span>
-                        <span style={{ marginRight: 8 }}>{section.icon}</span>
+                        <span
+                          style={{ marginRight: 8, fontFamily: "ibm-mono" }}
+                        >
+                          {section.icon}
+                        </span>
                         {section.title}
                       </span>
                     }
                   >
                     {section.description && (
-                      <Paragraph>{section.description}</Paragraph>
+                      <Paragraph className="font-ibm-sans">
+                        {section.description}
+                      </Paragraph>
                     )}
                     {section.content}
                   </Panel>

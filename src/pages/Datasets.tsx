@@ -24,7 +24,7 @@ export const Datasets = () => {
   }, []);
 
   useEffect(() => {
-    if (user && user?.role === "admin") {
+    if ((user && user?.role === "admin") || user?.role === "user") {
       dispatch(fetchAllDatasets());
     } else if (user && user?.role === "team_owner") {
       dispatch(fetchAllTeamDatasets());
@@ -38,7 +38,7 @@ export const Datasets = () => {
     <div>
       <NavigationBar />
       <div className="w-full   h-full flex justify-center">
-        <div className="w-[60%]  ">
+        <div className="w-[85%]">
           <div className="my-6 ">
             <h1 className="text-2xl font-bold font-ibm-mono">Datasets</h1>
             <p className="sub_description_text">
