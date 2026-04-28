@@ -4,7 +4,7 @@
  * Main page for annotating audio snippets
  */
 
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Spin, Empty, Alert, Button } from "antd";
 import { NavigationBar } from "../components/NavigationBar";
@@ -17,7 +17,6 @@ import { useAnnotationWorkflow } from "../hooks/useAnnotationWorkflow";
 export const AnnotationWorkflow: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [, setModalVisible] = useState(false);
 
   // Get dataset_id from URL params (e.g., /annotate?dataset_id=1)
   const datasetId = searchParams.get("dataset_id");
@@ -108,11 +107,11 @@ export const AnnotationWorkflow: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
-      <div className="w-full  flex justify-center p-6">
+      <div className="w-full flex justify-center p-4">
         <div className=" w-[85%]">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold font-ibm-mono mb-2">
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold font-ibm-mono mb-1">
               Annotation
             </h1>
             <p className="text-gray-600">
@@ -124,33 +123,43 @@ export const AnnotationWorkflow: React.FC = () => {
             </p>
           </div>
 
-          {/* Statistics Row */}
-          <AnnotationStatistics
-            totalSnippets={snippets.length}
-            currentIndex={currentIndex}
-            annotatedCount={annotatedCount}
-          />
+          <div className="space-y-4">
+            {/* Statistics Row */}
+            <div className="pt-1">
+              <AnnotationStatistics
+                totalSnippets={snippets.length}
+                currentIndex={currentIndex}
+                annotatedCount={annotatedCount}
+              />
+            </div>
 
-          {/* Progress Bar */}
-          <AnnotationProgress percent={progressPercent} />
+            {/* Progress Bar */}
+            <div className="pt-1">
+              <AnnotationProgress percent={progressPercent} />
+            </div>
 
-          {/* Current Snippet Card */}
-          {currentSnippet && (
-            <CurrentSnippetCard
-              snippet={currentSnippet}
-              annotations={annotations}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              canGoPrevious={canGoPrevious}
-              canGoNext={canGoNext}
-            />
-          )}
+            {/* Snippet Queue Preview */}
+            <div className="pt-1">
+              <SnippetQueuePreview
+                snippets={snippets}
+                currentSnippetId={currentSnippet?.id ?? null}
+              />
+            </div>
 
-          {/* Snippet Queue Preview */}
-          <SnippetQueuePreview
-            snippets={snippets}
-            currentSnippetId={currentSnippet?.id ?? null}
-          />
+            {/* Current Snippet Card */}
+            {currentSnippet && (
+              <div className="pt-1">
+                <CurrentSnippetCard
+                  snippet={currentSnippet}
+                  annotations={annotations}
+                  onPrevious={handlePrevious}
+                  onNext={handleNext}
+                  canGoPrevious={canGoPrevious}
+                  canGoNext={canGoNext}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

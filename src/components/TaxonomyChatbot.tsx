@@ -312,19 +312,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
     handleAddToLabelSpace(messageId, [index + 1]);
   };
 
-  const handleRemoveFromLabelSpace = async (itemId: number | string) => {
-    if (!conversation?.id) {
-      message.error("No active conversation");
-      return;
-    }
-
-    dispatch(
-      removeLabels({
-        conversationId: conversation.id,
-        itemId,
-      }),
-    );
-  };
+  // (Label space removal UI currently disabled in this component)
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -24,16 +24,21 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
 }) => {
   const dispatch = useAppDispatch();
 
-  const [maxVisible, setMaxVisible] = useState(15);
+  const [maxVisible, setMaxVisible] = useState(12);
   const [expanded, setExpanded] = useState(false);
   const visibleSnippets = snippets.slice(0, maxVisible);
   const remainingCount = snippets.length - maxVisible;
 
   return (
-    <Card title="Snippet Queue" size="small" className="shadow-sm auto">
+    <Card
+      title="Snippet Queue"
+      size="small"
+      className="shadow-sm auto"
+      bodyStyle={{ padding: 8 }}
+    >
       <div
         className={`
-      flex gap-2 pb-2 pl-2 py-2
+      flex gap-2 pl-1
       ${expanded ? "overflow-x-visible flex-wrap" : "overflow-x-auto"}
     `}
       >
@@ -41,7 +46,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
           <div
             key={snippet.id}
             className={`
-              shrink-0 p-3 border-2 rounded-lg min-w-19.5 text-center cursor-pointer
+              shrink-0 px-2 py-1.5 border-2 rounded-md min-w-16 text-center cursor-pointer
               transition-all duration-200
               ${
                 snippet.id === currentSnippetId
@@ -56,7 +61,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               dispatch(setCurrentSnippet(snippet));
             }}
           >
-            <div className="text-xs text-gray-500 mb-1 ">#{snippet.id}</div>
+            <div className="text-xs text-gray-500 leading-4">#{snippet.id}</div>
             {snippet.is_annotated && (
               <CheckCircleOutlined className="text-green-600" />
             )}
@@ -68,7 +73,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               setMaxVisible(snippets.length);
               setExpanded(true);
             }}
-            className="flex-shrink-0 p-3 text-gray-400 flex items-center hover:cursor-pointer"
+            className="flex-shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
           >
             +{remainingCount} more
           </div>
@@ -76,10 +81,10 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
         {remainingCount === 0 && (
           <div
             onClick={() => {
-              setMaxVisible(15);
+              setMaxVisible(12);
               setExpanded(false);
             }}
-            className="flex-shrink-0 p-3 text-gray-400 flex items-center hover:cursor-pointer"
+            className="flex-shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
           >
             show less
           </div>

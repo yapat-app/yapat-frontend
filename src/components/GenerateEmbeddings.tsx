@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Dataset } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { Select, Modal, Button, Form, message, Tooltip } from "antd";
+import { Select, Modal, Button, Form, message, Tooltip, Tag } from "antd";
 import {
   getAllEmbeddingMethods,
   createEmbedding,
@@ -34,6 +34,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
     embeddingLoading,
   } = useAppSelector((state) => state.embedding);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
+  const { user } = useAppSelector((state) => state.auth);
 
   const datasetIdNumber =
     typeof dataset.id === "string" ? Number(dataset.id) : dataset.id;

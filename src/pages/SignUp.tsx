@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearError, registerAsync, resetAuth } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
+import DFKI_logo from "../assets/react.svg";
 
 export const SignUp = () => {
   const dispatch = useAppDispatch();

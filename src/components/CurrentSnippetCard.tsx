@@ -29,15 +29,14 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
   annotations,
   onPrevious,
   onNext,
-  onAddAnnotation: _onAddAnnotation,
   canGoPrevious,
   canGoNext,
 }) => {
   return (
-    <Card className="flex flex-col mb-4 gap-1 shadow-md h-fit">
+    <Card className="flex flex-col gap-1 shadow-md h-fit">
       {/* Existing Annotations - at top */}
       {annotations.length > 0 && (
-        <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+        <div className="mb-3 p-2 bg-green-50 rounded-lg border border-green-200">
           <h4 className="font-semibold mb-2 text-green-900 text-sm">
             Existing Annotations ({annotations.length})
           </h4>
@@ -52,12 +51,12 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
       )}
 
       {/* Main content: snippet/audio (left) and scrollable label list (right) */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 items-start">
         {/* Snippet / Audio – natural height based on content */}
         <div className="w-[65%] flex flex-col">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start mb-2">
             <div>
-              <h3 className="text-xl font-semibold mb-1 font-ibm-sans">
+              <h3 className="text-lg font-semibold mb-1 font-ibm-sans">
                 Snippet #{snippet.id}
               </h3>
               <p className="text-gray-600">
@@ -79,33 +78,16 @@ export const CurrentSnippetCard: React.FC<CurrentSnippetCardProps> = ({
             </div>
           </div>
 
-          {/* Existing Annotations — show near the top */}
-          {annotations.length > 0 && (
-            <div className="mb-4 p-4 bg-green-50 rounded-lg  border-green-200">
-              <h4 className="font-semibold mb-2 text-green-900">
-                Existing Annotations ({annotations.length}):
-              </h4>
-
-              <Space wrap>
-                {annotations.map((ann) => (
-                  <Tag key={ann.id} color="green" className="text-sm py-1 px-3">
-                    <strong>{ann.resolved_name_snapshot}</strong>
-                  </Tag>
-                ))}
-              </Space>
-            </div>
-          )}
-
           {/* Audio Player */}
           <AudioPlayerPlaceholder />
         </div>
         {/* Label List */}
-        <div className="w-[35%] h-[65vh]  ">
+        <div className="w-[35%] max-h-[52vh] overflow-auto">
           <LabelSpaceActive />
         </div>
       </div>
       {/* Action Buttons */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center pt-3">
         <div className="flex gap-2">
           <Button
             size="large"

@@ -15,7 +15,6 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   const { datasetAnnotations } = useAppSelector(
     (state: any) => state.annotation,
   );
-  const { user } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
 
   const handleStartAL = () => {

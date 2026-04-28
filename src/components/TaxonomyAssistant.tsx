@@ -43,10 +43,31 @@ import {
   removeLabels,
 } from "../redux/features/customTaxonomySlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import type { Message, LabelSpaceItem } from "../types";
+import type { LabelSpaceItem } from "../types";
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
+
+type TaxonomyNode = {
+  id: string;
+  name: string;
+  rank?: string;
+  scientific_name?: string;
+  metadata?: {
+    source?: string;
+  };
+};
+
+type ConversationMessage = {
+  id: number;
+  role: "user" | "assistant" | "system" | string;
+  content: string;
+  message_metadata?: {
+    taxonomy_data?: {
+      nodes: TaxonomyNode[];
+    };
+  } | null;
+};
 
 interface AIAssistantTaxonomyProps {
   onExport?: (taxonomies: LabelSpaceItem[]) => void;
@@ -61,7 +82,6 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
   const [isMinimized, setIsMinimized] = useState(false);
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [, setIsLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -352,7 +372,8 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     }
 
     if (msg.role === "assistant") {
-      const taxonomies = msg.message_metadata?.taxonomy_data?.nodes || [];
+      const taxonomies: TaxonomyNode[] =
+        msg.message_metadata?.taxonomy_data?.nodes || [];
 
       return (
         <div style={{ display: "flex", gap: 12 }}>
@@ -412,7 +433,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                   size="small"
                   dataSource={taxonomies}
                   style={{ marginTop: 12 }}
-                  renderItem={(item, index) => (
+                  renderItem={(item: TaxonomyNode, index) => (
                     <List.Item
                       style={{
                         padding: "12px 0",
@@ -441,7 +462,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                             {item.id}
                           </Tag>
                           <Tag color="green" style={{ fontSize: 11 }}>
-                            {item.metadata.source}
+                              {item.metadata?.source ?? "unknown"}
                           </Tag>
                         </Space>
                       </Space>

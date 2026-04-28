@@ -15,10 +15,11 @@ export const AnnotationProgress: React.FC<AnnotationProgressProps> = ({
   percent,
 }) => {
   return (
-    <Card className="mb-4">
+    <Card size="small" bodyStyle={{ padding: 12 }}>
       <Progress
         percent={percent}
         status="active"
+        size="small"
         strokeColor={{
           "0%": "#108ee9",
           "100%": "#87d068",

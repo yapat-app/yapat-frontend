@@ -3,7 +3,6 @@ import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAppDispatch } from "../hooks";
 import { useSelector } from "react-redux";
 import { fetchSnippetAudio } from "../redux/features/snippetSlice";
-import TaxonomyAssistant from "./TaxonomyAssistant";
 
 export const AudioPlayerPlaceholder: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -19,33 +18,24 @@ export const AudioPlayerPlaceholder: React.FC = () => {
   }, [currentSnippet?.id]);
 
   return (
-    <div className=" from-blue-50 to-indigo-50 rounded-lg  text-center  border-blue-200  w-full">
+    <div className="w-full text-center">
       {currentSnippetAudio ? (
-        <>
+        <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
           <SpectrogramPlayer
             key={currentSnippetAudio}
             src={currentSnippetAudio}
             sampleRate={16000}
-            specHeight={380}
-            navHeight={60}
+            specHeight={260}
+            navHeight={44}
             dark={false}
-            specWidth={700}
-            navigator={false} //  hide zoom / navigator UI
+            navigator={false} // hide zoom / navigator UI
             settings={false} // settings
             colormap="viridis"
           />
-        </>
+        </div>
       ) : (
         <p className="text-sm text-gray-400">Loading audio…</p>
       )}
-      <div className="text-left mt-6">
-        {/* {currentSnippet && (
-          <AnnotationForm
-            snippetId={currentSnippet.id}
-            // onSuccess={handleAnnotationSuccess}
-          />
-        )} */}
-      </div>
     </div>
   );
 };

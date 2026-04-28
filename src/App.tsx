@@ -12,6 +12,7 @@ import { Taxonomies } from "./pages/Taxonomies";
 import { ActiveLearning } from "./pages/ActiveLearning";
 import HomePage from "./pages/HomePage";
 import { StudyPhaseProvider } from "./studyPhases";
+import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 
 function App() {
   return (
@@ -20,18 +21,18 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/signUp" element={<SignUp />} />
-          <Route path="/datasets" element={<Datasets />} />
+        <Route path="/datasets" element={<Datasets />} />
         <Route
-        path="/teams"
-        element={
-          <TeamOwnerRedirect>
-            <Teams />
-          </TeamOwnerRedirect>
-        }
-      />
+          path="/teams"
+          element={
+            <TeamOwnerRedirect>
+              <Teams />
+            </TeamOwnerRedirect>
+          }
+        />
 
-      <Route path="/teams/:teamId" element={<ManageTeam />} />
-      <Route path="/" element={<HomePage />} />
+        <Route path="/teams/:teamId" element={<ManageTeam />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/pre-annotation" element={<Taxonomies />} />
         <Route path="/history" element={<FeedHistory />} />
         <Route path="/annotate" element={<AnnotationWorkflow />} />

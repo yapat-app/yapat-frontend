@@ -26,9 +26,9 @@ export const AnnotationStatistics: React.FC<AnnotationStatisticsProps> = ({
   const remainingCount = totalSnippets - annotatedCount;
 
   return (
-    <Row gutter={16} className="mb-6">
+    <Row gutter={12}>
       <Col span={6}>
-        <Card>
+        <Card size="small" bodyStyle={{ padding: 12 }}>
           <Statistic
             title="Total Snippets"
             value={totalSnippets}
@@ -37,7 +37,7 @@ export const AnnotationStatistics: React.FC<AnnotationStatisticsProps> = ({
         </Card>
       </Col>
       <Col span={6}>
-        <Card>
+        <Card size="small" bodyStyle={{ padding: 12 }}>
           <Statistic
             title="Current Position"
             value={currentIndex + 1}
@@ -46,7 +46,7 @@ export const AnnotationStatistics: React.FC<AnnotationStatisticsProps> = ({
         </Card>
       </Col>
       <Col span={6}>
-        <Card>
+        <Card size="small" bodyStyle={{ padding: 12 }}>
           <Statistic
             title="Annotated"
             value={annotatedCount}
@@ -56,7 +56,7 @@ export const AnnotationStatistics: React.FC<AnnotationStatisticsProps> = ({
         </Card>
       </Col>
       <Col span={6}>
-        <Card>
+        <Card size="small" bodyStyle={{ padding: 12 }}>
           <Statistic
             title="Remaining"
             value={remainingCount}

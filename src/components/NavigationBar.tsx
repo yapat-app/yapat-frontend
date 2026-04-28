@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import DFKI_logo from "../assets/logos/dfki_Logo_digital_black.png";
+import DFKI_logo from "../assets/react.svg";
 
 // import React from "react";
 
