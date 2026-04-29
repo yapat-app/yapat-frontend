@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearError, registerAsync, resetAuth } from "../redux/features/authSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import DFKI_logo from "../assets/react.svg";
+import { Logo } from "../components/Logo";
 
 export const SignUp = () => {
   const dispatch = useAppDispatch();
@@ -53,7 +53,7 @@ export const SignUp = () => {
   return (
     <div className="flex h-screen flex-col ">
       <div>
-        <img className="nav_logo_dfki" src={DFKI_logo}></img>
+        <Logo />
       </div>
       <div className=" w-full  h-full flex items-center justify-center">
         <form className=" w-1/4" onSubmit={register}>

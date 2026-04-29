@@ -2,26 +2,26 @@ import { Button, Tooltip } from "antd";
 import { TbLogout } from "react-icons/tb";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import DFKI_logo from "../assets/react.svg";
+import { Logo } from "./Logo";
 
-// import React from "react";
+const NAV_LINKS = [
+  { label: "Dashboard", route: "/dashboard" },
+  { label: "Documentation", route: "/docs" },
+];
 
 export const NavigationBar = () => {
-  const navigator = useNavigate();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const dispatch = useAppDispatch();
   const { accessToken, isAuthenticated, user } = useAppSelector(
     (state) => state.auth,
   );
 
-  const navigateTab = (url: string) => {
-    navigator(url);
-  };
-
   useEffect(() => {
     if (!isAuthenticated) {
-      navigator("/login");
+      navigate("/login");
     }
   }, [isAuthenticated]);
 
@@ -30,84 +30,81 @@ export const NavigationBar = () => {
       dispatch(getLoggedInUser());
     }
   }, [accessToken]);
+
   const userlogout = () => {
     dispatch(logout());
-    navigator("/login");
+    navigate("/login");
   };
-  return (
-    <div className="flex w-full items-center justify-between py-2  px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
-      <div>
-        <h2 className="text-lg font-bold font-ibm-mono">YAPAT</h2>
-      </div>
-      <div className="flex gap-5">
-        <div
-          id="tabs"
-          className="flex items-center text-sm font-medium font-ibm-sans gap-4  "
-        >
-          <div className="nav_tabs" onClick={() => navigateTab("/datasets")}>
-            Datasets
-          </div>
-          <div className="nav_tabs" onClick={() => navigateTab("/annotate")}>
-            Annotate
-          </div>
-          <div
-            className="nav_tabs"
-            onClick={() => navigateTab("/active-learning")}
-          >
-            Active Learning
-          </div>
-          <div className="nav_tabs" onClick={() => navigateTab("/history")}>
-            Feed History
-          </div>
-          {user && (user.role === "admin" || user.role === "team_owner") && (
-            <div className="nav_tabs" onClick={() => navigateTab("/teams")}>
-              Teams
-            </div>
-          )}
-          <div
-            className="nav_tabs"
-            onClick={() => navigateTab("/pre-annotation")}
-          >
-            Pre annotation
-          </div>
-          <div className="nav_tabs" onClick={() => navigateTab("/docs")}>
-            Documentation
-          </div>
-        </div>
-        <div id="orgLogos" className="flex gap-4 items-center">
-          <div>
-            <img className="nav_logo_dfki" src={DFKI_logo}></img>
-          </div>
 
-          <div className="h-8 w-px bg-gray-300"></div>
+  const allLinks = NAV_LINKS;
+
+  return (
+    <div className="flex w-full items-center justify-between py-2 px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
+      {/* Brand */}
+      <h2
+        className="text-lg font-bold font-ibm-mono cursor-pointer select-none hover:opacity-70 transition-opacity"
+        onClick={() => navigate("/")}
+      >
+        YAPAT
+      </h2>
+
+      <div className="flex items-center gap-3 ml-auto">
+        {/* Nav links */}
+        <nav className="flex items-center text-sm font-medium font-ibm-sans gap-1">
+          {allLinks.map(({ label, route }) => {
+            const isActive =
+              route === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname.startsWith(route);
+            return (
+              <button
+                key={route}
+                onClick={() => navigate(route)}
+                className={`
+                  px-3 py-1.5 rounded-md transition-colors duration-150 whitespace-nowrap
+                  ${
+                    isActive
+                      ? "bg-gray-100 text-gray-900 font-semibold"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                  }
+                `}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right side: logo + user + logout */}
+        <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
+          <Logo />
+
           {user && (
-            <div className="flex flex-col items-start justify-center leading-tight">
+            <div className="flex flex-col items-start leading-tight">
               {user.username.length > 10 ? (
                 <Tooltip title={user.username} placement="top">
-                  <span className="text-sm font-semibold text-gray-800 capitalize max-w-30 truncate cursor-pointer">
-                    {user.username.length > 10
-                      ? user.username.substring(0, 10) + "…"
-                      : user.username}
+                  <span className="text-sm font-semibold text-gray-800 capitalize max-w-[7rem] truncate cursor-pointer">
+                    {user.username.substring(0, 10) + "…"}
                   </span>
                 </Tooltip>
               ) : (
-                <span className="text-sm font-semibold text-gray-800 capitalize max-w-30 truncate ">
+                <span className="text-sm font-semibold text-gray-800 capitalize">
                   {user.username}
                 </span>
               )}
-
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-400">
                 {user.role === "team_owner" ? "Team owner" : user.role}
               </span>
             </div>
           )}
+
           <Button
             onClick={userlogout}
             className="bg-[#E8EDF5]!"
             icon={<TbLogout className="h-5 w-5" />}
-          ></Button>
+          />
+          </div>
         </div>
-      </div>
     </div>
   );
 };

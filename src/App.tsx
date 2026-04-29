@@ -11,6 +11,7 @@ import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
 import { ActiveLearning } from "./pages/ActiveLearning";
 import HomePage from "./pages/HomePage";
+import { Dashboard } from "./pages/Dashboard";
 import { StudyPhaseProvider } from "./studyPhases";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 
@@ -21,6 +22,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/signUp" element={<SignUp />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/datasets" element={<Datasets />} />
         <Route
           path="/teams"
@@ -30,7 +32,6 @@ function App() {
             </TeamOwnerRedirect>
           }
         />
-
         <Route path="/teams/:teamId" element={<ManageTeam />} />
         <Route path="/" element={<HomePage />} />
         <Route path="/pre-annotation" element={<Taxonomies />} />
