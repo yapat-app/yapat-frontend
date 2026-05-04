@@ -1,9 +1,10 @@
 /**
- * ActiveLearning Page
- * Uses /api/pam-al/inference to load predictions.
+ * Active Learning page.
+ *
+ * Loads predictions via the PAM active learning inference API.
  */
 
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Select, Spin, Tag, Tooltip, Button, InputNumber, Modal, Form, Alert, Input, Switch, message } from "antd";
 import {
@@ -13,19 +14,20 @@ import {
   PlayCircleOutlined,
   HistoryOutlined,
   DeleteOutlined,
-  ExperimentOutlined,
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { ProjectionView } from "../components/al/ProjectionView";
 import { PredictionFeed } from "../components/al/PredictionFeed";
+import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   setSelectedDataset,
   setInferenceConfig,
   runInference,
+  fetchFeedbackCount,
   clearSavedFeed,
-  trainFromScratch,
   pollRetrainJob,
+  trainFromScratch,
 } from "../redux/features/alSlice";
 import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
@@ -57,14 +59,32 @@ export const ActiveLearning: React.FC = () => {
     inferenceLoading,
     feedbackCount,
     retrainThreshold,
+    retrainPending,
     lastRetrainJob,
     lastInferenceAt,
     lastRetrainDispatch,
   } = useAppSelector((state) => state.al);
 
-  // If we enter a whole-dataset / click-to-inspect phase while the store still
-  // contains only top-K "suggestions", ensure we have the full prediction set
-  // so any clicked point can render its card on the right.
+  // Backend is the source of truth for retrain state.
+  const feedbackCountDisplay = useMemo(() => {
+    if (!Number.isFinite(retrainThreshold) || retrainThreshold <= 0) {
+      return { shown: feedbackCount, pending: retrainPending };
+    }
+    return {
+      shown: retrainPending ? 0 : Math.min(feedbackCount, retrainThreshold),
+      pending: retrainPending,
+    };
+  }, [feedbackCount, retrainThreshold, retrainPending]);
+
+  // Refresh backend feedback counter after loading predictions.
+  useEffect(() => {
+    if (selectedDatasetId === null) return;
+    if (!modelFamilyName) return;
+    if (predictions.length === 0) return;
+    dispatch(fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: modelFamilyName }));
+  }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
+
+  // Ensure full prediction set is available for whole-dataset/inspect flows.
   useEffect(() => {
     const needsFullSet =
       phase.feed.mode === "single_card_on_select" ||
@@ -100,9 +120,8 @@ export const ActiveLearning: React.FC = () => {
     dispatch,
   ]);
 
-  // Local config state for the "Run Inference" modal
+  // Local state for the “Open session” modal.
   const [configOpen, setConfigOpen] = useState(false);
-  const [trainOpen, setTrainOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
   const [localCkpt, setLocalCkpt] = useState<number | null>(modelCheckpointId);
@@ -111,22 +130,23 @@ export const ActiveLearning: React.FC = () => {
   const [localK, setLocalK] = useState<number>(inferenceK);
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
 
-  // Local state for Train-from-scratch (cold-start) modal
-  const [trainFamily, setTrainFamily] = useState<string>(modelFamilyName ?? "cold_start_base");
-  const [trainSS, setTrainSS] = useState<number | null>(snippetSetId);
+  // Bootstrap/cold-start chooser (only when no checkpoints exist).
+  const [hasGroundTruthMetadata, setHasGroundTruthMetadata] = useState<boolean>(false);
+
+  // Cold-start training form fields (only when metadata-based training is enabled).
   const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(1);
   const [trainMetadataPath, setTrainMetadataPath] = useState<string>("");
   const [trainLabelConfigPath, setTrainLabelConfigPath] = useState<string>("");
   const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
   const [trainRunInference, setTrainRunInference] = useState<boolean>(false);
 
-  // Load datasets
+  // Load datasets.
   useEffect(() => {
     if (user?.role === "admin") dispatch(fetchAllDatasets());
     else if (user?.role === "team_owner") dispatch(fetchAllTeamDatasets());
   }, [user]);
 
-  // Sync dataset_id from URL
+  // Sync dataset_id from URL.
   useEffect(() => {
     const raw = searchParams.get("dataset_id");
     if (!raw) return;
@@ -139,23 +159,23 @@ export const ActiveLearning: React.FC = () => {
     }
   }, [dispatch, searchParams, selectedDatasetId]);
 
-  // When dataset changes, load checkpoints + snippet sets
+  // Load checkpoints and snippet sets for the selected dataset.
   useEffect(() => {
     if (selectedDatasetId === null) return;
     alApi.getCheckpoints(selectedDatasetId).then(setCheckpoints).catch(() => {});
     embeddingApi.allSnippetSets(selectedDatasetId).then(setSnippetSets).catch(() => {});
   }, [selectedDatasetId]);
 
-  // When checkpoints load, ensure local selection is consistent
+  // Keep modal selections consistent with loaded checkpoints.
   useEffect(() => {
-    // Bootstrap mode: no checkpoints => ensure we have a family name for the backend
+  // Bootstrap mode: no checkpoints; ensure a model family name is set.
     if (checkpoints.length === 0) {
       if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
       setLocalCkpt(null);
       return;
     }
 
-    // Normal mode: if a checkpoint is selected, keep family in sync; otherwise preselect the newest
+  // Normal mode: keep family in sync with selected checkpoint, or preselect the newest.
     if (localCkpt !== null) {
       const fam = checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? null;
       if (fam && fam !== localFamily) setLocalFamily(fam);
@@ -189,9 +209,7 @@ export const ActiveLearning: React.FC = () => {
       embeddingMethods?.[0]?.id ??
       1;
 
-    // Phase-driven inference shape:
-    //   - feed.mode = scrollable_topk → ask for ranked top-K (cheap, exactly what feed needs)
-    //   - everything else             → ask for the full prediction set (whole-dataset color)
+  // Request top-K suggestions for scrollable feeds; request full predictions otherwise.
     const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
     const useTopK = phaseRequiresTopK ? true : localTopKOnly && phase.feed.mode !== "single_card_on_select" && phase.feed.mode !== "hidden";
     const k = phaseRequiresTopK ? (phase.feed.topK ?? localK) : localK;
@@ -216,21 +234,37 @@ export const ActiveLearning: React.FC = () => {
           : { sample_suggestion: false }),
       }),
     );
+  // Refresh feedback counter for the active model family.
+    dispatch(fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: family }));
     setConfigOpen(false);
   };
 
-  const handleTrainFromScratch = async () => {
-    if (selectedDatasetId === null) return;
-    const fam = trainFamily.trim();
-    if (!fam) return;
+  const handleOpenSession = async () => {
+  // With checkpoints, opening a session runs inference.
+    if (checkpoints.length > 0) {
+      handleRunInference();
+      return;
+    }
+
+  // Without checkpoints, either train from metadata or bootstrap with random suggestions.
+    if (selectedDatasetId === null || localSS === null) return;
+
+    const family = (localFamily ?? "").trim() || "default";
+    if (!family) return;
+
+    if (!hasGroundTruthMetadata) {
+      handleRunInference();
+      return;
+    }
+
     if (!trainEmbeddingModelId || !Number.isFinite(trainEmbeddingModelId)) return;
     if (!trainMetadataPath.trim() || !trainLabelConfigPath.trim()) return;
 
     const result = await dispatch(
       trainFromScratch({
         dataset_id: selectedDatasetId,
-        model_family_name: fam,
-        snippet_set_id: trainSS ?? undefined,
+        model_family_name: family,
+        snippet_set_id: localSS ?? undefined,
         embedding_model_id: trainEmbeddingModelId,
         metadata_path: trainMetadataPath.trim(),
         label_config_path: trainLabelConfigPath.trim(),
@@ -246,11 +280,10 @@ export const ActiveLearning: React.FC = () => {
 
     const jobId = result.payload.job_id;
     message.success(`Training job ${jobId} dispatched`);
-    setTrainOpen(false);
+    setConfigOpen(false);
   };
 
-  // Background polling + persistent UI indication for training/retrain jobs.
-  // This ensures users can see status even after closing the modal.
+  // Poll retrain job status and keep the UI in sync.
   const lastNotifiedJobIdRef = useRef<number | null>(null);
   useEffect(() => {
     if (!selectedDatasetId) return;
@@ -265,30 +298,50 @@ export const ActiveLearning: React.FC = () => {
     async function tick() {
       if (cancelled) return;
       const r = await dispatch(pollRetrainJob(stableJobId));
-      if (!pollRetrainJob.fulfilled.match(r)) return;
 
-      const status = r.payload.status;
-      if (status === "COMPLETED" || status === "FAILED") {
+  // If polling fails (e.g. job missing), fall back to loading current predictions.
+      if (!pollRetrainJob.fulfilled.match(r)) {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
-          if (status === "COMPLETED") message.success("Training completed — checkpoint is ready");
-          else message.error("Training failed — check backend logs");
+          message.warning("Could not poll retrain job — loading current predictions");
         }
-        // After a successful retrain, refresh inference so the UI immediately shows the new model output.
-        // We keep the response small (Top‑K suggestions) as the default feed mode.
-        if (
-          status === "COMPLETED" &&
-          modelFamilyName !== null &&
-          snippetSetId !== null &&
-          selectedDatasetId !== null
-        ) {
+        if (modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
           const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
-              force_refresh: true,
+              force_refresh: false,
+              ...(phaseRequiresTopK
+                ? {
+                    sample_suggestion: true,
+                    suggestion_strategy: phase.feed.samplingStrategy ?? samplingMethod,
+                    k: phase.feed.topK ?? inferenceK,
+                  }
+                : { sample_suggestion: false }),
+            }),
+          );
+        }
+        return;
+      }
+
+      const status = r.payload.status;
+      if (status === "COMPLETED" || status === "FAILED") {
+        if (lastNotifiedJobIdRef.current !== stableJobId) {
+          lastNotifiedJobIdRef.current = stableJobId;
+          if (status === "COMPLETED") message.success("Training completed — checkpoint is ready");
+          else message.error("Training failed — loading current predictions");
+        }
+  // Refresh predictions after terminal job state.
+        if (modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
+          const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
+          dispatch(
+            runInference({
+              model_family_name: modelFamilyName,
+              dataset_id: selectedDatasetId,
+              snippet_set_id: snippetSetId,
+              force_refresh: status === "COMPLETED",
               ...(phaseRequiresTopK
                 ? {
                     sample_suggestion: true,
@@ -302,9 +355,7 @@ export const ActiveLearning: React.FC = () => {
         try {
           const updated = await alApi.getCheckpoints(stableDatasetId);
           setCheckpoints(updated);
-        } catch {
-          // ignore
-        }
+        } catch {}
         return;
       }
 
@@ -327,7 +378,7 @@ export const ActiveLearning: React.FC = () => {
     </Tag>
   ) : null;
 
-  // True if we are showing a saved (cached) feed rather than a freshly-run one
+  // True when rendering a restored (cached) feed.
   const isRestoredFeed = lastInferenceAt !== null && predictions.length > 0;
 
   const savedFeedLabel = isRestoredFeed
@@ -361,8 +412,7 @@ export const ActiveLearning: React.FC = () => {
           </Select>
         </div>
 
-        {/* Study-phase selector — power user / facilitator switch.
-            For participant flows just hand them a `?phase=P2.1` URL. */}
+    {/* Study-phase selector. */}
         <div className="flex items-center gap-2">
           <Tooltip title={`Active study phase: ${phase.label}`}>
             <Tag color="purple" className="text-xs">{phase.id}</Tag>
@@ -381,27 +431,17 @@ export const ActiveLearning: React.FC = () => {
                 setLocalSS(snippetSetId);
                 setLocalK(inferenceK);
                 setLocalTopKOnly(true);
-                setConfigOpen(true);
-              }}
-              style={{ backgroundColor: "#1e40af", color: "#fff" }}
-            >
-              Run Inference
-            </Button>
-            <Button
-              icon={<ExperimentOutlined />}
-              onClick={() => {
-                dispatch(getAllEmbeddingMethods());
-                setTrainFamily(modelFamilyName ?? "cold_start_base");
-                setTrainSS(snippetSetId);
+                setHasGroundTruthMetadata(false);
                 setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
                 setTrainMetadataPath("");
                 setTrainLabelConfigPath("");
                 setTrainDevice("cpu");
                 setTrainRunInference(false);
-                setTrainOpen(true);
+                setConfigOpen(true);
               }}
+              style={{ backgroundColor: "#1e40af", color: "#fff" }}
             >
-              Train from scratch
+              Start Inference
             </Button>
           </div>
         )}
@@ -417,7 +457,13 @@ export const ActiveLearning: React.FC = () => {
             <Tooltip title="Feedbacks since last retrain">
               <span className="flex items-center gap-1">
                 <CheckCircleOutlined className="text-green-500" />
-                {feedbackCount}/{retrainThreshold}
+                {feedbackCountDisplay.shown}
+                /{retrainThreshold}
+                {feedbackCountDisplay.pending && (
+                  <Tag color="gold" className="ml-2">
+                    Training…
+                  </Tag>
+                )}
               </span>
             </Tooltip>
             {retrainTag}
@@ -470,23 +516,29 @@ export const ActiveLearning: React.FC = () => {
         <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
           <DatabaseOutlined style={{ fontSize: 48 }} />
           <p className="text-lg font-ibm-sans">Select a dataset to start Active Learning</p>
-          <p className="text-sm">Then click "Run Inference" to load predictions.</p>
+          <p className="text-sm">Then click "Start labeling" to load predictions.</p>
         </div>
       ) : (
         <PhaseLayout />
       )}
 
-      {/* ── Run Inference Modal ─────────────────────────────────────────── */}
+      {/* ── Start Labeling Modal ───────────────────────────────────────── */}
       <Modal
-        title="Configure & Run Inference"
+        title={checkpoints.length > 0 ? "Resume labeling" : "Start labeling"}
         open={configOpen}
         onCancel={() => setConfigOpen(false)}
-        onOk={handleRunInference}
-        okText="Run Inference"
+        onOk={handleOpenSession}
+        okText={checkpoints.length > 0 ? "Resume" : hasGroundTruthMetadata ? "Start training" : "Start annotating"}
         okButtonProps={{
           disabled:
             !localSS ||
-            (checkpoints.length === 0 ? !(localFamily && localFamily.trim().length > 0) : !localCkpt),
+            (checkpoints.length === 0
+              ? !(localFamily && localFamily.trim().length > 0) ||
+                (hasGroundTruthMetadata &&
+                  (!Number.isFinite(trainEmbeddingModelId) ||
+                    !trainMetadataPath.trim() ||
+                    !trainLabelConfigPath.trim()))
+              : !localCkpt),
           style: { backgroundColor: "#1e40af", color: "#fff" },
         }}
       >
@@ -515,8 +567,8 @@ export const ActiveLearning: React.FC = () => {
               <Alert
                 type="info"
                 showIcon
-                message="No checkpoints found — using bootstrap mode"
-                description="Inference will return random snippet suggestions until a checkpoint is trained/registered. Choose a model family name to namespace future checkpoints for this dataset."
+                message="No model checkpoint found yet"
+                description="You can either cold-start from ground-truth metadata (train first checkpoint) or start annotating with random samples to bootstrap a model."
                 className="mb-3"
               />
               <Form.Item label="Model family name" required>
@@ -526,6 +578,71 @@ export const ActiveLearning: React.FC = () => {
                   onChange={(e) => setLocalFamily(e.target.value)}
                 />
               </Form.Item>
+
+              <Form.Item label="Do you have ground-truth metadata?">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-gray-600">Train from metadata (cold start)</div>
+                  <Switch
+                    checked={hasGroundTruthMetadata}
+                    onChange={(v) => {
+                      setHasGroundTruthMetadata(v);
+                      if (v) dispatch(getAllEmbeddingMethods());
+                    }}
+                  />
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  If disabled, the session starts in bootstrap mode (random samples).
+                </div>
+              </Form.Item>
+
+              {hasGroundTruthMetadata && (
+                <>
+                  <Form.Item label="Embedding model" required>
+                    <Select
+                      placeholder={embeddingMethodsLoading ? "Loading embedding models…" : "Select embedding model"}
+                      loading={embeddingMethodsLoading}
+                      value={trainEmbeddingModelId}
+                      onChange={(v: number) => setTrainEmbeddingModelId(v)}
+                      style={{ width: "100%" }}
+                      optionFilterProp="children"
+                      showSearch
+                    >
+                      {(embeddingMethods ?? []).map((m) => (
+                        <Option key={m.id} value={m.id}>
+                          {m.name} — {m.version}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item label="Metadata path (ground truth)" required>
+                    <Input
+                      placeholder='e.g. "pam/FNJV/metadata.csv"'
+                      value={trainMetadataPath}
+                      onChange={(e) => setTrainMetadataPath(e.target.value)}
+                    />
+                  </Form.Item>
+
+                  <Form.Item label="Label config path" required>
+                    <Input
+                      placeholder='e.g. "pam/FNJV/labels.json"'
+                      value={trainLabelConfigPath}
+                      onChange={(e) => setTrainLabelConfigPath(e.target.value)}
+                    />
+                  </Form.Item>
+
+                  <Form.Item label="Device">
+                    <Select value={trainDevice} onChange={(v) => setTrainDevice(v)} style={{ width: "100%" }}>
+                      <Option value="cpu">cpu</Option>
+                      <Option value="cuda">cuda</Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item label="Run inference automatically after training">
+                    <Switch checked={trainRunInference} onChange={setTrainRunInference} />
+                  </Form.Item>
+                </>
+              )}
             </>
           )}
 
@@ -556,7 +673,7 @@ export const ActiveLearning: React.FC = () => {
               value={localK}
               onChange={(v) => setLocalK(v ?? 20)}
               style={{ width: "100%" }}
-              disabled={!localTopKOnly}
+              disabled={!localTopKOnly || (checkpoints.length === 0 && hasGroundTruthMetadata)}
             />
           </Form.Item>
 
@@ -565,109 +682,15 @@ export const ActiveLearning: React.FC = () => {
               <div className="text-sm text-gray-600">
                 Return only Top‑K suggestions
               </div>
-              <Switch checked={localTopKOnly} onChange={setLocalTopKOnly} />
+              <Switch
+                checked={localTopKOnly}
+                onChange={setLocalTopKOnly}
+                disabled={checkpoints.length === 0 && hasGroundTruthMetadata}
+              />
             </div>
             <div className="text-xs text-gray-400 mt-1">
               When disabled, the system returns all predictions for the selected snippet set.
             </div>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* ── Train From Scratch Modal ───────────────────────────────────── */}
-      <Modal
-        title="Train from scratch (cold start)"
-        open={trainOpen}
-        onCancel={() => setTrainOpen(false)}
-        onOk={handleTrainFromScratch}
-        okText="Start training"
-        okButtonProps={{
-          disabled:
-            selectedDatasetId === null ||
-            !trainFamily.trim() ||
-            !Number.isFinite(trainEmbeddingModelId) ||
-            !trainMetadataPath.trim() ||
-            !trainLabelConfigPath.trim(),
-          style: { backgroundColor: "#1e40af", color: "#fff" },
-        }}
-      >
-        <Form layout="vertical" className="mt-4">
-          <Alert
-            type="info"
-            showIcon
-            className="mb-3"
-            message="This creates the first checkpoint for a model family."
-            description="Provide ground-truth metadata and a label config. The job runs asynchronously; you can keep using the UI and come back later."
-          />
-
-          <Form.Item label="Model family name" required>
-            <Input value={trainFamily} onChange={(e) => setTrainFamily(e.target.value)} />
-          </Form.Item>
-
-          <Form.Item label="Snippet set (optional)">
-            <Select
-              placeholder="Use dataset default snippet set"
-              allowClear
-              value={trainSS ?? undefined}
-              onChange={(v) => setTrainSS(v ?? null)}
-              style={{ width: "100%" }}
-            >
-              {snippetSets.map((s) => (
-                <Option key={s.id} value={s.id}>
-                  Set #{s.id} — {s.status}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Embedding model" required>
-            <Select
-              placeholder={embeddingMethodsLoading ? "Loading embedding models…" : "Select embedding model"}
-              loading={embeddingMethodsLoading}
-              value={trainEmbeddingModelId}
-              onChange={(v: number) => setTrainEmbeddingModelId(v)}
-              style={{ width: "100%" }}
-              optionFilterProp="children"
-              showSearch
-            >
-              {(embeddingMethods ?? []).map((m) => (
-                <Option key={m.id} value={m.id}>
-                  {m.name} — {m.version}
-                </Option>
-              ))}
-            </Select>
-            {!embeddingMethodsLoading && (!embeddingMethods || embeddingMethods.length === 0) && (
-              <div className="text-xs text-amber-500 mt-1">
-                No embedding models found.
-              </div>
-            )}
-          </Form.Item>
-
-          <Form.Item label="Metadata path (ground truth)" required>
-            <Input
-              placeholder='e.g. "pam/FNJV/metadata.csv"'
-              value={trainMetadataPath}
-              onChange={(e) => setTrainMetadataPath(e.target.value)}
-            />
-          </Form.Item>
-
-          <Form.Item label="Label config path" required>
-            <Input
-              placeholder='e.g. "pam/FNJV/labels.json"'
-              value={trainLabelConfigPath}
-              onChange={(e) => setTrainLabelConfigPath(e.target.value)}
-            />
-          </Form.Item>
-
-          <Form.Item label="Device">
-            <Select value={trainDevice} onChange={(v) => setTrainDevice(v)} style={{ width: "100%" }}>
-              <Option value="cpu">cpu</Option>
-              <Option value="cuda">cuda</Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Run inference automatically after training">
-            <Switch checked={trainRunInference} onChange={setTrainRunInference} />
           </Form.Item>
         </Form>
       </Modal>
@@ -692,13 +715,18 @@ const PhaseLayout: React.FC = () => {
 
   // Phase 1.1: feed only
   if (showFeed && !showVis) {
+    const isBlind = phase.ui.labelingMode === "blind";
     return (
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Prediction Feed</h2>
-            <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
-          </div>
+          {isBlind ? <BlindAnnotationHeader /> : (
+            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Annotation Feed</h2>
+              <p className="text-xs text-gray-400 font-ibm-sans">
+                Accept, reject, or modify each prediction
+              </p>
+            </div>
+          )}
           <div className="flex-1 overflow-hidden">
             <PredictionFeed />
           </div>
@@ -709,53 +737,72 @@ const PhaseLayout: React.FC = () => {
 
   // Phase 1.2: 50/50 split (feed + limited vis)
   if (showFeed && feedMode === "scrollable_topk" && showVis) {
+    const isBlind = phase.ui.labelingMode === "blind";
     return (
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-1/2 flex flex-col border-r border-gray-200 overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
-            <p className="text-xs text-gray-400 font-ibm-sans">Click a point to jump to its card</p>
+      <ResizableSplit
+        mode="ratio"
+        initialRatio={0.5}
+        minLeftPx={360}
+        minRightPx={420}
+        left={
+          <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
+              <p className="text-xs text-gray-400 font-ibm-sans">Click a point to jump to its card</p>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ProjectionView />
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <ProjectionView />
+        }
+        right={
+          <div className="flex flex-col h-full overflow-hidden">
+            {isBlind ? <BlindAnnotationHeader /> : (
+              <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+                <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Annotation Feed</h2>
+                <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
+              </div>
+            )}
+            <div className="flex-1 overflow-hidden">
+              <PredictionFeed />
+            </div>
           </div>
-        </div>
-        <div className="w-1/2 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Prediction Feed</h2>
-            <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <PredictionFeed />
-          </div>
-        </div>
-      </div>
+        }
+      />
     );
   }
 
   // Phase 2.x / 3.x: vis dominant; single-card panel slides in on selection
   if (showVis && feedMode === "single_card_on_select") {
     return (
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col border-r border-gray-200 overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
-            <p className="text-xs text-gray-400 font-ibm-sans">Click a point to inspect that snippet</p>
+      <ResizableSplit
+        mode="right_px"
+        initialRightPx={560}
+        minRightPanelPx={420}
+        maxRightPanelPx={900}
+        left={
+          <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Feature Projection</h2>
+              <p className="text-xs text-gray-400 font-ibm-sans">Click a point to inspect that snippet</p>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ProjectionView />
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <ProjectionView />
+        }
+        right={
+          <div className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
+              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Selected Snippet</h2>
+              <p className="text-xs text-gray-400 font-ibm-sans">Click a point on the projection</p>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <PredictionFeed />
+            </div>
           </div>
-        </div>
-        <div className="w-[420px] flex flex-col overflow-hidden bg-[#f7fafc]">
-          <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-            <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Selected Snippet</h2>
-            <p className="text-xs text-gray-400 font-ibm-sans">Click a point on the projection</p>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <PredictionFeed />
-          </div>
-        </div>
-      </div>
+        }
+      />
     );
   }
 
@@ -777,4 +824,24 @@ const PhaseLayout: React.FC = () => {
 
   // No-op fallback
   return null;
+};
+
+const BlindAnnotationHeader: React.FC = () => {
+  // Blind mode header intentionally keeps the UI minimal.
+
+  return (
+    <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-100">
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="min-w-0 flex-shrink-0 max-w-[360px]">
+          <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
+            Annotation Feed
+          </div>
+          <div className="text-[11px] text-gray-400 font-ibm-sans truncate">
+            Listen to each snippet and add one or more species labels
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
 };

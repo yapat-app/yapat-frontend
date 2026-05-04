@@ -16,7 +16,7 @@
  * `allowedColorProperties` so phases can curate the property surface area.
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Select, Slider, Tooltip, Tag } from "antd";
 import { EyeOutlined, BgColorsOutlined } from "@ant-design/icons";
 import {
@@ -62,6 +62,11 @@ interface ALFilterPanelProps {
   allowedVisibilityProperties?: AllowedProperty[];
   allowedColorProperties?: AllowedProperty[];
 
+  /** Optional default key for single-mode visibility filter. */
+  defaultVisibilityKey?: AllowedProperty | null;
+  /** Single-mode slider style. */
+  visibilitySliderStyle?: "range" | "threshold";
+
   /** Single-mode visibility callbacks (legacy / phase 2.2). */
   onVisibilityKeyChange: (key: string | null) => void;
   onVisibilityRangeChange: (range: [number, number]) => void;
@@ -83,6 +88,8 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   phaseColorMode = "single",
   allowedVisibilityProperties,
   allowedColorProperties,
+  defaultVisibilityKey = null,
+  visibilitySliderStyle = "range",
   onVisibilityKeyChange,
   onVisibilityRangeChange,
   onMultiVisibilityChange,
@@ -119,9 +126,15 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     ? getPropertyByKey(filters.visibility.propertyKey)
     : null;
 
-  const effectivePropMin = visibilityRangeOverride?.min ?? visProp?.range?.[0];
-  const effectivePropMax = visibilityRangeOverride?.max ?? visProp?.range?.[1];
-  const effectivePropStep = visibilityRangeOverride?.step;
+  /** Composite is always interpreted on [0, 1] with higher values more informative. */
+  const compositeDomainLock = filters.visibility.propertyKey === "composite";
+  const effectivePropMin = compositeDomainLock
+    ? 0
+    : visibilityRangeOverride?.min ?? visProp?.range?.[0];
+  const effectivePropMax = compositeDomainLock
+    ? 1
+    : visibilityRangeOverride?.max ?? visProp?.range?.[1];
+  const effectivePropStep = compositeDomainLock ? 0.01 : visibilityRangeOverride?.step;
 
   const sliderConfig = useMemo(() => {
     if (!visProp || effectivePropMin === undefined || effectivePropMax === undefined) return null;
@@ -174,6 +187,18 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     ]);
   };
 
+  const handleThresholdChange = (val: number) => {
+    if (effectivePropMin === undefined || effectivePropMax === undefined) return;
+    const span = effectivePropMax - effectivePropMin;
+    // Snap to the configured slider step so users pick discrete values
+    // (e.g. 0.0, 0.1, 0.2 …) rather than an arbitrary range.
+    const step = sliderConfig?.step ?? effectivePropStep ?? 0.01;
+    const snapped = step > 0 ? Math.round(val / step) * step : val;
+    const norm = span === 0 ? 0 : (snapped - effectivePropMin) / span;
+    // Store as [min, 1] so existing consumers treat it as a visible range.
+    onVisibilityRangeChange([Math.max(0, Math.min(1, norm)), 1]);
+  };
+
   const legendEntries = useMemo(() => {
     if (!colorProp) return [];
     return buildLegend(colorProp.key, allCategoricalValues[colorProp.key]);
@@ -218,6 +243,29 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
 
   if (!showVisibility && !showColor) return null;
 
+  // Special case: single visibility filter with only one available property.
+  // Auto-select and optionally render a threshold slider (no dropdown).
+  const effectiveDefaultKey = useMemo(() => {
+    if (phaseVisibilityMode !== "single") return null;
+    if (defaultVisibilityKey && visibilityList.some((p) => p.key === defaultVisibilityKey)) return defaultVisibilityKey;
+    if (visibilityList.length === 1) return visibilityList[0].key;
+    return null;
+  }, [phaseVisibilityMode, defaultVisibilityKey, visibilityList]);
+
+  // Only hide the dropdown when there is literally only one option.
+  const hideVisibilityDropdown =
+    phaseVisibilityMode === "single" && visibilityList.length === 1;
+  const useThresholdSlider = visibilitySliderStyle === "threshold";
+
+  useEffect(() => {
+    if (phaseVisibilityMode !== "single") return;
+    const target = effectiveDefaultKey;
+    if (!target) return;
+    if (filters.visibility.propertyKey !== target) {
+      onVisibilityKeyChange(target);
+    }
+  }, [phaseVisibilityMode, effectiveDefaultKey, filters.visibility.propertyKey, onVisibilityKeyChange]);
+
   return (
     <div className="flex flex-col gap-4 px-4 py-3 border-b border-gray-100 bg-white">
       <div className="flex flex-wrap gap-6 items-start">
@@ -232,39 +280,50 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
 
             {phaseVisibilityMode === "single" ? (
               <>
-                <Select
-                  size="small"
-                  value={filters.visibility.propertyKey ?? NONE}
-                  onChange={(v: string) => onVisibilityKeyChange(v === NONE ? null : v)}
-                  style={{ width: "100%" }}
-                >
-                  {makeOptions(visibilityList, true)}
-                </Select>
+                {!hideVisibilityDropdown && (
+                  <Select
+                    size="small"
+                    value={filters.visibility.propertyKey ?? NONE}
+                    onChange={(v: string) => onVisibilityKeyChange(v === NONE ? null : v)}
+                    style={{ width: "100%" }}
+                  >
+                    {makeOptions(visibilityList, true)}
+                  </Select>
+                )}
 
                 {visProp && sliderConfig && (
                   <div className="px-1 pt-1">
-                    <Slider
-                      range
-                      min={sliderConfig.min}
-                      max={sliderConfig.max}
-                      step={sliderConfig.step}
-                      value={sliderConfig.value}
-                      marks={sliderConfig.marks}
-                      onChange={handleSliderChange}
-                      tooltip={{ formatter: sliderConfig.tipFormatter }}
-                      styles={{
-                        track: { backgroundColor: "#3b82f6" },
-                        handle: { borderColor: "#3b82f6" },
-                      }}
-                    />
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[10px] text-gray-400 font-ibm-mono">
-                        {sliderConfig.tipFormatter(sliderConfig.min)}
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-ibm-mono">
-                        {sliderConfig.tipFormatter(sliderConfig.max)}
-                      </span>
-                    </div>
+                    {useThresholdSlider ? (
+                      <Slider
+                        min={sliderConfig.min}
+                        max={sliderConfig.max}
+                        step={sliderConfig.step}
+                        value={sliderConfig.value[0]}
+                        marks={sliderConfig.marks}
+                        onChange={(v) => handleThresholdChange(v as number)}
+                        tooltip={{ formatter: sliderConfig.tipFormatter }}
+                        included={false}
+                        styles={{
+                          track: { backgroundColor: "#3b82f6" },
+                          handle: { borderColor: "#3b82f6" },
+                        }}
+                      />
+                    ) : (
+                      <Slider
+                        range
+                        min={sliderConfig.min}
+                        max={sliderConfig.max}
+                        step={sliderConfig.step}
+                        value={sliderConfig.value}
+                        marks={sliderConfig.marks}
+                        onChange={handleSliderChange}
+                        tooltip={{ formatter: sliderConfig.tipFormatter }}
+                        styles={{
+                          track: { backgroundColor: "#3b82f6" },
+                          handle: { borderColor: "#3b82f6" },
+                        }}
+                      />
+                    )}
                   </div>
                 )}
               </>

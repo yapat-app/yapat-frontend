@@ -138,6 +138,8 @@ export interface FeedbackPayload {
   /** For MODIFY, send replacement labels; for ACCEPT you may omit to use predicted labels */
   labels?: string[];
   notes?: string;
+  /** If false, backend skips taxonomy resolution + canonical `annotations` writes (faster for study code labels). */
+  persist_annotations?: boolean;
 }
 
 export interface FeedbackResponse {
@@ -152,9 +154,21 @@ export interface FeedbackResponse {
   created_at: string;
   feedback_count_since_retrain: number;
   retrain_triggered: boolean;
+  /** True when the most recent child retrain failed — auto-retrain is blocked, use manual retrain */
+  last_retrain_failed?: boolean;
   /** Present when backend auto-retrain was dispatched from /feedback */
   auto_retrain_checkpoint_id?: number | null;
   auto_retrain_job_id?: number | null;
+}
+
+export interface PAMFeedbackCountResponse {
+  dataset_id: number;
+  model_family_name: string;
+  active_checkpoint_id?: number | null;
+  feedback_count_since_retrain: number;
+  retrain_after: number;
+  /** True when the backend has already enqueued a child retrain for the active checkpoint. */
+  retrain_pending?: boolean;
 }
 
 export interface PAMRetrainRequest {
@@ -258,6 +272,8 @@ export interface ALState {
   totalScored: number;
   feedbacks: Record<number, FeedbackResponse>; // keyed by snippet_id
   feedbackCount: number;
+  /** True when the backend indicates a retrain job is already pending/running for the current checkpoint. */
+  retrainPending: boolean;
   retrainThreshold: number;
   selectedSnippetId: number | null;
   selectedPredictionId: number | null;
@@ -267,6 +283,7 @@ export interface ALState {
   alFilters: ALFilterState;
   lastRetrainDispatch: PAMRetrainJobDispatch | null;
   lastRetrainJob: PAMRetrainJobStatus | null;
+  lastRetrainFailed: boolean;
   inferenceLoading: boolean;
   feedbackLoading: boolean;
   retrainLoading: boolean;

@@ -65,6 +65,10 @@ export interface FilterPhaseConfig {
   mode: FilterMode;
   /** Properties allowed in this filter dropdown for this phase. */
   allowedProperties: AllowedProperty[];
+  /** Optional default selection for single-mode filters. */
+  defaultPropertyKey?: AllowedProperty;
+  /** Slider style for single-mode visibility filter. */
+  sliderStyle?: "range" | "threshold";
 }
 
 export interface VisualizationPhaseConfig {
@@ -77,10 +81,20 @@ export interface VisualizationPhaseConfig {
   colorFilter: FilterPhaseConfig;
 }
 
+/**
+ * Controls how the labeling UI works in the feed:
+ *  "guided"  — model predictions are shown; user can Accept / Reject / Modify.
+ *  "blind"   — predictions are hidden; user must independently add one or more labels
+ *              via a species picker (PAM species list + GBIF search).
+ */
+export type LabelingMode = "guided" | "blind";
+
 export interface UIPhaseConfig {
   showSamplingMethodSelector: boolean;
   showProjectionMethodSelector: boolean;
   showRetrainControls: boolean;
+  /** Defaults to "guided" when omitted. */
+  labelingMode?: LabelingMode;
 }
 
 export interface PhaseConfig {

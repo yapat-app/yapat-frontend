@@ -1,6 +1,4 @@
-/**
- * PAM Active Learning Redux Slice — uses /api/pam-al/* endpoints.
- */
+/** PAM Active Learning slice (backed by /api/pam-al/* endpoints). */
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
@@ -21,9 +19,10 @@ import type {
   SamplingMethod,
   PAMRunInferenceRequest,
   PAMTrainFromScratchRequest,
+  PAMFeedbackCountResponse,
 } from "../../types/al";
 
-// Keep UI threshold aligned with backend RETRAIN_AFTER (active_learning/config.yaml)
+// Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
 const STORAGE_KEY = "yapat_al_last_feed";
 
@@ -59,8 +58,7 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
     const confidence = Number.isFinite(bestProb) && bestProb > 0 ? bestProb : r.confidence ?? 0;
     const mergedScores = {
       ...(r.scores ?? {}),
-      // Ensure sampler-suite keys always exist in `scores` so the filter/color system works
-      // even if the backend returns `scores: {}` and also provides these at top-level.
+  // Ensure sampler score keys exist for filtering/coloring.
       uncertainty: (r.uncertainty ?? (r.scores as any)?.uncertainty) ?? undefined,
       diversity: (r.diversity ?? (r.scores as any)?.diversity) ?? undefined,
       density: (r.density ?? (r.scores as any)?.density) ?? undefined,
@@ -93,7 +91,7 @@ function saveFeed(state: ALState): void {
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    // storage quota exceeded — ignore
+    // Ignore persistence errors (e.g. storage quota).
   }
 }
 
@@ -106,7 +104,7 @@ function loadFeed(): PersistedFeed | null {
   }
 }
 
-// Rehydrate predictions + config from localStorage on startup
+// Rehydrate state from localStorage.
 const saved = loadFeed();
 
 const initialState: ALState = {
@@ -117,11 +115,12 @@ const initialState: ALState = {
   embeddingModelId: saved?.embeddingModelId ?? null,
   inferenceK: saved?.inferenceK ?? 20,
   predictions: saved?.predictions ?? [],
-  projectionPredictions: saved?.predictions ?? [],  // start with saved feed if available
+  projectionPredictions: saved?.predictions ?? [],
   modelInfo: saved?.modelInfo ?? {},
   totalScored: saved?.totalScored ?? 0,
   feedbacks: {},
   feedbackCount: 0,
+  retrainPending: false,
   retrainThreshold: RETRAIN_THRESHOLD,
   selectedSnippetId: null,
   selectedPredictionId: null,
@@ -134,6 +133,7 @@ const initialState: ALState = {
   },
   lastRetrainDispatch: null,
   lastRetrainJob: null,
+  lastRetrainFailed: false,
   inferenceLoading: false,
   feedbackLoading: false,
   retrainLoading: false,
@@ -198,6 +198,20 @@ export const pollRetrainJob = createAsyncThunk(
   },
 );
 
+export const fetchFeedbackCount = createAsyncThunk(
+  "al/fetchFeedbackCount",
+  async (
+    params: { dataset_id: number; model_family_name: string },
+    { rejectWithValue },
+  ) => {
+    try {
+      return await alApi.getFeedbackCount(params.dataset_id, params.model_family_name);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 // ── Slice ─────────────────────────────────────────────────────────────────
 
 const alSlice = createSlice({
@@ -223,6 +237,7 @@ const alSlice = createSlice({
       state.feedbackCount = 0;
       state.lastRetrainDispatch = null;
       state.lastRetrainJob = null;
+      state.lastRetrainFailed = false;
       state.selectedSnippetId = null;
       state.selectedPredictionId = null;
       state.modelCheckpointId = null;
@@ -260,7 +275,7 @@ const alSlice = createSlice({
     setColorFilter: (state, action: PayloadAction<Partial<ColorFilterState>>) => {
       state.alFilters.color = { ...state.alFilters.color, ...action.payload };
     },
-    /** Multi-property visibility filter helpers (used in phase 3.2). */
+    /** Multi-property visibility filter helpers. */
     setVisibilityKeys: (state, action: PayloadAction<string[]>) => {
       state.alFilters.visibility.propertyKeys = action.payload;
       state.alFilters.visibility.ranges = state.alFilters.visibility.ranges ?? {};
@@ -321,8 +336,7 @@ const alSlice = createSlice({
         state.totalScored = action.payload.total_predictions;
         state.predictions = withDisplayFields(action.payload.rows);
         state.lastInferenceAt = new Date().toISOString();
-        // Update projection snapshot: on first inference OR after retrain
-        // (lastRetrainJob is set by triggerRetrain.fulfilled before this runs)
+        // Update projection snapshot on first inference or after a retrain.
         if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
           state.projectionPredictions = state.predictions;
         }
@@ -334,6 +348,17 @@ const alSlice = createSlice({
       state.error = action.payload as string;
     });
 
+    builder.addCase(fetchFeedbackCount.fulfilled, (state, action: PayloadAction<PAMFeedbackCountResponse>) => {
+      // Keep threshold in sync with backend.
+      if (Number.isFinite(action.payload.retrain_after) && action.payload.retrain_after > 0) {
+        state.retrainThreshold = action.payload.retrain_after;
+      }
+      // Don't overwrite a locally-reset counter while a retrain is in progress.
+      if (state.retrainLoading) return;
+      state.feedbackCount = action.payload.feedback_count_since_retrain;
+      state.retrainPending = Boolean(action.payload.retrain_pending);
+    });
+
     builder.addCase(submitFeedback.pending, (state) => {
       state.feedbackLoading = true;
     });
@@ -343,12 +368,14 @@ const alSlice = createSlice({
         state.feedbackLoading = false;
         const fb = action.payload;
         state.feedbacks[fb.snippet_id] = fb;
-        state.feedbackCount = fb.feedback_count_since_retrain;
 
-        // Backend is the source of truth for auto-retrain:
-        // when /feedback reports retrain_triggered, it has already created & dispatched a retrain job.
+        // When the backend reports auto-retrain, treat it as already dispatched.
         if (fb.retrain_triggered && fb.auto_retrain_job_id && fb.auto_retrain_checkpoint_id) {
+          // Reset counter locally while the new checkpoint job is pending.
+          state.feedbackCount = 0;
+          state.feedbacks = {};
           state.retrainLoading = true;
+          state.lastRetrainFailed = false;
           state.lastRetrainDispatch = {
             job_id: fb.auto_retrain_job_id,
             checkpoint_id: fb.auto_retrain_checkpoint_id,
@@ -356,13 +383,17 @@ const alSlice = createSlice({
             message: `Auto-retrain job ${fb.auto_retrain_job_id} dispatched`,
           };
           state.lastRetrainJob = null;
+        } else {
+          state.feedbackCount = fb.feedback_count_since_retrain;
+          // Surface failed retrain state so UI can prompt for manual retry.
+          if (fb.last_retrain_failed) {
+            state.lastRetrainFailed = true;
+          }
         }
       },
     );
     builder.addCase(submitFeedback.rejected, (state) => {
       state.feedbackLoading = false;
-      // Feedback errors should not blank the entire prediction feed UI.
-      // (The card-level UI already shows a toast on failure.)
       // Keep `state.error` reserved for inference/job failures.
     });
 
@@ -372,13 +403,13 @@ const alSlice = createSlice({
     builder.addCase(
       triggerRetrain.fulfilled,
       (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
-        state.retrainLoading = false;
+        // Keep retrainLoading=true until polling reports a terminal state.
         state.lastRetrainDispatch = action.payload;
         state.lastRetrainJob = null;
+        state.lastRetrainFailed = false;
         state.feedbackCount = 0;
         state.feedbacks = {};
-        // Snapshot current predictions into projection — will be updated
-        // again after retrain completes + inference reruns
+        // Snapshot current predictions for projection view.
         state.projectionPredictions = state.predictions;
       },
     );
@@ -394,10 +425,10 @@ const alSlice = createSlice({
     builder.addCase(
       trainFromScratch.fulfilled,
       (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
-        state.retrainLoading = false;
+        // Keep retrainLoading=true until polling reports a terminal state.
         state.lastRetrainDispatch = action.payload;
         state.lastRetrainJob = null;
-        // Cold-start creates an active checkpoint on completion; clear counters for a fresh run
+        // Clear counters for a fresh run.
         state.feedbackCount = 0;
         state.feedbacks = {};
       },
@@ -411,9 +442,11 @@ const alSlice = createSlice({
       state.lastRetrainJob = action.payload;
       if (action.payload.status === "COMPLETED" || action.payload.status === "FAILED") {
         state.retrainLoading = false;
+        state.lastRetrainFailed = action.payload.status === "FAILED";
       }
     });
     builder.addCase(pollRetrainJob.rejected, (state, action) => {
+      state.retrainLoading = false;
       state.error = action.payload as string;
     });
   },

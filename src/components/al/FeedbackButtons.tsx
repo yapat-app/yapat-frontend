@@ -1,24 +1,41 @@
 /**
- * FeedbackButtons — Accept / Reject / Modify for a prediction card.
+ * FeedbackButtons — renders feedback UI appropriate for the active study phase.
+ *
+ * "guided" mode (default): Accept / Reject / Modify label (existing flow).
+ * "blind"  mode (P1.1):    No predicted labels shown; user selects one or more
+ *                           labels from the PAM species list / GBIF search and
+ *                           submits them via a MODIFY action.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Tag, Spin, message, Tooltip, Input } from "antd";
 import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { runInference, submitFeedback } from "../../redux/features/alSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
+import { usePhaseConfig } from "../../studyPhases";
+import { LabelSelector } from "./LabelSelector";
 
 interface Props {
   prediction: PAMPrediction;
+  /** Labels hydrated from /api/pam-al/snippet-labels to survive refresh. */
+  serverLabels?: string[];
 }
 
-export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
+export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) => {
   const dispatch = useAppDispatch();
+  const phase = usePhaseConfig();
+  const isBlind = phase.ui.labelingMode === "blind";
+
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Guided mode: free-text input
   const [customLabel, setCustomLabel] = useState("");
+  // Blind mode: multi-select via LabelSelector
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+
   const { selectedDatasetId, modelFamilyName, usedCheckpointId, snippetSetId, inferenceK, samplingMethod, retrainThreshold } =
     useAppSelector((state) => state.al);
 
@@ -27,39 +44,19 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   const hasCheckpoint = usedCheckpointId !== null;
   const feedbackDisabled = submitting || !hasCheckpoint;
 
-  const modifyInline = modifyOpen ? (
-    <div className="mt-2 flex flex-col gap-2">
-      <Input
-        size="small"
-        placeholder="Correct label (press Enter to confirm)"
-        value={customLabel}
-        onChange={(e) => setCustomLabel(e.target.value)}
-        onPressEnter={() => customLabel.trim() && submit("MODIFY", customLabel.trim())}
-        autoFocus
-      />
-      <div className="flex gap-2 justify-end">
-        <Button
-          size="small"
-          onClick={() => {
-            setCustomLabel("");
-            setModifyOpen(false);
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          size="small"
-          type="primary"
-          disabled={!customLabel.trim()}
-          onClick={() => submit("MODIFY", customLabel.trim())}
-        >
-          Confirm
-        </Button>
-      </div>
-    </div>
-  ) : null;
+  // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
+  const submittedLabels = existingFeedback?.final_labels ?? serverLabels ?? [];
+  const lastSyncedSnippetIdRef = useRef<number | null>(null);
+  const skipNextAutoSubmitRef = useRef<boolean>(true);
+  const lastSubmittedKeyRef = useRef<string>("");
+  const debounceTimerRef = useRef<number | null>(null);
 
-  const submit = async (action: FeedbackAction, modifiedLabel?: string) => {
+  const selectionKey = useMemo(
+    () => [...selectedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
+    [selectedLabels],
+  );
+
+  const submit = async (action: FeedbackAction, labels?: string[]) => {
     if (selectedDatasetId === null || modelFamilyName === null) {
       message.error("Select a dataset and run inference first");
       return;
@@ -69,6 +66,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
       return;
     }
     setSubmitting(true);
+    setSaveState("saving");
     try {
       const fb = await dispatch(
         submitFeedback({
@@ -76,22 +74,23 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
           model_family_name: modelFamilyName,
           snippet_id: prediction.snippet_id,
           action,
-          ...(modifiedLabel ? { labels: [modifiedLabel] } : {}),
+          ...(labels && labels.length > 0 ? { labels } : {}),
+          ...(isBlind ? { persist_annotations: false } : {}),
         }),
       ).unwrap();
 
-      // If this feedback hit the backend threshold, the backend already dispatched an auto-retrain job.
-      // Tell the user immediately that the model is being updated and predictions will refresh.
       if (fb.retrain_triggered) {
         message.info(
           `Model update triggered (${fb.feedback_count_since_retrain}/${retrainThreshold}). ` +
           "Retraining started — predictions will refresh when ready.",
         );
       }
+
+      setSaveState("saved");
+      // Auto-dismiss the "Saved" indicator so it doesn't linger.
+      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
     } catch (e: any) {
       const detail = String(e?.message ?? e ?? "");
-      // Common case after retrain/checkpoint switch: UI feed is stale and snippet has no prediction
-      // under the backend's current active checkpoint.
       if (
         detail.includes("No prediction found for checkpoint") &&
         selectedDatasetId !== null &&
@@ -110,14 +109,126 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
             k: inferenceK,
           }),
         );
+        setSaveState("error");
       } else {
         message.error("Failed to submit feedback");
+        setSaveState("error");
       }
     } finally {
       setSubmitting(false);
-      setModifyOpen(false);
     }
   };
+
+  // Sync local selection from backend feedback when in blind mode.
+  // Never touch saveState here — the submit() function owns that lifecycle.
+  useEffect(() => {
+    if (!isBlind) return;
+    skipNextAutoSubmitRef.current = true;
+    if (lastSyncedSnippetIdRef.current !== prediction.snippet_id) {
+      lastSyncedSnippetIdRef.current = prediction.snippet_id;
+      setSaveState("idle");
+    }
+    setSelectedLabels(submittedLabels);
+  }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
+
+  // Auto-submit when the user changes labels (blind mode; debounced).
+  useEffect(() => {
+    if (!isBlind) return;
+    if (skipNextAutoSubmitRef.current) {
+      skipNextAutoSubmitRef.current = false;
+      return;
+    }
+    if (!hasCheckpoint) return;
+    if (feedbackDisabled) return;
+    if (selectionKey.length === 0) return;
+    if (selectionKey === lastSubmittedKeyRef.current) return;
+
+    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = window.setTimeout(() => {
+      lastSubmittedKeyRef.current = selectionKey;
+      submit("MODIFY", [...selectedLabels]);
+    }, 250);
+
+    return () => {
+      if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
+    };
+  }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
+
+  // ── Blind mode ────────────────────────────────────────────────────────────
+  if (isBlind) {
+    return (
+      <div className="flex flex-col gap-1.5 h-full min-h-0">
+        {/* Transient status — only shown while something is happening */}
+        {(saveState === "saving" || saveState === "error") && (
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {saveState === "saving" && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                <Spin size="small" /> Saving…
+              </span>
+            )}
+            {saveState === "error" && (
+              <span className="text-[11px] font-semibold text-red-500">Save failed — try again</span>
+            )}
+          </div>
+        )}
+        {!hasCheckpoint && (
+          <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
+            <span className="flex-shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
+              No model checkpoint — feedback disabled
+            </span>
+          </Tooltip>
+        )}
+
+        {/* Compact label picker — fills remaining space */}
+        <LabelSelector
+          value={selectedLabels}
+          onChange={(labels) => {
+            setSelectedLabels(labels);
+            setSaveState("idle");
+          }}
+          disabled={feedbackDisabled}
+          compact
+          showList
+          fillHeight
+          showSelectedRow={false}
+          hideSelectedInInput
+        />
+      </div>
+    );
+  }
+
+  // ── Guided mode (default) ─────────────────────────────────────────────────
+  const modifyInline = modifyOpen ? (
+    <div className="mt-2 flex flex-col gap-2">
+      <Input
+        size="small"
+        placeholder="Correct label (press Enter to confirm)"
+        value={customLabel}
+        onChange={(e) => setCustomLabel(e.target.value)}
+        onPressEnter={() => customLabel.trim() && submit("MODIFY", [customLabel.trim()])}
+        autoFocus
+      />
+      <div className="flex gap-2 justify-end">
+        <Button
+          size="small"
+          onClick={() => {
+            setCustomLabel("");
+            setModifyOpen(false);
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          size="small"
+          type="primary"
+          disabled={!customLabel.trim()}
+          onClick={() => submit("MODIFY", [customLabel.trim()])}
+        >
+          Confirm
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   if (isDone) {
     const colorMap: Record<FeedbackAction, string> = {
@@ -153,44 +264,44 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction }) => {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-1 items-center">
-      {submitting && <Spin size="small" />}
-      <Tooltip
-        title={
-          hasCheckpoint
-            ? null
-            : "Bootstrap mode: no checkpoint available yet. Train/register a checkpoint to enable feedback."
-        }
-      >
-        <span className="inline-flex gap-1 items-center">
-          <Button
-            size="small"
-            type="primary"
-            icon={<CheckOutlined />}
-            style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
-            disabled={feedbackDisabled}
-            onClick={() => submit("ACCEPT")}
-          >
-            Accept
-          </Button>
-          <Button
-            size="small"
-            danger
-            icon={<CloseOutlined />}
-            disabled={feedbackDisabled}
-            onClick={() => submit("REJECT")}
-          >
-            Reject
-          </Button>
-        </span>
-      </Tooltip>
-      <Button
-        size="small"
-        icon={<EditOutlined />}
-        disabled={feedbackDisabled}
-        onClick={() => setModifyOpen((v) => !v)}
-      >
-        Modify
-      </Button>
+        {submitting && <Spin size="small" />}
+        <Tooltip
+          title={
+            hasCheckpoint
+              ? null
+              : "Bootstrap mode: no checkpoint available yet. Train/register a checkpoint to enable feedback."
+          }
+        >
+          <span className="inline-flex gap-1 items-center">
+            <Button
+              size="small"
+              type="primary"
+              icon={<CheckOutlined />}
+              style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
+              disabled={feedbackDisabled}
+              onClick={() => submit("ACCEPT")}
+            >
+              Accept
+            </Button>
+            <Button
+              size="small"
+              danger
+              icon={<CloseOutlined />}
+              disabled={feedbackDisabled}
+              onClick={() => submit("REJECT")}
+            >
+              Reject
+            </Button>
+          </span>
+        </Tooltip>
+        <Button
+          size="small"
+          icon={<EditOutlined />}
+          disabled={feedbackDisabled}
+          onClick={() => setModifyOpen((v) => !v)}
+        >
+          Modify
+        </Button>
       </div>
       {modifyInline}
     </div>

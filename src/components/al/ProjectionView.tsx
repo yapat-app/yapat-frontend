@@ -21,7 +21,6 @@ import {
   setSelectedSnippet,
   setSamplingMethod,
   setVisibilityFilter,
-  setColorFilter,
   setVisibilityKeys,
   setVisibilityRangeFor,
 } from "../../redux/features/alSlice";
@@ -45,10 +44,14 @@ type PlotPoint = {
 };
 
 // ── Default colours ───────────────────────────────────────────────────────────
-const DEFAULT_COLOR = "#6366f1";
 const SELECTED_COLOR = "#facc15";
 const HIDDEN_COLOR = "#d1d5db";
+const UNLABELED_COLOR = "#9ca3af"; // grey
 const LABELED_BORDER_COLOR = "#111827";
+
+/** Composite ranks in [0, 1]; higher means more informative (visibility threshold selects the tail toward 1). */
+const COMPOSITE_DOMAIN: [number, number] = [0, 1];
+const SAMPLE_SCORE_UPPER_EPS = 1e-9;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -70,7 +73,7 @@ export const ProjectionView: React.FC = () => {
     snippetSetId,
   } = useAppSelector((state) => state.al);
 
-  const [method, setMethod] = useState<"pca" | "umap" | "tsne" | "isomap">("umap");
+  const [method, setMethod] = useState<"pca" | "umap" | "tsne" | "isomap">("tsne");
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvData, setFpvData] = useState<FPVResponse | null>(null);
@@ -84,12 +87,19 @@ export const ProjectionView: React.FC = () => {
 
   // ── Phase shortcuts ───────────────────────────────────────────────────────
   const visMode = phase.visualization.mode;
-  const colorMode = phase.visualization.colorFilter.mode;
   const visibilityMode = phase.visualization.visibilityFilter.mode;
-  const allowedColorProps = phase.visualization.colorFilter.allowedProperties;
   const allowedVisProps = phase.visualization.visibilityFilter.allowedProperties;
+  const defaultVisKey = phase.visualization.visibilityFilter.defaultPropertyKey ?? null;
+  const visSliderStyle = phase.visualization.visibilityFilter.sliderStyle ?? "range";
   const showLabeledPool = phase.visualization.showLabeledPool;
   const allowPointClick = phase.visualization.allowPointClick;
+
+  const dimRedMethods: Array<{ key: typeof method; label: string }> = [
+    { key: "tsne", label: "t‑SNE" },
+    { key: "umap", label: "UMAP" },
+    { key: "pca", label: "PCA" },
+    { key: "isomap", label: "Isomap" },
+  ];
 
   // ── Overlay data source (inference snapshot if available, else live) ─────
   // Used only for the feed / selection panel. The plot in `whole_dataset` mode
@@ -100,19 +110,10 @@ export const ProjectionView: React.FC = () => {
 
   const hasOverlayPredictions = rawOverlayPredictions.length > 0;
 
-  // Reset filters whenever the active phase changes — prevents stale color/key
+  // Reset visibility filters whenever the active phase changes — prevents stale key
   // selections that aren't allowed under the new phase.
   useEffect(() => {
-    const colorAllowed = allowedColorProps as readonly string[];
     const visAllowed = allowedVisProps as readonly string[];
-    if (colorMode === "disabled") {
-      dispatch(setColorFilter({ propertyKey: null }));
-    } else if (
-      alFilters.color.propertyKey &&
-      !colorAllowed.includes(alFilters.color.propertyKey)
-    ) {
-      dispatch(setColorFilter({ propertyKey: null }));
-    }
     if (visibilityMode === "disabled") {
       dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
       dispatch(setVisibilityKeys([]));
@@ -216,7 +217,8 @@ export const ProjectionView: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
-      if (!selectedDatasetId || !allowedColorProps.includes("actual_label")) {
+      // Always load labels so actual_label coloring is always applied.
+      if (!selectedDatasetId) {
         if (!cancelled) setLabelsBySnippet({});
         return;
       }
@@ -233,7 +235,7 @@ export const ProjectionView: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [selectedDatasetId, snippetSetId, allowedColorProps]);
+  }, [selectedDatasetId, snippetSetId]);
 
   const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
   const isMissingProjection =
@@ -285,6 +287,21 @@ export const ProjectionView: React.FC = () => {
     }
     return map;
   }, [fpvData, method]);
+
+  const fpvCoordsBySnippetForMethod = useMemo(() => {
+    if (!fpvData?.projections_2d) return null;
+    const maps: Partial<Record<typeof method, Record<number, [number, number]>>> = {};
+    (["tsne", "umap", "pca", "isomap"] as const).forEach((m) => {
+      const proj = fpvData.projections_2d?.[m];
+      if (!proj || proj.x.length !== fpvData.points.length || proj.y.length !== fpvData.points.length) return;
+      const map: Record<number, [number, number]> = {};
+      for (let i = 0; i < fpvData.points.length; i++) {
+        map[fpvData.points[i].snippet_id] = [proj.x[i], proj.y[i]];
+      }
+      maps[m] = map;
+    });
+    return maps;
+  }, [fpvData]);
 
   // ── Score join for whole-dataset filtering/coloring ──────────────────────
   // The FPV dataset response may not contain sampler-suite scores. In phase 3.x
@@ -394,35 +411,75 @@ export const ProjectionView: React.FC = () => {
       let visible = true;
 
       if (visibilityMode === "single" && visProp) {
-        const [pMin, pMax] = effectiveRange;
+        // Composite uses a fixed unit interval regardless of stale API range hints.
+        const [pMin, pMax] = visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
         const [normLo, normHi] = alFilters.visibility.range;
-        const domainLo = pMin + normLo * (pMax - pMin);
-        const domainHi = pMin + normHi * (pMax - pMin);
-        const raw = p.scores?.[visKey as keyof SampleScores] as number | undefined;
+        // Threshold slider: cutoff is normLo mapped into [pMin,pMax]; show [cutoff, pMax].
+        const span = pMax - pMin;
+        const domainLo = pMin + normLo * span;
+        const domainHi = visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
+        let raw = p.scores?.[visKey as keyof SampleScores] as number | undefined;
+        if (visKey === "composite" && typeof raw === "number") {
+          raw = Math.min(COMPOSITE_DOMAIN[1], Math.max(COMPOSITE_DOMAIN[0], raw));
+        }
         if (raw === undefined || raw === null) visible = false;
-        else visible = raw >= domainLo && raw <= domainHi;
+        else visible = raw >= domainLo && raw <= domainHi + SAMPLE_SCORE_UPPER_EPS;
       } else if (visibilityMode === "multi") {
         const keys = alFilters.visibility.propertyKeys ?? [];
         const ranges = alFilters.visibility.ranges ?? {};
         for (const key of keys) {
           const prop = getPropertyByKey(key);
           if (!prop || !prop.range) continue;
-          const [pMin, pMax] = prop.range;
+          const [pMin, pMax] = key === "composite" ? COMPOSITE_DOMAIN : prop.range;
           const [normLo, normHi] = ranges[key] ?? [0, 1];
           const domainLo = pMin + normLo * (pMax - pMin);
           const domainHi = pMin + normHi * (pMax - pMin);
           const raw = p.scores?.[key as keyof SampleScores] as number | undefined;
           if (raw === undefined || raw === null) { visible = false; break; }
-          if (raw < domainLo || raw > domainHi) { visible = false; break; }
+          let v = raw;
+          if (key === "composite" && typeof v === "number") {
+            v = Math.min(COMPOSITE_DOMAIN[1], Math.max(COMPOSITE_DOMAIN[0], v));
+          }
+          if (v < domainLo || v > domainHi + SAMPLE_SCORE_UPPER_EPS) { visible = false; break; }
         }
       }
 
       return { p, coord: coords[i], visible };
     });
-  }, [enrichedPlotPoints, coords, visProp, visKey, alFilters.visibility, effectiveRange, visibilityMode]);
+  }, [
+    enrichedPlotPoints,
+    coords,
+    visProp,
+    visKey,
+    alFilters.visibility,
+    effectiveRange,
+    visibilityMode,
+    visSliderStyle,
+  ]);
+
+  const actualLabelLegend = useMemo(() => {
+    // Legend should only show labels that are present among currently visible points.
+    const labels = Array.from(
+      new Set(
+        filtered
+          .filter((f) => f.visible)
+          .map((f) => (f.p.scores as any)?.actual_label as string | undefined)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    ).sort();
+    const MAX_LEGEND_PILLS = 30;
+    const shown = labels.slice(0, MAX_LEGEND_PILLS);
+    const remaining = Math.max(0, labels.length - shown.length);
+    return { shown, remaining, total: labels.length };
+  }, [filtered]);
+
+  const thumbnailPoints = useMemo(() => {
+    // Use all visible points so thumbnails reflect the current filter state.
+    return filtered.filter((f) => f.visible);
+  }, [filtered]);
 
   // ── Plot traces ──────────────────────────────────────────────────────────
-  const colorKey = colorMode === "disabled" ? null : alFilters.color.propertyKey;
+  const colorKey: "actual_label" = "actual_label";
 
   const traces = useMemo(() => {
     const backgroundTrace = null;
@@ -443,71 +500,86 @@ export const ProjectionView: React.FC = () => {
           customdata: hidden.map((f) => f.p.snippet_id),
           marker: { color: HIDDEN_COLOR, size: 4, opacity: 0.25, line: { width: 0 } },
           hovertemplate: "Snippet #%{customdata} (filtered)<extra></extra>",
+          // Don't let filtered-out points steal hover/click interactions.
+          hoverinfo: "skip" as const,
         }
       : null;
 
-    const byLabel = new Map<string, {
-      xs: number[];
-      ys: number[];
-      ids: number[];
-      colors: string[];
-      sizes: number[];
-      lineWidths: number[];
-      lineColors: string[];
-    }>();
+    const xs: number[] = [];
+    const ys: number[] = [];
+    const ids: number[] = [];
+    const colors: string[] = [];
+    const sizes: number[] = [];
+    const lineWidths: number[] = [];
+    const lineColors: string[] = [];
+    const hoverNames: string[] = [];
 
     visible.forEach(({ p, coord }) => {
-      const label = p.predicted_label ?? "—";
-      if (!byLabel.has(label)) {
-        byLabel.set(label, { xs: [], ys: [], ids: [], colors: [], sizes: [], lineWidths: [], lineColors: [] });
-      }
-      const g = byLabel.get(label)!;
-      g.xs.push(coord[0]);
-      g.ys.push(coord[1]);
-      g.ids.push(p.snippet_id);
+      xs.push(coord[0]);
+      ys.push(coord[1]);
+      ids.push(p.snippet_id);
 
       const isSelected = p.snippet_id === selectedSnippetId;
-      g.sizes.push(isSelected ? 13 : 6);
-      g.colors.push(
+      const actual = (p.scores as any)?.actual_label as string | undefined;
+      const isLabeled = Boolean(actual);
+
+      sizes.push(isSelected ? 13 : isLabeled ? 7 : 6);
+      colors.push(
         isSelected
           ? SELECTED_COLOR
-          : colorKey
+          : isLabeled
           ? resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? [])
-          : DEFAULT_COLOR,
+          : UNLABELED_COLOR,
       );
 
-      // Labeled-pool halo (border).
-      const isLabeled = showLabeledPool && labeledSnippetIds.has(p.snippet_id);
-      g.lineWidths.push(isLabeled ? 2 : 0);
-      g.lineColors.push(isLabeled ? LABELED_BORDER_COLOR : "rgba(0,0,0,0)");
+      // Selected gets a strong outline; labeled gets a subtle outline.
+      if (isSelected) {
+        lineWidths.push(2.5);
+        lineColors.push(LABELED_BORDER_COLOR);
+      } else if (isLabeled) {
+        lineWidths.push(1.5);
+        lineColors.push("rgba(17,24,39,0.35)");
+      } else {
+        lineWidths.push(0);
+        lineColors.push("rgba(0,0,0,0)");
+      }
+
+      hoverNames.push(actual ?? "Unlabeled");
     });
 
-    const visibleTraces = Array.from(byLabel.entries()).map(([label, g]) => ({
+    const visibleTrace = {
       type: "scatter" as const,
       mode: "markers" as const,
-      name: label,
-      x: g.xs,
-      y: g.ys,
-      customdata: g.ids,
+      name: "",
+      showlegend: false,
+      x: xs,
+      y: ys,
+      customdata: ids,
+      text: hoverNames,
       marker: {
-        color: g.colors,
-        size: g.sizes,
-        opacity: 0.88,
-        line: { width: g.lineWidths, color: g.lineColors },
+        color: colors,
+        size: sizes,
+        opacity: 0.9,
+        line: { width: lineWidths, color: lineColors },
       },
-      hovertemplate: `<b>${label}</b><br>Snippet #%{customdata}<extra></extra>`,
-    }));
+      hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
+    };
 
-    const base = hiddenTrace ? [hiddenTrace, ...visibleTraces] : visibleTraces;
+    const base = hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
     return backgroundTrace ? [backgroundTrace, ...base] : base;
-  }, [filtered, selectedSnippetId, colorKey, allCategoricalValues, fpvData, method, visMode, labeledSnippetIds, showLabeledPool]);
+  }, [filtered, selectedSnippetId, allCategoricalValues, colorKey]);
 
   const handlePlotClick = (event: any) => {
     if (!allowPointClick) return;
     const pt = event.points?.[0];
-    if (pt?.customdata !== undefined) {
-      dispatch(setSelectedSnippet(pt.customdata as number));
-    }
+    if (pt?.customdata === undefined) return;
+
+    // Only allow interactions with currently-visible points.
+    // Hidden/filtered points are rendered in a separate trace.
+    const hasHiddenTrace = Boolean(filtered.some((f) => !f.visible));
+    if (hasHiddenTrace && pt.curveNumber === 0) return;
+
+    dispatch(setSelectedSnippet(pt.customdata as number));
   };
 
   // ── Phase guard: hide entire view when phase says so ─────────────────────
@@ -517,7 +589,7 @@ export const ProjectionView: React.FC = () => {
   const isWaitingForRetrain = predictions.length > 0 && projectionPredictions.length === 0;
   const hasAnyTraces = traces.length > 0;
 
-  const showFilterPanel = visibilityMode !== "disabled" || colorMode !== "disabled";
+  const showFilterPanel = visibilityMode !== "disabled";
 
   return (
     <div className="flex flex-col h-full">
@@ -525,9 +597,11 @@ export const ProjectionView: React.FC = () => {
         <ALFilterPanel
           filters={alFilters}
           phaseVisibilityMode={visibilityMode}
-          phaseColorMode={colorMode}
+          phaseColorMode="disabled"
           allowedVisibilityProperties={allowedVisProps}
-          allowedColorProperties={allowedColorProps}
+          allowedColorProperties={[]}
+          defaultVisibilityKey={defaultVisKey}
+          visibilitySliderStyle={visSliderStyle}
           onVisibilityKeyChange={(key) =>
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
           }
@@ -538,9 +612,7 @@ export const ProjectionView: React.FC = () => {
           onMultiVisibilityRangeChange={(key, range) =>
             dispatch(setVisibilityRangeFor({ key, range }))
           }
-          onColorKeyChange={(key) =>
-            dispatch(setColorFilter({ propertyKey: key }))
-          }
+          onColorKeyChange={() => {}}
           allCategoricalValues={allCategoricalValues}
           visibilityRangeOverride={visRangeOverride ?? undefined}
         />
@@ -565,20 +637,7 @@ export const ProjectionView: React.FC = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-gray-400 font-ibm-sans">Projection</span>
-          <Select
-            size="small"
-            value={method}
-            onChange={(v) => setMethod(v)}
-            style={{ width: 120 }}
-          >
-            <Option value="umap">UMAP</Option>
-            <Option value="pca">PCA</Option>
-            <Option value="tsne">t-SNE</Option>
-            <Option value="isomap">Isomap</Option>
-          </Select>
-        </div>
+        {/* Projection type selector removed for the study (locked to t‑SNE). */}
 
         <div className="flex items-center gap-2 flex-wrap ml-auto">
           <span className="text-xs text-gray-400 font-ibm-sans">
@@ -589,6 +648,55 @@ export const ProjectionView: React.FC = () => {
             <Tag color="default" className="text-xs">
               {labeledSnippetIds.size} labeled
             </Tag>
+          )}
+
+          {/* Actual-label color legend (always-on) */}
+          {actualLabelLegend.total > 0 && (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] text-gray-400 font-ibm-sans whitespace-nowrap">Legend:</span>
+              <div
+                className={[
+                  "min-w-0 max-w-[min(52vw,720px)]",
+                  "overflow-x-auto",
+                  "[scrollbar-width:thin]",
+                  "[-webkit-overflow-scrolling:touch]",
+                ].join(" ")}
+              >
+                <div className="flex items-center gap-1.5 py-0.5 pr-1">
+                  {actualLabelLegend.shown.map((lbl) => (
+                    <span
+                      key={lbl}
+                      className={[
+                        "inline-flex items-center gap-1.5",
+                        "px-2 py-0.5",
+                        "rounded-full",
+                        "border border-gray-200",
+                        "bg-white/90",
+                        "text-[11px] text-gray-700",
+                        "shadow-[0_1px_0_rgba(0,0,0,0.02)]",
+                        "max-w-[160px]",
+                      ].join(" ")}
+                      title={lbl}
+                    >
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full border border-black/10 flex-shrink-0"
+                        style={{
+                          backgroundColor: resolveColor(
+                            { actual_label: lbl } as any,
+                            "actual_label",
+                            allCategoricalValues.actual_label ?? [],
+                          ),
+                        }}
+                      />
+                      <span className="truncate">{lbl}</span>
+                    </span>
+                  ))}
+                  {actualLabelLegend.remaining > 0 && actualLabelLegend.total > actualLabelLegend.shown.length && (
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap">+{actualLabelLegend.remaining}</span>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           {visMode === "whole_dataset" && fpvLoading && (
@@ -605,7 +713,7 @@ export const ProjectionView: React.FC = () => {
           )}
           {visMode === "whole_dataset" && !fpvLoading && !fpvError && (
             <Tag color="blue" className="text-xs">
-              {method.toUpperCase()}
+              {method === "tsne" ? "t‑SNE" : method.toUpperCase()}
             </Tag>
           )}
 
@@ -644,7 +752,50 @@ export const ProjectionView: React.FC = () => {
       </div>
 
       {/* ── Plot area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden flex">
+        {/* Left thumbnail selector */}
+        {phase.ui.showProjectionMethodSelector && (
+          <div className="w-[168px] flex-shrink-0 border-r border-gray-100 bg-white">
+            <div className="px-3 py-2 border-b border-gray-100">
+              <div className="text-xs font-ibm-mono font-semibold text-gray-700">Projection</div>
+              <div className="text-[11px] text-gray-400">Pick a method</div>
+            </div>
+            <div className="p-3 flex flex-col gap-2 overflow-auto" style={{ maxHeight: "100%" }}>
+              {dimRedMethods.map((m) => {
+                const active = method === m.key;
+                const hasProj = Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => hasProj && setMethod(m.key)}
+                    disabled={!hasProj}
+                    className={[
+                      "text-left rounded-xl border px-2.5 py-2 transition-all",
+                      active
+                        ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
+                        : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
+                      !hasProj ? "opacity-50 cursor-not-allowed" : "",
+                    ].join(" ")}
+                  >
+                    <div className="w-full h-[74px] rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
+                      <MiniProjection
+                        points={thumbnailPoints}
+                        coordsBySnippet={fpvCoordsBySnippetForMethod?.[m.key] ?? null}
+                        selectedSnippetId={selectedSnippetId}
+                        allActualLabels={allCategoricalValues.actual_label ?? []}
+                      />
+                    </div>
+                    <div className="mt-1 text-[11px] text-gray-600 font-ibm-sans">{m.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Plot */}
+        <div className="flex-1 relative overflow-hidden">
         {hasOverlayPredictions && rawOverlayPredictions.some((p) => !p.scores) && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
             <ExperimentOutlined className="text-blue-400" />
@@ -674,7 +825,7 @@ export const ProjectionView: React.FC = () => {
             layout={{
               autosize: true,
               margin: { l: 30, r: 10, t: 10, b: 30 },
-              showlegend: true,
+              showlegend: false,
               legend: {
                 font: { size: 10 },
                 itemsizing: "constant",
@@ -694,7 +845,82 @@ export const ProjectionView: React.FC = () => {
             config={{ displayModeBar: false, responsive: true }}
           />
         )}
+        </div>
       </div>
     </div>
+  );
+};
+
+const THUMB_W = 120;
+const THUMB_H = 74;
+
+const MiniProjection: React.FC<{
+  points: Array<{ p: any; coord: [number, number]; visible: boolean }>;
+  coordsBySnippet: Record<number, [number, number]> | null;
+  selectedSnippetId: number | null;
+  allActualLabels: string[];
+}> = ({ points, coordsBySnippet, selectedSnippetId, allActualLabels }) => {
+  if (!coordsBySnippet) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
+        N/A
+      </div>
+    );
+  }
+
+  // Build coords + colors
+  const coords: Array<{ x: number; y: number; id: number; color: string; r: number; stroke?: string; sw?: number }> = [];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+  for (const it of points) {
+    const id = it.p.snippet_id as number;
+    const c = coordsBySnippet[id];
+    if (!c) continue;
+    const x = c[0];
+    const y = c[1];
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+
+    const actual = (it.p.scores as any)?.actual_label as string | undefined;
+    const isLabeled = Boolean(actual);
+    const isSelected = selectedSnippetId === id;
+    coords.push({
+      x, y, id,
+      color: isSelected ? "#facc15" : isLabeled ? resolveColor({ actual_label: actual } as any, "actual_label", allActualLabels) : "#9ca3af",
+      r: isSelected ? 2.6 : isLabeled ? 2.0 : 1.7,
+      stroke: isSelected ? "#111827" : undefined,
+      sw: isSelected ? 1 : 0,
+    });
+  }
+
+  if (coords.length === 0 || !Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const pad = 4;
+
+  const toSvg = (x: number, y: number) => {
+    const sx = pad + ((x - minX) / spanX) * (THUMB_W - pad * 2);
+    const sy = pad + ((y - minY) / spanY) * (THUMB_H - pad * 2);
+    return [sx, THUMB_H - sy]; // flip y
+  };
+
+  return (
+    <svg viewBox={`0 0 ${THUMB_W} ${THUMB_H}`} className="w-full h-full">
+      {coords.map((c) => {
+        const [sx, sy] = toSvg(c.x, c.y);
+        return (
+          <circle
+            key={c.id}
+            cx={sx}
+            cy={sy}
+            r={c.r}
+            fill={c.color}
+            opacity={0.9}
+            stroke={c.stroke}
+            strokeWidth={c.sw}
+          />
+        );
+      })}
+    </svg>
   );
 };

@@ -6,8 +6,6 @@
 
 import type { PhaseConfig } from "./types";
 
-const FEED_TOPK = 20;
-
 export const DEFAULT_PHASE_ID = "P1.1";
 
 export const STUDY_PHASES: Record<string, PhaseConfig> = {
@@ -17,7 +15,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     label: "Phase 1 · Part 1 — Feed only",
     feed: {
       mode: "scrollable_topk",
-      topK: FEED_TOPK,
+      // In phase 1, Top‑K is chosen by the user in the UI modal
       samplingStrategy: "composite",
     },
     visualization: {
@@ -31,6 +29,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       showSamplingMethodSelector: false,
       showProjectionMethodSelector: false,
       showRetrainControls: true,
+      labelingMode: "blind",
     },
   },
 
@@ -39,7 +38,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     label: "Phase 1 · Part 2 — Feed + limited vis",
     feed: {
       mode: "scrollable_topk",
-      topK: FEED_TOPK,
+      // In phase 1, Top‑K is chosen by the user in the UI modal (not hard-coded here).
       samplingStrategy: "composite",
     },
     visualization: {
@@ -51,8 +50,9 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     ui: {
       showSamplingMethodSelector: false,
-      showProjectionMethodSelector: false,
+      showProjectionMethodSelector: true,
       showRetrainControls: true,
+      labelingMode: "blind",
     },
   },
 
@@ -73,7 +73,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     ui: {
       showSamplingMethodSelector: false,
-      showProjectionMethodSelector: false,
+      showProjectionMethodSelector: true,
       showRetrainControls: true,
     },
   },
@@ -86,7 +86,12 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       mode: "whole_dataset",
       showLabeledPool: true,
       allowPointClick: true,
-      visibilityFilter: { mode: "single", allowedProperties: ["composite"] },
+      visibilityFilter: {
+        mode: "single",
+        allowedProperties: ["composite"],
+        defaultPropertyKey: "composite",
+        sliderStyle: "threshold",
+      },
       colorFilter: {
         mode: "single",
         allowedProperties: ["composite", "actual_label"],
@@ -94,7 +99,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     ui: {
       showSamplingMethodSelector: false,
-      showProjectionMethodSelector: false,
+      showProjectionMethodSelector: true,
       showRetrainControls: true,
     },
   },
@@ -111,6 +116,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       visibilityFilter: {
         mode: "single",
         allowedProperties: ["uncertainty", "diversity", "density"],
+        defaultPropertyKey: "uncertainty",
+        sliderStyle: "threshold",
       },
       colorFilter: {
         mode: "single",
@@ -119,7 +126,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     ui: {
       showSamplingMethodSelector: false,
-      showProjectionMethodSelector: false,
+      showProjectionMethodSelector: true,
       showRetrainControls: true,
     },
   },
@@ -143,7 +150,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     ui: {
       showSamplingMethodSelector: false,
-      showProjectionMethodSelector: false,
+      showProjectionMethodSelector: true,
       showRetrainControls: true,
     },
   },

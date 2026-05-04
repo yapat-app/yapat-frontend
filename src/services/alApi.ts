@@ -16,6 +16,7 @@ import type {
   PAMCheckpoint,
   ALLabeledSnippetsResponse,
   ALSnippetLabelsResponse,
+  PAMFeedbackCountResponse,
 } from "../types/al";
 
 const BASE = "/api/pam-al";
@@ -38,6 +39,14 @@ export const alApi = {
   /** POST /api/pam-al/feedback */
   postFeedback: async (payload: FeedbackPayload): Promise<FeedbackResponse> => {
     const response = await api.post(`${BASE}/feedback`, payload);
+    return response.data;
+  },
+
+  /** GET /api/pam-al/feedback-count — counter for auto-retrain gating */
+  getFeedbackCount: async (datasetId: number, modelFamilyName: string): Promise<PAMFeedbackCountResponse> => {
+    const response = await api.get(`${BASE}/feedback-count`, {
+      params: { dataset_id: datasetId, model_family_name: modelFamilyName },
+    });
     return response.data;
   },
 
@@ -86,6 +95,18 @@ export const alApi = {
         ...(snippetSetId !== undefined ? { snippet_set_id: snippetSetId } : {}),
       },
     });
+    return response.data;
+  },
+
+  /** GET /api/pam-al/checkpoints/{checkpoint_id}/species — species list for a checkpoint */
+  getCheckpointSpecies: async (checkpointId: number): Promise<string[]> => {
+    const response = await api.get(`${BASE}/checkpoints/${checkpointId}/species`);
+    return response.data;
+  },
+
+  /** GET /api/pam-al/species-default — fallback species list from default PAM label config */
+  getDefaultSpecies: async (): Promise<string[]> => {
+    const response = await api.get(`${BASE}/species-default`);
     return response.data;
   },
 };
