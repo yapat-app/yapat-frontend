@@ -21,6 +21,31 @@ import type {
 
 const BASE = "/api/pam-al";
 
+// In-memory cache to avoid spamming `/species-default` across component remounts.
+// Particularly important when the endpoint returns 404 in some deployments.
+let defaultSpeciesCache:
+  | {
+      status: "pending";
+      promise: Promise<string[]>;
+    }
+  | {
+      status: "ready";
+      value: string[];
+    }
+  | {
+      status: "not_found";
+      value: string[];
+    }
+  | null = null;
+
+// Cache checkpoint species lists by checkpoint id.
+const checkpointSpeciesCache = new Map<
+  number,
+  | { status: "pending"; promise: Promise<string[]> }
+  | { status: "ready"; value: string[] }
+  | { status: "not_found"; value: string[] }
+>();
+
 export const alApi = {
   /** POST /api/pam-al/inference/get-or-create — run classifier or return cached predictions */
   runInference: async (body: PAMRunInferenceRequest): Promise<PAMInferenceResult> => {
@@ -100,14 +125,60 @@ export const alApi = {
 
   /** GET /api/pam-al/checkpoints/{checkpoint_id}/species — species list for a checkpoint */
   getCheckpointSpecies: async (checkpointId: number): Promise<string[]> => {
-    const response = await api.get(`${BASE}/checkpoints/${checkpointId}/species`);
-    return response.data;
+    const cached = checkpointSpeciesCache.get(checkpointId);
+    if (cached?.status === "ready") return cached.value;
+    if (cached?.status === "not_found") return cached.value;
+    if (cached?.status === "pending") return cached.promise;
+
+    const promise = api
+      .get(`${BASE}/checkpoints/${checkpointId}/species`)
+      .then((response) => {
+        const value = Array.isArray(response.data) ? response.data : [];
+        checkpointSpeciesCache.set(checkpointId, { status: "ready", value });
+        return value;
+      })
+      .catch((error: any) => {
+        const status = error?.response?.status;
+        if (status === 404) {
+          checkpointSpeciesCache.set(checkpointId, { status: "not_found", value: [] });
+          return [];
+        }
+        checkpointSpeciesCache.delete(checkpointId);
+        throw error;
+      });
+
+    checkpointSpeciesCache.set(checkpointId, { status: "pending", promise });
+    return promise;
   },
 
   /** GET /api/pam-al/species-default — fallback species list from default PAM label config */
   getDefaultSpecies: async (): Promise<string[]> => {
-    const response = await api.get(`${BASE}/species-default`);
-    return response.data;
+    // If we already got a value (or confirmed 404), never hit the network again.
+    if (defaultSpeciesCache?.status === "ready") return defaultSpeciesCache.value;
+    if (defaultSpeciesCache?.status === "not_found") return defaultSpeciesCache.value;
+    if (defaultSpeciesCache?.status === "pending") return defaultSpeciesCache.promise;
+
+    const promise = api
+      .get(`${BASE}/species-default`)
+      .then((response) => {
+        const value = Array.isArray(response.data) ? response.data : [];
+        defaultSpeciesCache = { status: "ready", value };
+        return value;
+      })
+      .catch((error: any) => {
+        const status = error?.response?.status;
+        // Deployment may not expose this route; treat 404 as "no PAM list" and stop retrying.
+        if (status === 404) {
+          defaultSpeciesCache = { status: "not_found", value: [] };
+          return [];
+        }
+        // Allow other errors (network, auth, 5xx) to surface to callers.
+        defaultSpeciesCache = null;
+        throw error;
+      });
+
+    defaultSpeciesCache = { status: "pending", promise };
+    return promise;
   },
 };
 

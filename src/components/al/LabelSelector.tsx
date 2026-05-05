@@ -13,6 +13,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from "react"
 import { Select, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { alApi } from "../../services/alApi";
+import { useAppSelector } from "../../hooks";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -71,6 +72,7 @@ export const LabelSelector: React.FC<Props> = ({
 }) => {
   const [pamSpecies, setPamSpecies] = useState<string[]>([]);
   const [pamLoading, setPamLoading] = useState(false);
+  const { usedCheckpointId } = useAppSelector((state) => state.al);
 
   const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
   const [gbifLoading, setGbifLoading] = useState(false);
@@ -78,18 +80,24 @@ export const LabelSelector: React.FC<Props> = ({
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load the user-study label list from the backend (`data/labels.json`).
+  // Load species list.
+  // Prefer checkpoint-specific species list (GET /api/pam-al/checkpoints/{id}/species).
+  // Fall back to default list when no checkpoint exists.
   useEffect(() => {
     setPamLoading(true);
-    alApi
-      .getDefaultSpecies()
+    const req =
+      usedCheckpointId !== null && usedCheckpointId !== undefined
+        ? alApi.getCheckpointSpecies(usedCheckpointId)
+        : alApi.getDefaultSpecies();
+
+    req
       .then(setPamSpecies)
       .catch(() => {
         // Silently fall back to empty list; GBIF search is still available.
         setPamSpecies([]);
       })
       .finally(() => setPamLoading(false));
-  }, []);
+  }, [usedCheckpointId]);
 
   const searchGBIF = useCallback((query: string) => {
     if (!query || query.trim().length < 2) {
