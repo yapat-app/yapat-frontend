@@ -34,7 +34,7 @@ const initialState: TeamState = {
 };
 
 export const fetchAllteams = createAsyncThunk("teams/all", async () => {
-  const response = await api.get("/api/teams");
+  const response = await api.get("/api/teams/");
   return response.data;
 });
 
@@ -52,7 +52,7 @@ export const fetchTeamById = createAsyncThunk(
 export const createTeam = createAsyncThunk(
   "team/createNew",
   async (body: any) => {
-    const response = await api.post("/api/teams", body);
+    const response = await api.post("/api/teams/", body);
     return response.data;
   },
 );
@@ -112,7 +112,7 @@ export const removeTeamMember = createAsyncThunk(
 export const fetchTeamDatasets = createAsyncThunk(
   "team/getAllDatasets",
   async (body: any) => {
-    const response = await api.post("/api/teams/available-datasets", body);
+    const response = await api.post("/api/teams//available-datasets", body);
     return response.data;
   },
 );
