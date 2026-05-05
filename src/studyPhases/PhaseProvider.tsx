@@ -20,7 +20,11 @@ const STORAGE_KEY = "yapat_study_phase";
 
 function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
   // Canonical + short alias
-  const direct = searchParams.get("phase") ?? searchParams.get("p");
+  // Also accept legacy/mistyped variants like `?phases=P2.1` used in some deployments.
+  const direct =
+    searchParams.get("phase") ??
+    searchParams.get("p") ??
+    searchParams.get("phases");
   if (direct) return direct;
 
   // Recovery path: if someone built a URL like `?dataset_id=1?phase=P2.1`
@@ -29,11 +33,13 @@ function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
     if (!v) continue;
     const idx = v.indexOf("phase=");
     const idxP = v.indexOf("p=");
+    const idxPhases = v.indexOf("phases=");
     const start = idx >= 0 ? idx : idxP;
-    if (start < 0) continue;
-    const tail = v.slice(start);
+    const start2 = start >= 0 ? start : idxPhases;
+    if (start2 < 0) continue;
+    const tail = v.slice(start2);
     const recovered = new URLSearchParams(tail.startsWith("?") ? tail.slice(1) : tail);
-    const ph = recovered.get("phase") ?? recovered.get("p");
+    const ph = recovered.get("phase") ?? recovered.get("p") ?? recovered.get("phases");
     if (ph) return ph;
   }
 
