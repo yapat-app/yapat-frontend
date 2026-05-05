@@ -6,7 +6,9 @@
 
 import type { PhaseConfig } from "./types";
 
-export const DEFAULT_PHASE_ID = "P1.1";
+// Default phase when URL/localStorage/env don't specify one.
+// Note: Deployments may still override this via VITE_STUDY_PHASE.
+export const DEFAULT_PHASE_ID = "P1.2";
 
 export const STUDY_PHASES: Record<string, PhaseConfig> = {
   // ── Phase 1 ─ Scrollable feed only ──────────────────────────────────────
