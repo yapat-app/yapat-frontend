@@ -39,7 +39,9 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     {datasetTypeLabel}
                   </span>
                 </div>
-                <p className="sub_base_text">Some description</p>
+                <p className="sub_base_text">
+                  {dataset.description?.trim() ? dataset.description : "—"}
+                </p>
               </div>
               <div className="flex items-center justify-end gap-3 pt-1">
                 {datasetAnnotations.datasets && (
