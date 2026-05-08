@@ -172,7 +172,12 @@ export const ProjectionView: React.FC = () => {
       setFpvLoading(true);
       setFpvError(null);
       try {
-        const params = { dataset_id: selectedDatasetId, embedding_model_id: effectiveEmbeddingModelId, run_3d: false };
+        const params = {
+          dataset_id: selectedDatasetId,
+          embedding_model_id: effectiveEmbeddingModelId,
+          run_3d: false,
+          method,
+        };
         const fpv = await visualisationsApi.getFPVDataset(params);
         if (!cancelled) setFpvData(fpv);
       } catch (e: any) {
@@ -189,7 +194,7 @@ export const ProjectionView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode]);
+  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, method]);
 
   // ── Load labeled pool + per-snippet labels for study features ─────────────
   useEffect(() => {
@@ -247,7 +252,12 @@ export const ProjectionView: React.FC = () => {
     setFpvGenerateLoading(true);
     setFpvError(null);
     try {
-      const body = { dataset_id: selectedDatasetId, embedding_model_id: effectiveEmbeddingModelId, run_3d: false };
+      const body = {
+        dataset_id: selectedDatasetId,
+        embedding_model_id: effectiveEmbeddingModelId,
+        run_3d: false,
+        method,
+      };
       const fpv = await visualisationsApi.generateFPVDataset(body);
       setFpvData(fpv);
     } catch (e: any) {
@@ -491,7 +501,7 @@ export const ProjectionView: React.FC = () => {
 
     const hiddenTrace = hidden.length > 0
       ? {
-          type: "scatter" as const,
+          type: "scattergl" as const,
           mode: "markers" as const,
           name: "",
           showlegend: false,
@@ -548,7 +558,7 @@ export const ProjectionView: React.FC = () => {
     });
 
     const visibleTrace = {
-      type: "scatter" as const,
+      type: "scattergl" as const,
       mode: "markers" as const,
       name: "",
       showlegend: false,
@@ -763,13 +773,13 @@ export const ProjectionView: React.FC = () => {
             <div className="p-3 flex flex-col gap-2 overflow-auto" style={{ maxHeight: "100%" }}>
               {dimRedMethods.map((m) => {
                 const active = method === m.key;
-                const hasProj = Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
+                const hasProj = method === m.key || Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
                 return (
                   <button
                     key={m.key}
                     type="button"
-                    onClick={() => hasProj && setMethod(m.key)}
-                    disabled={!hasProj}
+                    onClick={() => setMethod(m.key)}
+                    disabled={fpvLoading}
                     className={[
                       "text-left rounded-xl border px-2.5 py-2 transition-all",
                       active
@@ -781,7 +791,7 @@ export const ProjectionView: React.FC = () => {
                     <div className="w-full h-[74px] rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
                       <MiniProjection
                         points={thumbnailPoints}
-                        coordsBySnippet={fpvCoordsBySnippetForMethod?.[m.key] ?? null}
+                        coordsBySnippet={m.key === method ? fpvCoordsBySnippet : null}
                         selectedSnippetId={selectedSnippetId}
                         allActualLabels={allCategoricalValues.actual_label ?? []}
                       />

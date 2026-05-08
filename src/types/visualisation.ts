@@ -16,6 +16,7 @@ export type FPVDatasetRequest = {
   dataset_id: number;
   embedding_model_id: number;
   run_3d?: boolean;
+  method?: "pca" | "umap" | "tsne" | "isomap";
 };
 
 export type FPVPointMetadata = {

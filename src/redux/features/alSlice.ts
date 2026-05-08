@@ -25,6 +25,7 @@ import type {
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
 const STORAGE_KEY = "yapat_al_last_feed";
+const MAX_PERSISTED_PREDICTIONS = 5000;
 
 // ── Persistence helpers ───────────────────────────────────────────────────
 
@@ -76,8 +77,9 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
 
 function saveFeed(state: ALState): void {
   try {
+    const shouldPersistPredictions = state.predictions.length <= MAX_PERSISTED_PREDICTIONS;
     const data: PersistedFeed = {
-      predictions: state.predictions,
+      predictions: shouldPersistPredictions ? state.predictions : [],
       modelInfo: state.modelInfo,
       totalScored: state.totalScored,
       modelCheckpointId: state.modelCheckpointId,
