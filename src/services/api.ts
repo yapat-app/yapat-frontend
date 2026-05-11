@@ -631,6 +631,29 @@ export const wssedApi = {
     const response = await api.get("/api/wssed/histogram", { params });
     return response.data;
   },
+
+  createTrainingJob: async (body: {
+    dataset_id: number;
+    model_name: string;
+    hyperparameters: Record<string, unknown>;
+  }): Promise<{ job_id: number; status: string; message: string }> => {
+    const response = await api.post("/api/wssed/training-jobs", body);
+    return response.data;
+  },
+
+  getTrainingJobStatus: async (
+    jobId: number,
+  ): Promise<{
+    job_id: number;
+    status: string;
+    model_path: string | null;
+    metrics: Record<string, unknown> | null;
+    error: string | null;
+    progress: Record<string, unknown> | null;
+  }> => {
+    const response = await api.get(`/api/wssed/training-jobs/${jobId}/status`);
+    return response.data;
+  },
 };
 
 // ============================================================================
