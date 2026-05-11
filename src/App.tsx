@@ -10,6 +10,7 @@ import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
 import { ActiveLearning } from "./pages/ActiveLearning";
+import { Wssed } from "./pages/Wssed";
 import HomePage from "./pages/HomePage";
 import { Dashboard } from "./pages/Dashboard";
 import { StudyPhaseProvider } from "./studyPhases";
@@ -38,6 +39,7 @@ function App() {
         <Route path="/history" element={<FeedHistory />} />
         <Route path="/annotate" element={<AnnotationWorkflow />} />
         <Route path="/active-learning" element={<ActiveLearning />} />
+        <Route path="/wssed" element={<Wssed />} />
         <Route path="/docs" element={<YapatUserManual />} />
       </Routes>
     </StudyPhaseProvider>

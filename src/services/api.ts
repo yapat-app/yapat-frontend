@@ -39,6 +39,11 @@ import type {
   AvailableTaxonomies,
   SnippetSet,
   Invitation,
+  ActiveLearningResponse,
+  ActiveLearningLabel,
+  getActiveLearningSuggestionsParams,
+  retrainActiveLearningBody,
+  PredictionHistogram,
 } from "../types";
 
 type AddToLabelSpaceResponse = {
@@ -596,6 +601,35 @@ export const taskApi = {
 
   cancel: async (taskId: string): Promise<void> => {
     await api.delete(`/api/tasks/cancel/${taskId}`);
+  },
+};
+
+// ============================================================================
+// WSSED API
+// ============================================================================
+
+export const wssedApi = {
+  suggestions: async (
+    params: getActiveLearningSuggestionsParams,
+  ): Promise<ActiveLearningResponse> => {
+    const response = await api.get("/api/wssed/suggestions", { params });
+    return response.data;
+  },
+
+  submitLabel: async (body: ActiveLearningLabel): Promise<void> => {
+    await api.post("/api/wssed/label", body);
+  },
+
+  retrain: async (body: retrainActiveLearningBody): Promise<void> => {
+    await api.post("/api/wssed/retrain", body);
+  },
+
+  histogram: async (params: {
+    model_id: number;
+    snippet_set_id: number;
+  }): Promise<PredictionHistogram> => {
+    const response = await api.get("/api/wssed/histogram", { params });
+    return response.data;
   },
 };
 

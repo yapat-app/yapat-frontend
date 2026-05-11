@@ -497,3 +497,51 @@ export interface TaskStatus {
   error?: string;
   meta?: any;
 }
+
+// ============================================================================
+// WSSED Types
+// ============================================================================
+
+export interface ActiveLearningModelInfo {
+  species_model_id: number;
+}
+
+export interface ActiveLearningSuggestion {
+  snippet_id: number;
+  confidence: number;
+}
+
+export interface ActiveLearningResponse {
+  model_info: ActiveLearningModelInfo;
+  suggestions: ActiveLearningSuggestion[];
+}
+
+export interface getActiveLearningSuggestionsParams {
+  dataset_id: number;
+  snippet_set_id: number;
+  species_name: string;
+  threshold?: number;
+  limit?: number;
+}
+
+export interface ActiveLearningLabel {
+  snippet_set_id: number;
+  dataset_id: number;
+  species_name: string;
+  snippet_id: number;
+  label: 0 | 1;
+}
+
+export interface retrainActiveLearningBody {
+  snippet_set_id: number;
+  dataset_id: number;
+  species_name: string;
+  device?: "cpu" | "cuda";
+  epochs?: number;
+  lr?: number;
+}
+
+export interface PredictionHistogram {
+  bin_edges: number[];
+  counts: number[];
+}

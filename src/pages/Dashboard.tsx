@@ -65,6 +65,18 @@ const CARDS: ServiceCard[] = [
     badge: "AI-powered",
   },
   {
+    key: "wssed",
+    icon: <AudioOutlined className="text-2xl" />,
+    title: "WSSED",
+    description:
+      "Run weakly supervised sound event detection with dataset explorer, training settings, and iterative retraining.",
+    route: "/wssed",
+    color: "text-cyan-700",
+    bgColor: "bg-cyan-50",
+    borderColor: "border-cyan-200 hover:border-cyan-400",
+    badge: "Training flow",
+  },
+  {
     key: "pre-annotation",
     icon: <TagsOutlined className="text-2xl" />,
     title: "Label Management",

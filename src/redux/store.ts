@@ -10,6 +10,7 @@ import embeddingReducer from "./features/embeddingSlice";
 import feedReducer from "./features/feedSlice";
 import customTaxonomyReducer from "./features/customTaxonomySlice";
 import alReducer from "./features/alSlice";
+import wssedReducer from "./features/wssedSlice";
 
 const store = configureStore({
   reducer: {
@@ -24,6 +25,7 @@ const store = configureStore({
     embedding: embeddingReducer,
     feed: feedReducer,
     al: alReducer,
+    wssed: wssedReducer,
   },
 });
 
