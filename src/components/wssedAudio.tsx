@@ -118,6 +118,9 @@ export const WssedAudio = ({
 
   const suggestions = activeLearning?.suggestions ?? [];
   const hasSuggestions = suggestions.length > 0;
+  const hasRegisteredSpeciesModel =
+    activeLearning?.model_info?.species_model_id != null &&
+    activeLearning.model_info.species_model_id > 0;
 
   const shouldAdvanceAfterSubmitRef = useRef(false);
 
@@ -412,6 +415,23 @@ export const WssedAudio = ({
             </Tooltip>
 
             <div className="w-full flex items-center justify-center">
+              {!audioError && !audioLoading && !hasSuggestions && (
+                <div className="w-full flex flex-col items-center justify-center h-[250px] rounded-lg border border-dashed border-gray-200 bg-gray-50 px-6 text-center">
+                  <h4 className="text-sm font-semibold text-gray-800">
+                    No review snippets available yet
+                  </h4>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">
+                    {hasRegisteredSpeciesModel
+                      ? "This species model does not have unlabeled suggestions for the selected snippet set."
+                      : "Training completed, but no WSSED predictions have been registered for review yet."}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-gray-400">
+                    Once detection results are imported for this model, suggested
+                    snippets will appear here for accept/reject labeling.
+                  </p>
+                </div>
+              )}
+
               {audioError && (
                 <Alert
                   type="error"
@@ -422,13 +442,13 @@ export const WssedAudio = ({
                 />
               )}
 
-              {!audioError && audioLoading && (
+              {!audioError && audioLoading && hasSuggestions && (
                 <div className="w-full flex items-center justify-center h-[250px]">
                   <Spin />
                 </div>
               )}
 
-              {!audioError && !audioLoading && currentSnippetAudio && (
+              {!audioError && !audioLoading && hasSuggestions && currentSnippetAudio && (
                 <SpectrogramPlayer
                   key={currentSnippetAudio}
                   src={currentSnippetAudio}
@@ -441,9 +461,9 @@ export const WssedAudio = ({
                 />
               )}
 
-              {!audioError && !audioLoading && !currentSnippetAudio && (
+              {!audioError && !audioLoading && hasSuggestions && !currentSnippetAudio && (
                 <div className="w-full flex items-center justify-center h-[250px] text-sm text-gray-500">
-                  No audio loaded
+                  Loading selected snippet…
                 </div>
               )}
             </div>
