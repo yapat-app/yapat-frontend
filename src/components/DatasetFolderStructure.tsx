@@ -15,6 +15,7 @@ import {
 import { getAllDatasetSnippetSets } from "../redux/features/embeddingSlice";
 
 const { Panel } = Collapse;
+const WSSED_SELECTED_DATASET_STORAGE_KEY = "wssed:selectedDatasetId";
 
 export const DatasetFolderStructure: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -32,6 +33,7 @@ export const DatasetFolderStructure: React.FC = () => {
     null,
   );
   const [selectingDataset, setSelectingDataset] = useState(false);
+  const [restoringDataset, setRestoringDataset] = useState(false);
 
   useEffect(() => {
     if (user?.role === "admin") {
@@ -40,6 +42,29 @@ export const DatasetFolderStructure: React.FC = () => {
       dispatch(fetchAllTeamDatasets());
     }
   }, [user, dispatch]);
+
+  useEffect(() => {
+    if (datasetDirectories || restoringDataset) return;
+
+    const storedId = Number(
+      localStorage.getItem(WSSED_SELECTED_DATASET_STORAGE_KEY),
+    );
+    if (!storedId || Number.isNaN(storedId)) return;
+
+    setRestoringDataset(true);
+    setSelectedDatasetId(storedId);
+    dispatch(exploreDatasetDirectory({ datasetId: storedId }))
+      .unwrap()
+      .then(() => {
+        dispatch(getAllDatasetSnippetSets(storedId));
+      })
+      .catch(() => {
+        localStorage.removeItem(WSSED_SELECTED_DATASET_STORAGE_KEY);
+      })
+      .finally(() => {
+        setRestoringDataset(false);
+      });
+  }, [datasetDirectories, dispatch, restoringDataset]);
 
   const datasetOptions = useMemo(() => {
     return (allDatasets ?? [])
@@ -65,6 +90,10 @@ export const DatasetFolderStructure: React.FC = () => {
       await dispatch(
         exploreDatasetDirectory({ datasetId: selectedDatasetId }),
       ).unwrap();
+      localStorage.setItem(
+        WSSED_SELECTED_DATASET_STORAGE_KEY,
+        String(selectedDatasetId),
+      );
 
       setOpenChooseModal(false);
     } catch (err: any) {
@@ -77,7 +106,7 @@ export const DatasetFolderStructure: React.FC = () => {
   return (
     <div className="h-full">
       {/* Header actions */}
-      {!datasetDirectories && (
+      {!datasetDirectories && !restoringDataset && (
         <div className="flex flex-col items-center justify-center gap-2 p-2  h-[90%]">
           <Button
             className="font-ibm-mono! min-w-fit w-full! mx-8! py-4"
@@ -95,6 +124,11 @@ export const DatasetFolderStructure: React.FC = () => {
           >
             Choose Existing Dataset
           </Button>
+        </div>
+      )}
+      {!datasetDirectories && restoringDataset && (
+        <div className="flex h-[90%] items-center justify-center p-4 text-xs text-gray-500">
+          Restoring selected dataset…
         </div>
       )}
 
