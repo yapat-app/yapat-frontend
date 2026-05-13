@@ -38,8 +38,8 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
     threshold: 0.5,
     sample_rate: 22000,
     n_mels: 64,
-    n_fft: 3,
-    hop_length: 1,
+    bag_seconds: 3,
+    hop_seconds: 1,
   });
 
   const [statusText, setStatusText] = useState<string>("");
@@ -111,8 +111,10 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
       threshold: formData.threshold,
       sample_rate: formData.sample_rate,
       n_mels: formData.n_mels,
-      n_fft: formData.n_fft,
-      hop_length: formData.hop_length,
+      n_fft: 1100,
+      hop_length: 550,
+      bag_seconds: formData.bag_seconds,
+      hop_seconds: formData.hop_seconds,
     };
 
     try {
@@ -265,18 +267,18 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                     <span>
                       {formData.model === "birdnet"
                         ? "Window Size"
-                        : "FFT Window Size"}
+                        : "Bag Length"}
                     </span>
                     <span className="text-gray-400 text-sm">(seconds)</span>
                   </div>
                 }
-                tooltip="Number of samples used in each frequency analysis window"
+                tooltip="Audio duration used for each training bag"
               >
                 <InputNumber
                   disabled={modelTraining || formData.model === "birdnet"}
                   style={{ width: "100%" }}
-                  value={formData.n_fft}
-                  onChange={(value) => handleChange("n_fft", value)}
+                  value={formData.bag_seconds}
+                  onChange={(value) => handleChange("bag_seconds", value)}
                 />
               </Form.Item>
 
@@ -287,12 +289,12 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                     <span className="text-gray-400 text-sm">(seconds)</span>
                   </div>
                 }
-                tooltip="Step size between analysis windows"
+                tooltip="Step size between training bags"
               >
                 <InputNumber
                   style={{ width: "100%" }}
-                  value={formData.hop_length}
-                  onChange={(value) => handleChange("hop_length", value)}
+                  value={formData.hop_seconds}
+                  onChange={(value) => handleChange("hop_seconds", value)}
                   disabled={modelTraining}
                 />
               </Form.Item>
