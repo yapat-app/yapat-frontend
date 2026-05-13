@@ -88,6 +88,9 @@ export const datasetSlice = createSlice({
     ) => {
       state.selectedDatasetId = action.payload;
     },
+    clearDatasetDirectory: (state) => {
+      state.datasetDirectories = null;
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(fetchAllDatasets.fulfilled, (state, action) => {
@@ -129,5 +132,5 @@ export const datasetSlice = createSlice({
   },
 });
 
-export const { selectDataset } = datasetSlice.actions;
+export const { selectDataset, clearDatasetDirectory } = datasetSlice.actions;
 export default datasetSlice.reducer;

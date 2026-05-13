@@ -91,7 +91,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
           stopPolling();
           dispatch(setTraining(false));
           stopTraining();
-          message.success("Model training completed!");
+          message.success("Model training completed. Predictions are being prepared for the feed.");
         } else if (status.status === "FAILED") {
           stopPolling();
           dispatch(setTraining(false));

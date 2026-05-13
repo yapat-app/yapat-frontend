@@ -11,6 +11,7 @@ import {
   exploreDatasetDirectory,
   fetchAllDatasets,
   fetchAllTeamDatasets,
+  clearDatasetDirectory,
 } from "../redux/features/datasetSlice";
 import { getAllDatasetSnippetSets } from "../redux/features/embeddingSlice";
 
@@ -103,6 +104,12 @@ export const DatasetFolderStructure: React.FC = () => {
     }
   };
 
+  const handleChangeDataset = () => {
+    localStorage.removeItem(WSSED_SELECTED_DATASET_STORAGE_KEY);
+    dispatch(clearDatasetDirectory());
+    setOpenChooseModal(true);
+  };
+
   return (
     <div className="h-full">
       {/* Header actions */}
@@ -188,7 +195,29 @@ export const DatasetFolderStructure: React.FC = () => {
       {/* Content area: 90% height, scrolls */}
       <div className="overflow-y-auto p-2">
         {!hasDirectory ? (
-          <div />
+          datasetDirectories ? (
+            <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center">
+              <div>
+                <div className="text-sm font-semibold text-slate-700">
+                  No audio files found
+                </div>
+                <div className="mt-1 text-xs leading-5 text-slate-500">
+                  The selected dataset did not expose species folders or root-level audio files.
+                </div>
+                <div className="mt-1 truncate text-[11px] text-slate-400">
+                  {datasetDirectories.source_uri}
+                </div>
+              </div>
+              <Button
+                size="small"
+                type="primary"
+                icon={<DatabaseOutlined />}
+                onClick={handleChangeDataset}
+              >
+                Choose another dataset
+              </Button>
+            </div>
+          ) : null
         ) : (
           <div className="h-[90%] overflow-y-auto p-2">
             <Collapse

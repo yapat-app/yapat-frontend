@@ -647,6 +647,7 @@ export const wssedApi = {
     job_id: number;
     status: string;
     model_path: string | null;
+    model_paths?: Record<string, string> | null;
     metrics: Record<string, unknown> | null;
     error: string | null;
     progress: Record<string, unknown> | null;
