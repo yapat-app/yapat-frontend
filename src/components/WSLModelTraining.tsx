@@ -11,9 +11,6 @@ const POLL_INTERVAL_MS = 5000;
 
 const embeddingModelList = [
   { name: "BirdNET", value: "birdnet" },
-  { name: "Baseline", value: "baseline" },
-  { name: "CNN-BiGRU", value: "CNN-BiGRU" },
-  { name: "CNN-Transformer", value: "CNN-Transformer" },
   { name: "CDur", value: "CDur" },
   { name: "TALNet", value: "TALNet" },
 ];
@@ -141,17 +138,62 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
   }, []);
 
   const buttonText = modelTraining ? "Training…" : "Start Training";
+  const selectedModelLabel =
+    embeddingModelList.find((model) => model.value === formData.model)?.name ??
+    formData.model;
 
   return (
-    <div>
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+    <div className="h-full max-h-full min-h-0 overflow-hidden bg-slate-50/60">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="flex flex-col gap-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                WSSED Training
+              </p>
+              <h3 className="mt-1 text-sm font-semibold text-slate-900">
+                Train Event Detector
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Configure a GPU-backed training job for the selected dataset.
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                modelTraining
+                  ? "bg-blue-50 text-blue-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {modelTraining ? "Running" : selectedModelLabel}
+            </span>
+          </div>
+        </div>
+
         <Form
           layout="vertical"
-          className="flex flex-col gap-3 max-h-[60vh] overflow-auto"
+          className="flex flex-col gap-3"
         >
-          <Collapse className="mt-4 font-ibm-sans">
-            <Panel header="Training Settings" key="1">
-              <Form.Item label="Model" required>
+          <Collapse
+            expandIconPosition="end"
+            className="rounded-xl border border-slate-200 bg-white font-ibm-sans shadow-sm"
+          >
+            <Panel
+              header={
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    Training Settings
+                  </div>
+                  <div className="text-xs font-normal text-slate-500">
+                    Model, pooling, epochs and threshold
+                  </div>
+                </div>
+              }
+              key="1"
+            >
+              <Form.Item label="Model" required className="mb-3">
                 <Select
                   placeholder="Select a model"
                   value={formData.model}
@@ -169,6 +211,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
               <Form.Item
                 label="Pooling Method"
                 tooltip="Determines how features are summarized"
+                className="mb-3"
               >
                 <Select
                   value={formData.pooling}
@@ -178,16 +221,13 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                   <Option value="mean">mean</Option>
                   <Option value="max">max</Option>
                   <Option value="linear">linear</Option>
-                  <Option value="exp">exp</Option>
-                  <Option value="att">att</Option>
-                  <Option value="auto">auto</Option>
-                  <Option value="power">power</Option>
                 </Select>
               </Form.Item>
 
               <Form.Item
                 label="Training Epochs"
                 tooltip="Number of times the model trains on the full dataset"
+                className="mb-3"
               >
                 <InputNumber
                   min={1}
@@ -202,6 +242,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
               <Form.Item
                 label="Learning Rate"
                 tooltip="Controls how much the model updates its weights during training"
+                className="mb-3"
               >
                 <InputNumber
                   min={0.000001}
@@ -217,11 +258,13 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
               <Form.Item
                 label="Detection Threshold"
                 tooltip="Minimum confidence required to trigger a detection"
+                className="mb-1"
               >
                 <Slider
                   min={0}
                   max={1.0}
                   step={0.1}
+                  marks={{ 0: "0", 0.5: "0.5", 1: "1" }}
                   value={formData.threshold}
                   onChange={(value) => handleChange("threshold", value)}
                   disabled={modelTraining}
@@ -230,11 +273,27 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
             </Panel>
           </Collapse>
 
-          <Collapse className="mt-4">
-            <Panel header="Audio Processing & Hyperparameters" key="2">
+          <Collapse
+            expandIconPosition="end"
+            className="rounded-xl border border-slate-200 bg-white shadow-sm"
+          >
+            <Panel
+              header={
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    Audio & Windowing
+                  </div>
+                  <div className="text-xs font-normal text-slate-500">
+                    Sample rate, mel bands and bag settings
+                  </div>
+                </div>
+              }
+              key="2"
+            >
               <Form.Item
                 label="Sample Rate"
                 tooltip="Number of audio samples per second"
+                className="mb-3"
               >
                 <div className="flex gap-2 items-center">
                   <InputNumber
@@ -243,7 +302,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                     value={formData.sample_rate}
                     onChange={(value) => handleChange("sample_rate", value)}
                   />
-                  Hz
+                  <span className="text-xs font-medium text-slate-500">Hz</span>
                 </div>
               </Form.Item>
 
@@ -251,13 +310,23 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                 <Form.Item
                   label="Mel Bands"
                   tooltip="Controls how detailed the frequency representation is"
+                  className="mb-3"
                 >
                   <InputNumber
                     style={{ width: "100%" }}
                     value={formData.n_mels}
                     onChange={(value) => handleChange("n_mels", value)}
-                    disabled={modelTraining}
+                    disabled={
+                      modelTraining ||
+                      formData.model === "TALNet" ||
+                      formData.model === "CDur"
+                    }
                   />
+                  {(formData.model === "TALNet" || formData.model === "CDur") && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Fixed to the model default for {selectedModelLabel}.
+                    </p>
+                  )}
                 </Form.Item>
               )}
 
@@ -273,8 +342,10 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                   </div>
                 }
                 tooltip="Audio duration used for each training bag"
+                className="mb-3"
               >
                 <InputNumber
+                  min={1}
                   disabled={modelTraining || formData.model === "birdnet"}
                   style={{ width: "100%" }}
                   value={formData.bag_seconds}
@@ -290,8 +361,10 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                   </div>
                 }
                 tooltip="Step size between training bags"
+                className="mb-1"
               >
                 <InputNumber
+                  min={1}
                   style={{ width: "100%" }}
                   value={formData.hop_seconds}
                   onChange={(value) => handleChange("hop_seconds", value)}
@@ -302,22 +375,29 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
           </Collapse>
         </Form>
 
-        <Button
-          type="primary"
-          block
-          className="mt-4 font-ibm-sans!"
-          onClick={handleSubmit}
-          disabled={modelTraining}
-          loading={modelTraining}
-        >
-          {buttonText}
-        </Button>
-
-        {statusText && (
-          <div className="mt-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded p-2 font-mono">
-            {statusText}
           </div>
-        )}
+        </div>
+
+        <div className="shrink-0 border-t border-slate-200 bg-white/95 p-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
+          <Button
+            type="primary"
+            block
+            size="large"
+            className="h-10 rounded-lg font-ibm-sans! font-semibold shadow-sm"
+            onClick={handleSubmit}
+            disabled={modelTraining}
+            loading={modelTraining}
+          >
+            {buttonText}
+          </Button>
+
+          {statusText && (
+            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 shadow-sm">
+              <div className="font-semibold">Training status</div>
+              <div className="mt-1 font-mono">{statusText}</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
