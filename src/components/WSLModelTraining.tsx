@@ -30,12 +30,12 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
   const [formData, setFormData] = useState({
     model: "CDur",
     pooling: "mean",
-    epochs: 20,
+    epochs: 1,
     learning_rate: 0.0003,
     threshold: 0.5,
     sample_rate: 22000,
     n_mels: 64,
-    bag_seconds: 3,
+    bag_seconds: "full",
     hop_seconds: 1,
   });
 
@@ -110,9 +110,11 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
       n_mels: formData.n_mels,
       n_fft: 1100,
       hop_length: 550,
-      bag_seconds: formData.bag_seconds,
-      hop_seconds: formData.hop_seconds,
     };
+    if (formData.model !== "birdnet") {
+      hyperparameters.bag_seconds = formData.bag_seconds;
+      hyperparameters.hop_seconds = formData.hop_seconds;
+    }
 
     try {
       const result = await wssedApi.createTrainingJob({
@@ -284,7 +286,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                     Audio & Windowing
                   </div>
                   <div className="text-xs font-normal text-slate-500">
-                    Sample rate, mel bands and bag settings
+                    Sample rate, mel bands and model window settings
                   </div>
                 </div>
               }
@@ -330,47 +332,51 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                 </Form.Item>
               )}
 
-              <Form.Item
-                label={
-                  <div className="flex items-center gap-1">
-                    <span>
-                      {formData.model === "birdnet"
-                        ? "Window Size"
-                        : "Bag Length"}
-                    </span>
-                    <span className="text-gray-400 text-sm">(seconds)</span>
-                  </div>
-                }
-                tooltip="Audio duration used for each training bag"
-                className="mb-3"
-              >
-                <InputNumber
-                  min={1}
-                  disabled={modelTraining || formData.model === "birdnet"}
-                  style={{ width: "100%" }}
-                  value={formData.bag_seconds}
-                  onChange={(value) => handleChange("bag_seconds", value)}
-                />
-              </Form.Item>
+              {formData.model !== "birdnet" && (
+                <>
+                  <Form.Item
+                    label="Bag Length"
+                    tooltip="Audio duration used for each training bag"
+                    className="mb-3"
+                  >
+                    <Select
+                      disabled={modelTraining}
+                      value={formData.bag_seconds}
+                      onChange={(value) => handleChange("bag_seconds", value)}
+                    >
+                      <Option value="full">Full recording</Option>
+                      <Option value={3}>3 seconds</Option>
+                      <Option value={5}>5 seconds</Option>
+                      <Option value={10}>10 seconds</Option>
+                      <Option value={30}>30 seconds</Option>
+                    </Select>
+                  </Form.Item>
 
-              <Form.Item
-                label={
-                  <div className="flex items-center gap-1">
-                    <span>Hop Length</span>
-                    <span className="text-gray-400 text-sm">(seconds)</span>
-                  </div>
-                }
-                tooltip="Step size between training bags"
-                className="mb-1"
-              >
-                <InputNumber
-                  min={1}
-                  style={{ width: "100%" }}
-                  value={formData.hop_seconds}
-                  onChange={(value) => handleChange("hop_seconds", value)}
-                  disabled={modelTraining}
-                />
-              </Form.Item>
+                  <Form.Item
+                    label={
+                      <div className="flex items-center gap-1">
+                        <span>Hop Length</span>
+                        <span className="text-gray-400 text-sm">(seconds)</span>
+                      </div>
+                    }
+                    tooltip="Step size between training bags"
+                    className="mb-1"
+                  >
+                    <InputNumber
+                      min={1}
+                      style={{ width: "100%" }}
+                      value={formData.hop_seconds}
+                      onChange={(value) => handleChange("hop_seconds", value)}
+                      disabled={modelTraining || formData.bag_seconds === "full"}
+                    />
+                    {formData.bag_seconds === "full" && (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Not used when training on full recordings.
+                      </p>
+                    )}
+                  </Form.Item>
+                </>
+              )}
             </Panel>
           </Collapse>
         </Form>

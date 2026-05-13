@@ -42,10 +42,12 @@ export const DatasetFolderStructure: React.FC = () => {
   }, [user, dispatch]);
 
   const datasetOptions = useMemo(() => {
-    return (allDatasets ?? []).map((d: any) => ({
-      value: d.id,
-      label: `${d.name}`,
-    }));
+    return (allDatasets ?? [])
+      .filter((d: any) => d.dataset_type === "FOCAL_RECORDINGS")
+      .map((d: any) => ({
+        value: d.id,
+        label: `${d.name}`,
+      }));
   }, [allDatasets]);
 
   const hasDirectory = !!datasetDirectories?.species?.length;
@@ -125,11 +127,13 @@ export const DatasetFolderStructure: React.FC = () => {
         okButtonProps={{ disabled: !selectedDatasetId }}
       >
         <div className="flex flex-col gap-2">
-          <div className="text-sm text-gray-600">Select a dataset</div>
+          <div className="text-sm text-gray-600">
+            Select a focal recordings dataset
+          </div>
 
           <Select
             showSearch
-            placeholder="Select a dataset"
+            placeholder="Select a focal recordings dataset"
             options={datasetOptions}
             value={selectedDatasetId ?? undefined}
             onChange={(val) => {
@@ -142,6 +146,7 @@ export const DatasetFolderStructure: React.FC = () => {
                 .toLowerCase()
                 .includes(input.toLowerCase())
             }
+            notFoundContent="No focal recordings datasets available"
           />
         </div>
       </Modal>
