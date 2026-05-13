@@ -15,6 +15,20 @@ const embeddingModelList = [
   { name: "TALNet", value: "TALNet" },
 ];
 
+type TrainingProgress = {
+  phase?: string;
+  current_epoch?: number | null;
+  total_epochs?: number | null;
+  model_name?: string;
+  dataset_path?: string;
+  bag_seconds?: string | number;
+  hop_seconds?: string | number;
+  learning_rate?: number;
+  threshold?: number;
+  training_log?: string;
+  updated_at?: string;
+};
+
 interface WSLModelTrainingProps {
   stopTraining: () => void;
 }
@@ -40,6 +54,8 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
   });
 
   const [statusText, setStatusText] = useState<string>("");
+  const [trainingProgress, setTrainingProgress] =
+    useState<TrainingProgress | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobIdRef = useRef<number | null>(null);
 
@@ -60,15 +76,13 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
       try {
         const status = await wssedApi.getTrainingJobStatus(jobId);
 
-        if (status.progress) {
-          const p = status.progress as Record<string, unknown>;
-          const cur = p["current_epoch"];
-          const tot = p["total_epochs"];
-          if (cur !== undefined && tot !== undefined) {
-            setStatusText(`Epoch ${cur} / ${tot}`);
-          } else {
-            setStatusText(`Status: ${status.status}`);
-          }
+        const progress = (status.progress ?? null) as TrainingProgress | null;
+        setTrainingProgress(progress);
+
+        if (progress?.current_epoch != null && progress?.total_epochs != null) {
+          setStatusText(`Epoch ${progress.current_epoch} / ${progress.total_epochs}`);
+        } else if (progress?.phase) {
+          setStatusText(`${status.status} · ${progress.phase}`);
         } else {
           setStatusText(`Status: ${status.status}`);
         }
@@ -99,6 +113,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
 
     dispatch(setTraining(true));
     setStatusText("Dispatching training job…");
+    setTrainingProgress(null);
 
     const hyperparameters: Record<string, unknown> = {
       model_name: formData.model,
@@ -132,6 +147,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
         err instanceof Error ? err.message : "Failed to start training job";
       message.error(msg);
       setStatusText("");
+      setTrainingProgress(null);
     }
   };
 
@@ -143,6 +159,17 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
   const selectedModelLabel =
     embeddingModelList.find((model) => model.value === formData.model)?.name ??
     formData.model;
+  const progressPercent =
+    trainingProgress?.current_epoch != null &&
+    trainingProgress?.total_epochs != null &&
+    trainingProgress.total_epochs > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (trainingProgress.current_epoch / trainingProgress.total_epochs) * 100,
+          ),
+        )
+      : null;
 
   return (
     <div className="h-full max-h-full min-h-0 overflow-hidden bg-slate-50/60">
@@ -399,8 +426,63 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
 
           {statusText && (
             <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 shadow-sm">
-              <div className="font-semibold">Training status</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">Training status</div>
+                {progressPercent != null && (
+                  <div className="font-mono text-[11px]">{progressPercent}%</div>
+                )}
+              </div>
               <div className="mt-1 font-mono">{statusText}</div>
+
+              {progressPercent != null && (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              )}
+
+              {trainingProgress && (
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-blue-700">
+                  {trainingProgress.phase && (
+                    <div>
+                      <span className="font-semibold">Phase:</span>{" "}
+                      {trainingProgress.phase}
+                    </div>
+                  )}
+                  {trainingProgress.model_name && (
+                    <div>
+                      <span className="font-semibold">Model:</span>{" "}
+                      {trainingProgress.model_name}
+                    </div>
+                  )}
+                  {trainingProgress.bag_seconds !== undefined && (
+                    <div>
+                      <span className="font-semibold">Bag:</span>{" "}
+                      {String(trainingProgress.bag_seconds)}
+                    </div>
+                  )}
+                  {trainingProgress.learning_rate !== undefined && (
+                    <div>
+                      <span className="font-semibold">LR:</span>{" "}
+                      {trainingProgress.learning_rate}
+                    </div>
+                  )}
+                  {trainingProgress.dataset_path && (
+                    <div className="col-span-2 truncate">
+                      <span className="font-semibold">Dataset:</span>{" "}
+                      {trainingProgress.dataset_path}
+                    </div>
+                  )}
+                  {trainingProgress.training_log && (
+                    <div className="col-span-2 truncate">
+                      <span className="font-semibold">Log:</span>{" "}
+                      {trainingProgress.training_log}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
