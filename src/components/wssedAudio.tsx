@@ -175,7 +175,13 @@ export const WssedAudio = ({
         species_name: selectedSpecies,
       }),
     );
-  }, [dispatch, datasetIdFromDirectory, snippetSetId, selectedSpecies]);
+  }, [
+    dispatch,
+    datasetIdFromDirectory,
+    snippetSetId,
+    selectedSpecies,
+    modelTrained,
+  ]);
 
   // Auto-select first suggestion when suggestions arrive
   useEffect(() => {

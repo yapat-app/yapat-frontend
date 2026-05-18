@@ -655,6 +655,40 @@ export const wssedApi = {
     const response = await api.get(`/api/wssed/training-jobs/${jobId}/status`);
     return response.data;
   },
+
+  getDatasetArtifacts: async (
+    datasetId: number,
+  ): Promise<{
+    dataset_path: string;
+    embeddings_path: string;
+    embeddings_complete: boolean;
+    embeddings_status: string;
+    checkpoint_exists: boolean;
+    checkpoint_path: string | null;
+    output_dir: string;
+    audio_count: number;
+    npz_count: number;
+  }> => {
+    const response = await api.get(`/api/wssed/datasets/${datasetId}/artifacts`);
+    return response.data;
+  },
+
+  getLatestTrainingJobStatus: async (
+    datasetId: number,
+  ): Promise<{
+    job_id: number;
+    status: string;
+    model_path: string | null;
+    model_paths?: Record<string, string> | null;
+    metrics: Record<string, unknown> | null;
+    error: string | null;
+    progress: Record<string, unknown> | null;
+  }> => {
+    const response = await api.get("/api/wssed/training-jobs/latest", {
+      params: { dataset_id: datasetId },
+    });
+    return response.data;
+  },
 };
 
 // ============================================================================

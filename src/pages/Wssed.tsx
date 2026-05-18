@@ -6,31 +6,76 @@ import {
 } from "@ant-design/icons";
 import { Button, Tooltip, message } from "antd";
 
-import { useEffect, useState } from "react";
-import { useAppSelector } from "../hooks";
+import { useCallback, useEffect, useState } from "react";
+import { useAppDispatch, useAppSelector } from "../hooks";
 import { DatasetFolderStructure } from "../components/DatasetFolderStructure";
 import { WSLModelTraining } from "../components/WSLModelTraining";
 import { WssedAudio } from "../components/wssedAudio";
+import { setTraining } from "../redux/features/wssedSlice";
+import { wssedApi } from "../services/api";
 
 export const Wssed = () => {
+  const dispatch = useAppDispatch();
   const { datasetDirectories } = useAppSelector((state) => state.dataset);
+  const modelTraining = useAppSelector((state) => state.wssed.modelTraining);
+
   const [showDataset, setShowDataset] = useState(true);
   const [showTraining, setShowTraining] = useState(true);
   const [remaining, setRemaining] = useState(5);
   const [enableWSL, setEnableWSL] = useState(false);
-  const [modelTraining, setModelTraining] = useState(false);
   const [modelTrained, setIsModelTrained] = useState(false);
 
-  const handleRetrainClick = () => {
-    setModelTraining(true);
-  };
+  const datasetId = datasetDirectories?.dataset_id
+    ? Number(datasetDirectories.dataset_id)
+    : null;
 
-  const stopTraining = () => {
-    setModelTraining(false);
+  const stopTraining = useCallback(() => {
+    dispatch(setTraining(false));
     setIsModelTrained(true);
     setRemaining(5);
-    message.success("Model Successfully Trained!");
+    message.success("Model training completed.");
+  }, [dispatch]);
+
+  const handleRetrainClick = () => {
+    dispatch(setTraining(true));
   };
+
+  useEffect(() => {
+    if (!datasetId) {
+      setIsModelTrained(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const status = await wssedApi.getLatestTrainingJobStatus(datasetId);
+        if (cancelled) return;
+
+        if (status.status === "COMPLETED") {
+          setIsModelTrained(true);
+          dispatch(setTraining(false));
+        } else if (status.status === "TRAINING") {
+          setIsModelTrained(false);
+          dispatch(setTraining(true));
+        } else if (status.status === "FAILED") {
+          setIsModelTrained(false);
+          dispatch(setTraining(false));
+        } else {
+          setIsModelTrained(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsModelTrained(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, dispatch]);
 
   useEffect(() => {
     if (datasetDirectories) {
@@ -46,7 +91,6 @@ export const Wssed = () => {
         <aside
           className={`${showDataset ? "w-[18%]" : "w-fit"} h-inherit border-r border-[#F0F0F0] bg-white flex flex-col`}
         >
-          {/* Toggle button */}
           {!showDataset && (
             <div className="justify-end flex p-5">
               <Tooltip title={showDataset ? "Hide" : "Show Dataset Explorer"}>
@@ -110,10 +154,9 @@ export const Wssed = () => {
         <aside
           className={`${showTraining ? "w-[20%]" : "w-fit"} h-inherit border-r border-[#F0F0F0] bg-white flex flex-col`}
         >
-          {/* Toggle button */}
           {!showTraining && (
             <div className="justify-end flex p-5">
-              <Tooltip title={showTraining ? "Hide" : "Show Dataset Explorer"}>
+              <Tooltip title={showTraining ? "Hide" : "Show training panel"}>
                 <Button
                   size="small"
                   shape="square"
@@ -164,12 +207,13 @@ export const Wssed = () => {
                   </Tooltip>
                 </div>
 
-                {/* Content with conditional blur */}
                 <div className={enableWSL ? "" : "blur-sm"}>
-                  <WSLModelTraining stopTraining={stopTraining} />
+                  <WSLModelTraining
+                    datasetId={datasetId}
+                    stopTraining={stopTraining}
+                  />
                 </div>
 
-                {/* Disabled Overlay */}
                 {enableWSL === false && (
                   <div className="absolute inset-0 bg-white/60 backdrop-blur-xs flex items-center justify-center z-10">
                     <div className="bg-white shadow-lg rounded-lg p-8 max-w-md text-center border border-gray-200 m-8">
@@ -183,9 +227,6 @@ export const Wssed = () => {
                         Please upload or select a dataset panel to start
                         training the model.
                       </p>
-                      {/* <div className="mt-4 text-xs text-gray-400">
-          Currently: {uploadedFolderCount} folder{uploadedFolderCount !== 1 ? 's' : ''} uploaded
-        </div> */}
                     </div>
                   </div>
                 )}

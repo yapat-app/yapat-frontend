@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { Form, Select, Slider, InputNumber, Button, Collapse, message } from "antd";
+import {
+  Form,
+  Select,
+  Slider,
+  InputNumber,
+  Button,
+  Collapse,
+  message,
+  Alert,
+} from "antd";
+import { CheckCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
+import {
+  readWssedTrainingJobId,
+  storeWssedTrainingJobId,
+} from "../utils/wssedTrainingStorage";
 
 const { Option } = Select;
 const { Panel } = Collapse;
@@ -21,6 +35,12 @@ type TrainingProgress = {
   total_epochs?: number | null;
   model_name?: string;
   dataset_path?: string;
+  embeddings_path?: string;
+  output_dir?: string;
+  embeddings_complete?: boolean;
+  embeddings_status?: string;
+  skip_extraction?: boolean;
+  skip_training?: boolean;
   bag_seconds?: string | number;
   hop_seconds?: string | number;
   learning_rate?: number;
@@ -29,22 +49,34 @@ type TrainingProgress = {
   updated_at?: string;
 };
 
+type DatasetArtifacts = {
+  dataset_path: string;
+  embeddings_path: string;
+  embeddings_complete: boolean;
+  embeddings_status: string;
+  checkpoint_exists: boolean;
+  checkpoint_path: string | null;
+  output_dir: string;
+  audio_count: number;
+  npz_count: number;
+};
+
 interface WSLModelTrainingProps {
+  datasetId: number | null;
   stopTraining: () => void;
 }
 
-export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
+export const WSLModelTraining = ({
+  datasetId,
+  stopTraining,
+}: WSLModelTrainingProps) => {
   const { modelTraining } = useAppSelector((state) => state.wssed);
   const dispatch = useAppDispatch();
 
-  const datasetId = useAppSelector(
-    (state) => state.dataset.datasetDirectories?.dataset_id,
-  );
-
   const [formData, setFormData] = useState({
-    model: "CDur",
+    model: "birdnet",
     pooling: "mean",
-    epochs: 1,
+    epochs: 50,
     learning_rate: 0.0003,
     threshold: 0.5,
     sample_rate: 22000,
@@ -56,6 +88,13 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
   const [statusText, setStatusText] = useState<string>("");
   const [trainingProgress, setTrainingProgress] =
     useState<TrainingProgress | null>(null);
+  const [datasetArtifacts, setDatasetArtifacts] =
+    useState<DatasetArtifacts | null>(null);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
+  const [lastCompletedJob, setLastCompletedJob] = useState<{
+    job_id: number;
+    model_path: string | null;
+  } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobIdRef = useRef<number | null>(null);
 
@@ -70,7 +109,7 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
     }
   };
 
-  const startPolling = (jobId: number) => {
+  const startPolling = (jobId: number, options?: { silentComplete?: boolean }) => {
     stopPolling();
     pollRef.current = setInterval(async () => {
       try {
@@ -91,7 +130,11 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
           stopPolling();
           dispatch(setTraining(false));
           stopTraining();
-          message.success("Model training completed. Predictions are being prepared for the feed.");
+          if (!options?.silentComplete) {
+            message.success(
+              "Model training completed. Predictions are being prepared for the feed.",
+            );
+          }
         } else if (status.status === "FAILED") {
           stopPolling();
           dispatch(setTraining(false));
@@ -139,6 +182,9 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
       });
 
       jobIdRef.current = result.job_id;
+      if (datasetId) {
+        storeWssedTrainingJobId(datasetId, result.job_id);
+      }
       setStatusText(`Job ${result.job_id} started — waiting for GPU server…`);
       startPolling(result.job_id);
     } catch (err: unknown) {
@@ -155,10 +201,102 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
     return () => stopPolling();
   }, []);
 
+  /** Resume polling after page refresh when a job is still running. */
+  useEffect(() => {
+    if (!datasetId || pollRef.current != null) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const storedId = readWssedTrainingJobId(datasetId);
+        let jobId = storedId;
+        let status = jobId
+          ? await wssedApi.getTrainingJobStatus(jobId)
+          : null;
+
+        if (!status) {
+          status = await wssedApi.getLatestTrainingJobStatus(datasetId);
+          jobId = status.job_id;
+        }
+
+        if (cancelled || !jobId || !status) return;
+
+        jobIdRef.current = jobId;
+        storeWssedTrainingJobId(datasetId, jobId);
+
+        if (status.status === "TRAINING") {
+          dispatch(setTraining(true));
+          const progress = (status.progress ?? null) as TrainingProgress | null;
+          setTrainingProgress(progress);
+          setStatusText(`Resuming job ${jobId}…`);
+          startPolling(jobId);
+        } else if (status.status === "COMPLETED") {
+          const progress = (status.progress ?? null) as TrainingProgress | null;
+          setTrainingProgress(progress);
+          setStatusText(`Job ${jobId} completed`);
+          setLastCompletedJob({
+            job_id: jobId,
+            model_path: status.model_path,
+          });
+        }
+      } catch {
+        // no job to resume
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume once per dataset
+  }, [datasetId]);
+
+  /** Show whether embeddings / checkpoint already exist on the GPU server. */
+  useEffect(() => {
+    if (!datasetId || formData.model !== "birdnet") {
+      setDatasetArtifacts(null);
+      return;
+    }
+
+    let cancelled = false;
+    setArtifactsLoading(true);
+
+    (async () => {
+      try {
+        const artifacts = await wssedApi.getDatasetArtifacts(datasetId);
+        if (!cancelled) {
+          setDatasetArtifacts(artifacts);
+        }
+      } catch {
+        if (!cancelled) {
+          setDatasetArtifacts(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setArtifactsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, formData.model]);
+
   const buttonText = modelTraining ? "Training…" : "Start Training";
   const selectedModelLabel =
     embeddingModelList.find((model) => model.value === formData.model)?.name ??
     formData.model;
+  const hasExistingOutputs =
+    datasetArtifacts != null &&
+    (datasetArtifacts.embeddings_complete ||
+      datasetArtifacts.checkpoint_exists ||
+      datasetArtifacts.npz_count > 0);
+
+  const showArtifactsPanel =
+    formData.model === "birdnet" &&
+    (artifactsLoading || datasetArtifacts != null);
+
   const progressPercent =
     trainingProgress?.current_epoch != null &&
     trainingProgress?.total_epochs != null &&
@@ -200,6 +338,97 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
             </span>
           </div>
         </div>
+
+        {showArtifactsPanel && (
+          <Alert
+            type={hasExistingOutputs ? "success" : "info"}
+            showIcon
+            icon={
+              hasExistingOutputs ? (
+                <CheckCircleOutlined />
+              ) : (
+                <InfoCircleOutlined />
+              )
+            }
+            className="rounded-xl text-xs"
+            message={
+              artifactsLoading
+                ? "Checking for existing BirdNET outputs…"
+                : "Existing outputs on GPU server"
+            }
+            description={
+              artifactsLoading ? undefined : (
+                <ul className="mt-1 list-none space-y-1.5 pl-0 text-[11px] leading-5">
+                  <li>
+                    <span className="font-semibold">Embeddings: </span>
+                    {datasetArtifacts?.embeddings_complete ? (
+                      <span className="text-emerald-800">
+                        ready ({datasetArtifacts.npz_count}/
+                        {datasetArtifacts.audio_count})
+                      </span>
+                    ) : (
+                      <span className="text-amber-800">
+                        {datasetArtifacts?.embeddings_status ?? "not ready"}
+                      </span>
+                    )}
+                    {datasetArtifacts?.embeddings_path && (
+                      <div className="mt-0.5 truncate font-mono text-slate-600">
+                        {datasetArtifacts.embeddings_path}
+                      </div>
+                    )}
+                  </li>
+                  <li>
+                    <span className="font-semibold">Checkpoint: </span>
+                    {datasetArtifacts?.checkpoint_exists ? (
+                      <span className="text-emerald-800">available</span>
+                    ) : (
+                      <span className="text-slate-600">not found yet</span>
+                    )}
+                    {datasetArtifacts?.checkpoint_path && (
+                      <div className="mt-0.5 truncate font-mono text-slate-600">
+                        {datasetArtifacts.checkpoint_path}
+                      </div>
+                    )}
+                    {!datasetArtifacts?.checkpoint_exists &&
+                      datasetArtifacts?.output_dir && (
+                        <div className="mt-0.5 truncate font-mono text-slate-500">
+                          expected: {datasetArtifacts.output_dir}
+                        </div>
+                      )}
+                  </li>
+                  {hasExistingOutputs && (
+                    <li className="border-t border-emerald-200/80 pt-1.5 text-emerald-900">
+                      A new training run will reuse these files and skip finished
+                      steps automatically. Use hyperparameters{" "}
+                      <code className="rounded bg-emerald-100 px-1">
+                        force_reextract
+                      </code>{" "}
+                      /{" "}
+                      <code className="rounded bg-emerald-100 px-1">
+                        force_retrain
+                      </code>{" "}
+                      to run again from scratch.
+                    </li>
+                  )}
+                </ul>
+              )
+            }
+          />
+        )}
+
+        {lastCompletedJob?.model_path && (
+          <Alert
+            type="info"
+            showIcon
+            className="rounded-xl text-xs"
+            message={`Last completed job #${lastCompletedJob.job_id}`}
+            description={
+              <span className="font-mono text-[11px] break-all">
+                {lastCompletedJob.model_path}
+              </span>
+            }
+          />
+        )}
 
         <Form
           layout="vertical"
@@ -473,6 +702,23 @@ export const WSLModelTraining = ({ stopTraining }: WSLModelTrainingProps) => {
                     <div className="col-span-2 truncate">
                       <span className="font-semibold">Dataset:</span>{" "}
                       {trainingProgress.dataset_path}
+                    </div>
+                  )}
+                  {trainingProgress.embeddings_status && (
+                    <div className="col-span-2">
+                      <span className="font-semibold">Embeddings:</span>{" "}
+                      {trainingProgress.embeddings_status}
+                    </div>
+                  )}
+                  {(trainingProgress.skip_extraction ||
+                    trainingProgress.skip_training) && (
+                    <div className="col-span-2 text-emerald-800">
+                      {trainingProgress.skip_extraction && (
+                        <span className="mr-2">skipped extraction</span>
+                      )}
+                      {trainingProgress.skip_training && (
+                        <span>skipped training</span>
+                      )}
                     </div>
                   )}
                   {trainingProgress.training_log && (
