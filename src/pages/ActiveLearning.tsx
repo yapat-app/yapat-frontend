@@ -159,6 +159,13 @@ export const ActiveLearning: React.FC = () => {
     }
   }, [dispatch, searchParams, selectedDatasetId]);
 
+  useEffect(() => {
+    const family = searchParams.get("model_family");
+    if (family) {
+      setLocalFamily(family);
+    }
+  }, [searchParams]);
+
   // Load checkpoints and snippet sets for the selected dataset.
   useEffect(() => {
     if (selectedDatasetId === null) return;

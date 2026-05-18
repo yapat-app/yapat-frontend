@@ -673,6 +673,21 @@ export const wssedApi = {
     return response.data;
   },
 
+  registerTrainingJobForAL: async (
+    jobId: number,
+  ): Promise<{
+    job_id: number;
+    al_checkpoint_id: number;
+    model_family_name: string;
+    checkpoint_path: string;
+    snippet_set_id: number | null;
+    inference_job_id: number | null;
+    message: string;
+  }> => {
+    const response = await api.post(`/api/wssed/training-jobs/${jobId}/register-al`);
+    return response.data;
+  },
+
   getLatestTrainingJobStatus: async (
     datasetId: number,
   ): Promise<{
