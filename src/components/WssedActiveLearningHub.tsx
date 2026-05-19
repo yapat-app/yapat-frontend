@@ -140,9 +140,9 @@ export const WssedActiveLearningHub = ({
     active: boolean,
     stepNumber: number,
   ) => (
-    <div className="flex flex-1 flex-col items-center gap-2 text-center">
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
       <div
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
           done
             ? "bg-emerald-100 text-emerald-700"
             : active
@@ -153,7 +153,7 @@ export const WssedActiveLearningHub = ({
         {done ? <CheckCircleOutlined /> : stepNumber}
       </div>
       <span
-        className={`text-xs font-medium ${
+        className={`text-[11px] font-medium leading-tight ${
           done || active ? "text-slate-800" : "text-slate-400"
         }`}
       >
@@ -165,8 +165,8 @@ export const WssedActiveLearningHub = ({
   const renderContent = () => {
     if (!datasetId) {
       return (
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <LockOutlined className="text-4xl text-slate-300" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <LockOutlined className="text-3xl text-slate-300" />
           <div>
             <h4 className="text-base font-semibold text-slate-800">
               Select a dataset
@@ -182,7 +182,7 @@ export const WssedActiveLearningHub = ({
 
     if (modelTraining) {
       return (
-        <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
           <Spin indicator={<LoadingOutlined spin />} size="large" />
           <div>
             <h4 className="text-base font-semibold text-slate-800">
@@ -200,8 +200,8 @@ export const WssedActiveLearningHub = ({
 
     if (!modelTrained) {
       return (
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <ExperimentOutlined className="text-4xl text-slate-300" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <ExperimentOutlined className="text-3xl text-slate-300" />
           <div>
             <h4 className="text-base font-semibold text-slate-800">
               Train your event detector first
@@ -218,7 +218,7 @@ export const WssedActiveLearningHub = ({
 
     if (jobLoading) {
       return (
-        <div className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
           <Spin indicator={<LoadingOutlined spin />} size="large" />
           <p className="text-sm text-slate-500">Loading training status…</p>
         </div>
@@ -227,8 +227,8 @@ export const WssedActiveLearningHub = ({
 
     if (!lastJob) {
       return (
-        <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <ExperimentOutlined className="text-4xl text-slate-300" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <ExperimentOutlined className="text-3xl text-slate-300" />
           <div>
             <h4 className="text-base font-semibold text-slate-800">
               No completed training job found
@@ -244,12 +244,12 @@ export const WssedActiveLearningHub = ({
 
     if (readyForAl) {
       return (
-        <div className="flex flex-col items-center gap-6 py-6 text-center">
-          <div className="rounded-full bg-emerald-50 p-4">
-            <CheckCircleOutlined className="text-4xl text-emerald-600" />
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="rounded-full bg-emerald-50 p-3">
+            <CheckCircleOutlined className="text-3xl text-emerald-600" />
           </div>
           <div>
-            <h4 className="text-xl font-semibold text-slate-900">
+            <h4 className="text-lg font-semibold text-slate-900">
               Ready for Active Learning
             </h4>
             <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
@@ -280,12 +280,12 @@ export const WssedActiveLearningHub = ({
     }
 
     return (
-      <div className="flex flex-col items-center gap-6 py-6 text-center">
-        <div className="rounded-full bg-amber-50 p-4">
-          <RocketOutlined className="text-4xl text-amber-600" />
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="rounded-full bg-amber-50 p-3">
+          <RocketOutlined className="text-3xl text-amber-600" />
         </div>
         <div>
-          <h4 className="text-xl font-semibold text-slate-900">
+          <h4 className="text-lg font-semibold text-slate-900">
             Register for Active Learning
           </h4>
           <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
@@ -322,22 +322,22 @@ export const WssedActiveLearningHub = ({
   };
 
   return (
-    <div className="relative flex w-[60%] flex-1 flex-col bg-white">
-      <div className="border-b border-slate-100 px-6 py-4">
-        <h2 className="text-lg font-semibold uppercase tracking-wide text-slate-900">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+      <div className="shrink-0 border-b border-slate-100 px-6 py-3">
+        <h2 className="text-base font-semibold uppercase tracking-wide text-slate-900">
           {selectedSpecies}
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-0.5 text-xs text-slate-500">
           Weakly supervised training → Active Learning review
         </p>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-8">
-        <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-slate-50/50 p-6 shadow-sm">
-          <div className="mb-8 flex items-center gap-2">
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-4">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-sm">
+          <div className="mb-5 flex items-start gap-2">
             {renderStep("Train model", trainingStepDone, !trainingStepDone, 1)}
             <div
-              className={`mb-6 h-0.5 flex-1 ${trainingStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
+              className={`mt-4 h-0.5 flex-1 ${trainingStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
             />
             {renderStep(
               "Register checkpoint",
@@ -346,7 +346,7 @@ export const WssedActiveLearningHub = ({
               2,
             )}
             <div
-              className={`mb-6 h-0.5 flex-1 ${registerStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
+              className={`mt-4 h-0.5 flex-1 ${registerStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
             />
             {renderStep(
               "Active Learning",
@@ -359,6 +359,6 @@ export const WssedActiveLearningHub = ({
           {renderContent()}
         </div>
       </div>
-    </div>
+    </main>
   );
 };
