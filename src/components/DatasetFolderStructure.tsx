@@ -14,6 +14,7 @@ import {
   clearDatasetDirectory,
 } from "../redux/features/datasetSlice";
 import { getAllDatasetSnippetSets } from "../redux/features/embeddingSlice";
+import { filterFocalRecordingsDatasets } from "../utils/wssedAccess";
 
 const { Panel } = Collapse;
 const WSSED_SELECTED_DATASET_STORAGE_KEY = "wssed:selectedDatasetId";
@@ -37,9 +38,11 @@ export const DatasetFolderStructure: React.FC = () => {
   const [restoringDataset, setRestoringDataset] = useState(false);
 
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (!user) return;
+
+    if (user.role === "admin" || user.role === "user") {
       dispatch(fetchAllDatasets());
-    } else if (user?.role === "team_owner") {
+    } else if (user.role === "team_owner") {
       dispatch(fetchAllTeamDatasets());
     }
   }, [user, dispatch]);
@@ -68,12 +71,10 @@ export const DatasetFolderStructure: React.FC = () => {
   }, [datasetDirectories, dispatch, restoringDataset]);
 
   const datasetOptions = useMemo(() => {
-    return (allDatasets ?? [])
-      .filter((d: any) => d.dataset_type === "FOCAL_RECORDINGS")
-      .map((d: any) => ({
-        value: d.id,
-        label: `${d.name}`,
-      }));
+    return filterFocalRecordingsDatasets(allDatasets).map((d) => ({
+      value: d.id,
+      label: `${d.name}`,
+    }));
   }, [allDatasets]);
 
   const hasDirectory = !!datasetDirectories?.species?.length;

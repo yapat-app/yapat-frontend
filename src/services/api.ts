@@ -609,6 +609,14 @@ export const taskApi = {
 // ============================================================================
 
 export const wssedApi = {
+  getAccess: async (): Promise<{
+    enabled: boolean;
+    focal_dataset_count: number;
+  }> => {
+    const response = await api.get("/api/wssed/access");
+    return response.data;
+  },
+
   suggestions: async (
     params: getActiveLearningSuggestionsParams,
   ): Promise<ActiveLearningResponse> => {

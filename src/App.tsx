@@ -15,6 +15,7 @@ import HomePage from "./pages/HomePage";
 import { Dashboard } from "./pages/Dashboard";
 import { StudyPhaseProvider } from "./studyPhases";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
+import WssedAccessGuard from "./routes/WssedAccessGuard";
 
 function App() {
   return (
@@ -39,7 +40,14 @@ function App() {
         <Route path="/history" element={<FeedHistory />} />
         <Route path="/annotate" element={<AnnotationWorkflow />} />
         <Route path="/active-learning" element={<ActiveLearning />} />
-        <Route path="/wssed" element={<Wssed />} />
+        <Route
+          path="/wssed"
+          element={
+            <WssedAccessGuard>
+              <Wssed />
+            </WssedAccessGuard>
+          }
+        />
         <Route path="/docs" element={<YapatUserManual />} />
       </Routes>
     </StudyPhaseProvider>

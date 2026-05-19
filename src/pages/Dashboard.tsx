@@ -14,6 +14,7 @@ import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { getLoggedInUser } from "../redux/features/authSlice";
+import { canAccessWssed } from "../utils/wssedAccess";
 
 interface ServiceCard {
   key: string;
@@ -26,6 +27,7 @@ interface ServiceCard {
   borderColor: string;
   badge?: string;
   roles?: Array<"admin" | "team_owner" | "user">;
+  requiresFocalDatasets?: boolean;
 }
 
 const CARDS: ServiceCard[] = [
@@ -75,6 +77,7 @@ const CARDS: ServiceCard[] = [
     bgColor: "bg-cyan-50",
     borderColor: "border-cyan-200 hover:border-cyan-400",
     badge: "Training flow",
+    requiresFocalDatasets: true,
   },
   {
     key: "pre-annotation",
@@ -144,10 +147,15 @@ export const Dashboard: React.FC = () => {
     }
   }, [user, dispatch]);
 
-  const visibleCards = CARDS.filter(
-    (card) =>
-      !card.roles || (user?.role && card.roles.includes(user.role as any)),
-  );
+  const visibleCards = CARDS.filter((card) => {
+    if (card.roles && (!user?.role || !card.roles.includes(user.role as any))) {
+      return false;
+    }
+    if (card.requiresFocalDatasets && !canAccessWssed(user, allDatasets)) {
+      return false;
+    }
+    return true;
+  });
 
   const datasetCount = allDatasets.length;
 
