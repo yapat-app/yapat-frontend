@@ -12,7 +12,7 @@
  * client-side from `/api/pam-al/snippet-labels`.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Plot from "react-plotly.js";
 import { Button, Select, Tooltip, Tag } from "antd";
 import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
@@ -30,7 +30,7 @@ import { ALFilterPanel } from "./ALFilterPanel";
 import { visualisationsApi } from "../../services/visualisationsApi";
 import { alApi } from "../../services/alApi";
 import type { SamplingMethod, SampleScores } from "../../types/al";
-import type { FPVResponse } from "../../types/visualisation";
+import type { FPVPointMetadata, FPVProjection2D } from "../../types/visualisation";
 import { embeddingApi } from "../../services/api";
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
@@ -53,6 +53,21 @@ const LABELED_BORDER_COLOR = "#111827";
 const COMPOSITE_DOMAIN: [number, number] = [0, 1];
 const SAMPLE_SCORE_UPPER_EPS = 1e-9;
 
+type ProjectionMethod = "pca" | "umap" | "tsne" | "isomap";
+const ALL_PROJECTION_METHODS: ProjectionMethod[] = ["tsne", "umap", "pca", "isomap"];
+
+function buildCoordsMap(
+  points: FPVPointMetadata[],
+  proj: FPVProjection2D,
+): Record<number, [number, number]> | null {
+  if (proj.x.length !== points.length || proj.y.length !== points.length) return null;
+  const map: Record<number, [number, number]> = {};
+  for (let i = 0; i < points.length; i++) {
+    map[points[i].snippet_id] = [proj.x[i], proj.y[i]];
+  }
+  return map;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const ProjectionView: React.FC = () => {
@@ -73,10 +88,15 @@ export const ProjectionView: React.FC = () => {
     snippetSetId,
   } = useAppSelector((state) => state.al);
 
-  const [method, setMethod] = useState<"pca" | "umap" | "tsne" | "isomap">("tsne");
+  const [method, setMethod] = useState<ProjectionMethod>("tsne");
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
-  const [fpvData, setFpvData] = useState<FPVResponse | null>(null);
+  const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
+  const [projectionsByMethod, setProjectionsByMethod] = useState<
+    Partial<Record<ProjectionMethod, FPVProjection2D>>
+  >({});
+  const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
+  const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
   const [visRangeOverride, setVisRangeOverride] = useState<{ min: number; max: number; step: number } | null>(null);
@@ -156,45 +176,102 @@ export const ProjectionView: React.FC = () => {
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 
-  // ── Load FPV coords when needed by the current phase ─────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    async function loadFPV() {
-      // We still need FPV coordinates for `predictions_only`; we just don't
-      // render the background dataset trace in that mode.
-      if (visMode === "hidden") {
-        setFpvData(null);
-        setFpvError(null);
-        return;
-      }
-      if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
+  const resetProjectionCache = useCallback(() => {
+    setFpvPoints([]);
+    setProjectionsByMethod({});
+    setLoadingMethods(new Set());
+    inFlightMethodsRef.current = new Set();
+  }, []);
 
-      setFpvLoading(true);
-      setFpvError(null);
+  const fetchProjectionMethod = useCallback(
+    async (targetMethod: ProjectionMethod, options?: { background?: boolean }) => {
+      if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
+      if (inFlightMethodsRef.current.has(targetMethod)) return;
+
+      inFlightMethodsRef.current.add(targetMethod);
+      setLoadingMethods((prev) => new Set(prev).add(targetMethod));
+      if (!options?.background) {
+        setFpvLoading(true);
+        setFpvError(null);
+      }
+
       try {
-        const params = {
+        const fpv = await visualisationsApi.getFPVDataset({
           dataset_id: selectedDatasetId,
           embedding_model_id: effectiveEmbeddingModelId,
           run_3d: false,
-          method,
-        };
-        const fpv = await visualisationsApi.getFPVDataset(params);
-        if (!cancelled) setFpvData(fpv);
+          method: targetMethod,
+        });
+        const proj = fpv.projections_2d[targetMethod];
+        if (proj && fpv.points.length > 0) {
+          setFpvPoints(fpv.points);
+          setProjectionsByMethod((prev) =>
+            prev[targetMethod] ? prev : { ...prev, [targetMethod]: proj },
+          );
+        }
       } catch (e: any) {
-        if (!cancelled) {
-          setFpvData(null);
-          setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."));
+        if (!options?.background) {
+          resetProjectionCache();
+          setFpvError(
+            String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."),
+          );
         }
       } finally {
-        if (!cancelled) setFpvLoading(false);
+        inFlightMethodsRef.current.delete(targetMethod);
+        setLoadingMethods((prev) => {
+          const next = new Set(prev);
+          next.delete(targetMethod);
+          return next;
+        });
+        if (!options?.background) {
+          setFpvLoading(false);
+        }
       }
-    }
+    },
+    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionCache],
+  );
 
-    loadFPV();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, method]);
+  // Load the active projection method (single-method payload for large datasets).
+  useEffect(() => {
+    if (visMode === "hidden") {
+      resetProjectionCache();
+      setFpvError(null);
+      return;
+    }
+    if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
+
+    resetProjectionCache();
+    void fetchProjectionMethod(method);
+  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, resetProjectionCache]);
+
+  // When the user picks another method, fetch it on demand if not cached yet.
+  useEffect(() => {
+    if (visMode === "hidden" || !selectedDatasetId || !effectiveEmbeddingModelId) return;
+    if (projectionsByMethod[method]) return;
+    void fetchProjectionMethod(method);
+  }, [
+    method,
+    visMode,
+    selectedDatasetId,
+    effectiveEmbeddingModelId,
+    projectionsByMethod,
+    fetchProjectionMethod,
+  ]);
+
+  // Prefetch remaining methods in the background for sidebar thumbnails.
+  useEffect(() => {
+    if (visMode === "hidden" || fpvPoints.length === 0) return;
+    for (const m of ALL_PROJECTION_METHODS) {
+      if (m === method || projectionsByMethod[m]) continue;
+      void fetchProjectionMethod(m, { background: true });
+    }
+  }, [
+    visMode,
+    fpvPoints.length,
+    method,
+    projectionsByMethod,
+    fetchProjectionMethod,
+  ]);
 
   // ── Load labeled pool + per-snippet labels for study features ─────────────
   useEffect(() => {
@@ -252,16 +329,18 @@ export const ProjectionView: React.FC = () => {
     setFpvGenerateLoading(true);
     setFpvError(null);
     try {
-      const body = {
+      await visualisationsApi.generateFPVDataset({
         dataset_id: selectedDatasetId,
         embedding_model_id: effectiveEmbeddingModelId,
         run_3d: false,
-        method,
-      };
-      const fpv = await visualisationsApi.generateFPVDataset(body);
-      setFpvData(fpv);
+      });
+      resetProjectionCache();
+      await fetchProjectionMethod(method);
+      for (const m of ALL_PROJECTION_METHODS) {
+        if (m !== method) void fetchProjectionMethod(m, { background: true });
+      }
     } catch (e: any) {
-      setFpvData(null);
+      resetProjectionCache();
       setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to generate projection."));
     } finally {
       setFpvGenerateLoading(false);
@@ -288,30 +367,22 @@ export const ProjectionView: React.FC = () => {
 
   // ── Coordinates lookup ───────────────────────────────────────────────────
   const fpvCoordsBySnippet: Record<number, [number, number]> | null = useMemo(() => {
-    if (!fpvData) return null;
-    const proj = fpvData.projections_2d?.[method];
-    if (!proj || proj.x.length !== fpvData.points.length || proj.y.length !== fpvData.points.length) return null;
-    const map: Record<number, [number, number]> = {};
-    for (let i = 0; i < fpvData.points.length; i++) {
-      map[fpvData.points[i].snippet_id] = [proj.x[i], proj.y[i]];
-    }
-    return map;
-  }, [fpvData, method]);
+    const proj = projectionsByMethod[method];
+    if (!proj || fpvPoints.length === 0) return null;
+    return buildCoordsMap(fpvPoints, proj);
+  }, [fpvPoints, projectionsByMethod, method]);
 
   const fpvCoordsBySnippetForMethod = useMemo(() => {
-    if (!fpvData?.projections_2d) return null;
-    const maps: Partial<Record<typeof method, Record<number, [number, number]>>> = {};
-    (["tsne", "umap", "pca", "isomap"] as const).forEach((m) => {
-      const proj = fpvData.projections_2d?.[m];
-      if (!proj || proj.x.length !== fpvData.points.length || proj.y.length !== fpvData.points.length) return;
-      const map: Record<number, [number, number]> = {};
-      for (let i = 0; i < fpvData.points.length; i++) {
-        map[fpvData.points[i].snippet_id] = [proj.x[i], proj.y[i]];
-      }
-      maps[m] = map;
-    });
+    if (fpvPoints.length === 0) return null;
+    const maps: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> = {};
+    for (const m of ALL_PROJECTION_METHODS) {
+      const proj = projectionsByMethod[m];
+      if (!proj) continue;
+      const map = buildCoordsMap(fpvPoints, proj);
+      if (map) maps[m] = map;
+    }
     return maps;
-  }, [fpvData]);
+  }, [fpvPoints, projectionsByMethod]);
 
   // ── Score join for whole-dataset filtering/coloring ──────────────────────
   // The FPV dataset response may not contain sampler-suite scores. In phase 3.x
@@ -327,8 +398,8 @@ export const ProjectionView: React.FC = () => {
 
   // ── Plot points (phase-dependent) ────────────────────────────────────────
   const plotPoints: PlotPoint[] = useMemo(() => {
-    if (visMode === "whole_dataset" && fpvData) {
-      return fpvData.points.map((pt) => ({
+    if (visMode === "whole_dataset" && fpvPoints.length > 0) {
+      return fpvPoints.map((pt) => ({
         snippet_id: pt.snippet_id,
         predicted_label: pt.predicted_labels?.[0] ?? "—",
         // Prefer scores from AL inference (full set), fall back to FPV metadata.
@@ -342,7 +413,7 @@ export const ProjectionView: React.FC = () => {
     }
     // predictions_only: plot the inference subset
     return rawOverlayPredictions as unknown as PlotPoint[];
-  }, [visMode, fpvData, rawOverlayPredictions, scoresBySnippet]);
+  }, [visMode, fpvPoints, rawOverlayPredictions, scoresBySnippet]);
 
   const coords: [number, number][] = useMemo(() => {
     if (!fpvCoordsBySnippet) return plotPoints.map(() => [0, 0] as [number, number]);
@@ -774,18 +845,19 @@ export const ProjectionView: React.FC = () => {
               {dimRedMethods.map((m) => {
                 const active = method === m.key;
                 const hasProj = Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
+                const isLoadingThumb = loadingMethods.has(m.key) && !hasProj;
                 return (
                   <button
                     key={m.key}
                     type="button"
                     onClick={() => setMethod(m.key)}
-                    disabled={fpvLoading}
+                    disabled={fpvLoading && active}
                     className={[
                       "text-left rounded-xl border px-2.5 py-2 transition-all",
                       active
                         ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
                         : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
-                      !hasProj ? "opacity-50 cursor-not-allowed" : "",
+                      !hasProj && !isLoadingThumb ? "opacity-50 cursor-not-allowed" : "",
                     ].join(" ")}
                   >
                     <div className="w-full h-[74px] rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
@@ -794,6 +866,7 @@ export const ProjectionView: React.FC = () => {
                         coordsBySnippet={fpvCoordsBySnippetForMethod?.[m.key] ?? null}
                         selectedSnippetId={selectedSnippetId}
                         allActualLabels={allCategoricalValues.actual_label ?? []}
+                        loading={isLoadingThumb}
                       />
                     </div>
                     <div className="mt-1 text-[11px] text-gray-600 font-ibm-sans">{m.label}</div>
@@ -869,7 +942,15 @@ const MiniProjection: React.FC<{
   coordsBySnippet: Record<number, [number, number]> | null;
   selectedSnippetId: number | null;
   allActualLabels: string[];
-}> = ({ points, coordsBySnippet, selectedSnippetId, allActualLabels }) => {
+  loading?: boolean;
+}> = ({ points, coordsBySnippet, selectedSnippetId, allActualLabels, loading = false }) => {
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
+        …
+      </div>
+    );
+  }
   if (!coordsBySnippet) {
     return (
       <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
