@@ -408,8 +408,7 @@ export const AnnotationHub: React.FC = () => {
     canGoNext,
   } = useAnnotationWorkflow({ datasetId: classicDatasetId, enabled: mode !== "al" });
 
-  // Load embeddings for classic modes so the generate button can be enabled.
-  const { datasetEmbeddings } = useAppSelector((state) => state.embedding);
+  // Load embeddings for classic modes (used by similarity feed generation).
   useEffect(() => {
     if (!classicDatasetId || mode === "al") return;
     dispatch(getAllDatasetEmbeddings(Number(classicDatasetId)));
