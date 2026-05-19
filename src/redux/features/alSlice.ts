@@ -8,7 +8,6 @@ import type {
   ALState,
   VisibilityFilterState,
   ColorFilterState,
-  PAMInferenceResult,
   PAMPrediction,
   FeedbackPayload,
   FeedbackResponse,
@@ -106,42 +105,105 @@ function loadFeed(): PersistedFeed | null {
   }
 }
 
-// Rehydrate state from localStorage.
-const saved = loadFeed();
+function normalizeDatasetId(id: number | string | null | undefined): number | null {
+  if (id === null || id === undefined) return null;
+  const parsed = Number(id);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-const initialState: ALState = {
-  modelCheckpointId: saved?.modelCheckpointId ?? null,
-  modelFamilyName: saved?.modelFamilyName ?? null,
-  usedCheckpointId: saved?.usedCheckpointId ?? null,
-  snippetSetId: saved?.snippetSetId ?? null,
-  embeddingModelId: saved?.embeddingModelId ?? null,
-  inferenceK: saved?.inferenceK ?? 20,
-  predictions: saved?.predictions ?? [],
-  projectionPredictions: saved?.predictions ?? [],
-  modelInfo: saved?.modelInfo ?? {},
-  totalScored: saved?.totalScored ?? 0,
-  feedbacks: {},
-  feedbackCount: 0,
-  retrainPending: false,
-  retrainThreshold: RETRAIN_THRESHOLD,
-  selectedSnippetId: null,
-  selectedPredictionId: null,
-  selectedDatasetId: saved?.selectedDatasetId ?? null,
-  colorBy: "prediction",
-  samplingMethod: "uncertainty",
-  alFilters: {
-    visibility: { propertyKey: null, range: [0, 1], propertyKeys: [], ranges: {} },
-    color: { propertyKey: null },
-  },
-  lastRetrainDispatch: null,
-  lastRetrainJob: null,
-  lastRetrainFailed: false,
-  inferenceLoading: false,
-  feedbackLoading: false,
-  retrainLoading: false,
-  error: null,
-  lastInferenceAt: saved?.lastInferenceAt ?? null,
-};
+function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
+  const rows = withDisplayFields(saved.predictions ?? []);
+  state.predictions = rows;
+  state.projectionPredictions = rows;
+  state.modelInfo = saved.modelInfo ?? {};
+  state.totalScored = saved.totalScored ?? 0;
+  state.modelCheckpointId = saved.modelCheckpointId ?? null;
+  state.modelFamilyName = saved.modelFamilyName ?? null;
+  state.usedCheckpointId = saved.usedCheckpointId ?? null;
+  state.snippetSetId = saved.snippetSetId ?? null;
+  state.embeddingModelId = saved.embeddingModelId ?? null;
+  state.inferenceK = saved.inferenceK ?? 20;
+  state.lastInferenceAt = saved.lastInferenceAt ?? null;
+  state.selectedDatasetId = normalizeDatasetId(saved.selectedDatasetId);
+}
+
+function clearSessionState(state: ALState): void {
+  state.predictions = [];
+  state.projectionPredictions = [];
+  state.modelInfo = {};
+  state.totalScored = 0;
+  state.feedbacks = {};
+  state.feedbackCount = 0;
+  state.lastRetrainDispatch = null;
+  state.lastRetrainJob = null;
+  state.lastRetrainFailed = false;
+  state.selectedSnippetId = null;
+  state.selectedPredictionId = null;
+  state.modelCheckpointId = null;
+  state.modelFamilyName = null;
+  state.usedCheckpointId = null;
+  state.snippetSetId = null;
+  state.embeddingModelId = null;
+  state.lastInferenceAt = null;
+  state.error = null;
+}
+
+function buildInitialState(): ALState {
+  const saved = loadFeed();
+  const base: ALState = {
+    modelCheckpointId: null,
+    modelFamilyName: null,
+    usedCheckpointId: null,
+    snippetSetId: null,
+    embeddingModelId: null,
+    inferenceK: 20,
+    predictions: [],
+    projectionPredictions: [],
+    modelInfo: {},
+    totalScored: 0,
+    feedbacks: {},
+    feedbackCount: 0,
+    retrainPending: false,
+    retrainThreshold: RETRAIN_THRESHOLD,
+    selectedSnippetId: null,
+    selectedPredictionId: null,
+    selectedDatasetId: null,
+    colorBy: "prediction",
+    samplingMethod: "uncertainty",
+    alFilters: {
+      visibility: { propertyKey: null, range: [0, 1], propertyKeys: [], ranges: {} },
+      color: { propertyKey: null },
+    },
+    lastRetrainDispatch: null,
+    lastRetrainJob: null,
+    lastRetrainFailed: false,
+    inferenceLoading: false,
+    feedbackLoading: false,
+    retrainLoading: false,
+    error: null,
+    lastInferenceAt: null,
+  };
+
+  if (saved && (saved.predictions?.length ?? 0) > 0) {
+    applyPersistedFeed(base, saved);
+  } else if (saved) {
+    base.selectedDatasetId = normalizeDatasetId(saved.selectedDatasetId);
+    base.modelCheckpointId = saved.modelCheckpointId ?? null;
+    base.modelFamilyName = saved.modelFamilyName ?? null;
+    base.usedCheckpointId = saved.usedCheckpointId ?? null;
+    base.snippetSetId = saved.snippetSetId ?? null;
+    base.embeddingModelId = saved.embeddingModelId ?? null;
+    base.inferenceK = saved.inferenceK ?? 20;
+    base.lastInferenceAt = saved.lastInferenceAt ?? null;
+    base.modelInfo = saved.modelInfo ?? {};
+    base.totalScored = saved.totalScored ?? 0;
+  }
+
+  return base;
+}
+
+// Rehydrate state from localStorage.
+const initialState: ALState = buildInitialState();
 
 // ── Thunks ────────────────────────────────────────────────────────────────
 
@@ -232,22 +294,25 @@ const alSlice = createSlice({
       }
     },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
-      state.selectedDatasetId = action.payload;
-      state.predictions = [];
-      state.projectionPredictions = [];
-      state.feedbacks = {};
-      state.feedbackCount = 0;
-      state.lastRetrainDispatch = null;
-      state.lastRetrainJob = null;
-      state.lastRetrainFailed = false;
-      state.selectedSnippetId = null;
-      state.selectedPredictionId = null;
-      state.modelCheckpointId = null;
-      state.modelFamilyName = null;
-      state.usedCheckpointId = null;
-      state.snippetSetId = null;
-      state.embeddingModelId = null;
-      state.error = null;
+      const nextId = normalizeDatasetId(action.payload);
+      const currentId = normalizeDatasetId(state.selectedDatasetId);
+      if (nextId === currentId) return;
+
+      state.selectedDatasetId = nextId;
+
+      const saved = loadFeed();
+      const savedId = normalizeDatasetId(saved?.selectedDatasetId ?? null);
+      if (
+        nextId !== null &&
+        savedId === nextId &&
+        (saved?.predictions?.length ?? 0) > 0
+      ) {
+        applyPersistedFeed(state, saved!);
+        return;
+      }
+
+      clearSessionState(state);
+      state.selectedDatasetId = nextId;
     },
     setInferenceConfig: (
       state,
@@ -306,15 +371,20 @@ const alSlice = createSlice({
       state.error = null;
     },
     clearSavedFeed: (state) => {
-      state.predictions = [];
-      state.projectionPredictions = [];
-      state.modelInfo = {};
-      state.totalScored = 0;
-      state.feedbacks = {};
-      state.feedbackCount = 0;
-      state.usedCheckpointId = null;
-      state.lastInferenceAt = null;
+      clearSessionState(state);
+      state.selectedDatasetId = null;
       localStorage.removeItem(STORAGE_KEY);
+    },
+    hydrateSavedFeed: (state) => {
+      if (state.predictions.length > 0) return;
+      const saved = loadFeed();
+      if (!saved || (saved.predictions?.length ?? 0) === 0) return;
+
+      const savedId = normalizeDatasetId(saved.selectedDatasetId);
+      const currentId = normalizeDatasetId(state.selectedDatasetId);
+      if (currentId !== null && savedId !== null && currentId !== savedId) return;
+
+      applyPersistedFeed(state, saved);
     },
   },
   extraReducers: (builder) => {
@@ -324,7 +394,8 @@ const alSlice = createSlice({
     });
     builder.addCase(
       runInference.fulfilled,
-      (state, action: PayloadAction<PAMInferenceResult>) => {
+      (state, action) => {
+        const request = action.meta.arg as PAMRunInferenceRequest;
         state.inferenceLoading = false;
         state.modelFamilyName = action.payload.model_family_name;
         state.usedCheckpointId = action.payload.used_checkpoint_id;
@@ -338,6 +409,7 @@ const alSlice = createSlice({
         state.totalScored = action.payload.total_predictions;
         state.predictions = withDisplayFields(action.payload.rows);
         state.lastInferenceAt = new Date().toISOString();
+        state.selectedDatasetId = request.dataset_id;
         // Update projection snapshot on first inference or after a retrain.
         if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
           state.projectionPredictions = state.predictions;
@@ -468,6 +540,7 @@ export const {
   resetFeedbacks,
   clearError,
   clearSavedFeed,
+  hydrateSavedFeed,
 } = alSlice.actions;
 
 export default alSlice.reducer;

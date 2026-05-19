@@ -12,7 +12,7 @@ import {
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchAllTeamDatasets } from "../redux/features/datasetSlice";
+import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { getLoggedInUser } from "../redux/features/authSlice";
 
 interface ServiceCard {
@@ -130,11 +130,19 @@ export const Dashboard: React.FC = () => {
   const { allDatasets } = useAppSelector((state) => state.dataset);
 
   useEffect(() => {
-    if (accessToken) {
+    if (accessToken && !user) {
       dispatch(getLoggedInUser(accessToken as any));
+    }
+  }, [accessToken, user, dispatch]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === "admin" || user.role === "user") {
+      dispatch(fetchAllDatasets());
+    } else if (user.role === "team_owner") {
       dispatch(fetchAllTeamDatasets());
     }
-  }, [accessToken]);
+  }, [user, dispatch]);
 
   const visibleCards = CARDS.filter(
     (card) =>

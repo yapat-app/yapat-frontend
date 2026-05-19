@@ -773,7 +773,7 @@ export const ProjectionView: React.FC = () => {
             <div className="p-3 flex flex-col gap-2 overflow-auto" style={{ maxHeight: "100%" }}>
               {dimRedMethods.map((m) => {
                 const active = method === m.key;
-                const hasProj = method === m.key || Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
+                const hasProj = Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
                 return (
                   <button
                     key={m.key}
@@ -791,7 +791,7 @@ export const ProjectionView: React.FC = () => {
                     <div className="w-full h-[74px] rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
                       <MiniProjection
                         points={thumbnailPoints}
-                        coordsBySnippet={m.key === method ? fpvCoordsBySnippet : null}
+                        coordsBySnippet={fpvCoordsBySnippetForMethod?.[m.key] ?? null}
                         selectedSnippetId={selectedSnippetId}
                         allActualLabels={allCategoricalValues.actual_label ?? []}
                       />

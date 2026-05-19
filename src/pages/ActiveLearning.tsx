@@ -26,6 +26,7 @@ import {
   runInference,
   fetchFeedbackCount,
   clearSavedFeed,
+  hydrateSavedFeed,
   pollRetrainJob,
   trainFromScratch,
 } from "../redux/features/alSlice";
@@ -169,18 +170,29 @@ export const ActiveLearning: React.FC = () => {
     else if (user?.role === "team_owner") dispatch(fetchAllTeamDatasets());
   }, [user]);
 
-  // Sync dataset_id from URL.
+  // Restore persisted feed on mount (covers URL sync races after refresh).
+  useEffect(() => {
+    dispatch(hydrateSavedFeed());
+  }, [dispatch]);
+
+  // Sync dataset_id from URL without wiping a matching saved session.
   useEffect(() => {
     const raw = searchParams.get("dataset_id");
-    if (!raw) return;
+    if (!raw) {
+      if (selectedDatasetId !== null && predictions.length > 0) {
+        setSearchParams({ dataset_id: String(selectedDatasetId) }, { replace: true });
+      }
+      return;
+    }
 
     const parsed = Number.parseInt(raw, 10);
     if (Number.isNaN(parsed)) return;
 
-    if (parsed !== selectedDatasetId) {
+    const currentId = selectedDatasetId === null ? null : Number(selectedDatasetId);
+    if (parsed !== currentId) {
       dispatch(setSelectedDataset(parsed));
     }
-  }, [dispatch, searchParams, selectedDatasetId]);
+  }, [dispatch, searchParams, selectedDatasetId, predictions.length, setSearchParams]);
 
   useEffect(() => {
     const family = searchParams.get("model_family");
