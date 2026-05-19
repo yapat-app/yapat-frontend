@@ -45,7 +45,9 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   const feedbackDisabled = submitting || !hasCheckpoint;
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
-  const submittedLabels = existingFeedback?.final_labels ?? serverLabels ?? [];
+  const submittedLabels = existingFeedback
+    ? (existingFeedback.final_labels ?? [])
+    : (serverLabels ?? []);
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
   const skipNextAutoSubmitRef = useRef<boolean>(true);
   const lastSubmittedKeyRef = useRef<string>("");
@@ -75,7 +77,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
           snippet_id: prediction.snippet_id,
           action,
           ...(labels && labels.length > 0 ? { labels } : {}),
-          ...(isBlind ? { persist_annotations: false } : {}),
         }),
       ).unwrap();
 
@@ -128,6 +129,8 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
       lastSyncedSnippetIdRef.current = prediction.snippet_id;
       setSaveState("idle");
     }
+    const syncedKey = [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|");
+    lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
   }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
 
@@ -140,12 +143,15 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     }
     if (!hasCheckpoint) return;
     if (feedbackDisabled) return;
-    if (selectionKey.length === 0) return;
     if (selectionKey === lastSubmittedKeyRef.current) return;
 
     if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = window.setTimeout(() => {
       lastSubmittedKeyRef.current = selectionKey;
+      if (selectionKey.length === 0) {
+        submit("REJECT");
+        return;
+      }
       submit("MODIFY", [...selectedLabels]);
     }, 250);
 

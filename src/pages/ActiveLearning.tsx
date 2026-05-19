@@ -33,11 +33,34 @@ import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { embeddingApi } from "../services/api";
 import { alApi } from "../services/alApi";
-import type { PAMCheckpoint } from "../types/al";
+import type { PAMCheckpoint, PAMRunInferenceRequest, PAMSuggestionMode } from "../types/al";
 import type { SnippetSet } from "../types";
 import { usePhaseConfig } from "../studyPhases";
+import type { PhaseConfig } from "../studyPhases/types";
 
 const { Option } = Select;
+
+function buildInferenceSuggestionParams(
+  phase: PhaseConfig,
+  topKOnly: boolean,
+  k: number,
+  samplingMethod: string,
+): Pick<PAMRunInferenceRequest, "sample_suggestion" | "suggestion_strategy" | "k"> {
+  const feedSupportsSuggestions =
+    phase.feed.mode !== "single_card_on_select" && phase.feed.mode !== "hidden";
+  if (!topKOnly || !feedSupportsSuggestions) {
+    return { sample_suggestion: false };
+  }
+  return {
+    sample_suggestion: true,
+    suggestion_strategy: (phase.feed.samplingStrategy ?? samplingMethod) as PAMRunInferenceRequest["suggestion_strategy"],
+    k: phase.feed.topK ?? k,
+  };
+}
+
+function isSuggestionsMode(modelInfo: Record<string, unknown>): boolean {
+  return (modelInfo.mode as PAMSuggestionMode | undefined) === "suggestions";
+}
 
 export const ActiveLearning: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -216,11 +239,13 @@ export const ActiveLearning: React.FC = () => {
       embeddingMethods?.[0]?.id ??
       1;
 
-  // Request top-K suggestions for scrollable feeds; request full predictions otherwise.
-    const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
-    const useTopK = phaseRequiresTopK ? true : localTopKOnly && phase.feed.mode !== "single_card_on_select" && phase.feed.mode !== "hidden";
-    const k = phaseRequiresTopK ? (phase.feed.topK ?? localK) : localK;
-    const strategy = phase.feed.samplingStrategy ?? samplingMethod;
+    const suggestionParams = buildInferenceSuggestionParams(
+      phase,
+      localTopKOnly,
+      localK,
+      samplingMethod,
+    );
+    const k = suggestionParams.k ?? localK;
 
     dispatch(
       setInferenceConfig({
@@ -236,9 +261,7 @@ export const ActiveLearning: React.FC = () => {
         model_family_name: family,
         dataset_id: selectedDatasetId,
         snippet_set_id: localSS,
-        ...(useTopK
-          ? { sample_suggestion: true, suggestion_strategy: strategy, k }
-          : { sample_suggestion: false }),
+        ...suggestionParams,
       }),
     );
   // Refresh feedback counter for the active model family.
@@ -313,20 +336,18 @@ export const ActiveLearning: React.FC = () => {
           message.warning("Could not poll retrain job — loading current predictions");
         }
         if (modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
-          const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
               force_refresh: false,
-              ...(phaseRequiresTopK
-                ? {
-                    sample_suggestion: true,
-                    suggestion_strategy: phase.feed.samplingStrategy ?? samplingMethod,
-                    k: phase.feed.topK ?? inferenceK,
-                  }
-                : { sample_suggestion: false }),
+              ...buildInferenceSuggestionParams(
+                phase,
+                isSuggestionsMode(modelInfo),
+                inferenceK,
+                samplingMethod,
+              ),
             }),
           );
         }
@@ -342,20 +363,18 @@ export const ActiveLearning: React.FC = () => {
         }
   // Refresh predictions after terminal job state.
         if (modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
-          const phaseRequiresTopK = phase.feed.mode === "scrollable_topk";
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
               force_refresh: status === "COMPLETED",
-              ...(phaseRequiresTopK
-                ? {
-                    sample_suggestion: true,
-                    suggestion_strategy: phase.feed.samplingStrategy ?? samplingMethod,
-                    k: phase.feed.topK ?? inferenceK,
-                  }
-                : { sample_suggestion: false }),
+              ...buildInferenceSuggestionParams(
+                phase,
+                isSuggestionsMode(modelInfo),
+                inferenceK,
+                samplingMethod,
+              ),
             }),
           );
         }
@@ -374,7 +393,7 @@ export const ActiveLearning: React.FC = () => {
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [dispatch, lastRetrainDispatch, selectedDatasetId, modelFamilyName, snippetSetId, samplingMethod, inferenceK, phase]);
+  }, [dispatch, lastRetrainDispatch, selectedDatasetId, modelFamilyName, snippetSetId, samplingMethod, inferenceK, phase, modelInfo]);
 
   const retrainTag = lastRetrainJob ? (
     <Tag
@@ -437,7 +456,7 @@ export const ActiveLearning: React.FC = () => {
                 setLocalFamily(modelFamilyName);
                 setLocalSS(snippetSetId);
                 setLocalK(inferenceK);
-                setLocalTopKOnly(true);
+                setLocalTopKOnly(predictions.length === 0 || isSuggestionsMode(modelInfo));
                 setHasGroundTruthMetadata(false);
                 setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
                 setTrainMetadataPath("");

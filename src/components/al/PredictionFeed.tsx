@@ -58,6 +58,14 @@ export const PredictionFeed: React.FC = () => {
 
   // Blind mode: hydrate per-snippet labels from the backend so they persist across refresh.
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
+  const feedbackLabelSignature = useMemo(
+    () =>
+      Object.entries(feedbacks)
+        .map(([snippetId, fb]) => `${snippetId}:${fb.action}:${(fb.final_labels ?? []).join(",")}`)
+        .sort()
+        .join("|"),
+    [feedbacks],
+  );
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
@@ -77,7 +85,7 @@ export const PredictionFeed: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [isBlind, selectedDatasetId, snippetSetId]);
+  }, [isBlind, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
 
   // ── Derived stats for Phase 1 header ────────────────────────────────────
   const labeledCount = useMemo(
