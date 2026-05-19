@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   FolderOpenOutlined,
   AudioOutlined,
-  ThunderboltOutlined,
   TagsOutlined,
   HistoryOutlined,
   TeamOutlined,
@@ -47,24 +46,12 @@ const CARDS: ServiceCard[] = [
     icon: <AudioOutlined className="text-2xl" />,
     title: "Annotate",
     description:
-      "Label audio snippets with species names. Work through your annotation queue with AI-powered label suggestions.",
+      "Label audio snippets with random feeds, similarity search, or AI-powered active learning. All modes in one unified workspace.",
     route: "/annotate",
     color: "text-emerald-600",
     bgColor: "bg-emerald-50",
     borderColor: "border-emerald-200 hover:border-emerald-400",
     badge: "Core workflow",
-  },
-  {
-    key: "active-learning",
-    icon: <ThunderboltOutlined className="text-2xl" />,
-    title: "Active Learning",
-    description:
-      "Use AI to surface the most informative snippets first. Generate embeddings and smart annotation feeds.",
-    route: "/active-learning",
-    color: "text-violet-600",
-    bgColor: "bg-violet-50",
-    borderColor: "border-violet-200 hover:border-violet-400",
-    badge: "AI-powered",
   },
   {
     key: "wssed",

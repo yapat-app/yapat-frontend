@@ -1,15 +1,14 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { Login } from "./pages/Login";
 import { SignUp } from "./pages/SignUp";
 import { Datasets } from "./pages/Datasets";
 import { Teams } from "./pages/Teams";
 import { ManageTeam } from "./pages/ManageTeam";
-import { AnnotationWorkflow } from "./pages/AnnotationWorkflow";
+import { AnnotationHub } from "./pages/AnnotationHub";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
-import { ActiveLearning } from "./pages/ActiveLearning";
 import { Wssed } from "./pages/Wssed";
 import HomePage from "./pages/HomePage";
 import { Dashboard } from "./pages/Dashboard";
@@ -38,8 +37,9 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/pre-annotation" element={<Taxonomies />} />
         <Route path="/history" element={<FeedHistory />} />
-        <Route path="/annotate" element={<AnnotationWorkflow />} />
-        <Route path="/active-learning" element={<ActiveLearning />} />
+        <Route path="/annotate" element={<AnnotationHub />} />
+        {/* Legacy route — redirect to unified hub in AL mode */}
+        <Route path="/active-learning" element={<Navigate to="/annotate?mode=al" replace />} />
         <Route
           path="/wssed"
           element={

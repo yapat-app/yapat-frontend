@@ -18,7 +18,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   const navigate = useNavigate();
 
   const handleStartAL = () => {
-    navigate(`/active-learning?dataset_id=${dataset.id}`);
+    navigate(`/annotate?mode=al&dataset_id=${dataset.id}`);
   };
 
   const datasetTypeLabel = (dataset.dataset_type ?? "PAM").replaceAll("_", " ");

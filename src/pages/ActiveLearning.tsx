@@ -769,7 +769,7 @@ export const ActiveLearning: React.FC = () => {
  *   • feed=single_card + vis=whole_dataset    → vis dominant + side panel (Phase 2/3)
  *   • feed=hidden                             → vis only
  */
-const PhaseLayout: React.FC = () => {
+export const PhaseLayout: React.FC = () => {
   const phase = usePhaseConfig();
   const feedMode = phase.feed.mode;
   const visMode = phase.visualization.mode;
@@ -890,7 +890,7 @@ const PhaseLayout: React.FC = () => {
   return null;
 };
 
-const BlindAnnotationHeader: React.FC = () => {
+export const BlindAnnotationHeader: React.FC = () => {
   // Blind mode header intentionally keeps the UI minimal.
 
   return (

@@ -169,6 +169,13 @@ export const snippetSlice = createSlice({
       state.error = null;
     },
 
+    jumpToSnippetById: (state, action: PayloadAction<number>) => {
+      const idx = state.snippets.findIndex((s) => s.id === action.payload);
+      if (idx >= 0) {
+        state.currentIndex = idx;
+        state.currentSnippet = state.snippets[idx];
+      }
+    },
     setFeedId: (state, action) => {
       state.selectedFeedId = action.payload;
     },
@@ -288,6 +295,7 @@ export const {
   markCurrentAsAnnotated,
   clearSnippets,
   loadSnippets,
+  jumpToSnippetById,
   setFeedId,
   clearError,
 } = snippetSlice.actions;

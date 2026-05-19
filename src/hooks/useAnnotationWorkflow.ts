@@ -22,9 +22,10 @@ import { getFeedHistory } from "../redux/features/feedSlice";
 interface UseAnnotationWorkflowParams {
   datasetId: string | null;
   limit?: number;
+  enabled?: boolean;
 }
 
-export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
+export const useAnnotationWorkflow = ({ enabled = true }: UseAnnotationWorkflowParams) => {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
   const datasetId = searchParams.get("dataset_id");
@@ -67,19 +68,21 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
   // }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     dispatch(clearEmbedding());
-  }, [dispatch]);
+  }, [dispatch, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     dispatch(getFeedHistory());
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    console.log("inside annotation workflow");
+    if (!enabled) return;
     if (feedHistory && feedHistory.length > 0 && snippets.length === 0) {
       dispatch(loadSnippets(feedHistory[0]));
     }
-  }, [feedHistory]);
+  }, [feedHistory, enabled]);
 
   const lastToastKeyRef = useRef<string | null>(null);
 
@@ -110,12 +113,10 @@ export const useAnnotationWorkflow = ({}: UseAnnotationWorkflowParams) => {
     });
   }, [snippetsFetched, datasetId, selectedFeedId, snippets.length]);
 
-  //Load annotations for current snippet
   useEffect(() => {
-    if (currentSnippet) {
-      dispatch(fetchAnnotations({ snippet_id: currentSnippet.id }));
-    }
-  }, [currentSnippet, dispatch]);
+    if (!enabled || !currentSnippet) return;
+    dispatch(fetchAnnotations({ snippet_id: currentSnippet.id }));
+  }, [currentSnippet, dispatch, enabled]);
 
   //Memoize snippet IDs for dependency tracking
   const snippetIds = useMemo(
