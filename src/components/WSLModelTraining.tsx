@@ -7,9 +7,13 @@ import {
   Button,
   Collapse,
   message,
-  Alert,
+  Tooltip,
 } from "antd";
-import { CheckCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  InfoCircleOutlined,
+  LoadingOutlined,
+} from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
@@ -313,6 +317,63 @@ export const WSLModelTraining = ({
         )
       : null;
 
+  const artifactsTooltip =
+    datasetArtifacts == null ? null : (
+      <div className="max-w-xs space-y-2 text-[11px] leading-5">
+        <p className="font-semibold text-white">Existing outputs on GPU server</p>
+        <div>
+          <span className="font-semibold">Embeddings: </span>
+          {datasetArtifacts.embeddings_complete ? (
+            <span>
+              ready ({datasetArtifacts.npz_count}/{datasetArtifacts.audio_count})
+            </span>
+          ) : (
+            <span>{datasetArtifacts.embeddings_status ?? "not ready"}</span>
+          )}
+          {datasetArtifacts.embeddings_path && (
+            <div className="mt-0.5 break-all font-mono opacity-90">
+              {datasetArtifacts.embeddings_path}
+            </div>
+          )}
+        </div>
+        <div>
+          <span className="font-semibold">Checkpoint: </span>
+          {datasetArtifacts.checkpoint_exists ? "available" : "not found yet"}
+          {datasetArtifacts.checkpoint_path && (
+            <div className="mt-0.5 break-all font-mono opacity-90">
+              {datasetArtifacts.checkpoint_path}
+            </div>
+          )}
+          {!datasetArtifacts.checkpoint_exists && datasetArtifacts.output_dir && (
+            <div className="mt-0.5 break-all font-mono opacity-75">
+              expected: {datasetArtifacts.output_dir}
+            </div>
+          )}
+        </div>
+        {hasExistingOutputs && (
+          <p className="border-t border-white/20 pt-2 opacity-90">
+            A new training run reuses these files automatically. Use{" "}
+            <code className="rounded bg-white/15 px-1">force_reextract</code> /{" "}
+            <code className="rounded bg-white/15 px-1">force_retrain</code> to
+            start from scratch.
+          </p>
+        )}
+      </div>
+    );
+
+  const lastJobTooltip = lastCompletedJob ? (
+    <div className="max-w-xs space-y-1 text-[11px] leading-5">
+      <p className="font-semibold text-white">
+        Last completed job #{lastCompletedJob.job_id}
+      </p>
+      {lastCompletedJob.model_path && (
+        <p className="break-all font-mono opacity-90">
+          {lastCompletedJob.model_path}
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="h-full max-h-full min-h-0 overflow-hidden bg-slate-50/60">
       <div className="flex h-full min-h-0 flex-col">
@@ -320,7 +381,7 @@ export const WSLModelTraining = ({
           <div className="flex flex-col gap-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 WSSED Training
               </p>
@@ -331,108 +392,68 @@ export const WSLModelTraining = ({
                 Configure a GPU-backed training job for the selected dataset.
               </p>
             </div>
-            <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                modelTraining
-                  ? "bg-blue-50 text-blue-700"
-                  : "bg-slate-100 text-slate-600"
-              }`}
-            >
-              {modelTraining ? "Running" : selectedModelLabel}
-            </span>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  modelTraining
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {modelTraining ? "Running" : selectedModelLabel}
+              </span>
+              <div className="flex items-center gap-0.5">
+                {showArtifactsPanel && artifactsLoading && (
+                  <LoadingOutlined className="text-xs text-slate-400" spin />
+                )}
+                {showArtifactsPanel &&
+                  !artifactsLoading &&
+                  artifactsTooltip && (
+                    <Tooltip
+                      title={artifactsTooltip}
+                      placement="leftTop"
+                      overlayStyle={{ maxWidth: 320 }}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        aria-label="GPU server outputs"
+                        icon={
+                          hasExistingOutputs ? (
+                            <CheckCircleOutlined />
+                          ) : (
+                            <InfoCircleOutlined />
+                          )
+                        }
+                        className={
+                          hasExistingOutputs
+                            ? "text-emerald-600 hover:text-emerald-700!"
+                            : "text-slate-400 hover:text-slate-600!"
+                        }
+                      />
+                    </Tooltip>
+                  )}
+                {lastJobTooltip && (
+                  <Tooltip
+                    title={lastJobTooltip}
+                    placement="leftTop"
+                    overlayStyle={{ maxWidth: 320 }}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      aria-label={`Last completed job #${lastCompletedJob?.job_id}`}
+                      icon={<InfoCircleOutlined />}
+                      className="text-blue-600 hover:text-blue-700!"
+                    >
+                      #{lastCompletedJob?.job_id}
+                    </Button>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        {showArtifactsPanel && (
-          <Alert
-            type={hasExistingOutputs ? "success" : "info"}
-            showIcon
-            icon={
-              hasExistingOutputs ? (
-                <CheckCircleOutlined />
-              ) : (
-                <InfoCircleOutlined />
-              )
-            }
-            className="rounded-xl text-xs"
-            message={
-              artifactsLoading
-                ? "Checking for existing BirdNET outputs…"
-                : "Existing outputs on GPU server"
-            }
-            description={
-              artifactsLoading ? undefined : (
-                <ul className="mt-1 list-none space-y-1.5 pl-0 text-[11px] leading-5">
-                  <li>
-                    <span className="font-semibold">Embeddings: </span>
-                    {datasetArtifacts?.embeddings_complete ? (
-                      <span className="text-emerald-800">
-                        ready ({datasetArtifacts.npz_count}/
-                        {datasetArtifacts.audio_count})
-                      </span>
-                    ) : (
-                      <span className="text-amber-800">
-                        {datasetArtifacts?.embeddings_status ?? "not ready"}
-                      </span>
-                    )}
-                    {datasetArtifacts?.embeddings_path && (
-                      <div className="mt-0.5 truncate font-mono text-slate-600">
-                        {datasetArtifacts.embeddings_path}
-                      </div>
-                    )}
-                  </li>
-                  <li>
-                    <span className="font-semibold">Checkpoint: </span>
-                    {datasetArtifacts?.checkpoint_exists ? (
-                      <span className="text-emerald-800">available</span>
-                    ) : (
-                      <span className="text-slate-600">not found yet</span>
-                    )}
-                    {datasetArtifacts?.checkpoint_path && (
-                      <div className="mt-0.5 truncate font-mono text-slate-600">
-                        {datasetArtifacts.checkpoint_path}
-                      </div>
-                    )}
-                    {!datasetArtifacts?.checkpoint_exists &&
-                      datasetArtifacts?.output_dir && (
-                        <div className="mt-0.5 truncate font-mono text-slate-500">
-                          expected: {datasetArtifacts.output_dir}
-                        </div>
-                      )}
-                  </li>
-                  {hasExistingOutputs && (
-                    <li className="border-t border-emerald-200/80 pt-1.5 text-emerald-900">
-                      A new training run will reuse these files and skip finished
-                      steps automatically. Use hyperparameters{" "}
-                      <code className="rounded bg-emerald-100 px-1">
-                        force_reextract
-                      </code>{" "}
-                      /{" "}
-                      <code className="rounded bg-emerald-100 px-1">
-                        force_retrain
-                      </code>{" "}
-                      to run again from scratch.
-                    </li>
-                  )}
-                </ul>
-              )
-            }
-          />
-        )}
-
-        {lastCompletedJob?.model_path && (
-          <Alert
-            type="info"
-            showIcon
-            className="rounded-xl text-xs"
-            message={`Last completed job #${lastCompletedJob.job_id}`}
-            description={
-              <span className="font-mono text-[11px] break-all">
-                {lastCompletedJob.model_path}
-              </span>
-            }
-          />
-        )}
 
         <Form
           layout="vertical"
