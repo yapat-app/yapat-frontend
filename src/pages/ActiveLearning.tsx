@@ -27,6 +27,7 @@ import {
   fetchFeedbackCount,
   clearSavedFeed,
   hydrateSavedFeed,
+  restoreFeedFromServer,
   pollRetrainJob,
   trainFromScratch,
 } from "../redux/features/alSlice";
@@ -170,16 +171,41 @@ export const ActiveLearning: React.FC = () => {
     else if (user?.role === "team_owner") dispatch(fetchAllTeamDatasets());
   }, [user]);
 
-  // Restore persisted feed on mount (covers URL sync races after refresh).
+  // Restore persisted session metadata from localStorage.
   useEffect(() => {
     dispatch(hydrateSavedFeed());
   }, [dispatch]);
+
+  // Re-load prediction rows from backend when localStorage only stored session metadata.
+  useEffect(() => {
+    if (inferenceLoading || predictions.length > 0) return;
+    if (
+      !lastInferenceAt ||
+      selectedDatasetId === null ||
+      snippetSetId === null ||
+      !modelFamilyName
+    ) {
+      return;
+    }
+    void dispatch(restoreFeedFromServer());
+  }, [
+    dispatch,
+    inferenceLoading,
+    predictions.length,
+    lastInferenceAt,
+    selectedDatasetId,
+    snippetSetId,
+    modelFamilyName,
+  ]);
 
   // Sync dataset_id from URL without wiping a matching saved session.
   useEffect(() => {
     const raw = searchParams.get("dataset_id");
     if (!raw) {
-      if (selectedDatasetId !== null && predictions.length > 0) {
+      if (
+        selectedDatasetId !== null &&
+        (predictions.length > 0 || lastInferenceAt)
+      ) {
         setSearchParams({ dataset_id: String(selectedDatasetId) }, { replace: true });
       }
       return;
@@ -192,7 +218,7 @@ export const ActiveLearning: React.FC = () => {
     if (parsed !== currentId) {
       dispatch(setSelectedDataset(parsed));
     }
-  }, [dispatch, searchParams, selectedDatasetId, predictions.length, setSearchParams]);
+  }, [dispatch, searchParams, selectedDatasetId, predictions.length, lastInferenceAt, setSearchParams]);
 
   useEffect(() => {
     const family = searchParams.get("model_family");

@@ -19,6 +19,7 @@ import type {
   PAMRunInferenceRequest,
   PAMTrainFromScratchRequest,
   PAMFeedbackCountResponse,
+  PAMSuggestionStrategy,
 } from "../../types/al";
 
 // Default retrain threshold (kept in sync with backend when available).
@@ -40,6 +41,51 @@ interface PersistedFeed {
   inferenceK: number;
   selectedDatasetId: number | null;
   lastInferenceAt: string;
+  /** Whether the last run used top-K suggestions vs the full scored set. */
+  sampleSuggestion?: boolean;
+  suggestionStrategy?: PAMSuggestionStrategy;
+  /** True when predictions were too large to store in localStorage. */
+  predictionsTruncated?: boolean;
+}
+
+function needsServerRestore(saved: PersistedFeed | null): boolean {
+  if (!saved) return false;
+  if ((saved.predictions?.length ?? 0) > 0) return false;
+  if (saved.predictionsTruncated) return true;
+  return (saved.totalScored ?? 0) > 0 && Boolean(saved.lastInferenceAt);
+}
+
+function buildRestoreInferenceRequest(
+  state: ALState,
+  saved: PersistedFeed,
+): PAMRunInferenceRequest | null {
+  const datasetId = normalizeDatasetId(
+    state.selectedDatasetId ?? saved.selectedDatasetId,
+  );
+  const snippetSetId = state.snippetSetId ?? saved.snippetSetId;
+  const modelFamilyName = state.modelFamilyName ?? saved.modelFamilyName;
+  if (datasetId === null || snippetSetId === null || !modelFamilyName) {
+    return null;
+  }
+
+  const sampleSuggestion =
+    saved.sampleSuggestion ??
+    (saved.modelInfo?.mode as string | undefined) === "suggestions";
+
+  const body: PAMRunInferenceRequest = {
+    dataset_id: datasetId,
+    snippet_set_id: snippetSetId,
+    model_family_name: modelFamilyName,
+    sample_suggestion: sampleSuggestion,
+  };
+
+  if (sampleSuggestion) {
+    body.k = saved.inferenceK ?? state.inferenceK;
+    body.suggestion_strategy = (saved.suggestionStrategy ??
+      state.samplingMethod) as PAMSuggestionStrategy;
+  }
+
+  return body;
 }
 
 function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
@@ -74,11 +120,14 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
   });
 }
 
-function saveFeed(state: ALState): void {
+function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): void {
   try {
-    const shouldPersistPredictions = state.predictions.length <= MAX_PERSISTED_PREDICTIONS;
+    const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
+    const sampleSuggestion =
+      inferenceRequest?.sample_suggestion ??
+      (state.modelInfo?.mode as string | undefined) === "suggestions";
     const data: PersistedFeed = {
-      predictions: shouldPersistPredictions ? state.predictions : [],
+      predictions: tooLarge ? [] : state.predictions,
       modelInfo: state.modelInfo,
       totalScored: state.totalScored,
       modelCheckpointId: state.modelCheckpointId,
@@ -89,6 +138,10 @@ function saveFeed(state: ALState): void {
       inferenceK: state.inferenceK,
       selectedDatasetId: state.selectedDatasetId,
       lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
+      sampleSuggestion,
+      suggestionStrategy:
+        inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
+      predictionsTruncated: tooLarge,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
@@ -111,10 +164,7 @@ function normalizeDatasetId(id: number | string | null | undefined): number | nu
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
-  const rows = withDisplayFields(saved.predictions ?? []);
-  state.predictions = rows;
-  state.projectionPredictions = rows;
+function applyPersistedMetadata(state: ALState, saved: PersistedFeed): void {
   state.modelInfo = saved.modelInfo ?? {};
   state.totalScored = saved.totalScored ?? 0;
   state.modelCheckpointId = saved.modelCheckpointId ?? null;
@@ -125,6 +175,13 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
   state.inferenceK = saved.inferenceK ?? 20;
   state.lastInferenceAt = saved.lastInferenceAt ?? null;
   state.selectedDatasetId = normalizeDatasetId(saved.selectedDatasetId);
+}
+
+function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
+  const rows = withDisplayFields(saved.predictions ?? []);
+  state.predictions = rows;
+  state.projectionPredictions = rows;
+  applyPersistedMetadata(state, saved);
 }
 
 function clearSessionState(state: ALState): void {
@@ -186,6 +243,8 @@ function buildInitialState(): ALState {
 
   if (saved && (saved.predictions?.length ?? 0) > 0) {
     applyPersistedFeed(base, saved);
+  } else if (saved && needsServerRestore(saved)) {
+    applyPersistedMetadata(base, saved);
   } else if (saved) {
     base.selectedDatasetId = normalizeDatasetId(saved.selectedDatasetId);
     base.modelCheckpointId = saved.modelCheckpointId ?? null;
@@ -262,6 +321,32 @@ export const pollRetrainJob = createAsyncThunk(
   },
 );
 
+export const restoreFeedFromServer = createAsyncThunk(
+  "al/restoreFeedFromServer",
+  async (_, { getState, rejectWithValue }) => {
+    const state = (getState() as { al: ALState }).al;
+    if (state.predictions.length > 0) {
+      return null;
+    }
+
+    const saved = loadFeed();
+    if (!needsServerRestore(saved)) {
+      return null;
+    }
+
+    const body = buildRestoreInferenceRequest(state, saved!);
+    if (!body) {
+      return rejectWithValue("Incomplete saved Active Learning session");
+    }
+
+    try {
+      return await alApi.runInference(body);
+    } catch (error: unknown) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 export const fetchFeedbackCount = createAsyncThunk(
   "al/fetchFeedbackCount",
   async (
@@ -302,13 +387,15 @@ const alSlice = createSlice({
 
       const saved = loadFeed();
       const savedId = normalizeDatasetId(saved?.selectedDatasetId ?? null);
-      if (
-        nextId !== null &&
-        savedId === nextId &&
-        (saved?.predictions?.length ?? 0) > 0
-      ) {
-        applyPersistedFeed(state, saved!);
-        return;
+      if (nextId !== null && savedId === nextId && saved) {
+        if ((saved.predictions?.length ?? 0) > 0) {
+          applyPersistedFeed(state, saved);
+          return;
+        }
+        if (needsServerRestore(saved)) {
+          applyPersistedMetadata(state, saved);
+          return;
+        }
       }
 
       clearSessionState(state);
@@ -378,13 +465,20 @@ const alSlice = createSlice({
     hydrateSavedFeed: (state) => {
       if (state.predictions.length > 0) return;
       const saved = loadFeed();
-      if (!saved || (saved.predictions?.length ?? 0) === 0) return;
+      if (!saved) return;
 
       const savedId = normalizeDatasetId(saved.selectedDatasetId);
       const currentId = normalizeDatasetId(state.selectedDatasetId);
       if (currentId !== null && savedId !== null && currentId !== savedId) return;
 
-      applyPersistedFeed(state, saved);
+      if ((saved.predictions?.length ?? 0) > 0) {
+        applyPersistedFeed(state, saved);
+        return;
+      }
+
+      if (needsServerRestore(saved)) {
+        applyPersistedMetadata(state, saved);
+      }
     },
   },
   extraReducers: (builder) => {
@@ -414,10 +508,51 @@ const alSlice = createSlice({
         if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
           state.projectionPredictions = state.predictions;
         }
-        saveFeed(state);
+        saveFeed(state, request);
       },
     );
     builder.addCase(runInference.rejected, (state, action) => {
+      state.inferenceLoading = false;
+      state.error = action.payload as string;
+    });
+
+    builder.addCase(restoreFeedFromServer.pending, (state) => {
+      state.inferenceLoading = true;
+      state.error = null;
+    });
+    builder.addCase(
+      restoreFeedFromServer.fulfilled,
+      (state, action) => {
+        if (!action.payload) {
+          state.inferenceLoading = false;
+          return;
+        }
+        const saved = loadFeed();
+        const request = saved
+          ? buildRestoreInferenceRequest(state, saved)
+          : null;
+        state.inferenceLoading = false;
+        state.modelFamilyName = action.payload.model_family_name;
+        state.usedCheckpointId = action.payload.used_checkpoint_id;
+        state.modelInfo = {
+          mode: action.payload.mode,
+          suggestion_strategy: action.payload.suggestion_strategy,
+          returned_count: action.payload.returned_count,
+          total_predictions: action.payload.total_predictions,
+          used_checkpoint_id: action.payload.used_checkpoint_id,
+        };
+        state.totalScored = action.payload.total_predictions;
+        state.predictions = withDisplayFields(action.payload.rows);
+        if (state.projectionPredictions.length === 0) {
+          state.projectionPredictions = state.predictions;
+        }
+        if (request?.dataset_id != null) {
+          state.selectedDatasetId = request.dataset_id;
+        }
+        saveFeed(state, request ?? undefined);
+      },
+    );
+    builder.addCase(restoreFeedFromServer.rejected, (state, action) => {
       state.inferenceLoading = false;
       state.error = action.payload as string;
     });
@@ -543,4 +678,5 @@ export const {
   hydrateSavedFeed,
 } = alSlice.actions;
 
+export { needsServerRestore };
 export default alSlice.reducer;
