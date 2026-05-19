@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { DatasetFolderStructure } from "../components/DatasetFolderStructure";
 import { WSLModelTraining } from "../components/WSLModelTraining";
-import { WssedAudio } from "../components/wssedAudio";
+import { WssedActiveLearningHub } from "../components/WssedActiveLearningHub";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
 
@@ -21,7 +21,6 @@ export const Wssed = () => {
 
   const [showDataset, setShowDataset] = useState(true);
   const [showTraining, setShowTraining] = useState(true);
-  const [remaining, setRemaining] = useState(5);
   const [enableWSL, setEnableWSL] = useState(false);
   const [modelTrained, setIsModelTrained] = useState(false);
 
@@ -32,13 +31,8 @@ export const Wssed = () => {
   const stopTraining = useCallback(() => {
     dispatch(setTraining(false));
     setIsModelTrained(true);
-    setRemaining(5);
     message.success("Model training completed.");
   }, [dispatch]);
-
-  const handleRetrainClick = () => {
-    dispatch(setTraining(true));
-  };
 
   useEffect(() => {
     if (!datasetId) {
@@ -145,11 +139,10 @@ export const Wssed = () => {
             )}
           </div>
         </aside>
-        <WssedAudio
+        <WssedActiveLearningHub
           modelTrained={modelTrained}
           modelTraining={modelTraining}
-          remaining={remaining}
-          handleRetrainClick={handleRetrainClick}
+          datasetId={datasetId}
         />
         <aside
           className={`${showTraining ? "w-[20%]" : "w-fit"} h-inherit border-r border-[#F0F0F0] bg-white flex flex-col`}

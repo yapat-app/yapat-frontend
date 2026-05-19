@@ -10,7 +10,6 @@ import {
   Alert,
 } from "antd";
 import { CheckCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
@@ -73,7 +72,6 @@ export const WSLModelTraining = ({
 }: WSLModelTrainingProps) => {
   const { modelTraining } = useAppSelector((state) => state.wssed);
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     model: "birdnet",
@@ -97,11 +95,6 @@ export const WSLModelTraining = ({
     job_id: number;
     model_path: string | null;
   } | null>(null);
-  const [alRegistration, setAlRegistration] = useState<{
-    al_checkpoint_id: number;
-    model_family_name: string;
-  } | null>(null);
-  const [registeringAl, setRegisteringAl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jobIdRef = useRef<number | null>(null);
 
@@ -137,9 +130,13 @@ export const WSLModelTraining = ({
           stopPolling();
           dispatch(setTraining(false));
           stopTraining();
+          setLastCompletedJob({
+            job_id: jobId,
+            model_path: status.model_path,
+          });
           if (!options?.silentComplete) {
             message.success(
-              "Model training completed. Predictions are being prepared for the feed.",
+              "Model training completed. Register the checkpoint in the center panel to continue to Active Learning.",
             );
           }
         } else if (status.status === "FAILED") {
@@ -246,15 +243,6 @@ export const WSLModelTraining = ({
             job_id: jobId,
             model_path: status.model_path,
           });
-          const metrics = (status.metrics ?? {}) as Record<string, unknown>;
-          const ckptId = metrics.al_checkpoint_id;
-          const family = metrics.al_model_family_name;
-          if (typeof ckptId === "number" && typeof family === "string") {
-            setAlRegistration({
-              al_checkpoint_id: ckptId,
-              model_family_name: family,
-            });
-          }
         }
       } catch {
         // no job to resume
@@ -312,38 +300,6 @@ export const WSLModelTraining = ({
   const showArtifactsPanel =
     formData.model === "birdnet" &&
     (artifactsLoading || datasetArtifacts != null);
-
-  const completedJobId = jobIdRef.current ?? lastCompletedJob?.job_id ?? null;
-  const alModelFamily =
-    alRegistration?.model_family_name ?? "wssed_birdnet_segment";
-  const activeLearningUrl =
-    datasetId != null
-      ? `/active-learning?dataset_id=${datasetId}&model_family=${encodeURIComponent(alModelFamily)}`
-      : "/active-learning";
-
-  const handleRegisterForAL = async () => {
-    if (!completedJobId) {
-      message.warning("No completed training job to register.");
-      return;
-    }
-    setRegisteringAl(true);
-    try {
-      const result = await wssedApi.registerTrainingJobForAL(completedJobId);
-      setAlRegistration({
-        al_checkpoint_id: result.al_checkpoint_id,
-        model_family_name: result.model_family_name,
-      });
-      message.success(
-        "Checkpoint registered for Active Learning. Open the flow below to generate your review feed.",
-      );
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to register checkpoint";
-      message.error(msg);
-    } finally {
-      setRegisteringAl(false);
-    }
-  };
 
   const progressPercent =
     trainingProgress?.current_epoch != null &&
@@ -474,54 +430,6 @@ export const WSLModelTraining = ({
               <span className="font-mono text-[11px] break-all">
                 {lastCompletedJob.model_path}
               </span>
-            }
-          />
-        )}
-
-        {(lastCompletedJob || alRegistration) && datasetId && (
-          <Alert
-            type={alRegistration ? "success" : "warning"}
-            showIcon
-            className="rounded-xl text-xs"
-            message={
-              alRegistration
-                ? "Ready for Active Learning"
-                : "Next step: register checkpoint for Active Learning"
-            }
-            description={
-              <div className="space-y-2 text-[11px] leading-5">
-                <p>
-                  WSSED training produced a model, but the review feed is created in
-                  the <strong>Active Learning</strong> flow (not on this page). Register
-                  the checkpoint, then open Active Learning with model family{" "}
-                  <code className="rounded bg-slate-100 px-1">{alModelFamily}</code>.
-                </p>
-                {alRegistration && (
-                  <p className="text-emerald-800">
-                    Registered checkpoint #{alRegistration.al_checkpoint_id}. Choose a
-                    snippet set in Active Learning and run inference to populate
-                    suggestions.
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {!alRegistration && (
-                    <Button
-                      size="small"
-                      type="primary"
-                      loading={registeringAl}
-                      onClick={() => void handleRegisterForAL()}
-                    >
-                      Register for Active Learning
-                    </Button>
-                  )}
-                  <Button
-                    size="small"
-                    onClick={() => navigate(activeLearningUrl)}
-                  >
-                    Open Active Learning
-                  </Button>
-                </div>
-              </div>
             }
           />
         )}
