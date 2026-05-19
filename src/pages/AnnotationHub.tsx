@@ -63,7 +63,12 @@ import {
   restoreFeedFromServer,
   pollRetrainJob,
   trainFromScratch,
+  setClassicAnnotationFeed,
+  hydrateClassicFeedbacks,
+  clearClassicAnnotationFeed,
 } from "../redux/features/alSlice";
+import { annotationApi } from "../services/api";
+import { annotationsToClassicFeedbacks } from "../utils/classicFeedSync";
 import {
   fetchSnippetFeed,
   fetchSimilaritySnippetFeed,
@@ -127,8 +132,10 @@ export const AnnotationHub: React.FC = () => {
       const dsId = searchParams.get("dataset_id");
       if (dsId) params.dataset_id = dsId;
       setSearchParams(params, { replace: true });
-      // Clear classic snippets when switching away from classic modes.
-      if (next === "al") dispatch(clearSnippets());
+      if (next === "al") {
+        dispatch(clearSnippets());
+        dispatch(clearClassicAnnotationFeed());
+      }
     },
     [searchParams, setSearchParams, dispatch],
   );
@@ -396,17 +403,40 @@ export const AnnotationHub: React.FC = () => {
 
   // Classic annotation workflow — always active so feed-history auto-load
   // runs regardless of whether the workspace panel is mounted yet.
-  const {
-    snippets,
-    currentSnippet,
-    currentIndex,
-    annotations: classicAnnotations,
-    annotatedCount,
-    handlePrevious,
-    handleNext,
-    canGoPrevious,
-    canGoNext,
-  } = useAnnotationWorkflow({ datasetId: classicDatasetId, enabled: mode !== "al" });
+  const { snippets } = useAnnotationWorkflow({
+    datasetId: classicDatasetId,
+    enabled: mode !== "al",
+  });
+
+  // Mirror classic snippets into alSlice so PredictionFeed matches Active Learning UI.
+  useEffect(() => {
+    if (mode === "al" || snippets.length === 0 || !classicDatasetId) return;
+    const datasetId = Number(classicDatasetId);
+    if (Number.isNaN(datasetId)) return;
+
+    dispatch(setClassicAnnotationFeed({ snippets, datasetId }));
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await Promise.all(
+          snippets.map((s) =>
+            annotationApi.getAll({ snippet_id: s.id }).catch(() => []),
+          ),
+        );
+        if (cancelled) return;
+        dispatch(
+          hydrateClassicFeedbacks(annotationsToClassicFeedbacks(snippets, rows)),
+        );
+      } catch {
+        /* non-fatal */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, snippets, classicDatasetId, dispatch]);
 
   // Load embeddings for classic modes (used by similarity feed generation).
   useEffect(() => {
@@ -499,6 +529,7 @@ export const AnnotationHub: React.FC = () => {
               value={classicDatasetId ? Number(classicDatasetId) : undefined}
               onChange={(v: number) => {
                 dispatch(clearSnippets());
+                dispatch(clearClassicAnnotationFeed());
                 setSearchParams({ mode, dataset_id: String(v) });
               }}
               style={{ width: 200 }}
@@ -660,17 +691,7 @@ export const AnnotationHub: React.FC = () => {
 
       {/* Classic modes — workspace */}
       {(mode === "random" || mode === "similarity") && !showClassicEmpty && (
-        <ClassicWorkspace
-          snippets={snippets}
-          currentSnippet={currentSnippet}
-          currentIndex={currentIndex}
-          annotations={classicAnnotations}
-          annotatedCount={annotatedCount}
-          handlePrevious={handlePrevious}
-          handleNext={handleNext}
-          canGoPrevious={canGoPrevious}
-          canGoNext={canGoNext}
-        />
+        <ClassicWorkspace />
       )}
 
       {/* ── AL Inference config modal ──────────────────────────────────── */}

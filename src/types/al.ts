@@ -257,7 +257,11 @@ export interface PAMCheckpoint {
   parent_checkpoint_id?: number | null;
 }
 
+export type ALFeedSource = "pam" | "classic";
+
 export interface ALState {
+  /** Distinguishes PAM inference feed vs random/similarity classic feed. */
+  feedSource: ALFeedSource | null;
   /** Model selection */
   modelCheckpointId: number | null; // UI selection only (maps -> model_family_name)
   modelFamilyName: string | null;   // required by backend PAM-AL endpoints

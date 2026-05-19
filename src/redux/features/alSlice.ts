@@ -11,6 +11,7 @@ import type {
   PAMPrediction,
   FeedbackPayload,
   FeedbackResponse,
+  FeedbackAction,
   PAMRetrainRequest,
   PAMRetrainJobDispatch,
   PAMRetrainJobStatus,
@@ -21,6 +22,8 @@ import type {
   PAMFeedbackCountResponse,
   PAMSuggestionStrategy,
 } from "../../types/al";
+import type { Snippet } from "../../types";
+import { buildClassicFeedback, snippetsToPredictions } from "../../utils/classicFeedSync";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
@@ -185,6 +188,7 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
 }
 
 function clearSessionState(state: ALState): void {
+  state.feedSource = null;
   state.predictions = [];
   state.projectionPredictions = [];
   state.modelInfo = {};
@@ -208,6 +212,7 @@ function clearSessionState(state: ALState): void {
 function buildInitialState(): ALState {
   const saved = loadFeed();
   const base: ALState = {
+    feedSource: null,
     modelCheckpointId: null,
     modelFamilyName: null,
     usedCheckpointId: null,
@@ -462,6 +467,54 @@ const alSlice = createSlice({
       state.selectedDatasetId = null;
       localStorage.removeItem(STORAGE_KEY);
     },
+    setClassicAnnotationFeed: (
+      state,
+      action: PayloadAction<{ snippets: Snippet[]; datasetId: number }>,
+    ) => {
+      const { snippets, datasetId } = action.payload;
+      const predictions = snippetsToPredictions(snippets);
+      state.feedSource = "classic";
+      state.selectedDatasetId = datasetId;
+      state.predictions = predictions;
+      state.projectionPredictions = predictions;
+      state.modelInfo = { mode: "classic" };
+      state.inferenceLoading = false;
+      state.error = null;
+      state.usedCheckpointId = null;
+      state.feedbacks = {};
+      if (predictions.length > 0 && state.selectedSnippetId === null) {
+        state.selectedSnippetId = predictions[0].snippet_id;
+      }
+    },
+    hydrateClassicFeedbacks: (
+      state,
+      action: PayloadAction<Record<number, FeedbackResponse>>,
+    ) => {
+      if (state.feedSource !== "classic") return;
+      state.feedbacks = { ...state.feedbacks, ...action.payload };
+    },
+    setClassicSnippetFeedback: (
+      state,
+      action: PayloadAction<{
+        snippetId: number;
+        action: FeedbackAction;
+        labels: string[];
+      }>,
+    ) => {
+      if (state.feedSource !== "classic") return;
+      const { snippetId, action: fbAction, labels } = action.payload;
+      state.feedbacks[snippetId] = buildClassicFeedback(snippetId, fbAction, labels);
+    },
+    clearClassicAnnotationFeed: (state) => {
+      if (state.feedSource !== "classic") return;
+      state.feedSource = null;
+      state.predictions = [];
+      state.projectionPredictions = [];
+      state.feedbacks = {};
+      state.modelInfo = {};
+      state.selectedSnippetId = null;
+      state.selectedPredictionId = null;
+    },
     hydrateSavedFeed: (state) => {
       if (state.predictions.length > 0) return;
       const saved = loadFeed();
@@ -501,6 +554,7 @@ const alSlice = createSlice({
           used_checkpoint_id: action.payload.used_checkpoint_id,
         };
         state.totalScored = action.payload.total_predictions;
+        state.feedSource = "pam";
         state.predictions = withDisplayFields(action.payload.rows);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
@@ -676,6 +730,10 @@ export const {
   clearError,
   clearSavedFeed,
   hydrateSavedFeed,
+  setClassicAnnotationFeed,
+  hydrateClassicFeedbacks,
+  setClassicSnippetFeedback,
+  clearClassicAnnotationFeed,
 } = alSlice.actions;
 
 export { needsServerRestore };

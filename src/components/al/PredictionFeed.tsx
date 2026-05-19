@@ -18,9 +18,17 @@ import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 
 export const PredictionFeed: React.FC = () => {
-  const { predictions, inferenceLoading, error, selectedSnippetId, feedbacks, selectedDatasetId, snippetSetId } = useAppSelector(
-    (state) => state.al,
-  );
+  const {
+    predictions,
+    inferenceLoading,
+    error,
+    selectedSnippetId,
+    feedbacks,
+    selectedDatasetId,
+    snippetSetId,
+    feedSource,
+  } = useAppSelector((state) => state.al);
+  const isClassicFeed = feedSource === "classic";
   const phase = usePhaseConfig();
 
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -69,7 +77,20 @@ export const PredictionFeed: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
-      if (!isBlind || !selectedDatasetId) {
+      if (!isBlind) {
+        if (!cancelled) setLabelsBySnippet({});
+        return;
+      }
+      if (isClassicFeed) {
+        const map: Record<number, string[]> = {};
+        for (const [snippetId, fb] of Object.entries(feedbacks)) {
+          const labels = fb.final_labels ?? [];
+          if (labels.length > 0) map[Number(snippetId)] = labels;
+        }
+        if (!cancelled) setLabelsBySnippet(map);
+        return;
+      }
+      if (!selectedDatasetId) {
         if (!cancelled) setLabelsBySnippet({});
         return;
       }
@@ -85,7 +106,7 @@ export const PredictionFeed: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [isBlind, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
+  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature, feedbacks]);
 
   // ── Derived stats for Phase 1 header ────────────────────────────────────
   const labeledCount = useMemo(
@@ -122,7 +143,13 @@ export const PredictionFeed: React.FC = () => {
   if (!inferenceLoading && predictions.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Empty description="No predictions yet. Configure the model and run inference." />
+        <Empty
+          description={
+            isClassicFeed
+              ? "No snippets in this feed. Generate a feed to start annotating."
+              : "No predictions yet. Configure the model and run inference."
+          }
+        />
       </div>
     );
   }

@@ -11,7 +11,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Tag, Spin, message, Tooltip, Input } from "antd";
 import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { runInference, submitFeedback } from "../../redux/features/alSlice";
+import {
+  runInference,
+  setClassicSnippetFeedback,
+  submitFeedback,
+} from "../../redux/features/alSlice";
+import { createAnnotation } from "../../redux/features/annotationSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { LabelSelector } from "./LabelSelector";
@@ -36,13 +41,22 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   // Blind mode: multi-select via LabelSelector
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
 
-  const { selectedDatasetId, modelFamilyName, usedCheckpointId, snippetSetId, inferenceK, samplingMethod, retrainThreshold } =
-    useAppSelector((state) => state.al);
+  const {
+    selectedDatasetId,
+    modelFamilyName,
+    usedCheckpointId,
+    snippetSetId,
+    inferenceK,
+    samplingMethod,
+    retrainThreshold,
+    feedSource,
+  } = useAppSelector((state) => state.al);
 
+  const isClassicFeed = feedSource === "classic";
   const existingFeedback = feedbacks[prediction.snippet_id];
   const isDone = !!existingFeedback;
   const hasCheckpoint = usedCheckpointId !== null;
-  const feedbackDisabled = submitting || !hasCheckpoint;
+  const feedbackDisabled = submitting || (!isClassicFeed && !hasCheckpoint);
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
   const submittedLabels = existingFeedback
@@ -58,7 +72,47 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     [selectedLabels],
   );
 
+  const submitClassic = async (action: FeedbackAction, labels?: string[]) => {
+    const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
+    const previous = new Set(
+      (existingFeedback?.final_labels ?? serverLabels ?? []).map((l) => l.trim()),
+    );
+
+    setSubmitting(true);
+    setSaveState("saving");
+    try {
+      for (const label of normalized) {
+        if (previous.has(label)) continue;
+        await dispatch(
+          createAnnotation({
+            snippet_id: prediction.snippet_id,
+            taxon_id: label.toLowerCase(),
+            extra_metadata: { display_name: label },
+          }),
+        ).unwrap();
+      }
+      dispatch(
+        setClassicSnippetFeedback({
+          snippetId: prediction.snippet_id,
+          action: normalized.length > 0 ? action : "REJECT",
+          labels: normalized,
+        }),
+      );
+      setSaveState("saved");
+      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
+    } catch {
+      message.error("Failed to save annotation");
+      setSaveState("error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submit = async (action: FeedbackAction, labels?: string[]) => {
+    if (isClassicFeed) {
+      await submitClassic(action, labels);
+      return;
+    }
     if (selectedDatasetId === null || modelFamilyName === null) {
       message.error("Select a dataset and run inference first");
       return;
@@ -141,7 +195,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
       skipNextAutoSubmitRef.current = false;
       return;
     }
-    if (!hasCheckpoint) return;
+    if (!isClassicFeed && !hasCheckpoint) return;
     if (feedbackDisabled) return;
     if (selectionKey === lastSubmittedKeyRef.current) return;
 
@@ -177,7 +231,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
             )}
           </div>
         )}
-        {!hasCheckpoint && (
+        {!isClassicFeed && !hasCheckpoint && (
           <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
             <span className="flex-shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
               No model checkpoint — feedback disabled
