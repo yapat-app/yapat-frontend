@@ -13,14 +13,13 @@ import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   runInference,
-  setClassicSnippetFeedback,
+  setClassicSnippetAnnotations,
   submitFeedback,
 } from "../../redux/features/alSlice";
-import { createAnnotation } from "../../redux/features/annotationSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { LabelSelector } from "./LabelSelector";
-import { buildAnnotationCreatePayload } from "../../utils/annotationCreatePayload";
+import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
 interface Props {
   prediction: PAMPrediction;
@@ -34,6 +33,9 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   const isBlind = phase.ui.labelingMode === "blind";
 
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
+  const classicAnnotationsBySnippet = useAppSelector(
+    (state) => state.al.classicAnnotationsBySnippet,
+  );
   const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -73,26 +75,24 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     [selectedLabels],
   );
 
-  const submitClassic = async (action: FeedbackAction, labels?: string[]) => {
+  const submitClassic = async (_action: FeedbackAction, labels?: string[]) => {
     const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
-    const previous = new Set(
-      (existingFeedback?.final_labels ?? serverLabels ?? []).map((l) => l.trim()),
-    );
+    const existing =
+      classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
 
     setSubmitting(true);
     setSaveState("saving");
     try {
-      for (const label of normalized) {
-        if (previous.has(label)) continue;
-        await dispatch(
-          createAnnotation(buildAnnotationCreatePayload(prediction.snippet_id, label)),
-        ).unwrap();
-      }
+      const refreshed = await syncClassicSnippetLabels(
+        dispatch,
+        prediction.snippet_id,
+        normalized,
+        existing,
+      );
       dispatch(
-        setClassicSnippetFeedback({
+        setClassicSnippetAnnotations({
           snippetId: prediction.snippet_id,
-          action: normalized.length > 0 ? action : "REJECT",
-          labels: normalized,
+          annotations: refreshed,
         }),
       );
       setSaveState("saved");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { useAnnotationWorkflow } from "../../hooks/useAnnotationWorkflow";
 import {
@@ -8,6 +8,7 @@ import {
 import {
   setClassicAnnotationFeed,
   hydrateClassicFeedbacks,
+  hydrateClassicAnnotations,
   clearClassicAnnotationFeed,
 } from "../../redux/features/alSlice";
 import {
@@ -16,19 +17,19 @@ import {
   loadSnippets,
   saveClassicFeedSlot,
   restoreClassicFeedSlot,
+  ensureClassicFeedCacheHydrated,
 } from "../../redux/features/snippetSlice";
 import { getFeedHistory } from "../../redux/features/feedSlice";
 import { getAllDatasetEmbeddings } from "../../redux/features/embeddingSlice";
 import { pickLatestServerClassicFeed } from "../../utils/classicFeedServerHydrate";
-import store from "../../redux/store";
-import type { FeedSimilarityCreate } from "../../types";
+import type { Annotation, FeedSimilarityCreate } from "../../types";
 import type { AnnotateMode } from "./types";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 
 export function useHubClassic(
   mode: AnnotateMode,
   classicDatasetId: string | null,
-  classicFeedCacheUserId: number | null,
+  userId: number | null,
 ) {
   const dispatch = useAppDispatch();
   const prevClassicRef = useRef<{ datasetId: string; mode: "random" | "similarity" } | null>(
@@ -38,6 +39,7 @@ export function useHubClassic(
 
   const [classicConfigOpen, setClassicConfigOpen] = useState(false);
   const [serverHydrateBusy, setServerHydrateBusy] = useState(false);
+  const [classicBootstrapResolved, setClassicBootstrapResolved] = useState(false);
   const [feedLimit, setFeedLimit] = useState(50);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null;
@@ -52,13 +54,25 @@ export function useHubClassic(
     [],
   );
 
+  const isClassicMode = mode === "random" || mode === "similarity";
+
   useEffect(() => {
-    if (mode !== "random" && mode !== "similarity") {
+    if (!isClassicMode) {
+      setClassicBootstrapResolved(true);
+      return;
+    }
+    setClassicBootstrapResolved(false);
+    serverHydrateTriedRef.current = null;
+  }, [mode, classicDatasetId, isClassicMode]);
+
+  useEffect(() => {
+    if (!isClassicMode) {
       prevClassicRef.current = null;
       return;
     }
     if (!classicDatasetId) {
       prevClassicRef.current = null;
+      setClassicBootstrapResolved(true);
       return;
     }
     const ds = Number(classicDatasetId);
@@ -74,15 +88,24 @@ export function useHubClassic(
       }
     }
 
-    dispatch(restoreClassicFeedSlot({ datasetId: ds, kind: mode }));
     prevClassicRef.current = { datasetId: classicDatasetId, mode };
-  }, [mode, classicDatasetId, classicFeedCacheUserId, dispatch]);
+  }, [mode, classicDatasetId, userId, dispatch, isClassicMode]);
+
+  /** Restore last random/similarity slot from localStorage before paint (avoids empty-state flash). */
+  useLayoutEffect(() => {
+    if (!isClassicMode || !classicDatasetId || userId == null) return;
+    const ds = Number(classicDatasetId);
+    if (Number.isNaN(ds)) return;
+
+    dispatch(ensureClassicFeedCacheHydrated(userId));
+    dispatch(restoreClassicFeedSlot({ datasetId: ds, kind: mode }));
+  }, [isClassicMode, mode, classicDatasetId, userId, dispatch]);
 
   const { snippets } = useAnnotationWorkflow({
     datasetId: classicDatasetId,
     enabled: mode !== "al",
     skipFeedHistoryAutoLoad: true,
-    annotateHubClassic: mode === "random" || mode === "similarity",
+    annotateHubClassic: isClassicMode,
   });
 
   const classicSnippetIdsKey = useMemo(
@@ -91,18 +114,24 @@ export function useHubClassic(
   );
 
   useEffect(() => {
-    if (mode !== "random" && mode !== "similarity") return;
-    if (!classicDatasetId || classicFeedCacheUserId == null) return;
+    if (!isClassicMode || !classicDatasetId) return;
+    if (snippets.length > 0) {
+      setClassicBootstrapResolved(true);
+    }
+  }, [isClassicMode, classicDatasetId, snippets.length]);
+
+  useEffect(() => {
+    if (!isClassicMode) return;
+    if (!classicDatasetId || userId == null) return;
     const ds = Number(classicDatasetId);
     if (Number.isNaN(ds)) return;
 
-    const snippetLen = store.getState().snippet.snippets.length;
-    if (snippetLen > 0) {
-      serverHydrateTriedRef.current = null;
+    if (snippets.length > 0) {
+      setClassicBootstrapResolved(true);
       return;
     }
 
-    const tryKey = `${classicFeedCacheUserId}-${classicDatasetId}-${mode}`;
+    const tryKey = `${userId}-${classicDatasetId}-${mode}`;
     if (serverHydrateTriedRef.current === tryKey) return;
 
     let cancelled = false;
@@ -120,14 +149,17 @@ export function useHubClassic(
         dispatch(loadSnippets({ id: match.id, response: match.response }));
         dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
       } finally {
-        if (!cancelled) setServerHydrateBusy(false);
+        if (!cancelled) {
+          setServerHydrateBusy(false);
+          setClassicBootstrapResolved(true);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [mode, classicDatasetId, classicFeedCacheUserId, snippets.length, dispatch]);
+  }, [isClassicMode, mode, classicDatasetId, userId, snippets.length, dispatch]);
 
   useEffect(() => {
     if (mode === "al" || !classicDatasetId) return;
@@ -148,11 +180,17 @@ export function useHubClassic(
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const aligned = annotationRowsAlignedToSnippets(snippets, all);
+        const bySnippet: Record<number, Annotation[]> = {};
+        snippets.forEach((s, i) => {
+          const rows = aligned[i] ?? [];
+          if (rows.length > 0) bySnippet[s.id] = rows;
+        });
         dispatch(
           hydrateClassicFeedbacks(
             annotationsToClassicFeedbacks(snippets, aligned),
           ),
         );
+        dispatch(hydrateClassicAnnotations(bySnippet));
       } catch {
         /* non-fatal */
       }
@@ -203,16 +241,21 @@ export function useHubClassic(
     }
   }, [classicDatasetId, mode, feedLimit, similarityState, dispatch]);
 
-  const isClassicMode = mode === "random" || mode === "similarity";
-  const showClassicSpinner =
+  const awaitingClassicFeedBootstrap =
     isClassicMode &&
     !!classicDatasetId &&
     snippets.length === 0 &&
-    (snippetsLoading || serverHydrateBusy);
+    !classicBootstrapResolved;
+
+  const showClassicSpinner =
+    awaitingClassicFeedBootstrap || (isClassicMode && snippetsLoading);
   const showClassicEmpty =
     isClassicMode &&
     (!classicDatasetId ||
-      (snippets.length === 0 && !snippetsLoading && !serverHydrateBusy));
+      (snippets.length === 0 &&
+        classicBootstrapResolved &&
+        !snippetsLoading &&
+        !serverHydrateBusy));
   const generateFeedLabel = hasClassicFeed ? "Generate new feed" : "Generate feed";
 
   return {

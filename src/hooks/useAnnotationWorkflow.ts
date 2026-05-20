@@ -85,8 +85,9 @@ export const useAnnotationWorkflow = ({
 
   useEffect(() => {
     if (!enabled) return;
+    if (skipFeedHistoryAutoLoad || annotateHubClassic) return;
     dispatch(getFeedHistory());
-  }, [enabled]);
+  }, [enabled, skipFeedHistoryAutoLoad, annotateHubClassic, dispatch]);
 
   useEffect(() => {
     if (!enabled) return;

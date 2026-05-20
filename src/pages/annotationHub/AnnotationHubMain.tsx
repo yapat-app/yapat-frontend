@@ -91,9 +91,9 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
         ))}
 
       {isClassicMode && showClassicSpinner && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 min-h-0">
           <Spin size="large" />
-          <p className="text-sm text-gray-500 font-ibm-sans">Loading feed…</p>
+          <p className="text-sm text-gray-500 font-ibm-sans">Restoring your feed…</p>
         </div>
       )}
 

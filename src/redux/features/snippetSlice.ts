@@ -298,6 +298,17 @@ export const snippetSlice = createSlice({
       const id = action.payload;
       if (Number.isFinite(id)) delete state.classicFeedCache[id];
     },
+
+    /** Sync-load classic feed slots from localStorage (safe before restoreClassicFeedSlot). */
+    ensureClassicFeedCacheHydrated: (state, action: PayloadAction<number>) => {
+      const uid = action.payload;
+      if (!Number.isFinite(uid)) return;
+      if (state.classicFeedCacheUserId === uid) return;
+      state.classicFeedCache = loadClassicFeedCacheForUser(
+        uid,
+      ) as SnippetState["classicFeedCache"];
+      state.classicFeedCacheUserId = uid;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -439,6 +450,7 @@ export const {
   saveClassicFeedSlot,
   restoreClassicFeedSlot,
   clearClassicFeedCacheForDataset,
+  ensureClassicFeedCacheHydrated,
 } = snippetSlice.actions;
 
 export default snippetSlice.reducer;

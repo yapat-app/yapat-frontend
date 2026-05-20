@@ -22,7 +22,7 @@ import type {
   PAMFeedbackCountResponse,
   PAMSuggestionStrategy,
 } from "../../types/al";
-import type { Snippet } from "../../types";
+import type { Annotation, Snippet } from "../../types";
 import {
   applyClassicLabelScores,
   buildClassicFeedback,
@@ -193,6 +193,7 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
 
 function clearSessionState(state: ALState): void {
   state.feedSource = null;
+  state.classicAnnotationsBySnippet = {};
   state.predictions = [];
   state.projectionPredictions = [];
   state.modelInfo = {};
@@ -217,6 +218,7 @@ function buildInitialState(): ALState {
   const saved = loadFeed();
   const base: ALState = {
     feedSource: null,
+    classicAnnotationsBySnippet: {},
     modelCheckpointId: null,
     modelFamilyName: null,
     usedCheckpointId: null,
@@ -501,6 +503,39 @@ const alSlice = createSlice({
       state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
       state.projectionPredictions = state.predictions;
     },
+    hydrateClassicAnnotations: (
+      state,
+      action: PayloadAction<Record<number, Annotation[]>>,
+    ) => {
+      if (state.feedSource !== "classic") return;
+      state.classicAnnotationsBySnippet = {
+        ...state.classicAnnotationsBySnippet,
+        ...action.payload,
+      };
+    },
+    setClassicSnippetAnnotations: (
+      state,
+      action: PayloadAction<{ snippetId: number; annotations: Annotation[] }>,
+    ) => {
+      if (state.feedSource !== "classic") return;
+      const { snippetId, annotations } = action.payload;
+      if (annotations.length === 0) {
+        delete state.classicAnnotationsBySnippet[snippetId];
+        delete state.feedbacks[snippetId];
+      } else {
+        state.classicAnnotationsBySnippet[snippetId] = annotations;
+        const labels = annotations
+          .map((a) => a.resolved_name_snapshot?.trim())
+          .filter((name): name is string => Boolean(name));
+        state.feedbacks[snippetId] = buildClassicFeedback(
+          snippetId,
+          labels.length > 0 ? "MODIFY" : "REJECT",
+          labels,
+        );
+      }
+      state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
+      state.projectionPredictions = state.predictions;
+    },
     setClassicSnippetFeedback: (
       state,
       action: PayloadAction<{
@@ -518,6 +553,7 @@ const alSlice = createSlice({
     clearClassicAnnotationFeed: (state) => {
       if (state.feedSource !== "classic") return;
       state.feedSource = null;
+      state.classicAnnotationsBySnippet = {};
       state.predictions = [];
       state.projectionPredictions = [];
       state.feedbacks = {};
@@ -742,6 +778,8 @@ export const {
   hydrateSavedFeed,
   setClassicAnnotationFeed,
   hydrateClassicFeedbacks,
+  hydrateClassicAnnotations,
+  setClassicSnippetAnnotations,
   setClassicSnippetFeedback,
   clearClassicAnnotationFeed,
 } = alSlice.actions;

@@ -66,11 +66,7 @@ export const AnnotationHub: React.FC = () => {
   );
 
   const classicDatasetId = searchParams.get("dataset_id");
-  const classicFeedCacheUserId = useAppSelector(
-    (s) => s.snippet.classicFeedCacheUserId,
-  );
-
-  const classic = useHubClassic(mode, classicDatasetId, classicFeedCacheUserId);
+  const classic = useHubClassic(mode, classicDatasetId, user?.id ?? null);
   const al = useHubALSession(mode, searchParams, setSearchParams);
 
   return (

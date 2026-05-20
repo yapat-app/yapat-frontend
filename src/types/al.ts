@@ -2,6 +2,8 @@
  * PAM Active Learning Types — aligned with /api/pam-al/* backend schemas.
  */
 
+import type { Annotation } from "./index";
+
 export type FeedbackAction = "ACCEPT" | "REJECT" | "MODIFY";
 export type ALColorBy = "prediction" | "uncertainty" | "taxon";
 export type SamplingMethod = "uncertainty" | "diversity" | "density" | "random";
@@ -262,6 +264,8 @@ export type ALFeedSource = "pam" | "classic";
 export interface ALState {
   /** Distinguishes PAM inference feed vs random/similarity classic feed. */
   feedSource: ALFeedSource | null;
+  /** Classic mode: annotation rows per snippet (for add/remove sync with API). */
+  classicAnnotationsBySnippet: Record<number, Annotation[]>;
   /** Model selection */
   modelCheckpointId: number | null; // UI selection only (maps -> model_family_name)
   modelFamilyName: string | null;   // required by backend PAM-AL endpoints
