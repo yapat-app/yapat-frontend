@@ -8,6 +8,8 @@ import { useAppDispatch } from "../../hooks";
 import type { AnnotateMode } from "./types";
 
 export type AnnotationHubMainProps = {
+  /** While restoring last dataset into the URL; hide empty states that would flash. */
+  awaitingHubDatasetBootstrap?: boolean;
   mode: AnnotateMode;
   selectedDatasetId: number | null;
   isRestoredFeed: boolean;
@@ -22,6 +24,7 @@ export type AnnotationHubMainProps = {
 };
 
 export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
+  awaitingHubDatasetBootstrap = false,
   mode,
   selectedDatasetId,
   isRestoredFeed,
@@ -35,6 +38,15 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
   onBrowseDatasets,
 }) => {
   const dispatch = useAppDispatch();
+
+  if (awaitingHubDatasetBootstrap) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <Spin size="large" />
+        <p className="text-sm text-gray-500 font-ibm-sans">Loading workspace…</p>
+      </div>
+    );
+  }
 
   return (
     <>

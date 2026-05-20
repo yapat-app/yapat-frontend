@@ -29,7 +29,11 @@ export const AnnotationHub: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAppSelector((s) => s.auth);
-  const { allDatasets } = useHubDatasets(searchParams, setSearchParams, user);
+  const { allDatasets, awaitingHubDatasetBootstrap } = useHubDatasets(
+    searchParams,
+    setSearchParams,
+    user,
+  );
 
   const rawMode = searchParams.get("mode");
   const mode: AnnotateMode =
@@ -97,6 +101,7 @@ export const AnnotationHub: React.FC = () => {
       />
 
       <AnnotationHubMain
+        awaitingHubDatasetBootstrap={awaitingHubDatasetBootstrap}
         mode={mode}
         selectedDatasetId={al.selectedDatasetId}
         isRestoredFeed={al.isRestoredFeed}
