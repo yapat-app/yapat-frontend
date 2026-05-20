@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useRef, useCallback, useMemo } from "react";
-import { Select, Tag, Spin, Tooltip, Empty, Button } from "antd";
+import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
 
@@ -69,11 +69,12 @@ export const LabelSelector: React.FC<Props> = ({
   fillHeight = false,
   compact = false,
 }) => {
-  const { labels: pamSpecies, loading: pamLoading } = useQuickLabelList();
+  const { labels: quickLabels, loading: labelsLoading } = useQuickLabelList();
 
   const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
   const [gbifLoading, setGbifLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -99,10 +100,10 @@ export const LabelSelector: React.FC<Props> = ({
   // Build option groups:
   //  • PAM species list (always present)
   //  • GBIF matches (when user has typed ≥2 chars)
-  const pamOptions = pamSpecies.map((sp) => ({ value: sp, label: sp, source: "pam" as const }));
+  const pamOptions = quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const }));
 
   // De-duplicate GBIF results against PAM list.
-  const pamSet = new Set(pamSpecies.map((s) => s.toLowerCase()));
+  const pamSet = new Set(quickLabels.map((s) => s.toLowerCase()));
   const gbifOptions = gbifResults
     .filter((r) => {
       const name = r.canonicalName ?? r.scientificName;
@@ -139,9 +140,22 @@ export const LabelSelector: React.FC<Props> = ({
     onChange(exists ? normalized.filter((x) => x.toLowerCase() !== label.toLowerCase()) : [...normalized, label]);
   };
 
+  const addLabel = (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed || !onChange) return;
+    const normalized = value ?? [];
+    if (normalized.some((x) => x.toLowerCase() === trimmed.toLowerCase())) return;
+    onChange([...normalized, trimmed]);
+  };
+
+  const compactSearchOptions = useMemo(() => {
+    if (searchQuery.trim().length < 2) return filteredPamOptions;
+    return [...filteredPamOptions, ...gbifOptions].slice(0, 20);
+  }, [searchQuery, filteredPamOptions, gbifOptions]);
+
   // ── Compact inline mode ───────────────────────────────────────────────────
   if (compact) {
-    const compactSearchHint = pamLoading
+    const compactSearchHint = labelsLoading
       ? "Loading labels…"
       : "Type 2+ letters to search species (GBIF)…";
 
@@ -158,7 +172,7 @@ export const LabelSelector: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => onChange?.([])}
-                disabled={disabled || pamLoading}
+                disabled={disabled}
                 className="text-[11px] text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
               >
                 Clear all
@@ -169,7 +183,7 @@ export const LabelSelector: React.FC<Props> = ({
                 <Tag
                   key={lbl}
                   color="blue"
-                  closable={!disabled && !pamLoading}
+                  closable={!disabled}
                   onClose={(e) => {
                     e.preventDefault();
                     toggle(lbl);
@@ -187,57 +201,74 @@ export const LabelSelector: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── Search — GBIF lookup only; chip list never changes ── */}
-        <Select
-          mode="multiple"
-          allowClear
-          value={value}
-          onChange={onChange}
-          disabled={disabled || pamLoading}
-          placeholder={pamLoading ? "Loading labels…" : "Search species (GBIF)…"}
-          showSearch
-          filterOption={false}
-          // Prevent global/page-level key handlers (e.g. vim-like shortcuts) from
-          // swallowing first keypresses while the user is typing in the search box.
-          onKeyDown={(e) => e.stopPropagation()}
-          onInputKeyDown={(e) => e.stopPropagation()}
-          onSearch={handleSearch}
-          searchValue={searchQuery}
-          autoClearSearchValue
-          notFoundContent={
-            gbifLoading ? (
-              <div className="flex items-center gap-2 p-2 text-xs text-gray-500">
-                <Spin size="small" /> Searching GBIF…
-              </div>
-            ) : searchQuery.trim().length >= 2 ? (
-              <div className="p-2 text-xs text-gray-400 italic">No results found.</div>
-            ) : null
-          }
-          style={{ width: "100%" }}
-          // Hide tag chips in the control (selection is shown in "Your labels" above).
-          maxTagCount={0}
-          maxTagPlaceholder={() => null}
-          optionRender={(option) => {
-            const opt = option.data as (typeof filteredPamOptions | typeof gbifOptions)[number];
-            const isOptSelected = selectedSet.has((opt.value as string).toLowerCase());
-            const source = (opt as any).source as "pam" | "gbif";
-            return (
-              <div className="flex items-center justify-between gap-2">
-                <span className={["text-sm", isOptSelected ? "font-semibold text-blue-700" : "font-medium"].join(" ")}>
-                  {isOptSelected ? "✓ " : ""}{opt.label}
-                </span>
-                {source === "gbif" && (
-                  <Tooltip title="GBIF suggestion">
-                    <GlobalOutlined className="text-green-500 text-xs" />
-                  </Tooltip>
+        {/* ── Search — plain input (always typable); GBIF + label list in dropdown ── */}
+        <div className="relative flex-shrink-0">
+          <Input
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => window.setTimeout(() => setSearchFocused(false), 150)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && searchQuery.trim()) {
+                e.preventDefault();
+                const q = searchQuery.trim();
+                const match =
+                  compactSearchOptions.find(
+                    (o) => o.value.toLowerCase() === q.toLowerCase(),
+                  ) ?? compactSearchOptions[0];
+                addLabel(match?.value ?? q);
+                setSearchQuery("");
+                setGbifResults([]);
+              }
+            }}
+            disabled={disabled}
+            placeholder={labelsLoading ? "Loading labels…" : "Search species (GBIF)…"}
+            suffix={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
+            allowClear
+          />
+          {searchFocused &&
+            searchQuery.trim().length >= 1 &&
+            (gbifLoading || compactSearchOptions.length > 0) && (
+              <ul className="absolute z-50 left-0 right-0 mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1 text-sm">
+                {gbifLoading && (
+                  <li className="px-3 py-2 text-xs text-gray-500 flex items-center gap-2">
+                    <Spin size="small" /> Searching GBIF…
+                  </li>
                 )}
-              </div>
-            );
-          }}
-          suffixIcon={pamLoading ? <Spin size="small" /> : <SearchOutlined />}
-          options={[...filteredPamOptions, ...(searchQuery.trim().length >= 2 ? gbifOptions : [])]}
-          virtual={false}
-        />
+                {!gbifLoading &&
+                  compactSearchOptions.map((opt) => (
+                    <li key={`${opt.source}:${opt.value}`}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between gap-2"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          addLabel(opt.value);
+                          setSearchQuery("");
+                          setGbifResults([]);
+                        }}
+                      >
+                        <span>
+                          {selectedSet.has(opt.value.toLowerCase()) ? "✓ " : ""}
+                          {opt.label}
+                        </span>
+                        {opt.source === "gbif" && (
+                          <GlobalOutlined className="text-green-500 text-xs shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                {!gbifLoading &&
+                  searchQuery.trim().length >= 2 &&
+                  compactSearchOptions.length === 0 && (
+                    <li className="px-3 py-2 text-xs text-gray-400 italic">
+                      No results — press Enter to use &quot;{searchQuery.trim()}&quot;
+                    </li>
+                  )}
+              </ul>
+            )}
+        </div>
         <div className="text-[11px] text-gray-400 -mt-1">
           {compactSearchHint}
         </div>
@@ -247,7 +278,7 @@ export const LabelSelector: React.FC<Props> = ({
           <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
             Quick labels
           </span>
-          {pamLoading && <Spin size="small" className="ml-2" />}
+          {labelsLoading && <Spin size="small" className="ml-2" />}
         </div>
 
         <div
@@ -256,8 +287,11 @@ export const LabelSelector: React.FC<Props> = ({
             "pr-0.5",
           ].join(" ")}
         >
-          {pamOptions.length === 0 && !pamLoading ? (
-            <p className="text-xs text-gray-400 italic">No labels available.</p>
+          {pamOptions.length === 0 && !labelsLoading ? (
+            <p className="text-xs text-gray-400 italic">
+              No labels available. Use the search box above (GBIF) or run Active Learning
+              inference once to load labels.json for this dataset.
+            </p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {pamOptions.map((opt) => {
@@ -266,7 +300,7 @@ export const LabelSelector: React.FC<Props> = ({
                   <button
                     key={`pam:${opt.value}`}
                     type="button"
-                    disabled={disabled || pamLoading}
+                    disabled={disabled || labelsLoading}
                     onClick={() => toggle(opt.value)}
                     title={isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`}
                     className={[
@@ -274,7 +308,7 @@ export const LabelSelector: React.FC<Props> = ({
                       isSelected
                         ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                         : "bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
-                      disabled || pamLoading
+                      disabled || labelsLoading
                         ? "opacity-40 cursor-not-allowed"
                         : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
                     ].join(" ")}
@@ -304,7 +338,7 @@ export const LabelSelector: React.FC<Props> = ({
           {value.map((lbl) => (
             <Tag
               key={lbl}
-              closable={!disabled && !pamLoading}
+              closable={!disabled && !labelsLoading}
               onClose={(e) => {
                 e.preventDefault();
                 toggle(lbl);
@@ -323,8 +357,8 @@ export const LabelSelector: React.FC<Props> = ({
         allowClear
         value={value}
         onChange={onChange}
-        disabled={disabled || pamLoading}
-        placeholder={pamLoading ? "Loading labels…" : placeholder}
+        disabled={disabled}
+        placeholder={labelsLoading ? "Loading labels…" : placeholder}
         showSearch
         filterOption={false}
         onSearch={handleSearch}
@@ -355,7 +389,7 @@ export const LabelSelector: React.FC<Props> = ({
             </div>
           );
         }}
-        suffixIcon={pamLoading ? <Spin size="small" /> : <SearchOutlined />}
+        suffixIcon={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
         options={[...filteredPamOptions, ...(searchQuery.trim().length >= 2 ? gbifOptions : [])]}
         virtual={false}
       />
@@ -388,14 +422,14 @@ export const LabelSelector: React.FC<Props> = ({
                 <span className="text-[11px] text-gray-500">
                   {searchQuery.trim()
                     ? `${combinedList.length} match${combinedList.length === 1 ? "" : "es"}`
-                    : `${Math.min(pamSpecies.length, MAX_VISIBLE_LABELS)} labels`}
+                    : `${Math.min(quickLabels.length, MAX_VISIBLE_LABELS)} labels`}
                 </span>
                 {value.length > 0 && (
                   <Button
                     size="small"
                     type="text"
                     onClick={() => onChange?.([])}
-                    disabled={disabled || pamLoading}
+                    disabled={disabled || labelsLoading}
                     className="text-[11px]"
                   >
                     Clear
@@ -453,15 +487,15 @@ export const LabelSelector: React.FC<Props> = ({
                         <button
                           key={`pam:${opt.value}`}
                           type="button"
-                          disabled={disabled || pamLoading}
+                          disabled={disabled || labelsLoading}
                           onClick={() => toggle(opt.value)}
                           className={[
                             "group inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs transition-all",
                             isSelected
                               ? "bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300 hover:bg-blue-50"
                               : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
-                            disabled || pamLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                            !disabled && !pamLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-blue-200" : "",
+                            disabled || labelsLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                            !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-blue-200" : "",
                           ].join(" ")}
                           title="labels.json"
                         >
@@ -486,15 +520,15 @@ export const LabelSelector: React.FC<Props> = ({
                           <button
                             key={`gbif:${opt.value}`}
                             type="button"
-                            disabled={disabled || pamLoading}
+                            disabled={disabled || labelsLoading}
                             onClick={() => toggle(opt.value)}
                             className={[
                               "group inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs transition-all",
                               isSelected
                                 ? "bg-green-50 text-green-800 border-green-200 hover:border-green-300 hover:bg-green-50"
                                 : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
-                              disabled || pamLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                              !disabled && !pamLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-green-200" : "",
+                              disabled || labelsLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+                              !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-green-200" : "",
                             ].join(" ")}
                             title="GBIF"
                           >

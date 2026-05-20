@@ -484,7 +484,9 @@ const alSlice = createSlice({
       state.modelInfo = { mode: "classic" };
       state.inferenceLoading = false;
       state.error = null;
-      state.usedCheckpointId = null;
+      // Keep usedCheckpointId so quick labels still load from the same labels.json /
+      // checkpoint config as Active Learning (staged behaviour). Classic annotations
+      // use feedSource === "classic", not PAM feedback.
       state.feedbacks = {};
       if (predictions.length > 0 && state.selectedSnippetId === null) {
         state.selectedSnippetId = predictions[0].snippet_id;

@@ -1,11 +1,11 @@
 /**
  * Shared quick-label list for blind annotation (classic + AL).
- * PAM checkpoint/default species first; custom taxonomy fills gaps when PAM is empty.
+ * PAM labels.json / checkpoint label_config first; custom taxonomy fills gaps.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getAllTaxonomies } from "../redux/features/customTaxonomySlice";
-import { alApi } from "../services/alApi";
+import { fetchPamQuickLabelNames } from "../utils/fetchPamQuickLabelNames";
 import {
   labelNamesFromLabelSpace,
   labelNamesFromTaxonomyNodes,
@@ -15,7 +15,7 @@ import {
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((s) => s.auth);
-  const { usedCheckpointId } = useAppSelector((s) => s.al);
+  const { usedCheckpointId, selectedDatasetId } = useAppSelector((s) => s.al);
   const { allTaxonomies, labelSpace, loading: taxonomyLoading } = useAppSelector(
     (s) => s.customTaxonomy,
   );
@@ -33,14 +33,9 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   useEffect(() => {
     let cancelled = false;
     setPamLoading(true);
-    const req =
-      usedCheckpointId != null
-        ? alApi.getCheckpointSpecies(usedCheckpointId)
-        : alApi.getDefaultSpecies();
-
-    req
+    void fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId)
       .then((list) => {
-        if (!cancelled) setPamSpecies(Array.isArray(list) ? list : []);
+        if (!cancelled) setPamSpecies(list);
       })
       .catch(() => {
         if (!cancelled) setPamSpecies([]);
@@ -52,7 +47,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     return () => {
       cancelled = true;
     };
-  }, [usedCheckpointId]);
+  }, [usedCheckpointId, selectedDatasetId]);
 
   const taxonomyNames = useMemo(() => {
     const fromNodes = labelNamesFromTaxonomyNodes(
