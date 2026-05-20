@@ -112,7 +112,7 @@ export const removeTeamMember = createAsyncThunk(
 export const fetchTeamDatasets = createAsyncThunk(
   "team/getAllDatasets",
   async (body: any) => {
-    const response = await api.post("/api/teams//available-datasets", body);
+    const response = await api.post("/api/teams/available-datasets", body);
     return response.data;
   },
 );

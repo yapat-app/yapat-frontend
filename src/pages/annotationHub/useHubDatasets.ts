@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { fetchAllDatasets, fetchAllTeamDatasets } from "../../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../../redux/features/datasetSlice";
 import {
   loadLastAnnotateDatasetId,
   persistLastAnnotateDatasetId,
@@ -30,12 +30,13 @@ export function useHubDatasets(
       setHubDatasetListStatus("idle");
       return;
     }
-    if (user.role === "admin" || user.role === "user") {
+    if (
+      user.role === "admin" ||
+      user.role === "user" ||
+      user.role === "team_owner"
+    ) {
       setHubDatasetListStatus("loading");
       void dispatch(fetchAllDatasets()).finally(() => setHubDatasetListStatus("ready"));
-    } else if (user.role === "team_owner") {
-      setHubDatasetListStatus("loading");
-      void dispatch(fetchAllTeamDatasets()).finally(() => setHubDatasetListStatus("ready"));
     } else {
       setHubDatasetListStatus("ready");
     }

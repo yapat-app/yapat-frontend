@@ -10,7 +10,6 @@ import { useAppSelector, useAppDispatch } from "../hooks";
 import {
   exploreDatasetDirectory,
   fetchAllDatasets,
-  fetchAllTeamDatasets,
   clearDatasetDirectory,
 } from "../redux/features/datasetSlice";
 import { getAllDatasetSnippetSets } from "../redux/features/embeddingSlice";
@@ -40,10 +39,12 @@ export const DatasetFolderStructure: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    if (user.role === "admin" || user.role === "user") {
+    if (
+      user.role === "admin" ||
+      user.role === "user" ||
+      user.role === "team_owner"
+    ) {
       dispatch(fetchAllDatasets());
-    } else if (user.role === "team_owner") {
-      dispatch(fetchAllTeamDatasets());
     }
   }, [user, dispatch]);
 

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import api from "../../axios/axiosInstance";
 import type { User } from "../../types";
 import { getErrorMessage } from "../../services/api";
+import { normalizeUser } from "../../utils/normalizeUserRole";
 
 export interface Auth {
   name: string;
@@ -109,7 +110,7 @@ export const authSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(getLoggedInUser.fulfilled, (state, action) => {
-        state.user = action.payload;
+        state.user = normalizeUser(action.payload);
       })
       .addCase(loginAsync.pending, (state) => {
         state.status = "loading";

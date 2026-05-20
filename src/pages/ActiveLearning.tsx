@@ -32,7 +32,7 @@ import {
   trainFromScratch,
 } from "../redux/features/alSlice";
 import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
-import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { embeddingApi } from "../services/api";
 import { alApi } from "../services/alApi";
 import type { PAMCheckpoint, PAMRunInferenceRequest, PAMSuggestionMode } from "../types/al";
@@ -167,8 +167,13 @@ export const ActiveLearning: React.FC = () => {
 
   // Load datasets.
   useEffect(() => {
-    if (user?.role === "admin") dispatch(fetchAllDatasets());
-    else if (user?.role === "team_owner") dispatch(fetchAllTeamDatasets());
+    if (
+      user?.role === "admin" ||
+      user?.role === "user" ||
+      user?.role === "team_owner"
+    ) {
+      dispatch(fetchAllDatasets());
+    }
   }, [user]);
 
   // Restore persisted session metadata from localStorage.

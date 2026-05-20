@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import {
-  fetchAllDatasets,
-  fetchAllTeamDatasets,
-} from "../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
 import { DatasetCard } from "../components/DatasetCard";
 import { clearSnippets } from "../redux/features/snippetSlice";
@@ -24,13 +21,16 @@ export const Datasets = () => {
   }, []);
 
   useEffect(() => {
-    if ((user && user?.role === "admin") || user?.role === "user") {
+    if (!user) return;
+    if (
+      user.role === "admin" ||
+      user.role === "user" ||
+      user.role === "team_owner"
+    ) {
       dispatch(fetchAllDatasets());
-    } else if (user && user?.role === "team_owner") {
-      dispatch(fetchAllTeamDatasets());
     }
     dispatch(getAllDatasetAnnotationStats());
-  }, [user, embeddingCreated]);
+  }, [user, embeddingCreated, dispatch]);
 
   useEffect(() => {}, [allDatasets]);
 

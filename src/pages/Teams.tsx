@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import {
-  fetchAllDatasets,
-  fetchAllTeamDatasets,
-} from "../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { CopyOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   Space,
@@ -77,12 +74,8 @@ export const Teams = () => {
   }
 
   useEffect(() => {
-    if (user && user.role === "team_owner") {
-      dispatch(fetchAllTeamDatasets());
-    } else {
-      dispatch(fetchAllDatasets());
-    }
-  }, []);
+    dispatch(fetchAllDatasets());
+  }, [dispatch]);
 
   useEffect(() => {
     if (teamDeleted) {

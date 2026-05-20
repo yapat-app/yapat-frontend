@@ -11,7 +11,7 @@ import {
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getLoggedInUser } from "../redux/features/authSlice";
 import { canAccessWssed } from "../utils/wssedAccess";
 
@@ -127,10 +127,12 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role === "admin" || user.role === "user") {
+    if (
+      user.role === "admin" ||
+      user.role === "user" ||
+      user.role === "team_owner"
+    ) {
       dispatch(fetchAllDatasets());
-    } else if (user.role === "team_owner") {
-      dispatch(fetchAllTeamDatasets());
     }
   }, [user, dispatch]);
 

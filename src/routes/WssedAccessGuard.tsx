@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import {
-  fetchAllDatasets,
-  fetchAllTeamDatasets,
-} from "../redux/features/datasetSlice";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { wssedApi } from "../services/api";
 import { canAccessWssed } from "../utils/wssedAccess";
 
@@ -23,10 +20,12 @@ export default function WssedAccessGuard({
   useEffect(() => {
     if (!user) return;
 
-    if (user.role === "admin" || user.role === "user") {
+    if (
+      user.role === "admin" ||
+      user.role === "user" ||
+      user.role === "team_owner"
+    ) {
       dispatch(fetchAllDatasets());
-    } else if (user.role === "team_owner") {
-      dispatch(fetchAllTeamDatasets());
     }
   }, [user, dispatch]);
 
