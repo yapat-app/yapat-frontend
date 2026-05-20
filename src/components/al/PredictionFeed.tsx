@@ -185,6 +185,7 @@ export const PredictionFeed: React.FC = () => {
             prediction={selected}
             cardRef={setCardRef(selected.snippet_id)}
             scrollRoot={scrollRoot}
+            loadAudioImmediately
           />
           {phase.ui.showRetrainControls && (
             <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
@@ -209,7 +210,7 @@ export const PredictionFeed: React.FC = () => {
           style={{ scrollSnapType: "y mandatory" }}
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {predictions.map((p) => (
+            {predictions.map((p, index) => (
               <div
                 key={p.id ?? p.snippet_id}
                 className="snap-start shrink-0 w-full"
@@ -221,6 +222,7 @@ export const PredictionFeed: React.FC = () => {
                   cardHeightPx={blindSnapCardHeight}
                   serverLabels={labelsBySnippet[p.snippet_id] ?? []}
                   scrollRoot={scrollRoot}
+                  loadAudioImmediately={index === 0}
                 />
               </div>
             ))}
@@ -287,12 +289,13 @@ export const PredictionFeed: React.FC = () => {
       {/* Scrollable feed */}
       <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
-          {predictions.map((p) => (
+          {predictions.map((p, index) => (
             <PredictionCard
               key={p.id ?? p.snippet_id}
               prediction={p}
               cardRef={setCardRef(p.snippet_id)}
               scrollRoot={scrollRoot}
+              loadAudioImmediately={index === 0}
             />
           ))}
 

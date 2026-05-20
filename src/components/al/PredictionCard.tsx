@@ -2,7 +2,14 @@
  * PredictionCard — single card showing a PAM prediction.
  */
 
-import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+} from "react";
 import { Skeleton } from "antd";
 import { SoundOutlined } from "@ant-design/icons";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
@@ -23,6 +30,8 @@ interface Props {
   serverLabels?: string[];
   /** Scroll container for lazy-load visibility (must match feed overflow root). */
   scrollRoot?: Element | null;
+  /** Eager-load audio (first feed card) without waiting for intersection. */
+  loadAudioImmediately?: boolean;
 }
 
 export const PredictionCard: React.FC<Props> = ({
@@ -31,6 +40,7 @@ export const PredictionCard: React.FC<Props> = ({
   cardHeightPx,
   serverLabels,
   scrollRoot,
+  loadAudioImmediately = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -101,44 +111,60 @@ export const PredictionCard: React.FC<Props> = ({
     }
   }, [cachedUrl]);
 
-  // Fetch audio lazily when card is near viewport (or selected).
-  // SpectrogramPlayer computes the spectrogram client-side from the same blob URL.
-  useEffect(() => {
-    if (!inView && !isSelected) return;
-    if (audioUrlCache.has(prediction.snippet_id)) return;
-    if (inFlight.has(prediction.snippet_id)) return;
+  const shouldLoadAudio = loadAudioImmediately || isSelected || inView;
+
+  // Fetch audio when card is visible, selected, or the first feed slot.
+  useLayoutEffect(() => {
+    const snippetId = prediction.snippet_id;
+    if (!shouldLoadAudio) return;
+
+    const cached = audioUrlCache.get(snippetId);
+    if (cached) {
+      setAudioError(false);
+      setAudioBlobUrl(cached);
+      return;
+    }
+
+    const existing = inFlight.get(snippetId);
+    if (existing) {
+      let cancelled = false;
+      void existing.then((url) => {
+        if (!cancelled && url) {
+          setAudioError(false);
+          setAudioBlobUrl(url);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const controller = new AbortController();
+    const priority = loadAudioImmediately || isSelected;
     setAudioError(false);
 
-    const p = (async () => {
-      // Limit concurrent audio downloads to avoid stalls when many cards enter the viewport.
-      const release = await audioDownloadAcquire(controller.signal);
-      try {
-        const url = await snippetApi.getSnippetAudio(
-          prediction.snippet_id,
-          controller.signal,
-        );
-        audioUrlCacheSet(prediction.snippet_id, url);
-        setAudioBlobUrl(url);
-        return url;
-      } catch (e: any) {
-        // Ignore cancellations from fast scrolling.
-        if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return null;
-        setAudioError(true);
-        return null;
-      } finally {
-        release();
-      }
-    })().finally(() => {
-      inFlight.delete(prediction.snippet_id);
+    const p = loadSnippetAudio(snippetId, controller.signal, priority).finally(() => {
+      inFlight.delete(snippetId);
     });
 
-    inFlight.set(prediction.snippet_id, p);
+    inFlight.set(snippetId, p);
+    let cancelled = false;
+    void p.then((url) => {
+      if (cancelled || controller.signal.aborted) return;
+      if (url) {
+        setAudioError(false);
+        setAudioBlobUrl(url);
+      } else {
+        setAudioError(true);
+      }
+    });
+
     return () => {
+      cancelled = true;
       controller.abort();
+      inFlight.delete(snippetId);
     };
-  }, [prediction.snippet_id, inView, isSelected]);
+  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected]);
 
   const isPhase1 = phase.id.startsWith("P1.");
 
@@ -172,14 +198,14 @@ export const PredictionCard: React.FC<Props> = ({
           className="flex-shrink-0 px-5 pt-3 pb-2"
           onClick={(e) => e.stopPropagation()}
         >
-          {!audioBlobUrl && !audioError && (inView || isSelected) && (
+          {!audioBlobUrl && !audioError && shouldLoadAudio && (
             <Skeleton.Input
               active
               block
               style={{ height: blindSpecHeight, borderRadius: 12, width: "100%" }}
             />
           )}
-          {!audioBlobUrl && !audioError && !(inView || isSelected) && (
+          {!audioBlobUrl && !audioError && !shouldLoadAudio && (
             <div
               className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
               style={{ height: blindSpecHeight }}
@@ -255,12 +281,12 @@ export const PredictionCard: React.FC<Props> = ({
             className="w-[60%] border-r border-gray-100"
             onClick={(e) => e.stopPropagation()}
           >
-            {!audioBlobUrl && !audioError && (inView || isSelected) && (
+            {!audioBlobUrl && !audioError && shouldLoadAudio && (
               <div className="px-4 py-3">
                 <Skeleton.Input active block style={{ height: specHeight, borderRadius: 6 }} />
               </div>
             )}
-            {!audioBlobUrl && !audioError && !(inView || isSelected) && (
+            {!audioBlobUrl && !audioError && !shouldLoadAudio && (
               <div
                 className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
                 style={{ height: specHeight }}
@@ -358,7 +384,7 @@ export const PredictionCard: React.FC<Props> = ({
         className="border-t border-gray-100"
       >
         {/* Loading skeleton — shown until the blob URL is ready */}
-        {!audioBlobUrl && !audioError && (inView || isSelected) && (
+            {!audioBlobUrl && !audioError && shouldLoadAudio && (
           <div className="px-4 py-3">
             <Skeleton.Input
               active
@@ -369,7 +395,7 @@ export const PredictionCard: React.FC<Props> = ({
         )}
 
         {/* Not loading yet (lazy) */}
-        {!audioBlobUrl && !audioError && !(inView || isSelected) && (
+            {!audioBlobUrl && !audioError && !shouldLoadAudio && (
           <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ height: specHeight }}>
             Scroll to load audio
           </div>
@@ -427,9 +453,12 @@ const MAX_CONCURRENT_AUDIO = 2;
 let activeDownloads = 0;
 const downloadWaiters: Array<() => void> = [];
 
-async function audioDownloadAcquire(signal?: AbortSignal): Promise<() => void> {
+async function audioDownloadAcquire(
+  signal?: AbortSignal,
+  priority = false,
+): Promise<() => void> {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  if (activeDownloads < MAX_CONCURRENT_AUDIO) {
+  if (priority || activeDownloads < MAX_CONCURRENT_AUDIO) {
     activeDownloads += 1;
     return () => audioDownloadRelease();
   }
@@ -446,6 +475,25 @@ async function audioDownloadAcquire(signal?: AbortSignal): Promise<() => void> {
   });
   activeDownloads += 1;
   return () => audioDownloadRelease();
+}
+
+async function loadSnippetAudio(
+  snippetId: number,
+  signal?: AbortSignal,
+  priority = false,
+): Promise<string | null> {
+  const release = await audioDownloadAcquire(signal, priority);
+  try {
+    const url = await snippetApi.getSnippetAudio(snippetId, signal);
+    audioUrlCacheSet(snippetId, url);
+    return url;
+  } catch (e: unknown) {
+    const err = e as { name?: string; code?: string };
+    if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return null;
+    return null;
+  } finally {
+    release();
+  }
 }
 
 function audioDownloadRelease() {

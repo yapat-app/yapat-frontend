@@ -14,7 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Plot from "react-plotly.js";
-import { Button, Select, Tooltip, Tag } from "antd";
+import { Button, Select, Tooltip, Tag, Spin } from "antd";
 import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
@@ -682,6 +682,20 @@ export const ProjectionView: React.FC = () => {
   const isWaitingForRetrain = predictions.length > 0 && projectionPredictions.length === 0;
   const hasAnyTraces = traces.length > 0;
 
+  const activeProjectionReady =
+    visMode !== "whole_dataset" ||
+    (fpvPoints.length > 0 && Boolean(projectionsByMethod[method]));
+
+  const isFpvPlotLoading =
+    visMode === "whole_dataset" &&
+    Boolean(selectedDatasetId && effectiveEmbeddingModelId) &&
+    !fpvError &&
+    !isMissingProjection &&
+    (fpvGenerateLoading ||
+      fpvLoading ||
+      loadingMethods.has(method) ||
+      !activeProjectionReady);
+
   const showFilterPanel = visibilityMode !== "disabled";
 
   return (
@@ -890,7 +904,16 @@ export const ProjectionView: React.FC = () => {
         )}
 
         {/* Plot */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden min-h-[200px]">
+        {isFpvPlotLoading && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#f7fafc]/95">
+            <Spin size="large" />
+            <p className="text-sm text-gray-500 font-ibm-sans">
+              Loading feature projection…
+            </p>
+          </div>
+        )}
+
         {hasOverlayPredictions &&
           !isClassicFeed &&
           rawOverlayPredictions.some((p) => !p.scores) && (
@@ -900,23 +923,21 @@ export const ProjectionView: React.FC = () => {
           </div>
         )}
 
-        {!hasAnyTraces ? (
+        {!isFpvPlotLoading && !hasAnyTraces ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
-            {fpvLoading
-              ? "Loading projection…"
-              : fpvError
+            {fpvError
               ? "Projection not available yet — it’s prepared after embeddings finish (or generate it now)."
               : "Select a dataset and generate embeddings to see the projection."}
           </div>
-        ) : visibleCount === 0 ? (
+        ) : !isFpvPlotLoading && hasAnyTraces && visibleCount === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
             No points in selected range — adjust the visibility filter
           </div>
-        ) : visMode === "whole_dataset" && fpvError ? (
+        ) : !isFpvPlotLoading && visMode === "whole_dataset" && fpvError ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
             Projection not available yet — it will appear once the embedding job finishes (FPV is cached).
           </div>
-        ) : (
+        ) : !isFpvPlotLoading && activeProjectionReady ? (
           <Plot
             data={traces}
             layout={{
@@ -941,7 +962,7 @@ export const ProjectionView: React.FC = () => {
             onClick={handlePlotClick}
             config={{ displayModeBar: false, responsive: true }}
           />
-        )}
+        ) : null}
         </div>
       </div>
     </div>
@@ -960,8 +981,8 @@ const MiniProjection: React.FC<{
 }> = ({ points, coordsBySnippet, selectedSnippetId, allActualLabels, loading = false }) => {
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
-        …
+      <div className="w-full h-full flex items-center justify-center">
+        <Spin size="small" />
       </div>
     );
   }
