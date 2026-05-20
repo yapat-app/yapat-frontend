@@ -9,8 +9,8 @@ import {
   getLabelSpace,
   reset,
   removeLabels,
-  getAllTaxonomies,
 } from "../../redux/features/customTaxonomySlice";
+import { useEnsureTeamTaxonomies } from "../../hooks/useEnsureTeamTaxonomies";
 import { createAnnotation } from "../../redux/features/annotationSlice";
 // import { FreezeLabelSpace } from "./FreezeLabelSpace";
 
@@ -80,6 +80,9 @@ export const LabelSpaceActive: React.FC = () => {
   // Custom taxonomy sources
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
+  const { user } = useAppSelector((state) => state.auth);
+  const teamId = user?.team_ids?.[0] ?? 1;
+  useEnsureTeamTaxonomies(teamId);
 
   // Online suggestions (GBIF etc.)
   const { suggestions, loading: suggestionsLoading } = useAppSelector(
@@ -103,11 +106,6 @@ export const LabelSpaceActive: React.FC = () => {
       setLoadedConversationId(conversation.id);
     }
   }, [pathname, conversation?.id, dispatch, loadedConversationId]);
-
-  // Load saved/custom taxonomies for annotate screen
-  useEffect(() => {
-    dispatch(getAllTaxonomies(1));
-  }, [pathname, dispatch]);
 
   // Show toast and refresh after removing a label (taxonomy screen)
   useEffect(() => {

@@ -3,8 +3,8 @@
  * PAM labels.json / checkpoint label_config first; custom taxonomy fills gaps.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useAppDispatch, useAppSelector } from "../hooks";
-import { getAllTaxonomies } from "../redux/features/customTaxonomySlice";
+import { useAppSelector } from "../hooks";
+import { useEnsureTeamTaxonomies } from "./useEnsureTeamTaxonomies";
 import { fetchPamQuickLabelNames } from "../utils/fetchPamQuickLabelNames";
 import {
   labelNamesFromLabelSpace,
@@ -13,10 +13,9 @@ import {
 } from "../utils/quickLabelList";
 
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
-  const dispatch = useAppDispatch();
   const { user } = useAppSelector((s) => s.auth);
   const { usedCheckpointId, selectedDatasetId } = useAppSelector((s) => s.al);
-  const { allTaxonomies, labelSpace, loading: taxonomyLoading } = useAppSelector(
+  const { allTaxonomies, labelSpace, taxonomiesStatus } = useAppSelector(
     (s) => s.customTaxonomy,
   );
 
@@ -25,10 +24,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
   const teamId = user?.team_ids?.[0] ?? 1;
 
-  useEffect(() => {
-    if (!user) return;
-    void dispatch(getAllTaxonomies(teamId));
-  }, [user, teamId, dispatch]);
+  useEnsureTeamTaxonomies(teamId, !!user);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +61,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
   return {
     labels,
-    loading: pamLoading || (taxonomyLoading && labels.length === 0),
+    loading:
+      pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
   };
 }

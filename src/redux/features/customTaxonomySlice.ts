@@ -7,10 +7,15 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { getErrorMessage, customtaxonomyApi } from "../../services/api";
 import type { Conversation, LabelSpaceItem } from "../../types";
 
+export type TaxonomiesFetchStatus = "idle" | "loading" | "succeeded" | "failed";
+
 export interface CustomTaxonomyState {
   conversation: Conversation | null;
   labelSpace: LabelSpaceItem[] | [];
   allTaxonomies: any[] | [];
+  /** Team id for which `allTaxonomies` was last fetched successfully */
+  loadedTeamId: number | null;
+  taxonomiesStatus: TaxonomiesFetchStatus;
   messageSent: boolean;
   conversationFreezed: boolean;
   labelRemoved: boolean;
@@ -23,6 +28,22 @@ export interface CustomTaxonomyState {
   lastQuery: string;
 }
 
+/** In-flight team ids — prevents duplicate concurrent requests before pending state is set */
+const taxonomiesFetchInFlight = new Set<number>();
+
+type TaxonomyThunkState = { customTaxonomy: CustomTaxonomyState };
+
+function shouldSkipTaxonomiesFetch(teamId: number, state: CustomTaxonomyState): boolean {
+  if (taxonomiesFetchInFlight.has(teamId)) return true;
+  if (
+    state.taxonomiesStatus === "succeeded" &&
+    state.loadedTeamId === teamId
+  ) {
+    return true;
+  }
+  return false;
+}
+
 const initialState: CustomTaxonomyState = {
   conversation: null,
   messageSent: false,
@@ -30,6 +51,8 @@ const initialState: CustomTaxonomyState = {
   conversationFreezed: false,
   labelRemoved: false,
   allTaxonomies: [],
+  loadedTeamId: null,
+  taxonomiesStatus: "idle",
   labelSpace: [],
   labelAdded: false,
   lastAddWasDuplicates: false,
@@ -159,7 +182,17 @@ export const getAllTaxonomies = createAsyncThunk(
       return await customtaxonomyApi.allTaxonomies(teamId);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
+    } finally {
+      taxonomiesFetchInFlight.delete(teamId);
     }
+  },
+  {
+    condition: (teamId, { getState }) => {
+      const state = (getState() as TaxonomyThunkState).customTaxonomy;
+      if (shouldSkipTaxonomiesFetch(teamId, state)) return false;
+      taxonomiesFetchInFlight.add(teamId);
+      return true;
+    },
   },
 );
 
@@ -182,6 +215,11 @@ export const customtaxonomySlice = createSlice({
     },
     setLabelSpace: (state, action) => {
       state.labelSpace = action.payload;
+    },
+    /** Force the next getAllTaxonomies(teamId) to hit the API (e.g. after freezing label space). */
+    invalidateTaxonomiesCache: (state) => {
+      state.taxonomiesStatus = "idle";
+      state.loadedTeamId = null;
     },
   },
   extraReducers: (builder) => {
@@ -229,13 +267,21 @@ export const customtaxonomySlice = createSlice({
           state.labelSpace = action.payload.items;
         }
       })
-      .addCase(getAllTaxonomies.pending, (state) => {
-        state.loading = true;
+      .addCase(getAllTaxonomies.pending, (state, action) => {
+        state.taxonomiesStatus = "loading";
         state.error = null;
+        state.loadedTeamId = action.meta.arg;
       })
       .addCase(getAllTaxonomies.fulfilled, (state, action) => {
-        state.loading = false;
+        state.taxonomiesStatus = "succeeded";
+        state.loadedTeamId = action.meta.arg;
         state.allTaxonomies = action.payload.taxonomies;
+        taxonomiesFetchInFlight.delete(action.meta.arg);
+      })
+      .addCase(getAllTaxonomies.rejected, (state, action) => {
+        state.taxonomiesStatus = "failed";
+        state.error = action.payload as string;
+        taxonomiesFetchInFlight.delete(action.meta.arg);
       })
       .addCase(freezeConversation.pending, (state) => {
         state.loading = true;
@@ -246,6 +292,8 @@ export const customtaxonomySlice = createSlice({
         state.conversationFreezed = true;
         const conversation = action.payload?.conversation ?? action.payload;
         state.conversation = conversation;
+        state.taxonomiesStatus = "idle";
+        state.loadedTeamId = null;
       })
       .addCase(freezeConversation.rejected, (state, action) => {
         state.loading = false;
@@ -306,5 +354,6 @@ export const {
   reset,
   clearConversationFreezed,
   setLabelSpace,
+  invalidateTaxonomiesCache,
 } = customtaxonomySlice.actions;
 export default customtaxonomySlice.reducer;

@@ -9,8 +9,8 @@ import {
   getLabelSpace,
   reset,
   removeLabels,
-  getAllTaxonomies,
 } from "../redux/features/customTaxonomySlice";
+import { useEnsureTeamTaxonomies } from "../hooks/useEnsureTeamTaxonomies";
 import { createAnnotation } from "../redux/features/annotationSlice";
 import { FreezeLabelSpace } from "./FreezeLabelSpace";
 
@@ -80,6 +80,10 @@ export const LabelSpace: React.FC = () => {
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
   const { user } = useAppSelector((state) => state.auth);
+  const annotateTeamId = user?.team_ids?.length
+    ? user.team_ids[0]
+    : Number(localStorage.getItem("preAnnotationTeamId")) || 1;
+  useEnsureTeamTaxonomies(annotateTeamId, pathname === "/annotate");
   // Online suggestions (GBIF etc.)
   const { suggestions, loading: suggestionsLoading } = useAppSelector(
     (state) => state.taxonomy,
@@ -102,19 +106,6 @@ export const LabelSpace: React.FC = () => {
       setLoadedConversationId(conversation.id);
     }
   }, [pathname, conversation?.id, dispatch, loadedConversationId]);
-
-  // Load saved/custom taxonomies for annotate screen
-  useEffect(() => {
-    if (pathname === "/annotate") {
-      const storedTeamIdRaw = localStorage.getItem("preAnnotationTeamId");
-      const storedTeamId = storedTeamIdRaw ? Number(storedTeamIdRaw) : undefined;
-      dispatch(
-        getAllTaxonomies(
-          user?.team_ids?.length ? user?.team_ids[0] : (storedTeamId ?? 1),
-        ),
-      );
-    }
-  }, [pathname, dispatch]);
 
   // Show toast and refresh after removing a label (taxonomy screen)
   useEffect(() => {
