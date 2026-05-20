@@ -13,7 +13,7 @@ import {
   loadSnippets,
 } from "../redux/features/snippetSlice";
 import { fetchAnnotations } from "../redux/features/annotationSlice";
-import { annotationApi } from "../services/api";
+import { fetchAnnotationsBySnippetIds } from "../utils/batchFetchAnnotationsBySnippetIds";
 import { message } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { clearEmbedding } from "../redux/features/embeddingSlice";
@@ -149,22 +149,14 @@ export const useAnnotationWorkflow = ({
   //This allows us to know which snippets have annotations
   useEffect(() => {
     if (snippets.length > 0) {
-      // Fetch annotations for all snippets to determine which are annotated
       const fetchAllAnnotations = async () => {
         try {
-          const annotationPromises = snippets.map((snippet) =>
-            annotationApi.getAll({ snippet_id: snippet.id }).catch(() => []),
-          );
-          const allAnnotationArrays = await Promise.all(annotationPromises);
-
-          // Build set of snippet IDs that have annotations
+          const ids = snippets.map((s) => s.id);
+          const rows = await fetchAnnotationsBySnippetIds(ids);
           const annotatedSnippetIds = new Set<number>();
-          allAnnotationArrays.forEach((anns, index) => {
-            if (anns.length > 0) {
-              annotatedSnippetIds.add(snippets[index].id);
-            }
-          });
-
+          for (const ann of rows) {
+            annotatedSnippetIds.add(ann.snippet_id);
+          }
           setSnippetsWithAnnotations(annotatedSnippetIds);
         } catch (error) {
           // Silently fail - we'll still track annotations as we encounter them
@@ -172,11 +164,11 @@ export const useAnnotationWorkflow = ({
         }
       };
 
-      fetchAllAnnotations();
+      void fetchAllAnnotations();
     } else {
       setSnippetsWithAnnotations(new Set());
     }
-  }, [snippetIds, snippets]); // Re-run when snippet IDs change
+  }, [snippetIds]); // Re-run when snippet IDs change
 
   //Update snippetsWithAnnotations when annotations change (e.g., new annotation created)
   useEffect(() => {

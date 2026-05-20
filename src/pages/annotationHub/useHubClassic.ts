@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { useAnnotationWorkflow } from "../../hooks/useAnnotationWorkflow";
-import { annotationApi } from "../../services/api";
 import {
   annotationsToClassicFeedbacks,
   annotationRowsAlignedToSnippets,
@@ -22,11 +21,9 @@ import { getFeedHistory } from "../../redux/features/feedSlice";
 import { getAllDatasetEmbeddings } from "../../redux/features/embeddingSlice";
 import { pickLatestServerClassicFeed } from "../../utils/classicFeedServerHydrate";
 import store from "../../redux/store";
-import type { Annotation, FeedSimilarityCreate } from "../../types";
+import type { FeedSimilarityCreate } from "../../types";
 import type { AnnotateMode } from "./types";
-
-/** Max snippet IDs per GET /annotations request (URL length + server cap). */
-const CLASSIC_ANNOTATION_ID_CHUNK = 200;
+import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 
 export function useHubClassic(
   mode: AnnotateMode,
@@ -147,17 +144,7 @@ export function useHubClassic(
     void (async () => {
       try {
         const ids = snippets.map((s) => s.id);
-        const all: Annotation[] = [];
-        for (let i = 0; i < ids.length; i += CLASSIC_ANNOTATION_ID_CHUNK) {
-          const slice = ids.slice(i, i + CLASSIC_ANNOTATION_ID_CHUNK);
-          const snippet_ids = slice.join(",");
-          const rows = await annotationApi.getAll({
-            snippet_ids,
-            limit: 2000,
-          });
-          if (cancelled) return;
-          all.push(...rows);
-        }
+        const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const aligned = annotationRowsAlignedToSnippets(snippets, all);
         dispatch(
