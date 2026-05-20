@@ -20,6 +20,7 @@ import { createAnnotation } from "../../redux/features/annotationSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { LabelSelector } from "./LabelSelector";
+import { buildAnnotationCreatePayload } from "../../utils/annotationCreatePayload";
 
 interface Props {
   prediction: PAMPrediction;
@@ -84,11 +85,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
       for (const label of normalized) {
         if (previous.has(label)) continue;
         await dispatch(
-          createAnnotation({
-            snippet_id: prediction.snippet_id,
-            taxon_id: label.toLowerCase(),
-            extra_metadata: { display_name: label },
-          }),
+          createAnnotation(buildAnnotationCreatePayload(prediction.snippet_id, label)),
         ).unwrap();
       }
       dispatch(
@@ -100,8 +97,12 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
       );
       setSaveState("saved");
       window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
-    } catch {
-      message.error("Failed to save annotation");
+    } catch (err: unknown) {
+      const detail =
+        typeof err === "string"
+          ? err
+          : (err as { message?: string })?.message ?? "Failed to save annotation";
+      message.error(detail);
       setSaveState("error");
     } finally {
       setSubmitting(false);
