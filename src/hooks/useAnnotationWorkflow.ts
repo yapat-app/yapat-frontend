@@ -25,11 +25,17 @@ interface UseAnnotationWorkflowParams {
   enabled?: boolean;
   /** When true, do not auto-load the latest item from feed history (AnnotationHub per-mode slots). */
   skipFeedHistoryAutoLoad?: boolean;
+  /**
+   * AnnotationHub classic (random/similarity): annotations are loaded in bulk there and hydrated
+   * into `alSlice.feedbacks`. Skip per-snippet and duplicate bulk GETs to `/api/annotations/`.
+   */
+  annotateHubClassic?: boolean;
 }
 
 export const useAnnotationWorkflow = ({
   enabled = true,
   skipFeedHistoryAutoLoad = false,
+  annotateHubClassic = false,
 }: UseAnnotationWorkflowParams) => {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
@@ -119,10 +125,11 @@ export const useAnnotationWorkflow = ({
     });
   }, [snippetsFetched, datasetId, selectedFeedId, snippets.length]);
 
+  const currentSnippetId = currentSnippet?.id;
   useEffect(() => {
-    if (!enabled || !currentSnippet) return;
-    dispatch(fetchAnnotations({ snippet_id: currentSnippet.id }));
-  }, [currentSnippet, dispatch, enabled]);
+    if (!enabled || annotateHubClassic || currentSnippetId == null) return;
+    dispatch(fetchAnnotations({ snippet_id: currentSnippetId }));
+  }, [annotateHubClassic, currentSnippetId, dispatch, enabled]);
 
   //Memoize snippet IDs for dependency tracking
   const snippetIds = useMemo(
@@ -148,6 +155,10 @@ export const useAnnotationWorkflow = ({
   //Load annotations for all snippets when snippets are loaded
   //This allows us to know which snippets have annotations
   useEffect(() => {
+    if (!enabled || annotateHubClassic) {
+      setSnippetsWithAnnotations(new Set());
+      return;
+    }
     if (snippets.length > 0) {
       const fetchAllAnnotations = async () => {
         try {
@@ -168,10 +179,11 @@ export const useAnnotationWorkflow = ({
     } else {
       setSnippetsWithAnnotations(new Set());
     }
-  }, [snippetIds]); // Re-run when snippet IDs change
+  }, [snippetIds, enabled, annotateHubClassic]); // Re-run when snippet IDs change
 
   //Update snippetsWithAnnotations when annotations change (e.g., new annotation created)
   useEffect(() => {
+    if (annotateHubClassic) return;
     if (annotations.length > 0) {
       setSnippetsWithAnnotations((prev) => {
         const updated = new Set(prev);
@@ -181,7 +193,7 @@ export const useAnnotationWorkflow = ({
         return updated;
       });
     }
-  }, [annotationSnippetIds, annotations]);
+  }, [annotateHubClassic, annotationSnippetIds, annotations]);
 
   //Get annotations for current snippet
 

@@ -106,6 +106,8 @@ export function useHubALSession(
     dispatch(hydrateSavedFeed());
   }, [dispatch]);
 
+  // Restore truncated feed from server once per session — only when predictions
+  // are genuinely absent (not just cleared by a tab switch) and we haven't tried yet.
   useEffect(() => {
     if (inferenceLoading || predictions.length > 0) return;
     if (
@@ -115,6 +117,8 @@ export function useHubALSession(
       !modelFamilyName
     )
       return;
+    if (hasAttemptedRestoreRef.current) return;
+    hasAttemptedRestoreRef.current = true;
     void dispatch(restoreFeedFromServer());
   }, [
     dispatch,
@@ -156,6 +160,7 @@ export function useHubALSession(
     setSearchParams,
   ]);
 
+  const hasAttemptedRestoreRef = useRef(false);
   const [alConfigOpen, setAlConfigOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
@@ -176,6 +181,11 @@ export function useHubALSession(
     const family = searchParams.get("model_family");
     if (family) setLocalFamily(family);
   }, [searchParams]);
+
+  useEffect(() => {
+    // Reset restore guard when the dataset changes so the new dataset can restore.
+    hasAttemptedRestoreRef.current = false;
+  }, [selectedDatasetId]);
 
   useEffect(() => {
     if (selectedDatasetId === null) return;

@@ -14,6 +14,7 @@ import {
 } from "../redux/features/snippetSlice";
 import {
   clearClassicAnnotationFeed,
+  hydrateSavedFeed,
 } from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
@@ -54,6 +55,9 @@ export const AnnotationHub: React.FC = () => {
         }
         dispatch(clearSnippets());
         dispatch(clearClassicAnnotationFeed());
+        // Restore persisted AL feed immediately so predictions are available
+        // before restoreFeedFromServer checks them, preventing a spurious re-inference.
+        dispatch(hydrateSavedFeed());
       }
 
       setSearchParams(params, { replace: true });

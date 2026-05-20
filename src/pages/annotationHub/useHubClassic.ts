@@ -82,6 +82,7 @@ export function useHubClassic(
     datasetId: classicDatasetId,
     enabled: mode !== "al",
     skipFeedHistoryAutoLoad: true,
+    annotateHubClassic: mode === "random" || mode === "similarity",
   });
 
   const classicSnippetIdsKey = useMemo(
