@@ -37,6 +37,29 @@ import { usePhaseConfig } from "../../studyPhases";
 
 const { Option } = Select;
 
+// ── Module-level FPV cache — survives component remounts ──────────────────────
+// Points (snippet metadata) are the same for every projection method of a given
+// dataset+embeddingModel pair; projections are per-method.
+const _fpvPointsCache = new Map<string, FPVPointMetadata[]>();
+const _fpvProjectionCache = new Map<string, FPVProjection2D>();
+
+function fpvPointsKey(datasetId: number, embeddingModelId: number): string {
+  return `${datasetId}:${embeddingModelId}`;
+}
+function fpvProjectionKey(
+  datasetId: number,
+  embeddingModelId: number,
+  method: string,
+): string {
+  return `${datasetId}:${embeddingModelId}:${method}`;
+}
+function clearFpvCache(datasetId: number, embeddingModelId: number) {
+  _fpvPointsCache.delete(fpvPointsKey(datasetId, embeddingModelId));
+  for (const m of ["pca", "umap", "tsne", "isomap"]) {
+    _fpvProjectionCache.delete(fpvProjectionKey(datasetId, embeddingModelId, m));
+  }
+}
+
 type PlotPoint = {
   snippet_id: number;
   predicted_label?: string | null;
@@ -179,18 +202,49 @@ export const ProjectionView: React.FC = () => {
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 
-  const resetProjectionCache = useCallback(() => {
+  const resetProjectionComponentState = useCallback(() => {
     setFpvPoints([]);
     setProjectionsByMethod({});
     setLoadingMethods(new Set());
     inFlightMethodsRef.current = new Set();
   }, []);
 
+  // Restore cached data into component state for the current dataset+model combo.
+  const restoreFromCache = useCallback(
+    (dsId: number, emId: number) => {
+      const pts = _fpvPointsCache.get(fpvPointsKey(dsId, emId));
+      if (!pts) return false;
+      setFpvPoints(pts);
+      const restoredProjections: Partial<Record<ProjectionMethod, FPVProjection2D>> = {};
+      for (const m of ["pca", "umap", "tsne", "isomap"] as ProjectionMethod[]) {
+        const proj = _fpvProjectionCache.get(fpvProjectionKey(dsId, emId, m));
+        if (proj) restoredProjections[m] = proj;
+      }
+      setProjectionsByMethod(restoredProjections);
+      return true;
+    },
+    [],
+  );
+
   const fetchProjectionMethod = useCallback(
     async (targetMethod: ProjectionMethod, options?: { background?: boolean }) => {
       if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
-      if (inFlightMethodsRef.current.has(targetMethod)) return;
 
+      // Serve from module cache if already loaded.
+      const projKey = fpvProjectionKey(selectedDatasetId, effectiveEmbeddingModelId, targetMethod);
+      const cachedProj = _fpvProjectionCache.get(projKey);
+      if (cachedProj) {
+        const pts = _fpvPointsCache.get(fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId));
+        if (pts) {
+          setFpvPoints(pts);
+          setProjectionsByMethod((prev) =>
+            prev[targetMethod] ? prev : { ...prev, [targetMethod]: cachedProj },
+          );
+          return;
+        }
+      }
+
+      if (inFlightMethodsRef.current.has(targetMethod)) return;
       inFlightMethodsRef.current.add(targetMethod);
       setLoadingMethods((prev) => new Set(prev).add(targetMethod));
       if (!options?.background) {
@@ -207,6 +261,9 @@ export const ProjectionView: React.FC = () => {
         });
         const proj = fpv.projections_2d[targetMethod];
         if (proj && fpv.points.length > 0) {
+          // Persist to module-level cache.
+          _fpvPointsCache.set(fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId), fpv.points);
+          _fpvProjectionCache.set(projKey, proj);
           setFpvPoints(fpv.points);
           setProjectionsByMethod((prev) =>
             prev[targetMethod] ? prev : { ...prev, [targetMethod]: proj },
@@ -214,7 +271,7 @@ export const ProjectionView: React.FC = () => {
         }
       } catch (e: any) {
         if (!options?.background) {
-          resetProjectionCache();
+          resetProjectionComponentState();
           setFpvError(
             String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."),
           );
@@ -231,21 +288,25 @@ export const ProjectionView: React.FC = () => {
         }
       }
     },
-    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionCache],
+    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState],
   );
 
   // Load the active projection method (single-method payload for large datasets).
   useEffect(() => {
     if (visMode === "hidden") {
-      resetProjectionCache();
+      resetProjectionComponentState();
       setFpvError(null);
       return;
     }
     if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
 
-    resetProjectionCache();
-    void fetchProjectionMethod(method);
-  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, resetProjectionCache]);
+    // Try to restore from module cache before touching the network.
+    const alreadyCached = restoreFromCache(selectedDatasetId, effectiveEmbeddingModelId);
+    if (!alreadyCached) {
+      resetProjectionComponentState();
+      void fetchProjectionMethod(method);
+    }
+  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, resetProjectionComponentState, restoreFromCache]);
 
   // When the user picks another method, fetch it on demand if not cached yet.
   useEffect(() => {
@@ -346,13 +407,15 @@ export const ProjectionView: React.FC = () => {
         embedding_model_id: effectiveEmbeddingModelId,
         run_3d: false,
       });
-      resetProjectionCache();
+      // Invalidate module cache so the fresh projection is fetched.
+      clearFpvCache(selectedDatasetId, effectiveEmbeddingModelId);
+      resetProjectionComponentState();
       await fetchProjectionMethod(method);
       for (const m of ALL_PROJECTION_METHODS) {
         if (m !== method) void fetchProjectionMethod(m, { background: true });
       }
     } catch (e: any) {
-      resetProjectionCache();
+      resetProjectionComponentState();
       setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to generate projection."));
     } finally {
       setFpvGenerateLoading(false);

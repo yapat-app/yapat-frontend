@@ -23,7 +23,7 @@ import {
 import { getFeedHistory } from "../../redux/features/feedSlice";
 import { getAllDatasetEmbeddings } from "../../redux/features/embeddingSlice";
 import { pickLatestServerClassicFeed } from "../../utils/classicFeedServerHydrate";
-import type { Annotation, FeedSimilarityCreate } from "../../types";
+import type { Annotation, FeedSimilarityCreate, Snippet } from "../../types";
 import type { AnnotateMode } from "./types";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 
@@ -39,6 +39,7 @@ export function useHubClassic(
   const serverHydrateTriedRef = useRef<string | null>(null);
 
   const [classicConfigOpen, setClassicConfigOpen] = useState(false);
+  const [feedGenerateBusy, setFeedGenerateBusy] = useState(false);
   const [serverHydrateBusy, setServerHydrateBusy] = useState(false);
   const [classicBootstrapResolved, setClassicBootstrapResolved] = useState(false);
   const [feedLimit, setFeedLimit] = useState(50);
@@ -150,8 +151,8 @@ export function useHubClassic(
         dispatch(loadSnippets({ id: match.id, response: match.response }));
         dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
       } finally {
+        setServerHydrateBusy(false);
         if (!cancelled) {
-          setServerHydrateBusy(false);
           setClassicBootstrapResolved(true);
         }
       }
@@ -159,6 +160,7 @@ export function useHubClassic(
 
     return () => {
       cancelled = true;
+      setServerHydrateBusy(false);
     };
   }, [isClassicMode, mode, classicDatasetId, userId, snippets.length, dispatch]);
 
@@ -221,13 +223,14 @@ export function useHubClassic(
     const dsId = Number(classicDatasetId);
     if (Number.isNaN(dsId)) return;
 
+    setFeedGenerateBusy(true);
     try {
-      let count = 0;
+      let rows: Snippet[] = [];
+
       if (mode === "random") {
-        const rows = await dispatch(
+        rows = await dispatch(
           fetchSnippetFeed({ dataset_id: dsId, limit: feedLimit, method: "random" }),
         ).unwrap();
-        count = rows.length;
       } else {
         const { audioFile, startSec, endSec } = similarityState;
         if (!audioFile) {
@@ -241,9 +244,10 @@ export function useHubClassic(
           end_time: endSec,
           limit: feedLimit,
         };
-        const rows = await dispatch(fetchSimilaritySnippetFeed(payload)).unwrap();
-        count = rows.length;
+        rows = await dispatch(fetchSimilaritySnippetFeed(payload)).unwrap();
       }
+
+      const count = rows.length;
 
       dispatch(
         saveClassicFeedSlot({
@@ -254,8 +258,11 @@ export function useHubClassic(
 
       if (count === 0) {
         message.warning("No snippets returned for this feed. Try another dataset or limit.");
+        dispatch(clearClassicAnnotationFeed());
         return;
       }
+
+      dispatch(setClassicAnnotationFeed({ snippets: rows, datasetId: dsId }));
 
       setClassicConfigOpen(false);
       message.success(
@@ -271,7 +278,8 @@ export function useHubClassic(
             ? err.message
             : snippetError ?? "Failed to generate feed";
       message.error(detail);
-      throw err;
+    } finally {
+      setFeedGenerateBusy(false);
     }
   }, [
     classicDatasetId,
@@ -309,6 +317,7 @@ export function useHubClassic(
     serverHydrateBusy,
     feedLimit,
     setFeedLimit,
+    feedGenerateBusy,
     similarityState,
     handleSimilarityChange,
     snippetsLoading,

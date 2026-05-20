@@ -63,7 +63,10 @@ export const snippetApi = {
    * Prioritizes unannotated snippets
    */
   getFeed: async (params: FeedParams): Promise<Snippet[]> => {
-    const response = await api.get("/api/feed/", { params });
+    const response = await api.get("/api/feed/", {
+      params,
+      timeout: 120_000,
+    });
     return response.data;
   },
 

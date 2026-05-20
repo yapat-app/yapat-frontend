@@ -157,12 +157,8 @@ export const AnnotationHub: React.FC = () => {
         onCancel={() => classic.setClassicConfigOpen(false)}
         onOk={classic.handleGenerateFeed}
         okText={classic.generateFeedLabel}
-        okDisabled={
-          !classic.classicCanGenerate ||
-          classic.snippetsLoading ||
-          classic.serverHydrateBusy
-        }
-        okLoading={classic.snippetsLoading || classic.serverHydrateBusy}
+        okDisabled={!classic.classicCanGenerate || classic.feedGenerateBusy}
+        okLoading={classic.feedGenerateBusy}
       />
     </div>
   );
