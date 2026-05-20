@@ -154,6 +154,8 @@ export const annotationApi = {
 
   getAll: async (params: {
     snippet_id?: number;
+    /** Comma-separated snippet IDs for batched reads (annotate hub). */
+    snippet_ids?: string;
     taxon_id?: string;
     user_id?: number;
     skip?: number;

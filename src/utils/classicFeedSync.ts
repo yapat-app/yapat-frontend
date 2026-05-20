@@ -70,6 +70,20 @@ export function annotationsToClassicFeedbacks(
   return feedbacks;
 }
 
+/** Group flat annotation list into the same order as `snippets` for `annotationsToClassicFeedbacks`. */
+export function annotationRowsAlignedToSnippets(
+  snippets: Snippet[],
+  annotations: Annotation[],
+): Annotation[][] {
+  const byId = new Map<number, Annotation[]>();
+  for (const a of annotations) {
+    const list = byId.get(a.snippet_id);
+    if (list) list.push(a);
+    else byId.set(a.snippet_id, [a]);
+  }
+  return snippets.map((s) => byId.get(s.id) ?? []);
+}
+
 export function buildClassicFeedback(
   snippetId: number,
   action: FeedbackAction,

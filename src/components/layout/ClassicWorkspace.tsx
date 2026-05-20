@@ -11,7 +11,7 @@ import { ProjectionView } from "../al/ProjectionView";
 import { PredictionFeed } from "../al/PredictionFeed";
 import { BlindAnnotationHeader } from "../../pages/ActiveLearning";
 
-export const ClassicWorkspace: React.FC = () => {
+export const ClassicWorkspace: React.FC = React.memo(function ClassicWorkspace() {
   return (
     <ResizableSplit
       mode="ratio"
@@ -43,4 +43,4 @@ export const ClassicWorkspace: React.FC = () => {
       }
     />
   );
-};
+});

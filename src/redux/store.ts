@@ -31,21 +31,40 @@ const store = configureStore({
   },
 });
 
-/** After /me hydrates classicFeedCache from localStorage, persist on every change (per user). */
-let lastClassicPersistSignature: string | null = null;
+/** Persist classic feed cache when it changes (reference + debounce — avoids work on every Redux dispatch). */
+let prevClassicCacheRef: unknown = null;
+let prevClassicCacheUserId: number | null = null;
+let classicPersistTimer: ReturnType<typeof setTimeout> | null = null;
+
 store.subscribe(() => {
   const { classicFeedCache, classicFeedCacheUserId } = store.getState().snippet;
   if (classicFeedCacheUserId == null) {
-    lastClassicPersistSignature = null;
+    prevClassicCacheRef = classicFeedCache;
+    prevClassicCacheUserId = null;
+    if (classicPersistTimer !== null) {
+      window.clearTimeout(classicPersistTimer);
+      classicPersistTimer = null;
+    }
     return;
   }
-  const sig = `${classicFeedCacheUserId}:${JSON.stringify(classicFeedCache)}`;
-  if (sig === lastClassicPersistSignature) return;
-  lastClassicPersistSignature = sig;
-  persistClassicFeedSlotsForUser(
-    classicFeedCacheUserId,
-    classicFeedCache as unknown as PersistedClassicFeedCache,
-  );
+  if (
+    classicFeedCache === prevClassicCacheRef &&
+    classicFeedCacheUserId === prevClassicCacheUserId
+  ) {
+    return;
+  }
+  prevClassicCacheRef = classicFeedCache;
+  prevClassicCacheUserId = classicFeedCacheUserId;
+  if (classicPersistTimer !== null) window.clearTimeout(classicPersistTimer);
+  classicPersistTimer = window.setTimeout(() => {
+    classicPersistTimer = null;
+    const s = store.getState().snippet;
+    if (s.classicFeedCacheUserId == null) return;
+    persistClassicFeedSlotsForUser(
+      s.classicFeedCacheUserId,
+      s.classicFeedCache as unknown as PersistedClassicFeedCache,
+    );
+  }, 400);
 });
 
 export type RootState = ReturnType<typeof store.getState>;
