@@ -411,10 +411,13 @@ export interface DatasetCreate {
 export interface AvailableDatasetPath {
   path: string;
   name: string;
+  has_children?: boolean;
 }
 
 export interface AvailableDatasetPathsResponse {
   data_root: string;
+  current_path: string;
+  parent_path?: string | null;
   paths: AvailableDatasetPath[];
 }
 

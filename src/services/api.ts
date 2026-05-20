@@ -511,10 +511,12 @@ export const datasetApi = {
     return response.data;
   },
 
-  listAvailablePaths: async (): Promise<
-    import("../types").AvailableDatasetPathsResponse
-  > => {
-    const response = await api.get("/api/datasets/available-paths");
+  listAvailablePaths: async (
+    prefix?: string,
+  ): Promise<import("../types").AvailableDatasetPathsResponse> => {
+    const response = await api.get("/api/datasets/available-paths", {
+      params: prefix ? { prefix } : undefined,
+    });
     return response.data;
   },
 

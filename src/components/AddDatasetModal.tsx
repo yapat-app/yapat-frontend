@@ -5,9 +5,9 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   createDataset,
   fetchAllDatasets,
-  fetchAvailableDatasetPaths,
 } from "../redux/features/datasetSlice";
 import { fetchAllteams } from "../redux/features/teamSlice";
+import { DatasetPathPicker } from "./DatasetPathPicker";
 import type { DatasetCreate, DatasetType } from "../types";
 import { getErrorMessage } from "../services/api";
 
@@ -22,9 +22,6 @@ type AddDatasetModalProps = {
 
 const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
   const dispatch = useAppDispatch();
-  const { availablePaths, availablePathsLoading } = useAppSelector(
-    (state) => state.dataset,
-  );
   const { allTeams } = useAppSelector((state) => state.team);
 
   const [open, setOpen] = useState(false);
@@ -33,18 +30,8 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
 
   useEffect(() => {
     if (!open) return;
-    dispatch(fetchAvailableDatasetPaths());
     dispatch(fetchAllteams());
   }, [open, dispatch]);
-
-  const pathOptions = useMemo(
-    () =>
-      (availablePaths?.paths ?? []).map((p) => ({
-        value: p.path,
-        label: p.path,
-      })),
-    [availablePaths],
-  );
 
   const teamOptions = useMemo(
     () =>
@@ -104,6 +91,7 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
         confirmLoading={submitting}
         destroyOnClose
         afterClose={() => form.resetFields()}
+        width={560}
       >
         <Form layout="vertical" form={form} initialValues={{ dataset_type: "PAM" }}>
           <Form.Item
@@ -133,29 +121,9 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
             label="Path (data volume)"
             name="source_uri"
             rules={[{ required: true, message: "Select a folder from the data volume" }]}
-            extra={
-              availablePaths?.data_root
-                ? `Mounted at ${availablePaths.data_root}`
-                : "Folders available on the server data mount"
-            }
+            extra="Browse into subfolders (e.g. ChorusRF → PrioritySpecies), then select the dataset root folder."
           >
-            <Select
-              showSearch
-              placeholder="Select dataset folder"
-              loading={availablePathsLoading}
-              options={pathOptions}
-              notFoundContent={
-                availablePathsLoading
-                  ? "Loading paths…"
-                  : "No folders found on the data volume"
-              }
-              filterOption={(input, option) =>
-                (option?.label ?? "")
-                  .toString()
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-            />
+            <DatasetPathPicker key={open ? "open" : "closed"} />
           </Form.Item>
 
           <Form.Item

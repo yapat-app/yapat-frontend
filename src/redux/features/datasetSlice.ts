@@ -67,9 +67,9 @@ export const exploreDatasetDirectory = createAsyncThunk(
 
 export const fetchAvailableDatasetPaths = createAsyncThunk(
   "dataset/fetchAvailablePaths",
-  async (_, { rejectWithValue }) => {
+  async (prefix: string | undefined = undefined, { rejectWithValue }) => {
     try {
-      return await datasetApi.listAvailablePaths();
+      return await datasetApi.listAvailablePaths(prefix);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
