@@ -1,0 +1,230 @@
+import React from "react";
+import {
+  Select,
+  Segmented,
+  Spin,
+  Tag,
+  Tooltip,
+  Button,
+} from "antd";
+import {
+  DatabaseOutlined,
+  BulbOutlined,
+  CheckCircleOutlined,
+  PlayCircleOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+  UnorderedListOutlined,
+  ThunderboltOutlined,
+  AudioOutlined,
+} from "@ant-design/icons";
+import type { Dataset } from "../../types";
+import type { PhaseConfig } from "../../studyPhases/types";
+import { clearSavedFeed } from "../../redux/features/alSlice";
+import { useAppDispatch } from "../../hooks";
+import type { AnnotateMode } from "./types";
+
+const { Option } = Select;
+
+export type AnnotationHubToolbarProps = {
+  mode: AnnotateMode;
+  setMode: (m: AnnotateMode) => void;
+  phase: PhaseConfig;
+  allDatasets: Dataset[];
+  classicDatasetId: string | null;
+  onClassicDatasetChange: (datasetId: number) => void;
+  alSelectedDatasetId: number | null;
+  onAlDatasetChange: (datasetId: number) => void;
+  onOpenClassicFeedConfig: () => void;
+  classicGenerateLabel: string;
+  classicGenerateLoading: boolean;
+  onOpenAlInference: () => void;
+  inferenceLoading: boolean;
+  predictionsLength: number;
+  feedbackCountDisplay: { shown: number; pending: boolean };
+  retrainThreshold: number;
+  lastRetrainJob: { status: string } | null;
+  isRestoredFeed: boolean;
+  savedFeedLabel: string | null;
+};
+
+export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
+  mode,
+  setMode,
+  phase,
+  allDatasets,
+  classicDatasetId,
+  onClassicDatasetChange,
+  alSelectedDatasetId,
+  onAlDatasetChange,
+  onOpenClassicFeedConfig,
+  classicGenerateLabel,
+  classicGenerateLoading,
+  onOpenAlInference,
+  inferenceLoading,
+  predictionsLength,
+  feedbackCountDisplay,
+  retrainThreshold,
+  lastRetrainJob,
+  isRestoredFeed,
+  savedFeedLabel,
+}) => {
+  const dispatch = useAppDispatch();
+
+  const retrainTag = lastRetrainJob ? (
+    <Tag
+      color={
+        {
+          PENDING: "default",
+          RUNNING: "processing",
+          COMPLETED: "success",
+          FAILED: "error",
+        }[lastRetrainJob.status as "PENDING" | "RUNNING" | "COMPLETED" | "FAILED"] ??
+        "default"
+      }
+      className="text-xs"
+    >
+      Model: {lastRetrainJob.status}
+    </Tag>
+  ) : null;
+
+  return (
+    <div className="flex items-center gap-3 px-6 py-2 border-b border-gray-200 bg-white flex-shrink-0 flex-wrap">
+      <Segmented
+        value={mode}
+        onChange={(v) => setMode(v as AnnotateMode)}
+        options={[
+          {
+            label: <span className="font-ibm-sans text-xs px-1">Random</span>,
+            value: "random",
+            icon: <UnorderedListOutlined />,
+          },
+          {
+            label: <span className="font-ibm-sans text-xs px-1">Similarity</span>,
+            value: "similarity",
+            icon: <AudioOutlined />,
+          },
+          {
+            label: <span className="font-ibm-sans text-xs px-1">Active Learning</span>,
+            value: "al",
+            icon: <ThunderboltOutlined />,
+          },
+        ]}
+        className="flex-shrink-0"
+      />
+
+      <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
+
+      {mode === "al" && (
+        <div className="flex items-center gap-2">
+          <DatabaseOutlined className="text-gray-400" />
+          <Select
+            placeholder="Select dataset"
+            value={alSelectedDatasetId ?? undefined}
+            onChange={onAlDatasetChange}
+            style={{ width: 200 }}
+            showSearch
+            optionFilterProp="children"
+          >
+            {allDatasets.map((d) => (
+              <Option key={d.id} value={d.id}>
+                {d.name}
+              </Option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {mode !== "al" && (
+        <div className="flex items-center gap-2">
+          <DatabaseOutlined className="text-gray-400" />
+          <Select
+            placeholder="Select dataset"
+            value={classicDatasetId ? Number(classicDatasetId) : undefined}
+            onChange={onClassicDatasetChange}
+            style={{ width: 200 }}
+            showSearch
+            optionFilterProp="children"
+          >
+            {allDatasets.map((d) => (
+              <Option key={d.id} value={d.id}>
+                {d.name}
+              </Option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {mode === "al" && (
+        <Tooltip title={`Active study phase: ${phase.label}`}>
+          <Tag color="purple" className="text-xs">
+            {phase.id}
+          </Tag>
+        </Tooltip>
+      )}
+
+      {mode === "al" && alSelectedDatasetId !== null && (
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          loading={inferenceLoading}
+          onClick={onOpenAlInference}
+          style={{ backgroundColor: "#1e40af", color: "#fff" }}
+        >
+          Start Inference
+        </Button>
+      )}
+
+      {mode !== "al" && classicDatasetId && (
+        <Button
+          type="primary"
+          icon={<SettingOutlined />}
+          onClick={onOpenClassicFeedConfig}
+          loading={classicGenerateLoading}
+        >
+          {classicGenerateLabel}
+        </Button>
+      )}
+
+      {mode === "al" && predictionsLength > 0 && (
+        <div className="flex items-center gap-3 text-xs font-ibm-sans text-gray-500">
+          <Tooltip title="Total predictions">
+            <span className="flex items-center gap-1">
+              <BulbOutlined className="text-blue-400" />
+              {predictionsLength} predictions
+            </span>
+          </Tooltip>
+          <Tooltip title="Feedbacks since last retrain">
+            <span className="flex items-center gap-1">
+              <CheckCircleOutlined className="text-green-500" />
+              {feedbackCountDisplay.shown}/{retrainThreshold}
+              {feedbackCountDisplay.pending && (
+                <Tag color="gold" className="ml-1">
+                  Training…
+                </Tag>
+              )}
+            </span>
+          </Tooltip>
+          {retrainTag}
+          {isRestoredFeed && (
+            <Tooltip title="Showing saved feed from a previous session. Click to clear.">
+              <Tag
+                icon={<HistoryOutlined />}
+                color="blue"
+                closable
+                onClose={() => dispatch(clearSavedFeed())}
+                className="cursor-pointer"
+              >
+                Saved · {savedFeedLabel}
+              </Tag>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
+      {mode === "al" && inferenceLoading && <Spin size="small" />}
+    </div>
+  );
+};
+
+AnnotationHubToolbar.displayName = "AnnotationHubToolbar";
