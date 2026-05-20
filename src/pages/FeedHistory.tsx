@@ -49,9 +49,7 @@ export const FeedHistory: React.FC = () => {
               style={{ marginTop: 24 }}
             >
               {feedHistory && feedHistory.length > 0 ? (
-                feedHistory
-                  .slice(-5) // take last 5 items
-                  .map((feed) => (
+                feedHistory.map((feed) => (
                     <div key={feed.id}>
                       <Card
                         title={`Feed ${feed.id}`}

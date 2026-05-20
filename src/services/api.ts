@@ -30,6 +30,7 @@ import type {
   Feed,
   FeedCreate,
   FeedSimilarityCreate,
+  UserFeedSnapshot,
   DatasetAnnotationStats,
   MessageResponse,
   Conversation,
@@ -239,10 +240,20 @@ export const feedApi = {
   },
 
   /**
-   * Get Feed History
+   * Get Feed History (up to 5 per random + 5 per similarity; optional filters).
    */
-  history: async (): Promise<[]> => {
-    const response = await api.get("api/feed/history");
+  history: async (params?: {
+    method?: string;
+    dataset_id?: number;
+  }): Promise<UserFeedSnapshot[]> => {
+    const search: Record<string, string | number> = {};
+    if (params?.method) search.method = params.method;
+    if (params?.dataset_id != null && Number.isFinite(params.dataset_id)) {
+      search.dataset_id = params.dataset_id;
+    }
+    const response = await api.get("api/feed/history", {
+      params: Object.keys(search).length ? search : undefined,
+    });
     return response.data;
   },
 

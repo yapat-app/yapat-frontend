@@ -23,9 +23,14 @@ interface UseAnnotationWorkflowParams {
   datasetId: string | null;
   limit?: number;
   enabled?: boolean;
+  /** When true, do not auto-load the latest item from feed history (AnnotationHub per-mode slots). */
+  skipFeedHistoryAutoLoad?: boolean;
 }
 
-export const useAnnotationWorkflow = ({ enabled = true }: UseAnnotationWorkflowParams) => {
+export const useAnnotationWorkflow = ({
+  enabled = true,
+  skipFeedHistoryAutoLoad = false,
+}: UseAnnotationWorkflowParams) => {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
   const datasetId = searchParams.get("dataset_id");
@@ -79,10 +84,11 @@ export const useAnnotationWorkflow = ({ enabled = true }: UseAnnotationWorkflowP
 
   useEffect(() => {
     if (!enabled) return;
+    if (skipFeedHistoryAutoLoad) return;
     if (feedHistory && feedHistory.length > 0 && snippets.length === 0) {
       dispatch(loadSnippets(feedHistory[0]));
     }
-  }, [feedHistory, enabled]);
+  }, [feedHistory, enabled, skipFeedHistoryAutoLoad, snippets.length, dispatch]);
 
   const lastToastKeyRef = useRef<string | null>(null);
 

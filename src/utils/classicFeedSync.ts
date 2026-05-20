@@ -4,7 +4,15 @@
  */
 
 import type { Snippet, Annotation } from "../types";
-import type { FeedbackAction, FeedbackResponse, PAMPrediction } from "../types/al";
+import type {
+  FeedbackAction,
+  FeedbackResponse,
+  PAMPrediction,
+  SampleScores,
+} from "../types/al";
+
+/** Classic feeds have no PAM sampler scores; use an empty scores object so UI checks pass. */
+const CLASSIC_BASE_SCORES: SampleScores = {};
 
 export function snippetsToPredictions(snippets: Snippet[]): PAMPrediction[] {
   return snippets.map((s) => ({
@@ -21,7 +29,28 @@ export function snippetsToPredictions(snippets: Snippet[]): PAMPrediction[] {
     confidence: null,
     ranking_score: null,
     created_at: null,
+    scores: { ...CLASSIC_BASE_SCORES },
   }));
+}
+
+/** Merge annotation / classic-feedback labels into prediction scores for projection coloring. */
+export function applyClassicLabelScores(
+  predictions: PAMPrediction[],
+  feedbacks: Record<number, FeedbackResponse>,
+): PAMPrediction[] {
+  return predictions.map((p) => {
+    const labels = feedbacks[p.snippet_id]?.final_labels ?? [];
+    if (labels.length === 0) {
+      return { ...p, scores: { ...(p.scores ?? CLASSIC_BASE_SCORES) } };
+    }
+    return {
+      ...p,
+      scores: {
+        ...(p.scores ?? CLASSIC_BASE_SCORES),
+        actual_label: labels[0],
+      },
+    };
+  });
 }
 
 export function annotationsToClassicFeedbacks(

@@ -23,7 +23,11 @@ import type {
   PAMSuggestionStrategy,
 } from "../../types/al";
 import type { Snippet } from "../../types";
-import { buildClassicFeedback, snippetsToPredictions } from "../../utils/classicFeedSync";
+import {
+  applyClassicLabelScores,
+  buildClassicFeedback,
+  snippetsToPredictions,
+} from "../../utils/classicFeedSync";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
@@ -492,6 +496,8 @@ const alSlice = createSlice({
     ) => {
       if (state.feedSource !== "classic") return;
       state.feedbacks = { ...state.feedbacks, ...action.payload };
+      state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
+      state.projectionPredictions = state.predictions;
     },
     setClassicSnippetFeedback: (
       state,
@@ -504,6 +510,8 @@ const alSlice = createSlice({
       if (state.feedSource !== "classic") return;
       const { snippetId, action: fbAction, labels } = action.payload;
       state.feedbacks[snippetId] = buildClassicFeedback(snippetId, fbAction, labels);
+      state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
+      state.projectionPredictions = state.predictions;
     },
     clearClassicAnnotationFeed: (state) => {
       if (state.feedSource !== "classic") return;

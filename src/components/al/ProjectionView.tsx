@@ -86,7 +86,10 @@ export const ProjectionView: React.FC = () => {
     selectedDatasetId,
     embeddingModelId,
     snippetSetId,
+    feedSource,
+    feedbacks,
   } = useAppSelector((state) => state.al);
+  const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("tsne");
   const [fpvLoading, setFpvLoading] = useState(false);
@@ -299,6 +302,15 @@ export const ProjectionView: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
+      if (isClassicFeed) {
+        const map: Record<number, string[]> = {};
+        for (const [snippetId, fb] of Object.entries(feedbacks)) {
+          const labels = fb.final_labels ?? [];
+          if (labels.length > 0) map[Number(snippetId)] = labels;
+        }
+        if (!cancelled) setLabelsBySnippet(map);
+        return;
+      }
       // Always load labels so actual_label coloring is always applied.
       if (!selectedDatasetId) {
         if (!cancelled) setLabelsBySnippet({});
@@ -317,7 +329,7 @@ export const ProjectionView: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [selectedDatasetId, snippetSetId]);
+  }, [isClassicFeed, feedbacks, selectedDatasetId, snippetSetId]);
 
   const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
   const isMissingProjection =
@@ -879,7 +891,9 @@ export const ProjectionView: React.FC = () => {
 
         {/* Plot */}
         <div className="flex-1 relative overflow-hidden">
-        {hasOverlayPredictions && rawOverlayPredictions.some((p) => !p.scores) && (
+        {hasOverlayPredictions &&
+          !isClassicFeed &&
+          rawOverlayPredictions.some((p) => !p.scores) && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
             <ExperimentOutlined className="text-blue-400" />
             Filter scores are missing — backend scores not yet available

@@ -7,6 +7,24 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { snippetApi, getErrorMessage, feedApi } from "../../services/api";
 import type { Snippet, FeedParams, FeedSimilarityCreate } from "../../types";
+import { getLoggedInUser, logout } from "./authSlice";
+import { loadClassicFeedCacheForUser } from "../../utils/classicFeedPersistence";
+
+export type ClassicFeedKind = "random" | "similarity";
+
+/** Snapshot of classic (random/similarity) feed UI state per dataset. */
+export interface ClassicFeedSlotSnapshot {
+  snippets: Snippet[];
+  selectedFeedId: number | null;
+  currentSnippet: Snippet | null;
+  currentIndex: number;
+  snippetsFetched: boolean;
+  snippetsLoaded: boolean;
+}
+
+function cloneSnippetList(snippets: Snippet[]): Snippet[] {
+  return snippets.map((s) => ({ ...s }));
+}
 
 export interface SnippetState {
   snippets: Snippet[];
@@ -20,6 +38,37 @@ export interface SnippetState {
   snippetsLoading: boolean;
   error: string | null;
   hasMore: boolean;
+  /**
+   * Last random vs last similarity feed per dataset (AnnotationHub).
+   * Keys are dataset IDs.
+   */
+  classicFeedCache: Record<
+    number,
+    { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null }
+  >;
+  /** Last user id we hydrated classicFeedCache from localStorage (session guard). */
+  classicFeedCacheUserId: number | null;
+}
+
+function snapshotFromState(state: SnippetState): ClassicFeedSlotSnapshot {
+  return {
+    snippets: cloneSnippetList(state.snippets),
+    selectedFeedId: state.selectedFeedId,
+    currentSnippet: state.currentSnippet ? { ...state.currentSnippet } : null,
+    currentIndex: state.currentIndex,
+    snippetsFetched: state.snippetsFetched,
+    snippetsLoaded: state.snippetsLoaded,
+  };
+}
+
+function ensureClassicBucket(
+  cache: SnippetState["classicFeedCache"],
+  datasetId: number,
+): { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null } {
+  if (!cache[datasetId]) {
+    cache[datasetId] = { random: null, similarity: null };
+  }
+  return cache[datasetId]!;
 }
 
 const initialState: SnippetState = {
@@ -34,6 +83,8 @@ const initialState: SnippetState = {
   snippetsLoading: false,
   error: null,
   hasMore: true,
+  classicFeedCache: {},
+  classicFeedCacheUserId: null,
 };
 
 // ============================================================================
@@ -196,6 +247,57 @@ export const snippetSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+
+    saveClassicFeedSlot: (
+      state,
+      action: PayloadAction<{ datasetId: number; kind: ClassicFeedKind }>,
+    ) => {
+      const { datasetId, kind } = action.payload;
+      if (!Number.isFinite(datasetId)) return;
+      const bucket = ensureClassicBucket(state.classicFeedCache, datasetId);
+      bucket[kind] = snapshotFromState(state);
+    },
+
+    restoreClassicFeedSlot: (
+      state,
+      action: PayloadAction<{ datasetId: number; kind: ClassicFeedKind }>,
+    ) => {
+      const { datasetId, kind } = action.payload;
+      if (!Number.isFinite(datasetId)) return;
+      const bucket = state.classicFeedCache[datasetId];
+      const snap = bucket?.[kind] ?? null;
+      if (!snap || snap.snippets.length === 0) {
+        state.snippets = [];
+        state.currentSnippet = null;
+        state.selectedFeedId = null;
+        state.currentIndex = 0;
+        state.snippetsFetched = false;
+        state.snippetsLoaded = false;
+        state.error = null;
+        state.hasMore = true;
+        return;
+      }
+      state.snippets = cloneSnippetList(snap.snippets);
+      state.selectedFeedId = snap.selectedFeedId;
+      state.currentSnippet = snap.currentSnippet ? { ...snap.currentSnippet } : null;
+      state.currentIndex = snap.currentIndex;
+      if (state.currentSnippet && state.snippets.length > 0) {
+        const idx = state.snippets.findIndex((s) => s.id === state.currentSnippet?.id);
+        if (idx >= 0) state.currentIndex = idx;
+        else {
+          state.currentIndex = 0;
+          state.currentSnippet = state.snippets[0] ?? null;
+        }
+      }
+      state.snippetsFetched = snap.snippetsFetched;
+      state.snippetsLoaded = snap.snippetsLoaded;
+      state.error = null;
+    },
+
+    clearClassicFeedCacheForDataset: (state, action: PayloadAction<number>) => {
+      const id = action.payload;
+      if (Number.isFinite(id)) delete state.classicFeedCache[id];
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -211,10 +313,18 @@ export const snippetSlice = createSlice({
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
 
-        // Set first snippet as current if none set
-        if (action.payload.length > 0 && !state.currentSnippet) {
+        if (action.payload.length > 0) {
           state.currentSnippet = action.payload[0];
           state.currentIndex = 0;
+        } else {
+          state.currentSnippet = null;
+          state.currentIndex = 0;
+        }
+
+        const dsId = action.meta.arg.dataset_id;
+        if (typeof dsId === "number" && Number.isFinite(dsId)) {
+          const bucket = ensureClassicBucket(state.classicFeedCache, dsId);
+          bucket.random = snapshotFromState(state);
         }
       })
       .addCase(fetchSnippetFeed.rejected, (state, action) => {
@@ -232,10 +342,18 @@ export const snippetSlice = createSlice({
         state.snippetsFetched = true;
         state.snippets = action.payload;
         state.hasMore = action.payload.length > 0;
-        // Set first snippet as current if none set
-        if (action.payload.length > 0 && !state.currentSnippet) {
+        if (action.payload.length > 0) {
           state.currentSnippet = action.payload[0];
           state.currentIndex = 0;
+        } else {
+          state.currentSnippet = null;
+          state.currentIndex = 0;
+        }
+
+        const dsId = action.meta.arg.dataset_id;
+        if (typeof dsId === "number" && Number.isFinite(dsId)) {
+          const bucket = ensureClassicBucket(state.classicFeedCache, dsId);
+          bucket.similarity = snapshotFromState(state);
         }
       })
       .addCase(fetchSimilaritySnippetFeed.rejected, (state, action) => {
@@ -284,6 +402,26 @@ export const snippetSlice = createSlice({
       .addCase(fetchSnippet.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(getLoggedInUser.fulfilled, (state, action) => {
+        const uid = action.payload?.id;
+        if (uid == null || !Number.isFinite(uid)) return;
+        if (state.classicFeedCacheUserId === uid) return;
+        state.classicFeedCache = loadClassicFeedCacheForUser(uid) as SnippetState["classicFeedCache"];
+        state.classicFeedCacheUserId = uid;
+      })
+      .addCase(logout, (state) => {
+        state.classicFeedCache = {};
+        state.classicFeedCacheUserId = null;
+        state.snippets = [];
+        state.currentSnippet = null;
+        state.selectedFeedId = null;
+        state.currentSnippetAudio = null;
+        state.currentIndex = 0;
+        state.snippetsFetched = false;
+        state.snippetsLoaded = false;
+        state.error = null;
+        state.hasMore = true;
       });
   },
 });
@@ -298,6 +436,9 @@ export const {
   jumpToSnippetById,
   setFeedId,
   clearError,
+  saveClassicFeedSlot,
+  restoreClassicFeedSlot,
+  clearClassicFeedCacheForDataset,
 } = snippetSlice.actions;
 
 export default snippetSlice.reducer;

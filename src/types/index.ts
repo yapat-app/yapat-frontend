@@ -290,9 +290,14 @@ export interface FeedSimilarityCreate {
   snippet_set_id?: number;
 }
 
-// ============================================================================
-// Snippet Types
-// ============================================================================
+/** Snapshot from GET /api/feed/history — last stored feeds per user (see backend UserFeed). */
+export interface UserFeedSnapshot {
+  id: number;
+  method: string;
+  created_at: string;
+  response: Snippet[];
+  request_params?: Record<string, unknown> | null;
+}
 
 export interface Snippet {
   id: number;

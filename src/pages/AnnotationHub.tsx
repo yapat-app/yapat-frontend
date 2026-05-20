@@ -73,7 +73,11 @@ import {
   fetchSnippetFeed,
   fetchSimilaritySnippetFeed,
   clearSnippets,
+  loadSnippets,
+  saveClassicFeedSlot,
+  restoreClassicFeedSlot,
 } from "../redux/features/snippetSlice";
+import { getFeedHistory } from "../redux/features/feedSlice";
 import { getAllEmbeddingMethods, getAllDatasetEmbeddings } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets, fetchAllTeamDatasets } from "../redux/features/datasetSlice";
 import { embeddingApi } from "../services/api";
@@ -82,6 +86,8 @@ import type { PAMCheckpoint, PAMRunInferenceRequest, PAMSuggestionMode } from ".
 import type { FeedSimilarityCreate, SnippetSet } from "../types";
 import { usePhaseConfig } from "../studyPhases";
 import type { PhaseConfig } from "../studyPhases/types";
+import { pickLatestServerClassicFeed } from "../utils/classicFeedServerHydrate";
+import store from "../redux/store";
 
 const { Option } = Select;
 
@@ -131,13 +137,21 @@ export const AnnotationHub: React.FC = () => {
       const params: Record<string, string> = { mode: next };
       const dsId = searchParams.get("dataset_id");
       if (dsId) params.dataset_id = dsId;
-      setSearchParams(params, { replace: true });
+
       if (next === "al") {
+        if (dsId && (mode === "random" || mode === "similarity")) {
+          const ds = Number(dsId);
+          if (!Number.isNaN(ds)) {
+            dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
+          }
+        }
         dispatch(clearSnippets());
         dispatch(clearClassicAnnotationFeed());
       }
+
+      setSearchParams(params, { replace: true });
     },
-    [searchParams, setSearchParams, dispatch],
+    [searchParams, setSearchParams, dispatch, mode],
   );
 
   // ── Shared dataset state ───────────────────────────────────────────────────
@@ -387,6 +401,7 @@ export const AnnotationHub: React.FC = () => {
 
   // ── Classic feed config modal state ───────────────────────────────────────
   const [classicConfigOpen, setClassicConfigOpen] = useState(false);
+  const [serverHydrateBusy, setServerHydrateBusy] = useState(false);
   const [feedLimit, setFeedLimit] = useState(50);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null; startSec: number; endSec: number;
@@ -400,19 +415,94 @@ export const AnnotationHub: React.FC = () => {
   );
 
   const classicDatasetId = searchParams.get("dataset_id");
+  const classicFeedCacheUserId = useAppSelector((s) => s.snippet.classicFeedCacheUserId);
 
-  // Classic annotation workflow — always active so feed-history auto-load
-  // runs regardless of whether the workspace panel is mounted yet.
+  const prevClassicRef = useRef<{ datasetId: string; mode: "random" | "similarity" } | null>(null);
+  const serverHydrateTriedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "random" && mode !== "similarity") {
+      prevClassicRef.current = null;
+      return;
+    }
+    if (!classicDatasetId) {
+      prevClassicRef.current = null;
+      return;
+    }
+    const ds = Number(classicDatasetId);
+    if (Number.isNaN(ds)) return;
+
+    const prev = prevClassicRef.current;
+    if (prev) {
+      const prevDs = Number(prev.datasetId);
+      const datasetChanged = prev.datasetId !== classicDatasetId;
+      const modeChanged = prev.mode !== mode;
+      if (!Number.isNaN(prevDs) && (datasetChanged || modeChanged)) {
+        dispatch(saveClassicFeedSlot({ datasetId: prevDs, kind: prev.mode }));
+      }
+    }
+
+    dispatch(restoreClassicFeedSlot({ datasetId: ds, kind: mode }));
+    prevClassicRef.current = { datasetId: classicDatasetId, mode };
+  }, [mode, classicDatasetId, classicFeedCacheUserId, dispatch]);
+
+  // Classic annotation workflow — always active so per-mode slots restore correctly.
   const { snippets } = useAnnotationWorkflow({
     datasetId: classicDatasetId,
     enabled: mode !== "al",
+    skipFeedHistoryAutoLoad: true,
   });
+
+  // When localStorage has no slot, restore the latest server-stored feed for this user+dataset+mode (cross-device).
+  useEffect(() => {
+    if (mode !== "random" && mode !== "similarity") return;
+    if (!classicDatasetId || classicFeedCacheUserId == null) return;
+    const ds = Number(classicDatasetId);
+    if (Number.isNaN(ds)) return;
+
+    const snippetLen = store.getState().snippet.snippets.length;
+    if (snippetLen > 0) {
+      serverHydrateTriedRef.current = null;
+      return;
+    }
+
+    const tryKey = `${classicFeedCacheUserId}-${classicDatasetId}-${mode}`;
+    if (serverHydrateTriedRef.current === tryKey) return;
+
+    let cancelled = false;
+    setServerHydrateBusy(true);
+    void (async () => {
+      try {
+        const result = await dispatch(
+          getFeedHistory({ method: mode, dataset_id: ds }),
+        );
+        if (cancelled) return;
+        serverHydrateTriedRef.current = tryKey;
+        if (!getFeedHistory.fulfilled.match(result)) return;
+        const match = pickLatestServerClassicFeed(result.payload, ds, mode);
+        if (!match?.response?.length) return;
+        dispatch(loadSnippets({ id: match.id, response: match.response }));
+        dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
+      } finally {
+        if (!cancelled) setServerHydrateBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, classicDatasetId, classicFeedCacheUserId, snippets.length, dispatch]);
 
   // Mirror classic snippets into alSlice so PredictionFeed matches Active Learning UI.
   useEffect(() => {
-    if (mode === "al" || snippets.length === 0 || !classicDatasetId) return;
+    if (mode === "al" || !classicDatasetId) return;
     const datasetId = Number(classicDatasetId);
     if (Number.isNaN(datasetId)) return;
+
+    if (snippets.length === 0) {
+      dispatch(clearClassicAnnotationFeed());
+      return;
+    }
 
     dispatch(setClassicAnnotationFeed({ snippets, datasetId }));
 
@@ -444,7 +534,8 @@ export const AnnotationHub: React.FC = () => {
     dispatch(getAllDatasetEmbeddings(Number(classicDatasetId)));
   }, [classicDatasetId, mode, dispatch]);
 
-  const { snippetsLoading } = useAppSelector((state) => state.snippet);
+  const { snippetsLoading, snippets: snippetList } = useAppSelector((state) => state.snippet);
+  const hasClassicFeed = snippetList.length > 0;
 
   // Navigate to classic workspace after feed is loaded.
   useEffect(() => {
@@ -476,8 +567,18 @@ export const AnnotationHub: React.FC = () => {
     }
   };
 
-  // ── Classic empty state ────────────────────────────────────────────────────
-  const showClassicEmpty = (mode === "random" || mode === "similarity") && snippets.length === 0;
+  // ── Classic empty / loading (per dataset + mode slot) ─────────────────────
+  const isClassicMode = mode === "random" || mode === "similarity";
+  const showClassicSpinner =
+    isClassicMode &&
+    !!classicDatasetId &&
+    snippets.length === 0 &&
+    (snippetsLoading || serverHydrateBusy);
+  const showClassicEmpty =
+    isClassicMode &&
+    (!classicDatasetId ||
+      (snippets.length === 0 && !snippetsLoading && !serverHydrateBusy));
+  const generateFeedLabel = hasClassicFeed ? "Generate new feed" : "Generate feed";
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -528,8 +629,6 @@ export const AnnotationHub: React.FC = () => {
               placeholder="Select dataset"
               value={classicDatasetId ? Number(classicDatasetId) : undefined}
               onChange={(v: number) => {
-                dispatch(clearSnippets());
-                dispatch(clearClassicAnnotationFeed());
                 setSearchParams({ mode, dataset_id: String(v) });
               }}
               style={{ width: 200 }}
@@ -581,9 +680,9 @@ export const AnnotationHub: React.FC = () => {
             type="primary"
             icon={<SettingOutlined />}
             onClick={() => setClassicConfigOpen(true)}
-            loading={snippetsLoading}
+            loading={(snippetsLoading || serverHydrateBusy) && !hasClassicFeed}
           >
-            Generate Feed
+            {generateFeedLabel}
           </Button>
         )}
 
@@ -661,23 +760,30 @@ export const AnnotationHub: React.FC = () => {
       )}
 
       {/* Classic modes — empty state */}
-      {(mode === "random" || mode === "similarity") && showClassicEmpty && (
+      {isClassicMode && showClassicSpinner && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3">
+          <Spin size="large" />
+          <p className="text-sm text-gray-500 font-ibm-sans">Loading feed…</p>
+        </div>
+      )}
+
+      {isClassicMode && showClassicEmpty && !showClassicSpinner && (
         <div className="flex flex-1 items-center justify-center">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
               <div className="text-center">
-                <p className="text-lg font-semibold font-ibm-mono mb-1">No feed loaded</p>
+                <p className="text-lg font-semibold font-ibm-mono mb-1">No feed for this {mode} mode</p>
                 <p className="text-gray-500 text-sm font-ibm-sans mb-4">
                   {!classicDatasetId
                     ? "Select a dataset above, then generate a feed to start annotating."
                     : mode === "similarity"
-                      ? "Generate a similarity feed by uploading a reference audio sample."
-                      : "Generate a random feed to start annotating snippets."}
+                      ? "No saved similarity feed for this dataset yet. Generate one with a reference audio sample."
+                      : "No saved random feed for this dataset yet. Generate one to start annotating."}
                 </p>
                 {classicDatasetId && (
                   <Button type="primary" onClick={() => setClassicConfigOpen(true)}>
-                    Generate Feed
+                    {generateFeedLabel}
                   </Button>
                 )}
                 {!classicDatasetId && (
@@ -690,7 +796,7 @@ export const AnnotationHub: React.FC = () => {
       )}
 
       {/* Classic modes — workspace */}
-      {(mode === "random" || mode === "similarity") && !showClassicEmpty && (
+      {isClassicMode && !showClassicEmpty && !showClassicSpinner && (
         <ClassicWorkspace />
       )}
 
@@ -837,14 +943,18 @@ export const AnnotationHub: React.FC = () => {
 
       {/* ── Classic feed config modal ─────────────────────────────────────── */}
       <Modal
-        title={mode === "similarity" ? "Configure Similarity Feed" : "Configure Random Feed"}
+        title={
+          mode === "similarity"
+            ? "New similarity feed"
+            : "New random feed"
+        }
         open={classicConfigOpen}
         onCancel={() => setClassicConfigOpen(false)}
         onOk={handleGenerateFeed}
-        okText="Generate Feed"
+        okText={generateFeedLabel}
         okButtonProps={{
-          disabled: !classicCanGenerate || snippetsLoading,
-          loading: snippetsLoading,
+          disabled: !classicCanGenerate || snippetsLoading || serverHydrateBusy,
+          loading: snippetsLoading || serverHydrateBusy,
           style: { backgroundColor: "#1e40af", color: "#fff" },
         }}
       >

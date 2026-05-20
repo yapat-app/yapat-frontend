@@ -11,6 +11,8 @@ import feedReducer from "./features/feedSlice";
 import customTaxonomyReducer from "./features/customTaxonomySlice";
 import alReducer from "./features/alSlice";
 import wssedReducer from "./features/wssedSlice";
+import type { PersistedClassicFeedCache } from "../utils/classicFeedPersistence";
+import { persistClassicFeedSlotsForUser } from "../utils/classicFeedPersistence";
 
 const store = configureStore({
   reducer: {
@@ -27,6 +29,23 @@ const store = configureStore({
     al: alReducer,
     wssed: wssedReducer,
   },
+});
+
+/** After /me hydrates classicFeedCache from localStorage, persist on every change (per user). */
+let lastClassicPersistSignature: string | null = null;
+store.subscribe(() => {
+  const { classicFeedCache, classicFeedCacheUserId } = store.getState().snippet;
+  if (classicFeedCacheUserId == null) {
+    lastClassicPersistSignature = null;
+    return;
+  }
+  const sig = `${classicFeedCacheUserId}:${JSON.stringify(classicFeedCache)}`;
+  if (sig === lastClassicPersistSignature) return;
+  lastClassicPersistSignature = sig;
+  persistClassicFeedSlotsForUser(
+    classicFeedCacheUserId,
+    classicFeedCache as unknown as PersistedClassicFeedCache,
+  );
 });
 
 export type RootState = ReturnType<typeof store.getState>;

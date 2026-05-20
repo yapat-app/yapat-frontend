@@ -1,15 +1,15 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { feedApi, getErrorMessage } from "../../services/api";
 import type {
-  Snippet,
   Feed,
   FeedCreate,
   FeedSimilarityCreate,
+  UserFeedSnapshot,
 } from "../../types";
 
 export interface FeedState {
   feed: Feed[] | null;
-  feedHistory: Snippet[] | null;
+  feedHistory: UserFeedSnapshot[] | null;
   loading: boolean;
   error: string | null;
 }
@@ -39,14 +39,22 @@ export const createFeed = createAsyncThunk(
   },
 );
 
+export type FeedHistoryQuery = {
+  method?: string;
+  dataset_id?: number;
+};
+
 /**
  * Get Feed History
  */
-export const getFeedHistory = createAsyncThunk(
+export const getFeedHistory = createAsyncThunk<
+  UserFeedSnapshot[],
+  FeedHistoryQuery | undefined
+>(
   "feed/history",
-  async (_, { rejectWithValue }) => {
+  async (params, { rejectWithValue }) => {
     try {
-      return await feedApi.history();
+      return await feedApi.history(params);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
