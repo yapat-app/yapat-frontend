@@ -21,6 +21,8 @@ interface Props {
   cardHeightPx?: number;
   /** Labels hydrated from /api/pam-al/snippet-labels (survive refresh). */
   serverLabels?: string[];
+  /** Scroll container for lazy-load visibility (must match feed overflow root). */
+  scrollRoot?: Element | null;
 }
 
 export const PredictionCard: React.FC<Props> = ({
@@ -28,6 +30,7 @@ export const PredictionCard: React.FC<Props> = ({
   cardRef,
   cardHeightPx,
   serverLabels,
+  scrollRoot,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -51,7 +54,10 @@ export const PredictionCard: React.FC<Props> = ({
     [cardRef],
   );
 
-  const inView = useInViewport(cardEl, { rootMargin: "600px 0px" });
+  const inView = useInViewport(cardEl, {
+    root: scrollRoot ?? null,
+    rootMargin: "600px 0px",
+  });
 
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);

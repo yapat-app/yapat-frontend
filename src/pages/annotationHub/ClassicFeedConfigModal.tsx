@@ -19,7 +19,7 @@ export type ClassicFeedConfigModalProps = {
     endSec: number;
   }) => void;
   onCancel: () => void;
-  onOk: () => void;
+  onOk: () => void | Promise<void>;
   okText: string;
   okDisabled: boolean;
   okLoading: boolean;

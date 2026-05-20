@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { message } from "antd";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { useAnnotationWorkflow } from "../../hooks/useAnnotationWorkflow";
 import {
@@ -206,40 +207,81 @@ export function useHubClassic(
     dispatch(getAllDatasetEmbeddings(Number(classicDatasetId)));
   }, [classicDatasetId, mode, dispatch]);
 
-  const { snippetsLoading, snippets: snippetList } = useAppSelector((s) => s.snippet);
+  const { snippetsLoading, snippets: snippetList, error: snippetError } =
+    useAppSelector((s) => s.snippet);
   const hasClassicFeed = snippetList.length > 0;
-
-  useEffect(() => {
-    if (snippets.length > 0 && classicConfigOpen) {
-      setClassicConfigOpen(false);
-    }
-  }, [snippets.length, classicConfigOpen]);
 
   const classicCanGenerate =
     mode === "random"
       ? !!classicDatasetId
       : !!classicDatasetId && !!similarityState.audioFile;
 
-  const handleGenerateFeed = useCallback(() => {
+  const handleGenerateFeed = useCallback(async () => {
     if (!classicDatasetId) return;
     const dsId = Number(classicDatasetId);
-    if (mode === "random") {
+    if (Number.isNaN(dsId)) return;
+
+    try {
+      let count = 0;
+      if (mode === "random") {
+        const rows = await dispatch(
+          fetchSnippetFeed({ dataset_id: dsId, limit: feedLimit, method: "random" }),
+        ).unwrap();
+        count = rows.length;
+      } else {
+        const { audioFile, startSec, endSec } = similarityState;
+        if (!audioFile) {
+          message.warning("Upload a reference audio file to generate a similarity feed.");
+          return;
+        }
+        const payload: FeedSimilarityCreate = {
+          audio_file: audioFile,
+          dataset_id: dsId,
+          start_time: startSec,
+          end_time: endSec,
+          limit: feedLimit,
+        };
+        const rows = await dispatch(fetchSimilaritySnippetFeed(payload)).unwrap();
+        count = rows.length;
+      }
+
       dispatch(
-        fetchSnippetFeed({ dataset_id: dsId, limit: feedLimit, method: "random" }),
+        saveClassicFeedSlot({
+          datasetId: dsId,
+          kind: mode as "random" | "similarity",
+        }),
       );
-    } else {
-      const { audioFile, startSec, endSec } = similarityState;
-      if (!audioFile) return;
-      const payload: FeedSimilarityCreate = {
-        audio_file: audioFile,
-        dataset_id: dsId,
-        start_time: startSec,
-        end_time: endSec,
-        limit: feedLimit,
-      };
-      dispatch(fetchSimilaritySnippetFeed(payload));
+
+      if (count === 0) {
+        message.warning("No snippets returned for this feed. Try another dataset or limit.");
+        return;
+      }
+
+      setClassicConfigOpen(false);
+      message.success(
+        hasClassicFeed
+          ? `New feed ready — ${count} snippet${count === 1 ? "" : "s"}`
+          : `Feed generated — ${count} snippet${count === 1 ? "" : "s"}`,
+      );
+    } catch (err) {
+      const detail =
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+            ? err.message
+            : snippetError ?? "Failed to generate feed";
+      message.error(detail);
+      throw err;
     }
-  }, [classicDatasetId, mode, feedLimit, similarityState, dispatch]);
+  }, [
+    classicDatasetId,
+    mode,
+    feedLimit,
+    similarityState,
+    dispatch,
+    hasClassicFeed,
+    snippetError,
+  ]);
 
   const awaitingClassicFeedBootstrap =
     isClassicMode &&
@@ -247,8 +289,10 @@ export function useHubClassic(
     snippets.length === 0 &&
     !classicBootstrapResolved;
 
+  /** Full-page spinner only when there is no feed yet (not while regenerating). */
   const showClassicSpinner =
-    awaitingClassicFeedBootstrap || (isClassicMode && snippetsLoading);
+    awaitingClassicFeedBootstrap ||
+    (isClassicMode && snippetsLoading && snippets.length === 0);
   const showClassicEmpty =
     isClassicMode &&
     (!classicDatasetId ||

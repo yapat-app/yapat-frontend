@@ -33,6 +33,12 @@ export const PredictionFeed: React.FC = () => {
 
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+
+  const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
+    scrollContainerRef.current = el;
+    setScrollRoot(el);
+  }, []);
 
   // Height of the scroll container so each snap card fills exactly one viewport slot.
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
@@ -170,11 +176,15 @@ export const PredictionFeed: React.FC = () => {
 
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+        <div
+          ref={bindScrollContainer}
+          className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3"
+        >
           <PredictionCard
             key={selected.id ?? selected.snippet_id}
             prediction={selected}
             cardRef={setCardRef(selected.snippet_id)}
+            scrollRoot={scrollRoot}
           />
           {phase.ui.showRetrainControls && (
             <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
@@ -194,7 +204,7 @@ export const PredictionFeed: React.FC = () => {
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
         <div
-          ref={scrollContainerRef}
+          ref={bindScrollContainer}
           className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"
           style={{ scrollSnapType: "y mandatory" }}
         >
@@ -210,6 +220,7 @@ export const PredictionFeed: React.FC = () => {
                   cardRef={setCardRef(p.snippet_id)}
                   cardHeightPx={blindSnapCardHeight}
                   serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                  scrollRoot={scrollRoot}
                 />
               </div>
             ))}
@@ -274,13 +285,14 @@ export const PredictionFeed: React.FC = () => {
       </div>
 
       {/* Scrollable feed */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           {predictions.map((p) => (
             <PredictionCard
               key={p.id ?? p.snippet_id}
               prediction={p}
               cardRef={setCardRef(p.snippet_id)}
+              scrollRoot={scrollRoot}
             />
           ))}
 
