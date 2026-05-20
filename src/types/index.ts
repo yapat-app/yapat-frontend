@@ -408,6 +408,23 @@ export interface DatasetCreate {
   dataset_type?: DatasetType;
 }
 
+export interface AvailableDatasetPath {
+  path: string;
+  name: string;
+}
+
+export interface AvailableDatasetPathsResponse {
+  data_root: string;
+  paths: AvailableDatasetPath[];
+}
+
+export interface DatasetCreationResponse {
+  dataset: Dataset;
+  process_task_id?: string | null;
+  snippet_config_id?: number | null;
+  embedding_job_id?: number | null;
+}
+
 export interface DatasetFile {
   filename: string;
   file_path: string;

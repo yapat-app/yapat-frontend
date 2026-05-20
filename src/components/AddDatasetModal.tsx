@@ -1,66 +1,119 @@
-import { Modal, Button, Form, Input } from "antd";
-import { useRef, useState } from "react";
+import { Modal, Button, Form, Input, Select, message } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { useEffect, useMemo, useState } from "react";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import {
+  createDataset,
+  fetchAllDatasets,
+  fetchAvailableDatasetPaths,
+} from "../redux/features/datasetSlice";
+import { fetchAllteams } from "../redux/features/teamSlice";
+import type { DatasetCreate, DatasetType } from "../types";
+import { getErrorMessage } from "../services/api";
 
-const AddDatasetModal: React.FC = () => {
+const DATASET_TYPE_OPTIONS: { value: DatasetType; label: string }[] = [
+  { value: "PAM", label: "PAM" },
+  { value: "FOCAL_RECORDINGS", label: "Focal recordings" },
+];
+
+type AddDatasetModalProps = {
+  onCreated?: () => void;
+};
+
+const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
+  const dispatch = useAppDispatch();
+  const { availablePaths, availablePathsLoading } = useAppSelector(
+    (state) => state.dataset,
+  );
+  const { allTeams } = useAppSelector((state) => state.team);
+
   const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
+  useEffect(() => {
+    if (!open) return;
+    dispatch(fetchAvailableDatasetPaths());
+    dispatch(fetchAllteams());
+  }, [open, dispatch]);
+
+  const pathOptions = useMemo(
+    () =>
+      (availablePaths?.paths ?? []).map((p) => ({
+        value: p.path,
+        label: p.path,
+      })),
+    [availablePaths],
+  );
+
+  const teamOptions = useMemo(
+    () =>
+      (allTeams ?? []).map((t) => ({
+        value: t.id,
+        label: t.name,
+      })),
+    [allTeams],
+  );
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      setSubmitting(true);
 
-      const payload = {
-        name: values.name,
-        description: values.description,
-        file,
+      const payload: DatasetCreate = {
+        name: values.name.trim(),
+        description: values.description?.trim() || undefined,
+        source_uri: values.source_uri,
+        dataset_type: values.dataset_type,
+        team_id:
+          values.team_id != null && values.team_id !== ""
+            ? Number(values.team_id)
+            : undefined,
       };
 
-      console.log("Dataset submitted:", payload);
+      await dispatch(createDataset(payload)).unwrap();
+      message.success("Dataset created. Scanning recordings in the background.");
 
-      // reset & close
       form.resetFields();
-      setFile(null);
       setOpen(false);
-    } catch (err) {
-      // validation error – do nothing
+      dispatch(fetchAllDatasets());
+      onCreated?.();
+    } catch (err: unknown) {
+      const msg =
+        typeof err === "string"
+          ? err
+          : getErrorMessage(err as { response?: { data?: { detail?: unknown } } });
+      message.error(msg || "Failed to create dataset");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <>
-      {/* Open Modal Button */}
-      <Button type="primary" onClick={() => setOpen(true)}>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
         Add Dataset
       </Button>
 
-      {/* Modal */}
       <Modal
         title="Add New Dataset"
         open={open}
         onCancel={() => setOpen(false)}
         onOk={handleSubmit}
         okText="Add Dataset"
+        confirmLoading={submitting}
         destroyOnClose
+        afterClose={() => form.resetFields()}
       >
-        <Form layout="vertical" form={form}>
-          {/* Dataset Name */}
+        <Form layout="vertical" form={form} initialValues={{ dataset_type: "PAM" }}>
           <Form.Item
-            label="Dataset Name"
+            label="Dataset name"
             name="name"
             rules={[{ required: true, message: "Dataset name is required" }]}
           >
             <Input placeholder="e.g. European Bird Calls – Spring" />
           </Form.Item>
 
-          {/* Description */}
           <Form.Item label="Description" name="description">
             <Input.TextArea
               rows={3}
@@ -68,35 +121,61 @@ const AddDatasetModal: React.FC = () => {
             />
           </Form.Item>
 
-          {/* File Upload */}
-          <div className="mt-2">
-            <label
-              htmlFor="audio-upload"
-              className="
-                block p-6 border-2 border-dashed border-gray-300 rounded-lg
-                hover:border-blue-400 hover:bg-blue-50
-                transition-all cursor-pointer text-center
-              "
-            >
-              <div className="w-12 h-12 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-2xl text-blue-600">📁</span>
-              </div>
+          <Form.Item
+            label="Dataset type"
+            name="dataset_type"
+            rules={[{ required: true, message: "Select a dataset type" }]}
+          >
+            <Select options={DATASET_TYPE_OPTIONS} />
+          </Form.Item>
 
-              <p className="text-sm font-medium text-gray-900 mb-1">
-                {file ? file.name : "Upload audio dataset file"}
-              </p>
-              <p className="text-xs text-gray-500">WAV / ZIP supported</p>
+          <Form.Item
+            label="Path (data volume)"
+            name="source_uri"
+            rules={[{ required: true, message: "Select a folder from the data volume" }]}
+            extra={
+              availablePaths?.data_root
+                ? `Mounted at ${availablePaths.data_root}`
+                : "Folders available on the server data mount"
+            }
+          >
+            <Select
+              showSearch
+              placeholder="Select dataset folder"
+              loading={availablePathsLoading}
+              options={pathOptions}
+              notFoundContent={
+                availablePathsLoading
+                  ? "Loading paths…"
+                  : "No folders found on the data volume"
+              }
+              filterOption={(input, option) =>
+                (option?.label ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
 
-              <input
-                id="audio-upload"
-                ref={fileInputRef}
-                type="file"
-                accept="audio/wav,audio/*,.zip"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
-          </div>
+          <Form.Item
+            label="Team (optional)"
+            name="team_id"
+            extra="Leave empty to create an unassigned dataset for later team assignment."
+          >
+            <Select
+              allowClear
+              showSearch
+              placeholder="No team"
+              options={teamOptions}
+              filterOption={(input, option) =>
+                (option?.label ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
         </Form>
       </Modal>
     </>

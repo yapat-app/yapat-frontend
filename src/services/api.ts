@@ -511,6 +511,20 @@ export const datasetApi = {
     return response.data;
   },
 
+  listAvailablePaths: async (): Promise<
+    import("../types").AvailableDatasetPathsResponse
+  > => {
+    const response = await api.get("/api/datasets/available-paths");
+    return response.data;
+  },
+
+  create: async (
+    body: import("../types").DatasetCreate,
+  ): Promise<import("../types").DatasetCreationResponse> => {
+    const response = await api.post("/api/datasets/", body);
+    return response.data;
+  },
+
   explorer: async (datasetId: number): Promise<DatasetResponse> => {
     const response = await api.get(`/api/datasets/${datasetId}/explorer`);
     return response.data;

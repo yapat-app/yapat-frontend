@@ -1,13 +1,21 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import api from "../../axios/axiosInstance";
-import type { Dataset, ExportAnnotation, DatasetResponse } from "../../types";
+import type {
+  Dataset,
+  DatasetCreate,
+  ExportAnnotation,
+  DatasetResponse,
+  AvailableDatasetPathsResponse,
+} from "../../types";
 import { datasetApi, teamApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
   allDatasets: Dataset[] | [];
   datasetDirectories: DatasetResponse | null;
+  availablePaths: AvailableDatasetPathsResponse | null;
+  availablePathsLoading: boolean;
   annotationExported: boolean;
   selectedDatasetId: number | null;
   loading: boolean;
@@ -20,6 +28,8 @@ interface AnnotationState {
 const initialState: DatasetState = {
   allDatasets: [],
   datasetDirectories: null,
+  availablePaths: null,
+  availablePathsLoading: false,
   annotationExported: false,
   selectedDatasetId: null,
   loading: false,
@@ -49,6 +59,28 @@ export const exploreDatasetDirectory = createAsyncThunk(
   async ({ datasetId }: { datasetId: number }, { rejectWithValue }) => {
     try {
       return await datasetApi.explorer(datasetId);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const fetchAvailableDatasetPaths = createAsyncThunk(
+  "dataset/fetchAvailablePaths",
+  async (_, { rejectWithValue }) => {
+    try {
+      return await datasetApi.listAvailablePaths();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const createDataset = createAsyncThunk(
+  "dataset/create",
+  async (body: DatasetCreate, { rejectWithValue }) => {
+    try {
+      return await datasetApi.create(body);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -128,6 +160,17 @@ export const datasetSlice = createSlice({
     builder.addCase(exploreDatasetDirectory.rejected, (state) => {
       state.loading = false;
       state.datasetDirectories = null;
+    });
+    builder.addCase(fetchAvailableDatasetPaths.pending, (state) => {
+      state.availablePathsLoading = true;
+    });
+    builder.addCase(fetchAvailableDatasetPaths.fulfilled, (state, action) => {
+      state.availablePaths = action.payload;
+      state.availablePathsLoading = false;
+    });
+    builder.addCase(fetchAvailableDatasetPaths.rejected, (state) => {
+      state.availablePathsLoading = false;
+      state.availablePaths = null;
     });
   },
 });

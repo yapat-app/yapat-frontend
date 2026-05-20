@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
 import { DatasetCard } from "../components/DatasetCard";
+import AddDatasetModal from "../components/AddDatasetModal";
 import { clearSnippets } from "../redux/features/snippetSlice";
 
 export const Datasets = () => {
@@ -50,6 +51,7 @@ export const Datasets = () => {
               <div id="dataset_list">
                 <div className="flex justify-between items-center">
                   <h2 className="card_heading_text">Available Datasets</h2>
+                  {user?.role === "admin" && <AddDatasetModal />}
                 </div>
                 <div className="flex flex-col gap-3 my-8">
                   {allDatasets.map((dataset) => (
@@ -62,6 +64,7 @@ export const Datasets = () => {
             <div id="dataset_list">
               <div className="flex justify-between items-center">
                 <h2 className="card_heading_text">Available Datasets</h2>
+                {user?.role === "admin" && <AddDatasetModal />}
               </div>
               <div className="flex flex-col items-center justify-center my-8 p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                 <svg
@@ -81,8 +84,9 @@ export const Datasets = () => {
                   No Datasets Available
                 </h3>
                 <p className="text-gray-500 text-center">
-                  There are currently no datasets to display. Create or upload a
-                  dataset to get started.
+                  {user?.role === "admin"
+                    ? "There are currently no datasets. Use Add Dataset to register a folder from the data volume."
+                    : "There are currently no datasets to display. Contact an administrator to add datasets."}
                 </p>
               </div>
             </div>
