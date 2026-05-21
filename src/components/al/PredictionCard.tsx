@@ -21,6 +21,11 @@ import { snippetApi } from "../../services/api";
 import { useInViewport } from "../../hooks/useInViewport";
 import type { PAMPrediction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
+import { useDatasetSpectrogramConfig } from "../../hooks/useDatasetSpectrogramConfig";
+import {
+  spectrogramChromeHeight,
+  spectrogramLayoutHeights,
+} from "../../utils/spectrogramConfig";
 
 interface Props {
   prediction: PAMPrediction;
@@ -45,6 +50,13 @@ export const PredictionCard: React.FC<Props> = ({
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+  const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  const datasetSpectrogram = useDatasetSpectrogramConfig(selectedDatasetId);
+  const spectrogramBandKey = useMemo(
+    () =>
+      `${datasetSpectrogram?.spectrogram_f_min_hz ?? ""}:${datasetSpectrogram?.spectrogram_f_max_hz ?? ""}`,
+    [datasetSpectrogram],
+  );
   const selectedSnippetId = useAppSelector(
     (state) => state.al.selectedSnippetId,
   );
@@ -81,23 +93,39 @@ export const PredictionCard: React.FC<Props> = ({
   // ── Blind-mode height computation ──────────────────────────────────────
   // Card fills the scroll-snap viewport. Spectrogram takes the upper portion;
   // the label area below is fixed at LABEL_AREA_H px so the search + chips fit.
-  const PLAYER_CHROME = 72; // audio controls bar + borders (approx px)
   const HEADER_H = 49;
   const BODY_PAD_Y = 24; // py-3 top + py-3 bottom
   const LABEL_AREA_H = 248; // reserved height for search input + chip rows (larger chips need more)
 
   const [blindSpecHeight, setBlindSpecHeight] = useState<number>(300);
+  const blindSpecBlockHeight = useMemo(
+    () => spectrogramLayoutHeights(blindSpecHeight).blockHeight,
+    [blindSpecHeight],
+  );
 
-  useEffect(() => {
+  const compactSpecBlockHeight = useMemo(
+    () => spectrogramLayoutHeights(specHeight).blockHeight,
+    [specHeight],
+  );
+
+  const computeBlindSpecHeightRef = useRef<() => void>(() => {});
+
+  computeBlindSpecHeightRef.current = () => {
+    const cardH =
+      typeof cardHeightPx === "number"
+        ? cardHeightPx
+        : Math.max(560, window.innerHeight - 180);
+    const available = cardH - HEADER_H - BODY_PAD_Y - LABEL_AREA_H - 8;
+    const melBudget = available - spectrogramChromeHeight();
+    setBlindSpecHeight(Math.max(120, Math.min(600, melBudget)));
+  };
+
+  useLayoutEffect(() => {
     if (!isBlind) return;
-    const compute = () => {
-      const cardH = typeof cardHeightPx === "number" ? cardHeightPx : Math.max(560, window.innerHeight - 180);
-      const available = cardH - HEADER_H - BODY_PAD_Y - LABEL_AREA_H - 8; // 8px divider gap
-      setBlindSpecHeight(Math.max(160, Math.min(680, available - PLAYER_CHROME)));
-    };
-    compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
+    computeBlindSpecHeightRef.current();
+    const onResize = () => computeBlindSpecHeightRef.current();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [isBlind, cardHeightPx]);
 
   // Simple in-memory cache so scrolling back doesn't re-download audio.
@@ -211,13 +239,13 @@ export const PredictionCard: React.FC<Props> = ({
             <Skeleton.Input
               active
               block
-              style={{ height: blindSpecHeight, borderRadius: 12, width: "100%" }}
+              style={{ height: blindSpecBlockHeight, borderRadius: 12, width: "100%" }}
             />
           )}
           {!audioBlobUrl && !audioError && !shouldLoadAudio && (
             <div
               className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-              style={{ height: blindSpecHeight }}
+              style={{ height: blindSpecBlockHeight }}
             >
               Scroll to load audio
             </div>
@@ -225,17 +253,18 @@ export const PredictionCard: React.FC<Props> = ({
           {audioError && (
             <div
               className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-              style={{ height: blindSpecHeight }}
+              style={{ height: blindSpecBlockHeight }}
             >
               Audio unavailable
             </div>
           )}
           {audioBlobUrl && (
-            <div className="w-full rounded-xl overflow-hidden border border-gray-100 bg-white shadow-sm pb-1">
+            <div className="w-full flex-shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
               <SnippetSpectrogramPlayer
-                key={audioBlobUrl}
+                key={`${prediction.snippet_id}|${spectrogramBandKey}|${blindSpecHeight}`}
                 src={audioBlobUrl}
                 sampleRate={audioSampleRate}
+                datasetSpectrogram={datasetSpectrogram}
                 specHeight={blindSpecHeight}
                 navigator={false}
                 settings={false}
@@ -292,13 +321,13 @@ export const PredictionCard: React.FC<Props> = ({
           >
             {!audioBlobUrl && !audioError && shouldLoadAudio && (
               <div className="px-4 py-3">
-                <Skeleton.Input active block style={{ height: specHeight, borderRadius: 6 }} />
+                <Skeleton.Input active block style={{ height: compactSpecBlockHeight, borderRadius: 6 }} />
               </div>
             )}
             {!audioBlobUrl && !audioError && !shouldLoadAudio && (
               <div
                 className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-                style={{ height: specHeight }}
+                style={{ minHeight: compactSpecBlockHeight }}
               >
                 Scroll to load audio
               </div>
@@ -306,18 +335,19 @@ export const PredictionCard: React.FC<Props> = ({
             {audioError && (
               <div
                 className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-                style={{ height: specHeight }}
+                style={{ minHeight: compactSpecBlockHeight }}
               >
                 Audio unavailable
               </div>
             )}
             {audioBlobUrl && (
               <div className="px-4 py-3">
-                <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
+                <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
                   <SnippetSpectrogramPlayer
-                    key={audioBlobUrl}
+                    key={`${prediction.snippet_id}|${spectrogramBandKey}|${specHeight}`}
                     src={audioBlobUrl}
                     sampleRate={audioSampleRate}
+                    datasetSpectrogram={datasetSpectrogram}
                     specHeight={specHeight}
                     navigator={false}
                     settings={false}
@@ -398,14 +428,14 @@ export const PredictionCard: React.FC<Props> = ({
             <Skeleton.Input
               active
               block
-              style={{ height: specHeight, borderRadius: 6 }}
+              style={{ height: compactSpecBlockHeight, borderRadius: 6 }}
             />
           </div>
         )}
 
         {/* Not loading yet (lazy) */}
             {!audioBlobUrl && !audioError && !shouldLoadAudio && (
-          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ height: specHeight }}>
+          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ minHeight: compactSpecBlockHeight }}>
             Scroll to load audio
           </div>
         )}
@@ -414,7 +444,7 @@ export const PredictionCard: React.FC<Props> = ({
         {audioError && (
           <div
             className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-            style={{ height: specHeight }}
+            style={{ minHeight: compactSpecBlockHeight }}
           >
             Audio unavailable
           </div>
@@ -423,11 +453,12 @@ export const PredictionCard: React.FC<Props> = ({
         {/* Player — rendered once the blob URL is available */}
         {audioBlobUrl && (
           <div className="px-4 py-3">
-            <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
+            <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
               <SnippetSpectrogramPlayer
-                key={audioBlobUrl}
+                key={`${prediction.snippet_id}|${spectrogramBandKey}|${specHeight}`}
                 src={audioBlobUrl}
                 sampleRate={audioSampleRate}
+                datasetSpectrogram={datasetSpectrogram}
                 specHeight={specHeight}
                 navigator={false}
                 settings={false}

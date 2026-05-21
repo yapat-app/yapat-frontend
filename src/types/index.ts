@@ -400,10 +400,21 @@ export interface Dataset {
   team_id?: number;
   dataset_type?: DatasetType;
   default_snippet_set_id?: number | null;
+  spectrogram_f_min_hz?: number | null;
+  spectrogram_f_max_hz?: number | null;
   created_at?: string;
   updated_at?: string;
   is_ready_for_feed?: boolean;
   recording_count?: number;
+}
+
+export interface DatasetUpdate {
+  name?: string;
+  description?: string;
+  source_uri?: string;
+  dataset_type?: DatasetType;
+  spectrogram_f_min_hz?: number | null;
+  spectrogram_f_max_hz?: number | null;
 }
 
 export interface DatasetCreate {
@@ -412,6 +423,8 @@ export interface DatasetCreate {
   source_uri?: string;
   team_id?: number;
   dataset_type?: DatasetType;
+  spectrogram_f_min_hz?: number | null;
+  spectrogram_f_max_hz?: number | null;
 }
 
 export interface AvailableDatasetPath {

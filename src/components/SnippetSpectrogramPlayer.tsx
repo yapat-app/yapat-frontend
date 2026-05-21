@@ -1,25 +1,29 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import {
-  SPECTROGRAM_F_MIN,
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   SPECTROGRAM_HOP_LENGTH,
   SPECTROGRAM_N_FFT,
   SPECTROGRAM_N_MELS,
+  SPECTROGRAM_TIME_AXIS_HEIGHT,
   SPECTROGRAM_WIN_LENGTH,
   formatSpectrogramHz,
   formatSpectrogramTime,
-  spectrogramFMax,
+  resolveSpectrogramDisplayRange,
+  spectrogramLayoutHeights,
+  type DatasetSpectrogramRange,
 } from "../utils/spectrogramConfig";
 
 const Y_AXIS_WIDTH = 44;
-const X_AXIS_HEIGHT = 22;
 
 export interface SnippetSpectrogramPlayerProps {
   src: string;
   sampleRate?: number;
+  /** Dataset-level display band (optional). */
+  datasetSpectrogram?: DatasetSpectrogramRange | null;
   /** Snippet length in seconds; when omitted, read from audio metadata. */
   durationSec?: number;
+  /** Total vertical space for plot + axes + audio controls (px). */
   specHeight?: number;
   navigator?: boolean;
   settings?: boolean;
@@ -37,6 +41,7 @@ function buildTicks(min: number, max: number, count: number): number[] {
 export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> = ({
   src,
   sampleRate = SPECTROGRAM_FALLBACK_SAMPLE_RATE,
+  datasetSpectrogram,
   durationSec,
   specHeight = 200,
   navigator = false,
@@ -45,9 +50,22 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
   colormap = "viridis",
   showAxisInfo = true,
 }) => {
+  const { plotHeight, blockHeight } = useMemo(
+    () => spectrogramLayoutHeights(specHeight, showAxisInfo),
+    [specHeight, showAxisInfo],
+  );
+
   const [resolvedDuration, setResolvedDuration] = useState<number | null>(
     durationSec ?? null,
   );
+  /** Bumped after layout so remounted library players measure a stable width. */
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+
+  useLayoutEffect(() => {
+    setLayoutEpoch((n) => n + 1);
+    const id = requestAnimationFrame(() => setLayoutEpoch((n) => n + 1));
+    return () => cancelAnimationFrame(id);
+  }, [specHeight, showAxisInfo, src, datasetSpectrogram]);
 
   useEffect(() => {
     if (durationSec != null && durationSec > 0) {
@@ -68,10 +86,13 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
     };
   }, [src, durationSec]);
 
-  const fMax = spectrogramFMax(sampleRate);
+  const { fMin, fMax } = useMemo(
+    () => resolveSpectrogramDisplayRange(sampleRate, datasetSpectrogram),
+    [sampleRate, datasetSpectrogram],
+  );
   const freqTicks = useMemo(
-    () => buildTicks(SPECTROGRAM_F_MIN, fMax, 5).reverse(),
-    [fMax],
+    () => buildTicks(fMin, fMax, 5).reverse(),
+    [fMin, fMax],
   );
   const timeTicks = useMemo(() => {
     const dur = resolvedDuration ?? 0;
@@ -79,13 +100,21 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
     return buildTicks(0, dur, 5);
   }, [resolvedDuration]);
 
+  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${layoutEpoch}`;
+
   return (
-    <div className="w-full">
-      <div className="flex w-full min-w-0">
+    <div
+      className="w-full flex-shrink-0"
+      style={{ minHeight: blockHeight }}
+    >
+      <div
+        className="flex w-full min-w-0 flex-shrink-0"
+        style={{ minHeight: plotHeight }}
+      >
         {/* Frequency (Hz) axis */}
         <div
           className="flex-shrink-0 flex flex-col justify-between text-[10px] text-gray-500 font-ibm-mono pr-1 select-none"
-          style={{ width: Y_AXIS_WIDTH, height: specHeight }}
+          style={{ width: Y_AXIS_WIDTH, minHeight: plotHeight }}
           aria-hidden
         >
           {freqTicks.map((hz) => (
@@ -96,27 +125,30 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <SpectrogramPlayer
-            key={`${src}-${sampleRate}`}
-            src={src}
-            sampleRate={sampleRate}
-            n_fft={SPECTROGRAM_N_FFT}
-            win_length={SPECTROGRAM_WIN_LENGTH}
-            hop_length={SPECTROGRAM_HOP_LENGTH}
-            f_min={SPECTROGRAM_F_MIN}
-            f_max={fMax}
-            n_mels={SPECTROGRAM_N_MELS}
-            specHeight={specHeight}
-            navigator={navigator}
-            settings={settings}
-            dark={dark}
-            colormap={colormap}
-          />
+          {/* Do not clamp height here — library adds audio controls below the mel SVG. */}
+          <div className="w-full min-w-0">
+            <SpectrogramPlayer
+              key={playerKey}
+              src={src}
+              sampleRate={sampleRate}
+              n_fft={SPECTROGRAM_N_FFT}
+              win_length={SPECTROGRAM_WIN_LENGTH}
+              hop_length={SPECTROGRAM_HOP_LENGTH}
+              f_min={fMin}
+              f_max={fMax}
+              n_mels={SPECTROGRAM_N_MELS}
+              specHeight={plotHeight}
+              navigator={navigator}
+              settings={settings}
+              dark={dark}
+              colormap={colormap}
+            />
+          </div>
 
           {/* Time axis */}
           <div
-            className="flex justify-between text-[10px] text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100"
-            style={{ height: X_AXIS_HEIGHT, marginTop: 2 }}
+            className="flex justify-between text-[10px] text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100 flex-shrink-0"
+            style={{ height: SPECTROGRAM_TIME_AXIS_HEIGHT, marginTop: 2 }}
             aria-hidden
           >
             {timeTicks.length > 0 ? (
@@ -133,8 +165,8 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
       </div>
 
       {showAxisInfo && (
-        <p className="mt-1 text-[10px] text-gray-400 font-ibm-sans text-center">
-          Mel spectrogram · {formatSpectrogramHz(SPECTROGRAM_F_MIN)}–
+        <p className="mt-1 text-[10px] text-gray-400 font-ibm-sans text-center flex-shrink-0">
+          Mel spectrogram · {formatSpectrogramHz(fMin)}–
           {formatSpectrogramHz(fMax)} · {Math.round(sampleRate / 1000)} kHz
           sample rate
         </p>

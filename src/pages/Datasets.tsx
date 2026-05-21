@@ -51,7 +51,9 @@ export const Datasets = () => {
               <div id="dataset_list">
                 <div className="flex justify-between items-center">
                   <h2 className="card_heading_text">Available Datasets</h2>
-                  {user?.role === "admin" && <AddDatasetModal />}
+                  {(user?.role === "admin" || user?.role === "team_owner") && (
+                    <AddDatasetModal />
+                  )}
                 </div>
                 <div className="flex flex-col gap-3 my-8">
                   {allDatasets.map((dataset) => (
@@ -64,7 +66,9 @@ export const Datasets = () => {
             <div id="dataset_list">
               <div className="flex justify-between items-center">
                 <h2 className="card_heading_text">Available Datasets</h2>
-                {user?.role === "admin" && <AddDatasetModal />}
+                {(user?.role === "admin" || user?.role === "team_owner") && (
+                  <AddDatasetModal />
+                )}
               </div>
               <div className="flex flex-col items-center justify-center my-8 p-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
                 <svg

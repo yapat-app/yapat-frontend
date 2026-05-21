@@ -2,10 +2,15 @@ import React, { useEffect } from "react";
 import { useAppDispatch } from "../hooks";
 import { useSelector } from "react-redux";
 import { fetchSnippetAudio } from "../redux/features/snippetSlice";
+import { useSearchParams } from "react-router-dom";
 import { SnippetSpectrogramPlayer } from "./SnippetSpectrogramPlayer";
+import { useDatasetSpectrogramConfig } from "../hooks/useDatasetSpectrogramConfig";
 
 export const AudioPlayerPlaceholder: React.FC = () => {
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
+  const datasetIdParam = searchParams.get("dataset_id");
+  const datasetSpectrogram = useDatasetSpectrogramConfig(datasetIdParam);
   const { currentSnippetAudio, currentSnippet } = useSelector(
     (state: any) => state.snippet,
   );
@@ -19,11 +24,12 @@ export const AudioPlayerPlaceholder: React.FC = () => {
   return (
     <div className="w-full text-center">
       {currentSnippetAudio ? (
-        <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
+        <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
           <SnippetSpectrogramPlayer
-            key={currentSnippetAudio.url}
+            key={`${currentSnippet?.id ?? "snippet"}|${datasetIdParam ?? ""}`}
             src={currentSnippetAudio.url}
             sampleRate={currentSnippetAudio.sampleRate}
+            datasetSpectrogram={datasetSpectrogram}
             durationSec={currentSnippet?.duration}
             specHeight={260}
             navigator={false}

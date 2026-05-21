@@ -7,7 +7,14 @@
  *   • "hidden"                 → renders nothing
  */
 
-import React, { useRef, useCallback, useMemo, useEffect, useState } from "react";
+import React, {
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { Spin, Empty, Alert, Card, Progress, Row, Col, Statistic } from "antd";
 import { CheckCircleOutlined, SoundOutlined } from "@ant-design/icons";
 import { useAppSelector } from "../../hooks";
@@ -56,19 +63,29 @@ export const PredictionFeed: React.FC = () => {
   const isBlind = phase.ui.labelingMode === "blind";
 
   // Measure the scroll container so each blind card can fill it exactly.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isBlind) return;
-    const el = scrollContainerRef.current;
-    if (!el) return;
+
     const measure = () => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
       const h = el.clientHeight;
       if (h > 0) setBlindSnapCardHeight(Math.max(480, h));
     };
+
     measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isBlind]);
+    const raf = requestAnimationFrame(measure);
+    const ro = new ResizeObserver(() => measure());
+    const el = scrollContainerRef.current;
+    if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [isBlind, predictions.length]);
 
   // Blind mode: hydrate per-snippet labels from the backend so they persist across refresh.
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});

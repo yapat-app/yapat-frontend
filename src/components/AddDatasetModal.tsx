@@ -1,4 +1,4 @@
-import { Modal, Button, Form, Input, Select, message } from "antd";
+import { Modal, Button, Form, Input, InputNumber, Select, message } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
@@ -56,6 +56,8 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
           values.team_id != null && values.team_id !== ""
             ? Number(values.team_id)
             : undefined,
+        spectrogram_f_max_hz:
+          values.f_max_khz != null ? Math.round(values.f_max_khz * 1000) : undefined,
       };
 
       await dispatch(createDataset(payload)).unwrap();
@@ -124,6 +126,14 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
             extra="Browse into subfolders (e.g. ChorusRF → PrioritySpecies), then select the dataset root folder."
           >
             <DatasetPathPicker key={open ? "open" : "closed"} />
+          </Form.Item>
+
+          <Form.Item
+            label="Max spectrogram frequency (kHz)"
+            name="f_max_khz"
+            extra="Optional. e.g. 11 for bird PAM. Empty = full band per recording."
+          >
+            <InputNumber min={0.1} max={200} step={0.5} className="w-full" placeholder="Auto" />
           </Form.Item>
 
           <Form.Item

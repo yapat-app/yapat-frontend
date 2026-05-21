@@ -6,6 +6,7 @@ import { GenerateEmbeddings } from "./GenerateEmbeddings";
 import { Button } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -42,6 +43,9 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 <p className="sub_base_text">
                   {dataset.description?.trim() ? dataset.description : "—"}
                 </p>
+                <div className="mt-2">
+                  <DatasetSpectrogramSettings dataset={dataset} />
+                </div>
               </div>
               <div className="flex items-center justify-end gap-3 pt-1">
                 {datasetAnnotations.datasets && (

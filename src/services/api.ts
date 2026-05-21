@@ -21,6 +21,7 @@ import type {
   Recording,
   RecordingCreate,
   Dataset,
+  DatasetUpdate,
   FeedParams,
   TaskStatus,
   Embedding,
@@ -534,6 +535,11 @@ export const datasetApi = {
     body: import("../types").DatasetCreate,
   ): Promise<import("../types").DatasetCreationResponse> => {
     const response = await api.post("/api/datasets/", body);
+    return response.data;
+  },
+
+  update: async (datasetId: number, body: DatasetUpdate): Promise<Dataset> => {
+    const response = await api.patch(`/api/datasets/${datasetId}`, body);
     return response.data;
   },
 

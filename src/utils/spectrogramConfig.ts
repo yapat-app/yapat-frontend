@@ -6,8 +6,64 @@ export const SPECTROGRAM_N_MELS = 128;
 export const SPECTROGRAM_F_MIN = 0;
 export const SPECTROGRAM_FALLBACK_SAMPLE_RATE = 16000;
 
+/** Reserved below the mel canvas (time axis row + optional caption). */
+export const SPECTROGRAM_TIME_AXIS_HEIGHT = 22;
+export const SPECTROGRAM_INFO_LINE_HEIGHT = 18;
+/** `<audio controls>` row rendered by `react-audio-spectrogram-player` below the mel SVG. */
+export const SPECTROGRAM_AUDIO_CONTROLS_HEIGHT = 72;
+
+/** Vertical space used by UI outside the library mel canvas. */
+export function spectrogramChromeHeight(showAxisInfo = true): number {
+  return (
+    SPECTROGRAM_TIME_AXIS_HEIGHT +
+    SPECTROGRAM_AUDIO_CONTROLS_HEIGHT +
+    (showAxisInfo ? SPECTROGRAM_INFO_LINE_HEIGHT : 0)
+  );
+}
+
+/**
+ * `plotHeight` is the mel canvas height (library `specHeight`).
+ * `blockHeight` is the full widget including time axis, caption, and audio controls.
+ */
+export function spectrogramLayoutHeights(
+  plotHeight: number,
+  showAxisInfo = true,
+): { plotHeight: number; blockHeight: number } {
+  const melHeight = Math.max(80, plotHeight);
+  return {
+    plotHeight: melHeight,
+    blockHeight: melHeight + spectrogramChromeHeight(showAxisInfo),
+  };
+}
+
 export function spectrogramFMax(sampleRate: number): number {
   return sampleRate / 2;
+}
+
+export interface DatasetSpectrogramRange {
+  spectrogram_f_min_hz?: number | null;
+  spectrogram_f_max_hz?: number | null;
+}
+
+/** Apply dataset display caps; always clamp to Nyquist for the snippet's sample rate. */
+export function resolveSpectrogramDisplayRange(
+  sampleRate: number,
+  dataset?: DatasetSpectrogramRange | null,
+): { fMin: number; fMax: number } {
+  const nyquist = spectrogramFMax(sampleRate);
+  let fMin = SPECTROGRAM_F_MIN;
+  let fMax = nyquist;
+
+  if (dataset?.spectrogram_f_min_hz != null && dataset.spectrogram_f_min_hz > 0) {
+    fMin = Math.min(dataset.spectrogram_f_min_hz, nyquist);
+  }
+  if (dataset?.spectrogram_f_max_hz != null && dataset.spectrogram_f_max_hz > 0) {
+    fMax = Math.min(dataset.spectrogram_f_max_hz, nyquist);
+  }
+  if (fMax <= fMin) {
+    fMax = Math.max(fMin + 1, nyquist);
+  }
+  return { fMin, fMax };
 }
 
 export function formatSpectrogramHz(hz: number): string {
