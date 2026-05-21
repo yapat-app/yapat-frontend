@@ -39,6 +39,7 @@ import type {
   FreezeLabelSpaceResponse,
   AvailableTaxonomies,
   SnippetSet,
+  SnippetAudioResult,
   Invitation,
   ActiveLearningResponse,
   ActiveLearningLabel,
@@ -46,6 +47,10 @@ import type {
   retrainActiveLearningBody,
   PredictionHistogram,
 } from "../types";
+import {
+  parseWavSampleRate,
+  resolveSnippetSampleRate,
+} from "../utils/spectrogramConfig";
 
 type AddToLabelSpaceResponse = {
   conversation: Conversation;
@@ -121,14 +126,19 @@ export const snippetApi = {
   getSnippetAudio: async (
     snippetId: number,
     signal?: AbortSignal,
-  ): Promise<string> => {
+  ): Promise<SnippetAudioResult> => {
     const response = await api.get(`/api/snippets/${snippetId}/audio`, {
       responseType: "blob",
       signal,
     });
-    const url = URL.createObjectURL(response.data);
-    // return seriazable audio url
-    return url;
+    const blob = response.data as Blob;
+    const url = URL.createObjectURL(blob);
+    const wavRate = await parseWavSampleRate(blob);
+    const sampleRate = resolveSnippetSampleRate(
+      wavRate,
+      response.headers["x-sample-rate"],
+    );
+    return { url, sampleRate };
   },
 };
 

@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
-import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAppDispatch } from "../hooks";
 import { useSelector } from "react-redux";
 import { fetchSnippetAudio } from "../redux/features/snippetSlice";
+import { SnippetSpectrogramPlayer } from "./SnippetSpectrogramPlayer";
 
 export const AudioPlayerPlaceholder: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -10,26 +10,25 @@ export const AudioPlayerPlaceholder: React.FC = () => {
     (state: any) => state.snippet,
   );
 
-  // Fetch audio when snippet changes
   useEffect(() => {
     if (currentSnippet?.id != null) {
       dispatch(fetchSnippetAudio(currentSnippet.id));
     }
-  }, [currentSnippet?.id]);
+  }, [currentSnippet?.id, dispatch]);
 
   return (
     <div className="w-full text-center">
       {currentSnippetAudio ? (
         <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
-          <SpectrogramPlayer
-            key={currentSnippetAudio}
-            src={currentSnippetAudio}
-            sampleRate={16000}
+          <SnippetSpectrogramPlayer
+            key={currentSnippetAudio.url}
+            src={currentSnippetAudio.url}
+            sampleRate={currentSnippetAudio.sampleRate}
+            durationSec={currentSnippet?.duration}
             specHeight={260}
-            navHeight={44}
+            navigator={false}
+            settings={false}
             dark={false}
-            navigator={false} // hide zoom / navigator UI
-            settings={false} // settings
             colormap="viridis"
           />
         </div>

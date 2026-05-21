@@ -12,7 +12,8 @@ import React, {
 } from "react";
 import { Skeleton } from "antd";
 import { SoundOutlined } from "@ant-design/icons";
-import SpectrogramPlayer from "react-audio-spectrogram-player";
+import { SnippetSpectrogramPlayer } from "../SnippetSpectrogramPlayer";
+import type { SnippetAudioResult } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FeedbackButtons } from "./FeedbackButtons";
@@ -71,6 +72,7 @@ export const PredictionCard: React.FC<Props> = ({
 
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [audioSampleRate, setAudioSampleRate] = useState<number>(16000);
 
   const isBlind = phase.ui.labelingMode === "blind";
   // In blind mode the card fills the viewport; elsewhere use compact heights.
@@ -100,16 +102,20 @@ export const PredictionCard: React.FC<Props> = ({
 
   // Simple in-memory cache so scrolling back doesn't re-download audio.
   // We keep object URLs for the session; 
-  const cachedUrl = useMemo(() => audioUrlCache.get(prediction.snippet_id) ?? null, [prediction.snippet_id]);
+  const cachedAudio = useMemo(
+    () => audioUrlCache.get(prediction.snippet_id) ?? null,
+    [prediction.snippet_id],
+  );
 
   useEffect(() => {
-    if (cachedUrl) {
+    if (cachedAudio) {
       setAudioError(false);
-      setAudioBlobUrl(cachedUrl);
+      setAudioBlobUrl(cachedAudio.url);
+      setAudioSampleRate(cachedAudio.sampleRate);
     } else {
       setAudioBlobUrl(null);
     }
-  }, [cachedUrl]);
+  }, [cachedAudio]);
 
   const shouldLoadAudio = loadAudioImmediately || isSelected || inView;
 
@@ -121,17 +127,19 @@ export const PredictionCard: React.FC<Props> = ({
     const cached = audioUrlCache.get(snippetId);
     if (cached) {
       setAudioError(false);
-      setAudioBlobUrl(cached);
+      setAudioBlobUrl(cached.url);
+      setAudioSampleRate(cached.sampleRate);
       return;
     }
 
     const existing = inFlight.get(snippetId);
     if (existing) {
       let cancelled = false;
-      void existing.then((url) => {
-        if (!cancelled && url) {
+      void existing.then((audio) => {
+        if (!cancelled && audio) {
           setAudioError(false);
-          setAudioBlobUrl(url);
+          setAudioBlobUrl(audio.url);
+          setAudioSampleRate(audio.sampleRate);
         }
       });
       return () => {
@@ -149,11 +157,12 @@ export const PredictionCard: React.FC<Props> = ({
 
     inFlight.set(snippetId, p);
     let cancelled = false;
-    void p.then((url) => {
+    void p.then((audio) => {
       if (cancelled || controller.signal.aborted) return;
-      if (url) {
+      if (audio) {
         setAudioError(false);
-        setAudioBlobUrl(url);
+        setAudioBlobUrl(audio.url);
+        setAudioSampleRate(audio.sampleRate);
       } else {
         setAudioError(true);
       }
@@ -223,10 +232,10 @@ export const PredictionCard: React.FC<Props> = ({
           )}
           {audioBlobUrl && (
             <div className="w-full rounded-xl overflow-hidden border border-gray-100 bg-white shadow-sm pb-1">
-              <SpectrogramPlayer
+              <SnippetSpectrogramPlayer
                 key={audioBlobUrl}
                 src={audioBlobUrl}
-                sampleRate={16000}
+                sampleRate={audioSampleRate}
                 specHeight={blindSpecHeight}
                 navigator={false}
                 settings={false}
@@ -305,10 +314,10 @@ export const PredictionCard: React.FC<Props> = ({
             {audioBlobUrl && (
               <div className="px-4 py-3">
                 <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
-                  <SpectrogramPlayer
+                  <SnippetSpectrogramPlayer
                     key={audioBlobUrl}
                     src={audioBlobUrl}
-                    sampleRate={16000}
+                    sampleRate={audioSampleRate}
                     specHeight={specHeight}
                     navigator={false}
                     settings={false}
@@ -415,10 +424,10 @@ export const PredictionCard: React.FC<Props> = ({
         {audioBlobUrl && (
           <div className="px-4 py-3">
             <div className="rounded-md overflow-hidden border border-gray-100 bg-white">
-              <SpectrogramPlayer
+              <SnippetSpectrogramPlayer
                 key={audioBlobUrl}
                 src={audioBlobUrl}
-                sampleRate={16000}
+                sampleRate={audioSampleRate}
                 specHeight={specHeight}
                 navigator={false}
                 settings={false}
@@ -443,8 +452,8 @@ export const PredictionCard: React.FC<Props> = ({
 
 // ── Audio cache (module-level) ────────────────────────────────────────────────
 
-const audioUrlCache = new Map<number, string>();
-const inFlight = new Map<number, Promise<string | null>>();
+const audioUrlCache = new Map<number, SnippetAudioResult>();
+const inFlight = new Map<number, Promise<SnippetAudioResult | null>>();
 const LRU: number[] = [];
 const MAX_CACHE = 40;
 
@@ -481,12 +490,12 @@ async function loadSnippetAudio(
   snippetId: number,
   signal?: AbortSignal,
   priority = false,
-): Promise<string | null> {
+): Promise<SnippetAudioResult | null> {
   const release = await audioDownloadAcquire(signal, priority);
   try {
-    const url = await snippetApi.getSnippetAudio(snippetId, signal);
-    audioUrlCacheSet(snippetId, url);
-    return url;
+    const audio = await snippetApi.getSnippetAudio(snippetId, signal);
+    audioUrlCacheSet(snippetId, audio);
+    return audio;
   } catch (e: unknown) {
     const err = e as { name?: string; code?: string };
     if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return null;
@@ -502,7 +511,7 @@ function audioDownloadRelease() {
   if (next) next();
 }
 
-function audioUrlCacheSet(snippetId: number, url: string) {
+function audioUrlCacheSet(snippetId: number, audio: SnippetAudioResult) {
   if (!audioUrlCache.has(snippetId)) {
     LRU.push(snippetId);
   } else {
@@ -511,13 +520,13 @@ function audioUrlCacheSet(snippetId: number, url: string) {
     LRU.push(snippetId);
   }
 
-  audioUrlCache.set(snippetId, url);
+  audioUrlCache.set(snippetId, audio);
 
   while (LRU.length > MAX_CACHE) {
     const evict = LRU.shift();
     if (evict === undefined) break;
     const old = audioUrlCache.get(evict);
-    if (old) URL.revokeObjectURL(old);
+    if (old) URL.revokeObjectURL(old.url);
     audioUrlCache.delete(evict);
   }
 }

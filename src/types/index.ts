@@ -299,6 +299,12 @@ export interface UserFeedSnapshot {
   request_params?: Record<string, unknown> | null;
 }
 
+/** Blob URL + sample rate from GET /api/snippets/:id/audio response headers. */
+export interface SnippetAudioResult {
+  url: string;
+  sampleRate: number;
+}
+
 export interface Snippet {
   id: number;
   recording_id: number;

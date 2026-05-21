@@ -6,7 +6,12 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { snippetApi, getErrorMessage, feedApi } from "../../services/api";
-import type { Snippet, FeedParams, FeedSimilarityCreate } from "../../types";
+import type {
+  Snippet,
+  SnippetAudioResult,
+  FeedParams,
+  FeedSimilarityCreate,
+} from "../../types";
 import { getLoggedInUser, logout } from "./authSlice";
 import { loadClassicFeedCacheForUser } from "../../utils/classicFeedPersistence";
 
@@ -30,7 +35,7 @@ export interface SnippetState {
   snippets: Snippet[];
   selectedFeedId: number | null;
   currentSnippet: Snippet | null;
-  currentSnippetAudio: string | null;
+  currentSnippetAudio: SnippetAudioResult | null;
   currentIndex: number;
   snippetsFetched: boolean;
   snippetsLoaded: boolean;

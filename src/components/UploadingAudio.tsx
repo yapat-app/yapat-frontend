@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import SpectrogramPlayer from "react-audio-spectrogram-player";
+import { SnippetSpectrogramPlayer } from "./SnippetSpectrogramPlayer";
+import { SPECTROGRAM_FALLBACK_SAMPLE_RATE } from "../utils/spectrogramConfig";
 import { Form } from "antd";
 
 type UploadedSnippetPlayerProps = {
@@ -18,6 +19,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [sampleRate, setSampleRate] = useState(SPECTROGRAM_FALLBACK_SAMPLE_RATE);
   const [windowStart, setWindowStart] = useState<number>(0); // seconds
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -30,6 +32,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
     setAudioFile(null);
     setAudioUrl(null);
     setDuration(null);
+    setSampleRate(SPECTROGRAM_FALLBACK_SAMPLE_RATE);
     setWindowStart(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = ""; // Reset input
@@ -54,8 +57,30 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
     if (!file) return;
     setAudioFile(file);
     setDuration(null);
+    setSampleRate(SPECTROGRAM_FALLBACK_SAMPLE_RATE);
     setWindowStart(0);
   };
+
+  useEffect(() => {
+    if (!audioFile) return;
+    let cancelled = false;
+    const ctx = new AudioContext();
+    void audioFile.arrayBuffer().then((buf) => {
+      if (cancelled) return;
+      return ctx.decodeAudioData(buf.slice(0));
+    }).then((decoded) => {
+      if (cancelled || !decoded) return;
+      if (decoded.sampleRate > 0) setSampleRate(decoded.sampleRate);
+    }).catch(() => {
+      /* keep fallback sample rate */
+    }).finally(() => {
+      void ctx.close();
+    });
+    return () => {
+      cancelled = true;
+      void ctx.close();
+    };
+  }, [audioFile]);
 
   const handleAudioLoadedMetadata = () => {
     if (audioRef.current) {
@@ -206,10 +231,11 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
         {/* Spectrogram + draggable window */}
         {audioUrl && (
           <div ref={spectroContainerRef} style={{ position: "relative" }}>
-            <SpectrogramPlayer
-              key={audioUrl}
+            <SnippetSpectrogramPlayer
+              key={`${audioUrl}-${sampleRate}`}
               src={audioUrl}
-              sampleRate={16000}
+              sampleRate={sampleRate}
+              durationSec={duration ?? undefined}
               specHeight={250}
               navigator={false}
               settings={false}

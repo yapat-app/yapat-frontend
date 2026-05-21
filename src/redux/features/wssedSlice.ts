@@ -10,6 +10,7 @@ import type {
   ActiveLearningLabel,
   getActiveLearningSuggestionsParams,
   Snippet,
+  SnippetAudioResult,
   retrainActiveLearningBody,
   PredictionHistogram,
 } from "../../types";
@@ -26,7 +27,7 @@ export interface wssedState {
   currentSnippet: Snippet | null;
 
   // Audio for the currently selected snippet
-  currentSnippetAudio: string | null;
+  currentSnippetAudio: SnippetAudioResult | null;
   audioLoading: boolean;
   audioError: string | null;
 
