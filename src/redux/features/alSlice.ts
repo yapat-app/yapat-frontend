@@ -21,8 +21,9 @@ import type {
   PAMTrainFromScratchRequest,
   PAMFeedbackCountResponse,
   PAMSuggestionStrategy,
-  isInferenceJobDispatch,
+  PAMInferenceResult,
 } from "../../types/al";
+import { isInferenceJobDispatch } from "../../types/al";
 import type { Annotation, Snippet } from "../../types";
 import {
   applyClassicLabelScores,
@@ -352,7 +353,13 @@ export const restoreFeedFromServer = createAsyncThunk(
     }
 
     try {
-      return await alApi.runInference(body);
+      const data = await alApi.runInference(body);
+      if (isInferenceJobDispatch(data)) {
+        return rejectWithValue(
+          "Predictions are still being generated on the server. Try again shortly.",
+        );
+      }
+      return data;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -592,9 +599,11 @@ const alSlice = createSlice({
         const request = action.meta.arg as PAMRunInferenceRequest;
         state.inferenceLoading = false;
 
+        const payload = action.payload;
+
         // Sync inference failed on the server; predictions are being built on pam_al worker.
-        if (isInferenceJobDispatch(action.payload)) {
-          state.lastRetrainDispatch = action.payload;
+        if (isInferenceJobDispatch(payload)) {
+          state.lastRetrainDispatch = payload;
           state.lastRetrainJob = null;
           state.retrainLoading = true;
           state.error = null;
@@ -602,18 +611,19 @@ const alSlice = createSlice({
           return;
         }
 
-        state.modelFamilyName = action.payload.model_family_name;
-        state.usedCheckpointId = action.payload.used_checkpoint_id;
+        const result: PAMInferenceResult = payload;
+        state.modelFamilyName = result.model_family_name;
+        state.usedCheckpointId = result.used_checkpoint_id;
         state.modelInfo = {
-          mode: action.payload.mode,
-          suggestion_strategy: action.payload.suggestion_strategy,
-          returned_count: action.payload.returned_count,
-          total_predictions: action.payload.total_predictions,
-          used_checkpoint_id: action.payload.used_checkpoint_id,
+          mode: result.mode,
+          suggestion_strategy: result.suggestion_strategy,
+          returned_count: result.returned_count,
+          total_predictions: result.total_predictions,
+          used_checkpoint_id: result.used_checkpoint_id,
         };
-        state.totalScored = action.payload.total_predictions;
+        state.totalScored = result.total_predictions;
         state.feedSource = "pam";
-        state.predictions = withDisplayFields(action.payload.rows);
+        state.predictions = withDisplayFields(result.rows);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
         state.retrainLoading = false;
@@ -645,17 +655,18 @@ const alSlice = createSlice({
           ? buildRestoreInferenceRequest(state, saved)
           : null;
         state.inferenceLoading = false;
-        state.modelFamilyName = action.payload.model_family_name;
-        state.usedCheckpointId = action.payload.used_checkpoint_id;
+        const restored: PAMInferenceResult = action.payload;
+        state.modelFamilyName = restored.model_family_name;
+        state.usedCheckpointId = restored.used_checkpoint_id;
         state.modelInfo = {
-          mode: action.payload.mode,
-          suggestion_strategy: action.payload.suggestion_strategy,
-          returned_count: action.payload.returned_count,
-          total_predictions: action.payload.total_predictions,
-          used_checkpoint_id: action.payload.used_checkpoint_id,
+          mode: restored.mode,
+          suggestion_strategy: restored.suggestion_strategy,
+          returned_count: restored.returned_count,
+          total_predictions: restored.total_predictions,
+          used_checkpoint_id: restored.used_checkpoint_id,
         };
-        state.totalScored = action.payload.total_predictions;
-        state.predictions = withDisplayFields(action.payload.rows);
+        state.totalScored = restored.total_predictions;
+        state.predictions = withDisplayFields(restored.rows);
         if (state.projectionPredictions.length === 0) {
           state.projectionPredictions = state.predictions;
         }

@@ -6,7 +6,6 @@
 import api from "../axios/axiosInstance";
 import type {
   PAMRunInferenceRequest,
-  PAMInferenceResult,
   PAMInferenceResponse,
   FeedbackPayload,
   FeedbackResponse,
