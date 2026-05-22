@@ -7,6 +7,7 @@ import api from "../axios/axiosInstance";
 import type {
   PAMRunInferenceRequest,
   PAMInferenceResult,
+  PAMInferenceResponse,
   FeedbackPayload,
   FeedbackResponse,
   PAMRetrainRequest,
@@ -48,7 +49,7 @@ const checkpointSpeciesCache = new Map<
 
 export const alApi = {
   /** POST /api/pam-al/inference/get-or-create — run classifier or return cached predictions */
-  runInference: async (body: PAMRunInferenceRequest): Promise<PAMInferenceResult> => {
+  runInference: async (body: PAMRunInferenceRequest): Promise<PAMInferenceResponse> => {
     const response = await api.post(`${BASE}/inference/get-or-create`, body);
     return response.data;
   },

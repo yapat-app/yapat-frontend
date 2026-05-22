@@ -213,6 +213,15 @@ export interface PAMRetrainJobDispatch {
   message: string;
 }
 
+/** POST /inference/get-or-create may return this when sync inference fails and a Celery job is enqueued. */
+export type PAMInferenceResponse = PAMInferenceResult | PAMRetrainJobDispatch;
+
+export function isInferenceJobDispatch(
+  payload: PAMInferenceResponse,
+): payload is PAMRetrainJobDispatch {
+  return typeof (payload as PAMRetrainJobDispatch).job_id === "number";
+}
+
 /** Full status of a retrain job — use for polling. */
 export interface PAMRetrainJobStatus {
   id: number;

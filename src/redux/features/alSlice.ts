@@ -21,6 +21,7 @@ import type {
   PAMTrainFromScratchRequest,
   PAMFeedbackCountResponse,
   PAMSuggestionStrategy,
+  isInferenceJobDispatch,
 } from "../../types/al";
 import type { Annotation, Snippet } from "../../types";
 import {
@@ -590,6 +591,17 @@ const alSlice = createSlice({
       (state, action) => {
         const request = action.meta.arg as PAMRunInferenceRequest;
         state.inferenceLoading = false;
+
+        // Sync inference failed on the server; predictions are being built on pam_al worker.
+        if (isInferenceJobDispatch(action.payload)) {
+          state.lastRetrainDispatch = action.payload;
+          state.lastRetrainJob = null;
+          state.retrainLoading = true;
+          state.error = null;
+          state.selectedDatasetId = request.dataset_id;
+          return;
+        }
+
         state.modelFamilyName = action.payload.model_family_name;
         state.usedCheckpointId = action.payload.used_checkpoint_id;
         state.modelInfo = {
@@ -604,6 +616,7 @@ const alSlice = createSlice({
         state.predictions = withDisplayFields(action.payload.rows);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
+        state.retrainLoading = false;
         // Update projection snapshot on first inference or after a retrain.
         if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
           state.projectionPredictions = state.predictions;
