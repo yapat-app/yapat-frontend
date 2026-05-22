@@ -79,17 +79,34 @@ const SAMPLE_SCORE_UPPER_EPS = 1e-9;
 type ProjectionMethod = "pca" | "umap" | "tsne" | "isomap";
 const ALL_PROJECTION_METHODS: ProjectionMethod[] = ["tsne", "umap", "pca", "isomap"];
 
+function projectionHasValidCoords(proj: FPVProjection2D | undefined): boolean {
+  if (!proj || proj.x.length === 0 || proj.y.length !== proj.x.length) return false;
+  return proj.x.some(
+    (x, i) =>
+      x != null &&
+      proj.y[i] != null &&
+      Number.isFinite(x) &&
+      Number.isFinite(proj.y[i] as number),
+  );
+}
+
 function buildCoordsMap(
   points: FPVPointMetadata[],
   proj: FPVProjection2D,
 ): Record<number, [number, number]> | null {
-  if (proj.x.length !== points.length || proj.y.length !== points.length) return null;
+  if (!projectionHasValidCoords(proj) || proj.x.length !== points.length) return null;
   const map: Record<number, [number, number]> = {};
   for (let i = 0; i < points.length; i++) {
-    map[points[i].snippet_id] = [proj.x[i], proj.y[i]];
+    const x = proj.x[i];
+    const y = proj.y[i];
+    if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    map[points[i].snippet_id] = [x, y];
   }
   return map;
 }
+
+/** When UMAP/t-SNE were not computed, fall back to PCA for display. */
+const FPV_METHOD_FETCH_FALLBACK: ProjectionMethod = "pca";
 
 function fpvScopeKey(datasetId: number, embeddingModelId: number): string {
   return `${datasetId}:${embeddingModelId}`;
@@ -137,7 +154,7 @@ export const ProjectionView: React.FC = () => {
   } = useAppSelector((state) => state.al);
   const isClassicFeed = feedSource === "classic";
 
-  const [method, setMethod] = useState<ProjectionMethod>("tsne");
+  const [method, setMethod] = useState<ProjectionMethod>("pca");
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
@@ -291,17 +308,28 @@ export const ProjectionView: React.FC = () => {
       }
 
       try {
-        const fpv = await visualisationsApi.getFPVDataset({
-          dataset_id: selectedDatasetId,
-          embedding_model_id: effectiveEmbeddingModelId,
-          run_3d: false,
-          method: targetMethod,
-        });
-        const proj = fpv.projections_2d[targetMethod];
-        if (proj && fpv.points.length > 0) {
+        const methodsToTry: ProjectionMethod[] =
+          targetMethod === FPV_METHOD_FETCH_FALLBACK
+            ? [targetMethod]
+            : [targetMethod, FPV_METHOD_FETCH_FALLBACK];
+
+        let loaded = false;
+        for (const fetchMethod of methodsToTry) {
+          const fpv = await visualisationsApi.getFPVDataset({
+            dataset_id: selectedDatasetId,
+            embedding_model_id: effectiveEmbeddingModelId,
+            run_3d: false,
+            method: fetchMethod,
+          });
+          const proj = fpv.projections_2d[fetchMethod];
+          if (!projectionHasValidCoords(proj) || fpv.points.length === 0) {
+            continue;
+          }
           fpvUnavailableScopeRef.current = null;
-          // Persist to module-level cache.
-          _fpvPointsCache.set(fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId), fpv.points);
+          _fpvPointsCache.set(
+            fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId),
+            fpv.points,
+          );
           _fpvProjectionCache.set(projKey, proj);
           setFpvPoints(fpv.points);
           setProjectionsByMethod((prev) =>
@@ -310,6 +338,13 @@ export const ProjectionView: React.FC = () => {
           if (!options?.background) {
             setFpvError(null);
           }
+          loaded = true;
+          break;
+        }
+        if (!loaded && !options?.background) {
+          setFpvError(
+            `No valid ${targetMethod} projection coordinates; try PCA or regenerate FPV.`,
+          );
         }
       } catch (e: unknown) {
         const detail = extractFpvErrorDetail(e);
