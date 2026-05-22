@@ -91,6 +91,29 @@ function buildCoordsMap(
   return map;
 }
 
+function fpvScopeKey(datasetId: number, embeddingModelId: number): string {
+  return `${datasetId}:${embeddingModelId}`;
+}
+
+/** Backend 400 when fpv_vis rows do not exist yet (embeddings may still be ready). */
+function isProjectionNotReadyMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("generate projections first") ||
+    lower.includes("no dataset-level feature projection rows found")
+  );
+}
+
+function extractFpvErrorDetail(error: unknown): string {
+  const e = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  const detail = e?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d) => (typeof d === "object" && d && "msg" in d ? String((d as { msg: string }).msg) : String(d))).join("; ");
+  }
+  return String(e?.message ?? "Failed to load projection.");
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export const ProjectionView: React.FC = () => {
@@ -123,6 +146,8 @@ export const ProjectionView: React.FC = () => {
   >({});
   const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
+  /** When set, GET fpv-dataset returned 400 "not ready" — do not retry until dataset/embed changes or user generates. */
+  const fpvUnavailableScopeRef = useRef<string | null>(null);
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
   const [visRangeOverride, setVisRangeOverride] = useState<{ min: number; max: number; step: number } | null>(null);
@@ -202,6 +227,12 @@ export const ProjectionView: React.FC = () => {
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 
+  // Allow a new fetch attempt when dataset or embedding model changes.
+  useEffect(() => {
+    fpvUnavailableScopeRef.current = null;
+    setFpvError(null);
+  }, [selectedDatasetId, effectiveEmbeddingModelId]);
+
   const resetProjectionComponentState = useCallback(() => {
     setFpvPoints([]);
     setProjectionsByMethod({});
@@ -227,8 +258,13 @@ export const ProjectionView: React.FC = () => {
   );
 
   const fetchProjectionMethod = useCallback(
-    async (targetMethod: ProjectionMethod, options?: { background?: boolean }) => {
+    async (targetMethod: ProjectionMethod, options?: { background?: boolean; force?: boolean }) => {
       if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
+
+      const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
+      if (!options?.force && fpvUnavailableScopeRef.current === scopeKey) {
+        return;
+      }
 
       // Serve from module cache if already loaded.
       const projKey = fpvProjectionKey(selectedDatasetId, effectiveEmbeddingModelId, targetMethod);
@@ -249,7 +285,9 @@ export const ProjectionView: React.FC = () => {
       setLoadingMethods((prev) => new Set(prev).add(targetMethod));
       if (!options?.background) {
         setFpvLoading(true);
-        setFpvError(null);
+        if (!options?.force) {
+          setFpvError(null);
+        }
       }
 
       try {
@@ -261,6 +299,7 @@ export const ProjectionView: React.FC = () => {
         });
         const proj = fpv.projections_2d[targetMethod];
         if (proj && fpv.points.length > 0) {
+          fpvUnavailableScopeRef.current = null;
           // Persist to module-level cache.
           _fpvPointsCache.set(fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId), fpv.points);
           _fpvProjectionCache.set(projKey, proj);
@@ -268,13 +307,20 @@ export const ProjectionView: React.FC = () => {
           setProjectionsByMethod((prev) =>
             prev[targetMethod] ? prev : { ...prev, [targetMethod]: proj },
           );
+          if (!options?.background) {
+            setFpvError(null);
+          }
         }
-      } catch (e: any) {
-        if (!options?.background) {
+      } catch (e: unknown) {
+        const detail = extractFpvErrorDetail(e);
+        if (isProjectionNotReadyMessage(detail)) {
+          fpvUnavailableScopeRef.current = scopeKey;
+          if (!options?.background) {
+            setFpvError(detail);
+          }
+        } else if (!options?.background) {
           resetProjectionComponentState();
-          setFpvError(
-            String(e?.response?.data?.detail ?? e?.message ?? "Failed to load projection."),
-          );
+          setFpvError(detail);
         }
       } finally {
         inFlightMethodsRef.current.delete(targetMethod);
@@ -300,17 +346,32 @@ export const ProjectionView: React.FC = () => {
     }
     if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
 
+    const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
+    if (fpvUnavailableScopeRef.current === scopeKey) return;
+
     // Try to restore from module cache before touching the network.
     const alreadyCached = restoreFromCache(selectedDatasetId, effectiveEmbeddingModelId);
-    if (!alreadyCached) {
-      resetProjectionComponentState();
-      void fetchProjectionMethod(method);
+    if (alreadyCached) {
+      fpvUnavailableScopeRef.current = null;
+      return;
     }
-  }, [selectedDatasetId, effectiveEmbeddingModelId, visMode, resetProjectionComponentState, restoreFromCache]);
+    resetProjectionComponentState();
+    void fetchProjectionMethod(method);
+  }, [
+    selectedDatasetId,
+    effectiveEmbeddingModelId,
+    visMode,
+    method,
+    resetProjectionComponentState,
+    restoreFromCache,
+    fetchProjectionMethod,
+  ]);
 
   // When the user picks another method, fetch it on demand if not cached yet.
   useEffect(() => {
     if (visMode === "hidden" || !selectedDatasetId || !effectiveEmbeddingModelId) return;
+    const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
+    if (fpvUnavailableScopeRef.current === scopeKey) return;
     if (projectionsByMethod[method]) return;
     void fetchProjectionMethod(method);
   }, [
@@ -393,14 +454,13 @@ export const ProjectionView: React.FC = () => {
   }, [isClassicFeed, feedbacks, selectedDatasetId, snippetSetId]);
 
   const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
-  const isMissingProjection =
-    (fpvError ?? "").toLowerCase().includes("generate projections first") ||
-    (fpvError ?? "").toLowerCase().includes("no dataset-level feature projection rows found");
+  const isMissingProjection = isProjectionNotReadyMessage(fpvError ?? "");
 
   const handleGenerateNow = async () => {
     if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
     setFpvGenerateLoading(true);
     setFpvError(null);
+    fpvUnavailableScopeRef.current = null;
     try {
       await visualisationsApi.generateFPVDataset({
         dataset_id: selectedDatasetId,
@@ -410,9 +470,9 @@ export const ProjectionView: React.FC = () => {
       // Invalidate module cache so the fresh projection is fetched.
       clearFpvCache(selectedDatasetId, effectiveEmbeddingModelId);
       resetProjectionComponentState();
-      await fetchProjectionMethod(method);
+      await fetchProjectionMethod(method, { force: true });
       for (const m of ALL_PROJECTION_METHODS) {
-        if (m !== method) void fetchProjectionMethod(m, { background: true });
+        if (m !== method) void fetchProjectionMethod(m, { background: true, force: true });
       }
     } catch (e: any) {
       resetProjectionComponentState();
