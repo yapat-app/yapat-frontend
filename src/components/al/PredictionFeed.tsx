@@ -91,9 +91,16 @@ export const PredictionFeed: React.FC = () => {
       return;
     }
     let cancelled = false;
+    const neededRecordingIds = Array.from(
+      new Set(
+        predictions
+          .map((p) => p.recording_id)
+          .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
+      ),
+    );
     void recordingApi
       .getAll({ dataset_id: selectedDatasetId, limit: 10000 })
-      .then((rows) => {
+      .then(async (rows) => {
         if (cancelled) return;
         const next: Record<number, string> = {};
         for (const r of rows) {
@@ -105,6 +112,28 @@ export const PredictionFeed: React.FC = () => {
             null;
           if (name) next[id] = name;
         }
+        // Fallback: if dataset has >10k recordings, resolve displayed-but-missing IDs directly.
+        const missingIds = neededRecordingIds.filter((id) => !next[id]);
+        if (missingIds.length > 0) {
+          const fetched = await Promise.all(
+            missingIds.map(async (id) => {
+              try {
+                const r = await recordingApi.getById(id);
+                const name =
+                  (typeof r.file_name === "string" && r.file_name) ||
+                  (typeof r.name === "string" && r.name) ||
+                  null;
+                return name ? { id, name } : null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+          for (const item of fetched) {
+            if (item) next[item.id] = item.name;
+          }
+        }
+        if (cancelled) return;
         setRecordingNameById(next);
       })
       .catch(() => {
@@ -113,7 +142,7 @@ export const PredictionFeed: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId]);
+  }, [selectedDatasetId, predictions]);
 
   const setCardRef = useCallback(
     (snippetId: number) => (el: HTMLDivElement | null) => {
