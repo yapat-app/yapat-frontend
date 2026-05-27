@@ -177,15 +177,13 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
 
   const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
   const labelContributors: Record<string, string[]> = {};
-  if (isClassicFeed) {
-    for (const ann of snippetAnnotations) {
-      const label = (ann.resolved_name_snapshot ?? "").trim();
-      if (!label) continue;
-      const who = (ann.username ?? `user:${ann.user_id}`).trim();
-      if (!labelContributors[label]) labelContributors[label] = [];
-      if (!labelContributors[label].includes(who)) {
-        labelContributors[label].push(who);
-      }
+  for (const ann of snippetAnnotations) {
+    const label = (ann.resolved_name_snapshot ?? "").trim();
+    if (!label) continue;
+    const who = (ann.username ?? `user:${ann.user_id}`).trim();
+    if (!labelContributors[label]) labelContributors[label] = [];
+    if (!labelContributors[label].includes(who)) {
+      labelContributors[label].push(who);
     }
   }
 
@@ -264,9 +262,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
           getLabelTooltip={(lbl) =>
             labelContributors[lbl]?.length
               ? `Annotated by: ${labelContributors[lbl].join(", ")}`
-              : isClassicFeed
-                ? "Annotator unknown"
-                : "Contributor details unavailable in this mode"
+              : "Annotator unknown"
           }
           disabled={feedbackDisabled}
           compact

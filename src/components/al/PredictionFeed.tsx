@@ -17,15 +17,19 @@ import React, {
 } from "react";
 import { Spin, Empty, Alert, Card, Progress, Row, Col, Statistic } from "antd";
 import { CheckCircleOutlined, SoundOutlined } from "@ant-design/icons";
-import { useAppSelector } from "../../hooks";
+import { useAppDispatch, useAppSelector } from "../../hooks";
 import { alApi } from "../../services/alApi";
 import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
+import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
+import { hydrateClassicAnnotations } from "../../redux/features/alSlice";
+import type { Annotation } from "../../types";
 
 export const PredictionFeed: React.FC = () => {
+  const dispatch = useAppDispatch();
   const {
     predictions,
     inferenceLoading,
@@ -53,6 +57,33 @@ export const PredictionFeed: React.FC = () => {
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
   useALSync(cardRefs);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateSnippetContributors() {
+      if (predictions.length === 0) {
+        dispatch(hydrateClassicAnnotations({}));
+        return;
+      }
+      try {
+        const ids = predictions.map((p) => p.snippet_id);
+        const all = await fetchAnnotationsBySnippetIds(ids);
+        if (cancelled) return;
+        const bySnippet: Record<number, Annotation[]> = {};
+        for (const ann of all) {
+          if (!bySnippet[ann.snippet_id]) bySnippet[ann.snippet_id] = [];
+          bySnippet[ann.snippet_id].push(ann);
+        }
+        dispatch(hydrateClassicAnnotations(bySnippet));
+      } catch {
+        if (!cancelled) dispatch(hydrateClassicAnnotations({}));
+      }
+    }
+    void hydrateSnippetContributors();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, predictions]);
 
   useEffect(() => {
     if (!selectedDatasetId) {

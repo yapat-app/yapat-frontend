@@ -515,11 +515,7 @@ const alSlice = createSlice({
       state,
       action: PayloadAction<Record<number, Annotation[]>>,
     ) => {
-      if (state.feedSource !== "classic") return;
-      state.classicAnnotationsBySnippet = {
-        ...state.classicAnnotationsBySnippet,
-        ...action.payload,
-      };
+      state.classicAnnotationsBySnippet = action.payload;
     },
     setClassicSnippetAnnotations: (
       state,
