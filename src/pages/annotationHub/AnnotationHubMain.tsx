@@ -111,7 +111,9 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
                     ? "Select a dataset above, then generate a feed to start annotating."
                     : mode === "similarity"
                       ? "No saved similarity feed for this dataset yet. Generate one with a reference audio sample."
-                      : "No saved random feed for this dataset yet. Generate one to start annotating."}
+                      : mode === "filter"
+                        ? "No saved filter feed for this dataset yet. Set your filters and generate a feed."
+                        : "No saved random feed for this dataset yet. Generate one to start annotating."}
                 </p>
                 {classicDatasetId && (
                   <Button type="primary" onClick={onOpenClassicFeedConfig}>

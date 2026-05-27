@@ -175,6 +175,20 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     }
   };
 
+  const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+  const labelContributors: Record<string, string[]> = {};
+  if (isClassicFeed) {
+    for (const ann of snippetAnnotations) {
+      const label = (ann.resolved_name_snapshot ?? "").trim();
+      if (!label) continue;
+      const who = (ann.username ?? `user:${ann.user_id}`).trim();
+      if (!labelContributors[label]) labelContributors[label] = [];
+      if (!labelContributors[label].includes(who)) {
+        labelContributors[label].push(who);
+      }
+    }
+  }
+
   // Sync local selection from backend feedback when in blind mode.
   // Never touch saveState here — the submit() function owns that lifecycle.
   useEffect(() => {
@@ -247,6 +261,13 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
             setSelectedLabels(labels);
             setSaveState("idle");
           }}
+          getLabelTooltip={(lbl) =>
+            labelContributors[lbl]?.length
+              ? `Annotated by: ${labelContributors[lbl].join(", ")}`
+              : isClassicFeed
+                ? "Annotator unknown"
+                : "Contributor details unavailable in this mode"
+          }
           disabled={feedbackDisabled}
           compact
           showList
@@ -317,6 +338,23 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
             Modify Label
           </Button>
         </div>
+        {existingFeedback.action === "MODIFY" &&
+          (existingFeedback.final_labels ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {(existingFeedback.final_labels ?? []).map((lbl) => (
+                <Tooltip
+                  key={lbl}
+                  title={
+                    labelContributors[lbl]?.length
+                      ? `Annotated by: ${labelContributors[lbl].join(", ")}`
+                      : "Annotator unknown"
+                  }
+                >
+                  <Tag className="cursor-help">{lbl}</Tag>
+                </Tooltip>
+              ))}
+            </div>
+          )}
         {modifyInline}
       </div>
     );

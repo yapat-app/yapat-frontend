@@ -19,6 +19,7 @@ import { Spin, Empty, Alert, Card, Progress, Row, Col, Statistic } from "antd";
 import { CheckCircleOutlined, SoundOutlined } from "@ant-design/icons";
 import { useAppSelector } from "../../hooks";
 import { alApi } from "../../services/alApi";
+import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
@@ -41,6 +42,7 @@ export const PredictionFeed: React.FC = () => {
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+  const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
 
   const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
     scrollContainerRef.current = el;
@@ -51,6 +53,36 @@ export const PredictionFeed: React.FC = () => {
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
   useALSync(cardRefs);
+
+  useEffect(() => {
+    if (!selectedDatasetId) {
+      setRecordingNameById({});
+      return;
+    }
+    let cancelled = false;
+    void recordingApi
+      .getAll({ dataset_id: selectedDatasetId, limit: 10000 })
+      .then((rows) => {
+        if (cancelled) return;
+        const next: Record<number, string> = {};
+        for (const r of rows) {
+          const id = Number(r.id);
+          if (!Number.isFinite(id)) continue;
+          const name =
+            (typeof r.file_name === "string" && r.file_name) ||
+            (typeof r.name === "string" && r.name) ||
+            null;
+          if (name) next[id] = name;
+        }
+        setRecordingNameById(next);
+      })
+      .catch(() => {
+        if (!cancelled) setRecordingNameById({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDatasetId]);
 
   const setCardRef = useCallback(
     (snippetId: number) => (el: HTMLDivElement | null) => {
@@ -200,6 +232,11 @@ export const PredictionFeed: React.FC = () => {
           <PredictionCard
             key={selected.id ?? selected.snippet_id}
             prediction={selected}
+            recordingName={
+              typeof selected.recording_id === "number"
+                ? recordingNameById[selected.recording_id]
+                : undefined
+            }
             cardRef={setCardRef(selected.snippet_id)}
             scrollRoot={scrollRoot}
             loadAudioImmediately
@@ -235,6 +272,11 @@ export const PredictionFeed: React.FC = () => {
               >
                 <PredictionCard
                   prediction={p}
+                  recordingName={
+                    typeof p.recording_id === "number"
+                      ? recordingNameById[p.recording_id]
+                      : undefined
+                  }
                   cardRef={setCardRef(p.snippet_id)}
                   cardHeightPx={blindSnapCardHeight}
                   serverLabels={labelsBySnippet[p.snippet_id] ?? []}
@@ -310,6 +352,11 @@ export const PredictionFeed: React.FC = () => {
             <PredictionCard
               key={p.id ?? p.snippet_id}
               prediction={p}
+              recordingName={
+                typeof p.recording_id === "number"
+                  ? recordingNameById[p.recording_id]
+                  : undefined
+              }
               cardRef={setCardRef(p.snippet_id)}
               scrollRoot={scrollRoot}
               loadAudioImmediately={index === 0}

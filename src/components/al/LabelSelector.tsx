@@ -29,6 +29,7 @@ interface GBIFSuggestion {
 interface Props {
   value?: string[];
   onChange?: (labels: string[]) => void;
+  getLabelTooltip?: (label: string) => string | null;
   disabled?: boolean;
   placeholder?: string;
   /** Show an always-visible label list below the selector (Annotation-like UI). */
@@ -60,6 +61,7 @@ interface Props {
 export const LabelSelector: React.FC<Props> = ({
   value = [],
   onChange,
+  getLabelTooltip,
   disabled = false,
   placeholder = "Search species…",
   showList = true,
@@ -167,7 +169,7 @@ export const LabelSelector: React.FC<Props> = ({
           <div className="flex-shrink-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
-                Your labels
+                Labels
               </span>
               <button
                 type="button"
@@ -180,18 +182,19 @@ export const LabelSelector: React.FC<Props> = ({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {value.map((lbl) => (
-                <Tag
-                  key={lbl}
-                  color="blue"
-                  closable={!disabled}
-                  onClose={(e) => {
-                    e.preventDefault();
-                    toggle(lbl);
-                  }}
-                  className="text-xs font-semibold rounded-md px-2 py-0.5 m-0"
-                >
-                  {lbl}
-                </Tag>
+                <Tooltip key={lbl} title={getLabelTooltip?.(lbl) ?? undefined}>
+                  <Tag
+                    color="blue"
+                    closable={!disabled}
+                    onClose={(e) => {
+                      e.preventDefault();
+                      toggle(lbl);
+                    }}
+                    className="text-xs font-semibold rounded-md px-2 py-0.5 m-0 cursor-help"
+                  >
+                    {lbl}
+                  </Tag>
+                </Tooltip>
               ))}
             </div>
           </div>

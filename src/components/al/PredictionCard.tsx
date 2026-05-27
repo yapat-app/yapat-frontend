@@ -29,6 +29,7 @@ import {
 
 interface Props {
   prediction: PAMPrediction;
+  recordingName?: string;
   cardRef?: (el: HTMLDivElement | null) => void;
   /** Height in px for the blind snap card (measured from scroll container in PredictionFeed). */
   cardHeightPx?: number;
@@ -42,6 +43,7 @@ interface Props {
 
 export const PredictionCard: React.FC<Props> = ({
   prediction,
+  recordingName,
   cardRef,
   cardHeightPx,
   serverLabels,
@@ -64,6 +66,8 @@ export const PredictionCard: React.FC<Props> = ({
   const isSelected = selectedSnippetId === prediction.snippet_id;
   // feedbacks are keyed by snippet_id
   const hasFeedback = !!feedbacks[prediction.snippet_id];
+  const recordingId = prediction.recording_id;
+  const recordingLabel = recordingName ?? (typeof recordingId === "number" ? `Recording #${recordingId}` : null);
 
   const localRef = useRef<HTMLDivElement | null>(null);
   // Keep the actual element in state so viewport logic re-runs when ref is set.
@@ -220,9 +224,14 @@ export const PredictionCard: React.FC<Props> = ({
       >
         {/* ── Header ── */}
         <div className="flex-shrink-0 flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
-          <span className="text-xs text-gray-500 font-ibm-sans flex items-center gap-1">
-            <SoundOutlined /> Snippet #{prediction.snippet_id}
-          </span>
+          <div className="text-xs text-gray-500 font-ibm-sans flex items-center gap-2">
+            <span className="flex items-center gap-1">
+              <SoundOutlined /> Snippet #{prediction.snippet_id}
+            </span>
+            {recordingLabel && (
+              <span className="text-gray-400">· {recordingLabel}</span>
+            )}
+          </div>
           {hasFeedback && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
               Labeled
@@ -307,9 +316,14 @@ export const PredictionCard: React.FC<Props> = ({
           <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
             {labelText}
           </span>
-          <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1 flex-shrink-0">
-            <SoundOutlined />#{prediction.snippet_id}
-          </span>
+          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2 flex-shrink-0">
+            <span className="flex items-center gap-1">
+              <SoundOutlined />#{prediction.snippet_id}
+            </span>
+            {recordingLabel && (
+              <span>{recordingLabel}</span>
+            )}
+          </div>
         </div>
 
         {/* ── Two-column body ── */}
@@ -411,9 +425,14 @@ export const PredictionCard: React.FC<Props> = ({
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1">
-            <SoundOutlined />#{prediction.snippet_id}
-          </span>
+          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2">
+            <span className="flex items-center gap-1">
+              <SoundOutlined />#{prediction.snippet_id}
+            </span>
+            {recordingLabel && (
+              <span>{recordingLabel}</span>
+            )}
+          </div>
         </div>
       </div>
 

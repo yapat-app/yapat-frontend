@@ -1,1 +1,1 @@
-export type AnnotateMode = "random" | "similarity" | "al";
+export type AnnotateMode = "random" | "similarity" | "al" | "filter";

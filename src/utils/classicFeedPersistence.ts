@@ -5,8 +5,8 @@
 
 import type { Snippet } from "../types";
 
-const STORAGE_KEY = "yapat_classic_feed_slots_v1";
-const VERSION = 1;
+const STORAGE_KEY = "yapat_classic_feed_slots_v2";
+const VERSION = 2;
 
 export interface PersistedClassicFeedSlot {
   snippets: Snippet[];
@@ -19,7 +19,7 @@ export interface PersistedClassicFeedSlot {
 
 export type PersistedClassicFeedCache = Record<
   number,
-  { random: PersistedClassicFeedSlot | null; similarity: PersistedClassicFeedSlot | null }
+  { random: PersistedClassicFeedSlot | null; similarity: PersistedClassicFeedSlot | null; filter: PersistedClassicFeedSlot | null }
 >;
 
 type PersistedRoot = {

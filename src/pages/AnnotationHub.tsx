@@ -38,7 +38,7 @@ export const AnnotationHub: React.FC = () => {
 
   const rawMode = searchParams.get("mode");
   const mode: AnnotateMode =
-    rawMode === "al" || rawMode === "similarity" ? rawMode : "random";
+    rawMode === "al" || rawMode === "similarity" || rawMode === "filter" ? rawMode : "random";
 
   const setMode = useCallback(
     (next: AnnotateMode) => {
@@ -47,7 +47,7 @@ export const AnnotationHub: React.FC = () => {
       if (dsId) params.dataset_id = dsId;
 
       if (next === "al") {
-        if (dsId && (mode === "random" || mode === "similarity")) {
+        if (dsId && (mode === "random" || mode === "similarity" || mode === "filter")) {
           const ds = Number(dsId);
           if (!Number.isNaN(ds)) {
             dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
@@ -152,6 +152,12 @@ export const AnnotationHub: React.FC = () => {
         mode={mode}
         feedLimit={classic.feedLimit}
         onFeedLimitChange={classic.setFeedLimit}
+        filterAnnotationStatus={classic.filterAnnotationStatus}
+        onFilterAnnotationStatusChange={classic.setFilterAnnotationStatus}
+        filterLocations={classic.filterLocations}
+        onFilterLocationsChange={classic.setFilterLocations}
+        recordingLocations={classic.recordingLocations}
+        locationsLoading={classic.locationsLoading}
         similarityState={classic.similarityState}
         onSimilarityChange={classic.handleSimilarityChange}
         onCancel={() => classic.setClassicConfigOpen(false)}

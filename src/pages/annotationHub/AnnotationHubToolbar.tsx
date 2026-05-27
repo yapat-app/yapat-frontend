@@ -17,6 +17,7 @@ import {
   UnorderedListOutlined,
   ThunderboltOutlined,
   AudioOutlined,
+  FilterOutlined,
 } from "@ant-design/icons";
 import type { Dataset } from "../../types";
 import type { PhaseConfig } from "../../studyPhases/types";
@@ -103,6 +104,11 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
             label: <span className="font-ibm-sans text-xs px-1">Similarity</span>,
             value: "similarity",
             icon: <AudioOutlined />,
+          },
+          {
+            label: <span className="font-ibm-sans text-xs px-1">Filter</span>,
+            value: "filter",
+            icon: <FilterOutlined />,
           },
           {
             label: <span className="font-ibm-sans text-xs px-1">Active Learning</span>,

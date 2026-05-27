@@ -99,6 +99,7 @@ export interface PAMPrediction {
   id: number | null;
   model_checkpoint_id: number | null;
   snippet_id: number;
+  recording_id?: number | null;
   /**
    * Backend is multi-label.
    * UI still expects a primary label + confidence, so we also keep

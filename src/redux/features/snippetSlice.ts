@@ -15,7 +15,7 @@ import type {
 import { getLoggedInUser, logout } from "./authSlice";
 import { loadClassicFeedCacheForUser } from "../../utils/classicFeedPersistence";
 
-export type ClassicFeedKind = "random" | "similarity";
+export type ClassicFeedKind = "random" | "similarity" | "filter";
 
 /** Snapshot of classic (random/similarity) feed UI state per dataset. */
 export interface ClassicFeedSlotSnapshot {
@@ -49,7 +49,7 @@ export interface SnippetState {
    */
   classicFeedCache: Record<
     number,
-    { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null }
+    { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null; filter: ClassicFeedSlotSnapshot | null }
   >;
   /** Last user id we hydrated classicFeedCache from localStorage (session guard). */
   classicFeedCacheUserId: number | null;
@@ -69,9 +69,9 @@ function snapshotFromState(state: SnippetState): ClassicFeedSlotSnapshot {
 function ensureClassicBucket(
   cache: SnippetState["classicFeedCache"],
   datasetId: number,
-): { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null } {
+): { random: ClassicFeedSlotSnapshot | null; similarity: ClassicFeedSlotSnapshot | null; filter: ClassicFeedSlotSnapshot | null } {
   if (!cache[datasetId]) {
-    cache[datasetId] = { random: null, similarity: null };
+    cache[datasetId] = { random: null, similarity: null, filter: null };
   }
   return cache[datasetId]!;
 }
@@ -340,7 +340,8 @@ export const snippetSlice = createSlice({
         const dsId = action.meta.arg.dataset_id;
         if (typeof dsId === "number" && Number.isFinite(dsId)) {
           const bucket = ensureClassicBucket(state.classicFeedCache, dsId);
-          bucket.random = snapshotFromState(state);
+          const kind: ClassicFeedKind = action.meta.arg.method === "filter" ? "filter" : "random";
+          bucket[kind] = snapshotFromState(state);
         }
       })
       .addCase(fetchSnippetFeed.rejected, (state, action) => {
