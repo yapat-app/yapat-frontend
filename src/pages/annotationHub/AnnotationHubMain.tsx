@@ -19,7 +19,11 @@ export type AnnotationHubMainProps = {
   showClassicEmpty: boolean;
   classicDatasetId: string | null;
   generateFeedLabel: string;
+  classicGenerateLoading: boolean;
   onOpenClassicFeedConfig: () => void;
+  alFeedActionLabel: string;
+  alFeedActionLoading: boolean;
+  onOpenAlFeedConfig: () => void;
   onBrowseDatasets: () => void;
 };
 
@@ -34,7 +38,11 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
   showClassicEmpty,
   classicDatasetId,
   generateFeedLabel,
+  classicGenerateLoading,
   onOpenClassicFeedConfig,
+  alFeedActionLabel,
+  alFeedActionLoading,
+  onOpenAlFeedConfig,
   onBrowseDatasets,
 }) => {
   const dispatch = useAppDispatch();
@@ -87,7 +95,13 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
             </p>
           </div>
         ) : (
-          <PhaseLayout />
+          <PhaseLayout
+            actionButton={{
+              label: alFeedActionLabel,
+              loading: alFeedActionLoading,
+              onClick: onOpenAlFeedConfig,
+            }}
+          />
         ))}
 
       {isClassicMode && showClassicSpinner && (
@@ -130,7 +144,11 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
       )}
 
       {isClassicMode && !showClassicEmpty && !showClassicSpinner && (
-        <ClassicWorkspace />
+        <ClassicWorkspace
+          feedActionLabel={generateFeedLabel}
+          onOpenFeedConfig={onOpenClassicFeedConfig}
+          feedActionLoading={classicGenerateLoading}
+        />
       )}
     </>
   );

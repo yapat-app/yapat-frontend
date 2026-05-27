@@ -5,15 +5,12 @@ import {
   Spin,
   Tag,
   Tooltip,
-  Button,
 } from "antd";
 import {
   DatabaseOutlined,
   BulbOutlined,
   CheckCircleOutlined,
-  PlayCircleOutlined,
   HistoryOutlined,
-  SettingOutlined,
   UnorderedListOutlined,
   ThunderboltOutlined,
   AudioOutlined,
@@ -36,10 +33,6 @@ export type AnnotationHubToolbarProps = {
   onClassicDatasetChange: (datasetId: number) => void;
   alSelectedDatasetId: number | null;
   onAlDatasetChange: (datasetId: number) => void;
-  onOpenClassicFeedConfig: () => void;
-  classicGenerateLabel: string;
-  classicGenerateLoading: boolean;
-  onOpenAlInference: () => void;
   inferenceLoading: boolean;
   predictionsLength: number;
   feedbackCountDisplay: { shown: number; pending: boolean };
@@ -58,10 +51,6 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
   onClassicDatasetChange,
   alSelectedDatasetId,
   onAlDatasetChange,
-  onOpenClassicFeedConfig,
-  classicGenerateLabel,
-  classicGenerateLoading,
-  onOpenAlInference,
   inferenceLoading,
   predictionsLength,
   feedbackCountDisplay,
@@ -167,29 +156,6 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
             {phase.id}
           </Tag>
         </Tooltip>
-      )}
-
-      {mode === "al" && alSelectedDatasetId !== null && (
-        <Button
-          type="primary"
-          icon={<PlayCircleOutlined />}
-          loading={inferenceLoading}
-          onClick={onOpenAlInference}
-          style={{ backgroundColor: "#1e40af", color: "#fff" }}
-        >
-          Start Inference
-        </Button>
-      )}
-
-      {mode !== "al" && classicDatasetId && (
-        <Button
-          type="primary"
-          icon={<SettingOutlined />}
-          onClick={onOpenClassicFeedConfig}
-          loading={classicGenerateLoading}
-        >
-          {classicGenerateLabel}
-        </Button>
       )}
 
       {mode === "al" && predictionsLength > 0 && (

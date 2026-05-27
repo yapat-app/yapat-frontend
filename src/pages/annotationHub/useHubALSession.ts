@@ -196,6 +196,20 @@ export function useHubALSession(
       .catch(() => {});
   }, [selectedDatasetId]);
 
+  const resolvedSnippetSetId = useMemo(() => {
+    if (localSS !== null) return localSS;
+    if (snippetSetId !== null) return snippetSetId;
+    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    return ready?.id ?? null;
+  }, [localSS, snippetSetId, snippetSets]);
+  const hasReadySnippetSet = resolvedSnippetSetId !== null;
+
+  useEffect(() => {
+    if (localSS !== null) return;
+    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    if (ready?.id != null) setLocalSS(ready.id);
+  }, [snippetSets, localSS]);
+
   useEffect(() => {
     if (checkpoints.length === 0) {
       if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
@@ -224,7 +238,7 @@ export function useHubALSession(
   );
 
   const handleRunInference = useCallback(() => {
-    if (selectedDatasetId === null || localSS === null) return;
+    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
     const family =
       (localFamily ?? "").trim() ||
       (localCkpt !== null
@@ -232,7 +246,7 @@ export function useHubALSession(
         : "");
     if (!family) return;
     const embeddingModelId =
-      snippetSets.find((s) => s.id === localSS)?.embedding_model_id ??
+      snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
       1;
     const suggestionParams = buildInferenceSuggestionParams(
@@ -246,7 +260,7 @@ export function useHubALSession(
       setInferenceConfig({
         modelCheckpointId: localCkpt,
         modelFamilyName: family,
-        snippetSetId: localSS,
+        snippetSetId: resolvedSnippetSetId,
         embeddingModelId,
         k,
       }),
@@ -255,7 +269,7 @@ export function useHubALSession(
       runInference({
         model_family_name: family,
         dataset_id: selectedDatasetId,
-        snippet_set_id: localSS,
+        snippet_set_id: resolvedSnippetSetId,
         ...suggestionParams,
       }),
     );
@@ -268,7 +282,7 @@ export function useHubALSession(
     setAlConfigOpen(false);
   }, [
     selectedDatasetId,
-    localSS,
+    resolvedSnippetSetId,
     localFamily,
     localCkpt,
     checkpoints,
@@ -286,7 +300,7 @@ export function useHubALSession(
       handleRunInference();
       return;
     }
-    if (selectedDatasetId === null || localSS === null) return;
+    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
     const family = (localFamily ?? "").trim() || "default";
     if (!hasGroundTruthMetadata) {
       handleRunInference();
@@ -298,7 +312,7 @@ export function useHubALSession(
       trainFromScratch({
         dataset_id: selectedDatasetId,
         model_family_name: family,
-        snippet_set_id: localSS ?? undefined,
+        snippet_set_id: resolvedSnippetSetId ?? undefined,
         embedding_model_id: trainEmbeddingModelId,
         metadata_path: trainMetadataPath.trim(),
         label_config_path: trainLabelConfigPath.trim(),
@@ -316,7 +330,7 @@ export function useHubALSession(
     checkpoints.length,
     handleRunInference,
     selectedDatasetId,
-    localSS,
+    resolvedSnippetSetId,
     localFamily,
     hasGroundTruthMetadata,
     trainEmbeddingModelId,
@@ -417,6 +431,7 @@ export function useHubALSession(
     selectedDatasetId,
     modelFamilyName,
     snippetSetId,
+    hasReadySnippetSet,
     samplingMethod,
     inferenceK,
     phase,
@@ -434,7 +449,7 @@ export function useHubALSession(
   const openInferenceModal = useCallback(() => {
     setLocalCkpt(modelCheckpointId);
     setLocalFamily(modelFamilyName);
-    setLocalSS(snippetSetId);
+    setLocalSS(resolvedSnippetSetId);
     setLocalK(inferenceK);
     setLocalTopKOnly(
       predictions.length === 0 || isSuggestionsMode(modelInfo),
@@ -449,7 +464,7 @@ export function useHubALSession(
   }, [
     modelCheckpointId,
     modelFamilyName,
-    snippetSetId,
+    resolvedSnippetSetId,
     inferenceK,
     predictions.length,
     modelInfo,
@@ -465,6 +480,7 @@ export function useHubALSession(
     modelFamilyName,
     samplingMethod,
     snippetSetId,
+    hasReadySnippetSet,
     inferenceK,
     predictions,
     modelInfo,
@@ -485,8 +501,6 @@ export function useHubALSession(
     setLocalCkpt,
     localFamily,
     setLocalFamily,
-    localSS,
-    setLocalSS,
     localK,
     setLocalK,
     localTopKOnly,

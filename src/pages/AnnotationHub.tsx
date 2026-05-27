@@ -84,13 +84,6 @@ export const AnnotationHub: React.FC = () => {
         }
         alSelectedDatasetId={al.selectedDatasetId}
         onAlDatasetChange={al.handleDatasetChange}
-        onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
-        classicGenerateLabel={classic.generateFeedLabel}
-        classicGenerateLoading={
-          (classic.snippetsLoading || classic.serverHydrateBusy) &&
-          !classic.hasClassicFeed
-        }
-        onOpenAlInference={al.openInferenceModal}
         inferenceLoading={al.inferenceLoading}
         predictionsLength={al.predictions.length}
         feedbackCountDisplay={al.feedbackCountDisplay}
@@ -111,7 +104,11 @@ export const AnnotationHub: React.FC = () => {
         showClassicEmpty={classic.showClassicEmpty}
         classicDatasetId={classicDatasetId}
         generateFeedLabel={classic.generateFeedLabel}
+        classicGenerateLoading={classic.feedGenerateBusy}
         onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
+        alFeedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
+        alFeedActionLoading={al.inferenceLoading}
+        onOpenAlFeedConfig={al.openInferenceModal}
         onBrowseDatasets={() => navigate("/datasets")}
       />
 
@@ -120,19 +117,17 @@ export const AnnotationHub: React.FC = () => {
         onCancel={() => al.setAlConfigOpen(false)}
         onOk={al.handleOpenALSession}
         checkpoints={al.checkpoints}
-        snippetSets={al.snippetSets}
         embeddingMethods={al.embeddingMethods}
         embeddingMethodsLoading={al.embeddingMethodsLoading}
         localCkpt={al.localCkpt}
         setLocalCkpt={al.setLocalCkpt}
         localFamily={al.localFamily}
         setLocalFamily={al.setLocalFamily}
-        localSS={al.localSS}
-        setLocalSS={al.setLocalSS}
         localK={al.localK}
         setLocalK={al.setLocalK}
         localTopKOnly={al.localTopKOnly}
         setLocalTopKOnly={al.setLocalTopKOnly}
+        hasReadySnippetSet={al.hasReadySnippetSet}
         hasGroundTruthMetadata={al.hasGroundTruthMetadata}
         setHasGroundTruthMetadata={al.setHasGroundTruthMetadata}
         trainEmbeddingModelId={al.trainEmbeddingModelId}

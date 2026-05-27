@@ -89,6 +89,7 @@ export const PredictionCard: React.FC<Props> = ({
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [audioSampleRate, setAudioSampleRate] = useState<number>(16000);
+  const [audioAttempt, setAudioAttempt] = useState(0);
 
   const isBlind = phase.ui.labelingMode === "blind";
   // In blind mode the card fills the viewport; elsewhere use compact heights.
@@ -149,6 +150,10 @@ export const PredictionCard: React.FC<Props> = ({
     }
   }, [cachedAudio]);
 
+  useEffect(() => {
+    setAudioAttempt(0);
+  }, [prediction.snippet_id]);
+
   const shouldLoadAudio = loadAudioImmediately || isSelected || inView;
 
   // Fetch audio when card is visible, selected, or the first feed slot.
@@ -196,6 +201,15 @@ export const PredictionCard: React.FC<Props> = ({
         setAudioBlobUrl(audio.url);
         setAudioSampleRate(audio.sampleRate);
       } else {
+        // First card occasionally races on initial mount; retry eager loads briefly.
+        if (loadAudioImmediately && audioAttempt < 2) {
+          window.setTimeout(() => {
+            if (!controller.signal.aborted) {
+              setAudioAttempt((n) => n + 1);
+            }
+          }, 220);
+          return;
+        }
         setAudioError(true);
       }
     });
@@ -205,7 +219,7 @@ export const PredictionCard: React.FC<Props> = ({
       controller.abort();
       inFlight.delete(snippetId);
     };
-  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected]);
+  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected, audioAttempt]);
 
   const isPhase1 = phase.id.startsWith("P1.");
 

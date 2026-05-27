@@ -11,7 +11,7 @@ import {
 import { useAppDispatch } from "../../hooks";
 import { getAllEmbeddingMethods } from "../../redux/features/embeddingSlice";
 import type { PAMCheckpoint } from "../../types/al";
-import type { SnippetSet, EmbeddingMethod } from "../../types";
+import type { EmbeddingMethod } from "../../types";
 
 const { Option } = Select;
 
@@ -20,19 +20,17 @@ export type ALInferenceConfigModalProps = {
   onCancel: () => void;
   onOk: () => void | Promise<void>;
   checkpoints: PAMCheckpoint[];
-  snippetSets: SnippetSet[];
   embeddingMethods: EmbeddingMethod[] | null | undefined;
   embeddingMethodsLoading: boolean;
   localCkpt: number | null;
   setLocalCkpt: (v: number | null) => void;
   localFamily: string | null;
   setLocalFamily: (v: string | null) => void;
-  localSS: number | null;
-  setLocalSS: (v: number | null) => void;
   localK: number;
   setLocalK: (v: number) => void;
   localTopKOnly: boolean;
   setLocalTopKOnly: (v: boolean) => void;
+  hasReadySnippetSet: boolean;
   hasGroundTruthMetadata: boolean;
   setHasGroundTruthMetadata: (v: boolean) => void;
   trainEmbeddingModelId: number;
@@ -52,19 +50,17 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
   onCancel,
   onOk,
   checkpoints,
-  snippetSets,
   embeddingMethods,
   embeddingMethodsLoading,
   localCkpt,
   setLocalCkpt,
   localFamily,
   setLocalFamily,
-  localSS,
-  setLocalSS,
   localK,
   setLocalK,
   localTopKOnly,
   setLocalTopKOnly,
+  hasReadySnippetSet,
   hasGroundTruthMetadata,
   setHasGroundTruthMetadata,
   trainEmbeddingModelId,
@@ -80,26 +76,22 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
 }) => {
   const dispatch = useAppDispatch();
 
-  const okText =
-    checkpoints.length > 0
-      ? "Resume"
-      : hasGroundTruthMetadata
-        ? "Start training"
-        : "Start annotating";
+  const modalTitle = checkpoints.length > 0 ? "Edit Feed" : "Generate Feed";
+  const okText = hasGroundTruthMetadata ? "Start Training" : "Run Inference";
 
-  const okDisabled =
-    !localSS ||
-    (checkpoints.length === 0
+  const okDisabled = !hasReadySnippetSet
+    ? true
+    : checkpoints.length === 0
       ? !(localFamily && localFamily.trim().length > 0) ||
         (hasGroundTruthMetadata &&
           (!Number.isFinite(trainEmbeddingModelId) ||
             !trainMetadataPath.trim() ||
             !trainLabelConfigPath.trim()))
-      : !localCkpt);
+      : !localCkpt;
 
   return (
     <Modal
-      title={checkpoints.length > 0 ? "Resume labeling" : "Start labeling"}
+      title={modalTitle}
       open={open}
       onCancel={onCancel}
       onOk={() => void onOk()}
@@ -133,6 +125,15 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
           </Form.Item>
         ) : (
           <>
+            {!hasReadySnippetSet && (
+              <Alert
+                type="warning"
+                showIcon
+                className="mb-3"
+                message="No READY default snippet set found for this dataset"
+                description="Generate snippets/embeddings first. Inference now auto-uses the dataset's default READY snippet set."
+              />
+            )}
             <Alert
               type="info"
               showIcon
@@ -219,25 +220,6 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
             )}
           </>
         )}
-        <Form.Item label="Snippet Set" required>
-          <Select
-            placeholder="Select snippet set"
-            value={localSS ?? undefined}
-            onChange={setLocalSS}
-            style={{ width: "100%" }}
-          >
-            {snippetSets.map((s) => (
-              <Option key={s.id} value={s.id}>
-                Set #{s.id} — {s.status}
-              </Option>
-            ))}
-          </Select>
-          {snippetSets.length === 0 && (
-            <p className="text-xs text-amber-500 mt-1">
-              No snippet sets found. Generate embeddings first.
-            </p>
-          )}
-        </Form.Item>
         <Form.Item label="Top-K predictions">
           <InputNumber
             min={1}

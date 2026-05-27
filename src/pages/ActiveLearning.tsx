@@ -774,7 +774,13 @@ export const ActiveLearning: React.FC = () => {
  *   • feed=single_card + vis=whole_dataset    → vis dominant + side panel (Phase 2/3)
  *   • feed=hidden                             → vis only
  */
-export const PhaseLayout: React.FC = () => {
+export const PhaseLayout: React.FC<{
+  actionButton?: {
+    label: string;
+    onClick: () => void;
+    loading?: boolean;
+  };
+}> = ({ actionButton }) => {
   const phase = usePhaseConfig();
   const feedMode = phase.feed.mode;
   const visMode = phase.visualization.mode;
@@ -788,12 +794,30 @@ export const PhaseLayout: React.FC = () => {
     return (
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
-          {isBlind ? <BlindAnnotationHeader /> : (
+          {isBlind ? <BlindAnnotationHeader actionButton={actionButton} /> : (
             <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Annotation Feed</h2>
-              <p className="text-xs text-gray-400 font-ibm-sans">
-                Accept, reject, or modify each prediction
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
+                    Annotation Feed
+                  </h2>
+                  <p className="text-xs text-gray-400 font-ibm-sans">
+                    Accept, reject, or modify each prediction
+                  </p>
+                </div>
+                <div className="flex-1" />
+                {actionButton && (
+                  <Button
+                    type="primary"
+                    size="middle"
+                    onClick={actionButton.onClick}
+                    loading={actionButton.loading}
+                    style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
+                  >
+                    {actionButton.label}
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           <div className="flex-1 overflow-hidden">
@@ -826,10 +850,30 @@ export const PhaseLayout: React.FC = () => {
         }
         right={
           <div className="flex flex-col h-full overflow-hidden">
-            {isBlind ? <BlindAnnotationHeader /> : (
+            {isBlind ? <BlindAnnotationHeader actionButton={actionButton} /> : (
               <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-                <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Annotation Feed</h2>
-                <p className="text-xs text-gray-400 font-ibm-sans">Accept, reject, or modify each prediction</p>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
+                      Annotation Feed
+                    </h2>
+                    <p className="text-xs text-gray-400 font-ibm-sans">
+                      Accept, reject, or modify each prediction
+                    </p>
+                  </div>
+                  <div className="flex-1" />
+                  {actionButton && (
+                    <Button
+                      type="primary"
+                      size="middle"
+                      onClick={actionButton.onClick}
+                      loading={actionButton.loading}
+                      style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
+                    >
+                      {actionButton.label}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
             <div className="flex-1 overflow-hidden">
@@ -895,12 +939,18 @@ export const PhaseLayout: React.FC = () => {
   return null;
 };
 
-export const BlindAnnotationHeader: React.FC = () => {
+export const BlindAnnotationHeader: React.FC<{
+  actionButton?: {
+    label: string;
+    onClick: () => void;
+    loading?: boolean;
+  };
+}> = ({ actionButton }) => {
   // Blind mode header intentionally keeps the UI minimal.
 
   return (
     <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-100">
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex items-center gap-4">
         <div className="min-w-0 flex-shrink-0 max-w-[360px]">
           <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
             Annotation Feed
@@ -909,7 +959,18 @@ export const BlindAnnotationHeader: React.FC = () => {
             Listen to each snippet and add one or more species labels
           </div>
         </div>
-
+        <div className="flex-1" />
+        {actionButton && (
+          <Button
+            type="primary"
+            size="middle"
+            onClick={actionButton.onClick}
+            loading={actionButton.loading}
+            style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
+          >
+            {actionButton.label}
+          </Button>
+        )}
       </div>
     </div>
   );
