@@ -26,6 +26,8 @@ export function useHubALSession(
 ) {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+  const isValidateMode = mode === "validate";
+  const isAlLikeMode = mode === "al" || mode === "validate";
 
   const { embeddingMethods, loading: embeddingMethodsLoading } = useAppSelector(
     (s) => s.embedding,
@@ -69,6 +71,7 @@ export function useHubALSession(
   }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
 
   useEffect(() => {
+    if (isValidateMode) return;
     const needsFullSet =
       phase.feed.mode === "single_card_on_select" ||
       phase.visualization.mode === "whole_dataset";
@@ -95,6 +98,7 @@ export function useHubALSession(
     phase.feed.mode,
     phase.visualization.mode,
     modelInfo,
+    isValidateMode,
     selectedDatasetId,
     snippetSetId,
     modelFamilyName,
@@ -131,7 +135,7 @@ export function useHubALSession(
   ]);
 
   useEffect(() => {
-    if (mode !== "al") return;
+    if (!isAlLikeMode) return;
     const raw = searchParams.get("dataset_id");
     if (!raw) {
       if (
@@ -139,7 +143,7 @@ export function useHubALSession(
         (predictions.length > 0 || lastInferenceAt)
       ) {
         setSearchParams(
-          { mode: "al", dataset_id: String(selectedDatasetId) },
+          { mode, dataset_id: String(selectedDatasetId) },
           { replace: true },
         );
       }
@@ -154,6 +158,7 @@ export function useHubALSession(
     dispatch,
     searchParams,
     mode,
+    isAlLikeMode,
     selectedDatasetId,
     predictions.length,
     lastInferenceAt,
@@ -232,9 +237,9 @@ export function useHubALSession(
   const handleDatasetChange = useCallback(
     (value: number) => {
       dispatch(setSelectedDataset(value));
-      setSearchParams({ mode: "al", dataset_id: String(value) });
+      setSearchParams({ mode, dataset_id: String(value) });
     },
-    [dispatch, setSearchParams],
+    [dispatch, setSearchParams, mode],
   );
 
   const handleRunInference = useCallback(() => {
@@ -249,12 +254,18 @@ export function useHubALSession(
       snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
       1;
-    const suggestionParams = buildInferenceSuggestionParams(
-      phase,
-      localTopKOnly,
-      localK,
-      samplingMethod,
-    );
+    const suggestionParams = isValidateMode
+      ? {
+          sample_suggestion: true as const,
+          suggestion_strategy: "confidence" as const,
+          k: localK,
+        }
+      : buildInferenceSuggestionParams(
+          phase,
+          localTopKOnly,
+          localK,
+          samplingMethod,
+        );
     const k = suggestionParams.k ?? localK;
     dispatch(
       setInferenceConfig({
@@ -292,6 +303,7 @@ export function useHubALSession(
     localTopKOnly,
     localK,
     samplingMethod,
+    isValidateMode,
     dispatch,
   ]);
 
@@ -363,18 +375,25 @@ export function useHubALSession(
           snippetSetId !== null &&
           selectedDatasetId !== null
         ) {
+          const suggestionParams = isValidateMode
+            ? {
+                sample_suggestion: true as const,
+                suggestion_strategy: "confidence" as const,
+                k: inferenceK,
+              }
+            : buildInferenceSuggestionParams(
+                phase,
+                isSuggestionsMode(modelInfo),
+                inferenceK,
+                samplingMethod,
+              );
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
               force_refresh: false,
-              ...buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              ),
+              ...suggestionParams,
             }),
           );
         }
@@ -395,18 +414,25 @@ export function useHubALSession(
           snippetSetId !== null &&
           selectedDatasetId !== null
         ) {
+          const suggestionParams = isValidateMode
+            ? {
+                sample_suggestion: true as const,
+                suggestion_strategy: "confidence" as const,
+                k: inferenceK,
+              }
+            : buildInferenceSuggestionParams(
+                phase,
+                isSuggestionsMode(modelInfo),
+                inferenceK,
+                samplingMethod,
+              );
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
               force_refresh: status === "COMPLETED",
-              ...buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              ),
+              ...suggestionParams,
             }),
           );
         }
@@ -432,6 +458,7 @@ export function useHubALSession(
     modelFamilyName,
     snippetSetId,
     hasReadySnippetSet,
+    isValidateMode,
     samplingMethod,
     inferenceK,
     phase,
@@ -452,7 +479,7 @@ export function useHubALSession(
     setLocalSS(resolvedSnippetSetId);
     setLocalK(inferenceK);
     setLocalTopKOnly(
-      predictions.length === 0 || isSuggestionsMode(modelInfo),
+      isValidateMode || predictions.length === 0 || isSuggestionsMode(modelInfo),
     );
     setHasGroundTruthMetadata(false);
     setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
@@ -468,6 +495,7 @@ export function useHubALSession(
     inferenceK,
     predictions.length,
     modelInfo,
+    isValidateMode,
     embeddingMethods,
   ]);
 

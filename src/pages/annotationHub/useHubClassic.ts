@@ -110,7 +110,7 @@ export function useHubClassic(
 
   const { snippets } = useAnnotationWorkflow({
     datasetId: classicDatasetId,
-    enabled: mode !== "al",
+    enabled: isClassicMode,
     skipFeedHistoryAutoLoad: true,
     annotateHubClassic: isClassicMode,
   });
@@ -170,7 +170,7 @@ export function useHubClassic(
   }, [isClassicMode, mode, classicDatasetId, userId, snippets.length, dispatch]);
 
   useEffect(() => {
-    if (mode === "al" || !classicDatasetId) return;
+    if (!isClassicMode || !classicDatasetId) return;
     const datasetId = Number(classicDatasetId);
     if (Number.isNaN(datasetId)) return;
 
@@ -207,12 +207,12 @@ export function useHubClassic(
     return () => {
       cancelled = true;
     };
-  }, [mode, classicDatasetId, classicSnippetIdsKey, dispatch, snippets]);
+  }, [isClassicMode, classicDatasetId, classicSnippetIdsKey, dispatch, snippets]);
 
   useEffect(() => {
-    if (!classicDatasetId || mode === "al") return;
+    if (!classicDatasetId || !isClassicMode) return;
     dispatch(getAllDatasetEmbeddings(Number(classicDatasetId)));
-  }, [classicDatasetId, mode, dispatch]);
+  }, [classicDatasetId, isClassicMode, dispatch]);
 
   useEffect(() => {
     if (mode !== "filter" || !classicDatasetId) {

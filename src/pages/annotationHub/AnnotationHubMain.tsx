@@ -46,6 +46,7 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
   onBrowseDatasets,
 }) => {
   const dispatch = useAppDispatch();
+  const isAlLikeMode = mode === "al" || mode === "validate";
 
   if (awaitingHubDatasetBootstrap) {
     return (
@@ -58,7 +59,7 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
 
   return (
     <>
-      {mode === "al" && !selectedDatasetId && isRestoredFeed && (
+      {isAlLikeMode && !selectedDatasetId && isRestoredFeed && (
         <Alert
           type="info"
           showIcon
@@ -83,15 +84,15 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
         />
       )}
 
-      {mode === "al" &&
+      {isAlLikeMode &&
         (!selectedDatasetId && !isRestoredFeed ? (
           <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
             <DatabaseOutlined style={{ fontSize: 48 }} />
             <p className="text-lg font-ibm-sans">
-              Select a dataset to start Active Learning
+              Select a dataset to start {mode === "validate" ? "Validate" : "Active Learning"}
             </p>
             <p className="text-sm font-ibm-sans">
-              Then click &quot;Start Inference&quot; to load predictions.
+              Then click &quot;Generate Feed&quot; to load predictions.
             </p>
           </div>
         ) : (

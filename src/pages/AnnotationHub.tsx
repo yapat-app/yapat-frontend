@@ -38,7 +38,12 @@ export const AnnotationHub: React.FC = () => {
 
   const rawMode = searchParams.get("mode");
   const mode: AnnotateMode =
-    rawMode === "al" || rawMode === "similarity" || rawMode === "filter" ? rawMode : "random";
+    rawMode === "al" ||
+    rawMode === "validate" ||
+    rawMode === "similarity" ||
+    rawMode === "filter"
+      ? rawMode
+      : "random";
 
   const setMode = useCallback(
     (next: AnnotateMode) => {
@@ -46,7 +51,7 @@ export const AnnotationHub: React.FC = () => {
       const dsId = searchParams.get("dataset_id");
       if (dsId) params.dataset_id = dsId;
 
-      if (next === "al") {
+      if (next === "al" || next === "validate") {
         if (dsId && (mode === "random" || mode === "similarity" || mode === "filter")) {
           const ds = Number(dsId);
           if (!Number.isNaN(ds)) {

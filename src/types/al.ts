@@ -6,7 +6,12 @@ import type { Annotation } from "./index";
 
 export type FeedbackAction = "ACCEPT" | "REJECT" | "MODIFY";
 export type ALColorBy = "prediction" | "uncertainty" | "taxon";
-export type SamplingMethod = "uncertainty" | "diversity" | "density" | "random";
+export type SamplingMethod =
+  | "uncertainty"
+  | "diversity"
+  | "density"
+  | "random"
+  | "confidence";
 export type PAMRetrainStatusValue = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
 export type PAMModelStatusValue = "AVAILABLE" | "LOADING" | "ERROR";
 export type PAMSuggestionMode = "predictions" | "suggestions";
@@ -15,7 +20,8 @@ export type PAMSuggestionStrategy =
   | "uncertainty"
   | "diversity"
   | "density"
-  | "composite";
+  | "composite"
+  | "confidence";
 
 // ── Property & Filter System ──────────────────────────────────────────────────
 
@@ -93,6 +99,7 @@ export interface PAMRunInferenceRequest {
   sample_suggestion?: boolean;
   suggestion_strategy?: PAMSuggestionStrategy;
   k?: number; // used when sample_suggestion=true
+  min_confidence?: number;
 }
 
 export interface PAMPrediction {

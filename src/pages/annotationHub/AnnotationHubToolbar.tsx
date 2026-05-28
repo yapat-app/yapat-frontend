@@ -15,6 +15,7 @@ import {
   ThunderboltOutlined,
   AudioOutlined,
   FilterOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons";
 import type { Dataset } from "../../types";
 import type { PhaseConfig } from "../../studyPhases/types";
@@ -60,6 +61,7 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
   savedFeedLabel,
 }) => {
   const dispatch = useAppDispatch();
+  const isAlLikeMode = mode === "al" || mode === "validate";
 
   const retrainTag = lastRetrainJob ? (
     <Tag
@@ -104,13 +106,18 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
             value: "al",
             icon: <ThunderboltOutlined />,
           },
+          {
+            label: <span className="font-ibm-sans text-xs px-1">Validate</span>,
+            value: "validate",
+            icon: <SafetyOutlined />,
+          },
         ]}
         className="flex-shrink-0"
       />
 
       <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
 
-      {mode === "al" && (
+      {isAlLikeMode && (
         <div className="flex items-center gap-2">
           <DatabaseOutlined className="text-gray-400" />
           <Select
@@ -130,7 +137,7 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
         </div>
       )}
 
-      {mode !== "al" && (
+      {!isAlLikeMode && (
         <div className="flex items-center gap-2">
           <DatabaseOutlined className="text-gray-400" />
           <Select
@@ -150,7 +157,7 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
         </div>
       )}
 
-      {mode === "al" && (
+      {isAlLikeMode && (
         <Tooltip title={`Active study phase: ${phase.label}`}>
           <Tag color="purple" className="text-xs">
             {phase.id}
@@ -158,7 +165,7 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
         </Tooltip>
       )}
 
-      {mode === "al" && predictionsLength > 0 && (
+      {isAlLikeMode && predictionsLength > 0 && (
         <div className="flex items-center gap-3 text-xs font-ibm-sans text-gray-500">
           <Tooltip title="Total predictions">
             <span className="flex items-center gap-1">
@@ -194,7 +201,7 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
         </div>
       )}
 
-      {mode === "al" && inferenceLoading && <Spin size="small" />}
+      {isAlLikeMode && inferenceLoading && <Spin size="small" />}
     </div>
   );
 };
