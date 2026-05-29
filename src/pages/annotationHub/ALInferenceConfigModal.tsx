@@ -97,7 +97,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
     : checkpoints.length > 0
       ? "Edit Feed"
       : "Generate Feed";
-  const okText = hasGroundTruthMetadata ? "Start Training" : "Run Inference";
+  const okText = "Apply";
 
   const okDisabled = !hasReadySnippetSet
     ? true
@@ -251,8 +251,8 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
         {isValidateMode && (
           <>
             <Form.Item
-              label="Confidence labels"
-              tooltip="Noisy-OR confidence uses these model label names: c = 1 − ∏(1 − p(label))."
+              label="Focus on species (optional)"
+              tooltip="Rank snippets by how confidently the model detects any of these species. Leave empty to rank by the single highest-probability label on each snippet."
             >
               <Select
                 mode="multiple"
@@ -260,7 +260,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                 placeholder={
                   labelScopeLoading
                     ? "Loading checkpoint labels…"
-                    : "Select labels for confidence ranking"
+                    : "Select species to focus on"
                 }
                 loading={labelScopeLoading}
                 value={localLabelScope}
@@ -273,12 +273,12 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                 maxTagCount="responsive"
               />
               <div className="text-xs text-gray-400 mt-1">
-                Leave empty to rank by max probability per snippet (no scoped noisy-OR).
+                Leave empty to rank by the model's top prediction regardless of species.
               </div>
             </Form.Item>
             <Form.Item
               label="Minimum confidence (optional)"
-              tooltip="Filter suggestions after ranking. Uses noisy-OR over the selected labels when set."
+              tooltip="Only show snippets where the model's confidence meets this threshold. Useful to focus on clear predictions and skip uncertain ones."
             >
               <InputNumber
                 min={0}
