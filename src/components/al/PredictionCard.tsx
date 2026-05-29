@@ -246,11 +246,27 @@ export const PredictionCard: React.FC<Props> = ({
               <span className="text-gray-400">· {recordingLabel}</span>
             )}
           </div>
-          {hasFeedback && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
-              Labeled
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {prediction.confidence != null && (
+              <span
+                className={[
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-ibm-mono",
+                  prediction.confidence >= 0.8
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : prediction.confidence >= 0.5
+                    ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                    : "bg-red-50 text-red-600 border border-red-200",
+                ].join(" ")}
+              >
+                {Math.round(prediction.confidence * 100)}%
+              </span>
+            )}
+            {hasFeedback && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                Labeled
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Spectrogram ── */}
