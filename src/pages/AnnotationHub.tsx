@@ -169,7 +169,7 @@ export const AnnotationHub: React.FC = () => {
         onSimilarityChange={classic.handleSimilarityChange}
         onCancel={() => classic.setClassicConfigOpen(false)}
         onOk={classic.handleGenerateFeed}
-        okText={classic.generateFeedLabel}
+        okText="Apply"
         okDisabled={!classic.classicCanGenerate || classic.feedGenerateBusy}
         okLoading={classic.feedGenerateBusy}
       />

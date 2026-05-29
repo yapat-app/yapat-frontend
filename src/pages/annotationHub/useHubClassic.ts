@@ -352,7 +352,7 @@ export function useHubClassic(
         classicBootstrapResolved &&
         !snippetsLoading &&
         !serverHydrateBusy));
-  const generateFeedLabel = "Apply";
+  const generateFeedLabel = hasClassicFeed ? "Edit Feed" : "Generate Feed";
 
   return {
     snippets,
