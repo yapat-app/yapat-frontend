@@ -9,7 +9,7 @@
  * Form or can be used standalone.
  */
 
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
@@ -80,6 +80,14 @@ export const LabelSelector: React.FC<Props> = ({
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Clear pending timer on unmount to avoid orphaned GBIF fetches setting state
+  // on an unmounted component when the label selector is opened and closed quickly.
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
   const searchGBIF = useCallback((query: string) => {
     if (!query || query.trim().length < 2) {
       setGbifResults([]);
@@ -102,10 +110,13 @@ export const LabelSelector: React.FC<Props> = ({
   // Build option groups:
   //  • PAM species list (always present)
   //  • GBIF matches (when user has typed ≥2 chars)
-  const pamOptions = quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const }));
+  const pamOptions = useMemo(
+    () => quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const })),
+    [quickLabels],
+  );
 
   // De-duplicate GBIF results against PAM list.
-  const pamSet = new Set(quickLabels.map((s) => s.toLowerCase()));
+  const pamSet = useMemo(() => new Set(quickLabels.map((s) => s.toLowerCase())), [quickLabels]);
   const gbifOptions = gbifResults
     .filter((r) => {
       const name = r.canonicalName ?? r.scientificName;
@@ -118,11 +129,14 @@ export const LabelSelector: React.FC<Props> = ({
 
   // Filter PAM options by search query for a snappy feel (AntD also filters, but this
   // ensures PAM options surface even during GBIF-debounce delay).
-  const filteredPamOptions = searchQuery
-    ? pamOptions.filter((o) =>
-        o.value.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : pamOptions;
+  const searchQueryLower = useMemo(() => searchQuery.toLowerCase(), [searchQuery]);
+  const filteredPamOptions = useMemo(
+    () =>
+      searchQuery
+        ? pamOptions.filter((o) => o.value.toLowerCase().includes(searchQueryLower))
+        : pamOptions,
+    [pamOptions, searchQuery, searchQueryLower],
+  );
 
   const combinedList = useMemo(() => {
     // In the always-visible list, show the local label list always,

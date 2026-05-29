@@ -147,35 +147,45 @@ function withDisplayFields(
   });
 }
 
+let _saveFeedTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): void {
-  try {
-    const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
-    const sampleSuggestion =
-      inferenceRequest?.sample_suggestion ??
-      (state.modelInfo?.mode as string | undefined) === "suggestions";
-    const data: PersistedFeed = {
-      predictions: tooLarge ? [] : state.predictions,
-      modelInfo: state.modelInfo,
-      totalScored: state.totalScored,
-      modelCheckpointId: state.modelCheckpointId,
-      modelFamilyName: state.modelFamilyName,
-      usedCheckpointId: state.usedCheckpointId,
-      snippetSetId: state.snippetSetId,
-      embeddingModelId: state.embeddingModelId,
-      inferenceK: state.inferenceK,
-      selectedDatasetId: state.selectedDatasetId,
-      lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
-      sampleSuggestion,
-      suggestionStrategy:
-        inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
-      labelScope: inferenceRequest?.label_scope,
-      minConfidence: inferenceRequest?.min_confidence,
-      predictionsTruncated: tooLarge,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore persistence errors (e.g. storage quota).
-  }
+  // Debounce: rapid feedback submissions (e.g. 10 in a row) should only trigger
+  // one synchronous JSON.stringify + localStorage.setItem, not ten.
+  if (_saveFeedTimer !== null) clearTimeout(_saveFeedTimer);
+
+  const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
+  const sampleSuggestion =
+    inferenceRequest?.sample_suggestion ??
+    (state.modelInfo?.mode as string | undefined) === "suggestions";
+  const data: PersistedFeed = {
+    predictions: tooLarge ? [] : state.predictions,
+    modelInfo: state.modelInfo,
+    totalScored: state.totalScored,
+    modelCheckpointId: state.modelCheckpointId,
+    modelFamilyName: state.modelFamilyName,
+    usedCheckpointId: state.usedCheckpointId,
+    snippetSetId: state.snippetSetId,
+    embeddingModelId: state.embeddingModelId,
+    inferenceK: state.inferenceK,
+    selectedDatasetId: state.selectedDatasetId,
+    lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
+    sampleSuggestion,
+    suggestionStrategy:
+      inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
+    labelScope: inferenceRequest?.label_scope,
+    minConfidence: inferenceRequest?.min_confidence,
+    predictionsTruncated: tooLarge,
+  };
+
+  _saveFeedTimer = setTimeout(() => {
+    _saveFeedTimer = null;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore persistence errors (e.g. storage quota).
+    }
+  }, 300);
 }
 
 function loadFeed(): PersistedFeed | null {

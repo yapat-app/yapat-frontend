@@ -85,64 +85,67 @@ export const PredictionFeed: React.FC = () => {
     };
   }, [dispatch, predictions]);
 
-  useEffect(() => {
-    if (!selectedDatasetId) {
-      setRecordingNameById({});
-      return;
-    }
-    let cancelled = false;
-    const neededRecordingIds = Array.from(
+  // Stable set of recording IDs needed by the current prediction list.
+  const neededRecordingIdsKey = useMemo(() => {
+    const ids = Array.from(
       new Set(
         predictions
           .map((p) => p.recording_id)
           .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
       ),
     );
-    void recordingApi
-      .getAll({ dataset_id: selectedDatasetId, limit: 10000 })
-      .then(async (rows) => {
+    return ids.join(",");
+  }, [predictions]);
+
+  useEffect(() => {
+    if (!selectedDatasetId || !neededRecordingIdsKey) {
+      setRecordingNameById({});
+      return;
+    }
+    const neededIds = neededRecordingIdsKey
+      .split(",")
+      .map(Number)
+      .filter((n) => Number.isFinite(n));
+
+    let cancelled = false;
+
+    // Only fetch the recordings we actually need — avoids a 10k-row dump on every feed load.
+    const BATCH = 10;
+    const batches: number[][] = [];
+    for (let i = 0; i < neededIds.length; i += BATCH) {
+      batches.push(neededIds.slice(i, i + BATCH));
+    }
+
+    async function fetchNames() {
+      const next: Record<number, string> = {};
+      for (const batch of batches) {
         if (cancelled) return;
-        const next: Record<number, string> = {};
-        for (const r of rows) {
-          const id = Number(r.id);
+        const results = await Promise.allSettled(
+          batch.map((id) => recordingApi.getById(id)),
+        );
+        for (const r of results) {
+          if (r.status !== "fulfilled") continue;
+          const rec = r.value;
+          const id = Number(rec.id);
           if (!Number.isFinite(id)) continue;
           const name =
-            (typeof r.file_name === "string" && r.file_name) ||
-            (typeof r.name === "string" && r.name) ||
+            (typeof rec.file_name === "string" && rec.file_name) ||
+            (typeof rec.name === "string" && rec.name) ||
             null;
           if (name) next[id] = name;
         }
-        // Fallback: if dataset has >10k recordings, resolve displayed-but-missing IDs directly.
-        const missingIds = neededRecordingIds.filter((id) => !next[id]);
-        if (missingIds.length > 0) {
-          const fetched = await Promise.all(
-            missingIds.map(async (id) => {
-              try {
-                const r = await recordingApi.getById(id);
-                const name =
-                  (typeof r.file_name === "string" && r.file_name) ||
-                  (typeof r.name === "string" && r.name) ||
-                  null;
-                return name ? { id, name } : null;
-              } catch {
-                return null;
-              }
-            }),
-          );
-          for (const item of fetched) {
-            if (item) next[item.id] = item.name;
-          }
-        }
-        if (cancelled) return;
-        setRecordingNameById(next);
-      })
-      .catch(() => {
-        if (!cancelled) setRecordingNameById({});
-      });
+      }
+      if (!cancelled) setRecordingNameById(next);
+    }
+
+    void fetchNames().catch(() => {
+      if (!cancelled) setRecordingNameById({});
+    });
+
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, predictions]);
+  }, [selectedDatasetId, neededRecordingIdsKey]);
 
   const setCardRef = useCallback(
     (snippetId: number) => (el: HTMLDivElement | null) => {
@@ -181,6 +184,8 @@ export const PredictionFeed: React.FC = () => {
 
   // Blind mode: hydrate per-snippet labels from the backend so they persist across refresh.
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
+  // Stable string key so the effect only re-runs when actual label content changes,
+  // not on every object reference change of the `feedbacks` map.
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
@@ -189,6 +194,10 @@ export const PredictionFeed: React.FC = () => {
         .join("|"),
     [feedbacks],
   );
+  // Keep a ref so the effect body can read feedbacks without adding it to deps.
+  const feedbacksRef = useRef(feedbacks);
+  feedbacksRef.current = feedbacks;
+
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
@@ -198,7 +207,7 @@ export const PredictionFeed: React.FC = () => {
       }
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
-        for (const [snippetId, fb] of Object.entries(feedbacks)) {
+        for (const [snippetId, fb] of Object.entries(feedbacksRef.current)) {
           const labels = fb.final_labels ?? [];
           if (labels.length > 0) map[Number(snippetId)] = labels;
         }
@@ -221,7 +230,7 @@ export const PredictionFeed: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature, feedbacks]);
+  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
 
   // ── Derived stats for Phase 1 header ────────────────────────────────────
   const labeledCount = useMemo(
