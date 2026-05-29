@@ -14,6 +14,7 @@ import {
   restoreFeedFromServer,
   pollRetrainJob,
   trainFromScratch,
+  clearRetrainDispatch,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -430,13 +431,16 @@ export function useHubALSession(
     dispatch,
   ]);
 
+  // Use the primitive job_id as the dep — the lastRetrainDispatch object reference
+  // changes on every Redux update even when the job_id is the same, which would
+  // restart the polling loop on every render and flood the server with requests.
+  const retrainJobId = lastRetrainDispatch?.job_id ?? null;
+
   const lastNotifiedJobIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!selectedDatasetId) return;
+    if (!selectedDatasetId || retrainJobId === null) return;
     const stableDatasetId: number = selectedDatasetId;
-    const jobId = lastRetrainDispatch?.job_id;
-    if (jobId === undefined || jobId === null) return;
-    const stableJobId: number = jobId;
+    const stableJobId: number = retrainJobId;
     let cancelled = false;
     let timer: number | null = null;
     async function tick() {
@@ -447,6 +451,9 @@ export function useHubALSession(
           lastNotifiedJobIdRef.current = stableJobId;
           message.warning("Could not poll retrain job — loading current predictions");
         }
+        // Clear the dispatch record first so that runInference returning another
+        // job dispatch does not restart this polling effect with a new job_id loop.
+        dispatch(clearRetrainDispatch());
         if (
           modelFamilyName !== null &&
           snippetSetId !== null &&
@@ -478,6 +485,9 @@ export function useHubALSession(
             message.error("Training failed — loading current predictions");
           }
         }
+        // Clear first so a subsequent runInference returning a job dispatch does
+        // not chain into another polling loop for the new job_id.
+        dispatch(clearRetrainDispatch());
         if (
           modelFamilyName !== null &&
           snippetSetId !== null &&
@@ -514,7 +524,7 @@ export function useHubALSession(
     };
   }, [
     dispatch,
-    lastRetrainDispatch,
+    retrainJobId,
     selectedDatasetId,
     modelFamilyName,
     snippetSetId,

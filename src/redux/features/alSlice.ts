@@ -585,6 +585,11 @@ const alSlice = createSlice({
       state.selectedSnippetId = null;
       state.selectedPredictionId = null;
     },
+    clearRetrainDispatch: (state) => {
+      state.lastRetrainDispatch = null;
+      state.lastRetrainJob = null;
+      state.retrainLoading = false;
+    },
     hydrateSavedFeed: (state) => {
       if (state.predictions.length > 0) return;
       const saved = loadFeed();
@@ -828,6 +833,7 @@ export const {
   setClassicSnippetAnnotations,
   setClassicSnippetFeedback,
   clearClassicAnnotationFeed,
+  clearRetrainDispatch,
 } = alSlice.actions;
 
 export { needsServerRestore };
