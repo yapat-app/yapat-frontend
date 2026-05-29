@@ -48,6 +48,33 @@ export const PredictionFeed: React.FC = () => {
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
 
+  // Incremental rendering: start with 50 cards, expand as user scrolls near the bottom.
+  // Prevents browser freeze when predictions contains thousands of items.
+  const PAGE_SIZE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset visible count whenever the predictions list changes (new feed / dataset).
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [predictions]);
+
+  // Expand the visible window when the sentinel scrolls into view.
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, predictions.length));
+        }
+      },
+      { root: scrollContainerRef.current, rootMargin: "200px" },
+    );
+    obs.observe(sentinel);
+    return () => obs.disconnect();
+  }, [predictions.length, scrollRoot]);
+
   const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
     scrollContainerRef.current = el;
     setScrollRoot(el);
@@ -66,7 +93,9 @@ export const PredictionFeed: React.FC = () => {
         return;
       }
       try {
-        const ids = predictions.map((p) => p.snippet_id);
+        // Only fetch annotations for the currently visible window, not all predictions.
+        // More will be fetched as the user scrolls and visibleCount increases.
+        const ids = predictions.slice(0, visibleCount).map((p) => p.snippet_id);
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const bySnippet: Record<number, Annotation[]> = {};
@@ -83,7 +112,7 @@ export const PredictionFeed: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [dispatch, predictions]);
+  }, [dispatch, predictions, visibleCount]);
 
   // Stable set of recording IDs needed by the current prediction list.
   const neededRecordingIdsKey = useMemo(() => {
@@ -333,27 +362,50 @@ export const PredictionFeed: React.FC = () => {
           style={{ scrollSnapType: "y mandatory" }}
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {predictions.map((p, index) => (
-              <div
-                key={p.id ?? p.snippet_id}
-                className="snap-start shrink-0 w-full"
-                style={{ height: blindSnapCardHeight }}
-              >
-                <PredictionCard
-                  prediction={p}
-                  recordingName={
-                    typeof p.recording_id === "number"
-                      ? recordingNameById[p.recording_id]
-                      : undefined
-                  }
-                  cardRef={setCardRef(p.snippet_id)}
-                  cardHeightPx={blindSnapCardHeight}
-                  serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                  scrollRoot={scrollRoot}
-                  loadAudioImmediately={index === 0}
-                />
-              </div>
-            ))}
+            {predictions.map((p, index) => {
+              const key = p.id ?? p.snippet_id;
+              const height = blindSnapCardHeight;
+              if (index >= visibleCount) {
+                // Placeholder preserves scroll height without mounting hooks.
+                return (
+                  <div
+                    key={key}
+                    className="snap-start shrink-0 w-full rounded-lg bg-gray-50 border border-gray-100"
+                    style={{ height }}
+                  />
+                );
+              }
+              if (index === visibleCount - 1) {
+                // Sentinel: expand window when last real card is near the viewport.
+                return (
+                  <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
+                    <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
+                    <PredictionCard
+                      prediction={p}
+                      recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                      cardRef={setCardRef(p.snippet_id)}
+                      cardHeightPx={height}
+                      serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                      scrollRoot={scrollRoot}
+                      loadAudioImmediately={index === 0}
+                    />
+                  </div>
+                );
+              }
+              return (
+                <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
+                  <PredictionCard
+                    prediction={p}
+                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                    cardRef={setCardRef(p.snippet_id)}
+                    cardHeightPx={height}
+                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                    scrollRoot={scrollRoot}
+                    loadAudioImmediately={index === 0}
+                  />
+                </div>
+              );
+            })}
 
             {inferenceLoading && (
               <div className="flex justify-center py-4">
@@ -417,20 +469,42 @@ export const PredictionFeed: React.FC = () => {
       {/* Scrollable feed */}
       <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
-          {predictions.map((p, index) => (
-            <PredictionCard
-              key={p.id ?? p.snippet_id}
-              prediction={p}
-              recordingName={
-                typeof p.recording_id === "number"
-                  ? recordingNameById[p.recording_id]
-                  : undefined
-              }
-              cardRef={setCardRef(p.snippet_id)}
-              scrollRoot={scrollRoot}
-              loadAudioImmediately={index === 0}
-            />
-          ))}
+          {predictions.map((p, index) => {
+            const key = p.id ?? p.snippet_id;
+            if (index >= visibleCount) {
+              return (
+                <div
+                  key={key}
+                  className="rounded-lg bg-gray-50 border border-gray-100"
+                  style={{ height: 220 }}
+                />
+              );
+            }
+            if (index === visibleCount - 1) {
+              return (
+                <React.Fragment key={key}>
+                  <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
+                  <PredictionCard
+                    prediction={p}
+                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                    cardRef={setCardRef(p.snippet_id)}
+                    scrollRoot={scrollRoot}
+                    loadAudioImmediately={index === 0}
+                  />
+                </React.Fragment>
+              );
+            }
+            return (
+              <PredictionCard
+                key={key}
+                prediction={p}
+                recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                cardRef={setCardRef(p.snippet_id)}
+                scrollRoot={scrollRoot}
+                loadAudioImmediately={index === 0}
+              />
+            );
+          })}
 
           {inferenceLoading && (
             <div className="flex justify-center py-4">
