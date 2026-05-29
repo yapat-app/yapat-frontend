@@ -449,30 +449,13 @@ export function useHubALSession(
       if (!pollRetrainJob.fulfilled.match(r)) {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
-          message.warning("Could not poll retrain job — loading current predictions");
+          message.warning("Could not poll retrain job — please retry manually");
         }
-        // Clear the dispatch record first so that runInference returning another
-        // job dispatch does not restart this polling effect with a new job_id loop.
+        // Do NOT dispatch runInference here: if the backend is returning job
+        // dispatches on every inference call (e.g. broken checkpoint), a fallback
+        // runInference would immediately produce another job_id, restarting this
+        // polling loop indefinitely. Clear state and let the user retry via UI.
         dispatch(clearRetrainDispatch());
-        if (
-          modelFamilyName !== null &&
-          snippetSetId !== null &&
-          selectedDatasetId !== null
-        ) {
-          const suggestionParams = buildSuggestionParams(
-            inferenceK,
-            isValidateMode || isSuggestionsMode(modelInfo),
-          );
-          dispatch(
-            runInference({
-              model_family_name: modelFamilyName,
-              dataset_id: selectedDatasetId,
-              snippet_set_id: snippetSetId,
-              force_refresh: false,
-              ...suggestionParams,
-            }),
-          );
-        }
         return;
       }
       const status = r.payload.status;
@@ -480,19 +463,15 @@ export function useHubALSession(
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
           if (status === "COMPLETED") {
-            message.success("Training completed — checkpoint is ready");
+            message.success("Training completed — click Generate Feed to load predictions");
           } else {
-            message.error("Training failed — loading current predictions");
+            message.error("Training failed — please check the model checkpoint and retry");
           }
         }
-        // Clear first so a subsequent runInference returning a job dispatch does
-        // not chain into another polling loop for the new job_id.
+        // Clear before any further dispatch so that runInference returning a job
+        // dispatch does not chain into another polling loop for a new job_id.
         dispatch(clearRetrainDispatch());
-        if (
-          modelFamilyName !== null &&
-          snippetSetId !== null &&
-          selectedDatasetId !== null
-        ) {
+        if (status === "COMPLETED" && modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
           const suggestionParams = buildSuggestionParams(
             inferenceK,
             isValidateMode || isSuggestionsMode(modelInfo),
@@ -502,7 +481,7 @@ export function useHubALSession(
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
-              force_refresh: status === "COMPLETED",
+              force_refresh: true,
               ...suggestionParams,
             }),
           );
