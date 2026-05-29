@@ -331,6 +331,20 @@ export const PredictionCard: React.FC<Props> = ({
             {labelText}
           </span>
           <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2 flex-shrink-0">
+            {prediction.confidence != null && (
+              <span
+                className={[
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-ibm-mono",
+                  prediction.confidence >= 0.8
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : prediction.confidence >= 0.5
+                    ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                    : "bg-red-50 text-red-600 border border-red-200",
+                ].join(" ")}
+              >
+                {Math.round(prediction.confidence * 100)}%
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <SoundOutlined />#{prediction.snippet_id}
             </span>
@@ -387,7 +401,7 @@ export const PredictionCard: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Right: predicted labels + feedback */}
+          {/* Right: predicted labels + confidence + feedback */}
           <div
             className="w-[40%] flex flex-col gap-3 px-4 py-3"
             onClick={(e) => e.stopPropagation()}
@@ -395,15 +409,36 @@ export const PredictionCard: React.FC<Props> = ({
             {prediction.predicted_labels && prediction.predicted_labels.length > 0 ? (
               <div>
                 <p className="text-xs text-gray-400 font-ibm-sans mb-1">Predicted labels</p>
-                <div className="flex flex-wrap gap-1">
-                  {prediction.predicted_labels.map((lbl) => (
-                    <span
-                      key={lbl}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200"
-                    >
-                      {lbl}
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-1">
+                  {prediction.predicted_labels.map((lbl) => {
+                    const prob = prediction.predicted_probabilities?.[lbl];
+                    const pct = prob != null ? Math.round(prob * 100) : null;
+                    const barColor =
+                      pct == null ? "bg-blue-300"
+                      : pct >= 80 ? "bg-green-500"
+                      : pct >= 50 ? "bg-yellow-400"
+                      : "bg-red-400";
+                    return (
+                      <div key={lbl} className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200 truncate max-w-[60%]">
+                          {lbl}
+                        </span>
+                        {pct != null && (
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <div className="flex-1 h-1.5 rounded-full bg-gray-100">
+                              <div
+                                className={`h-1.5 rounded-full ${barColor} transition-all`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-ibm-mono w-7 text-right flex-shrink-0">
+                              {pct}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
