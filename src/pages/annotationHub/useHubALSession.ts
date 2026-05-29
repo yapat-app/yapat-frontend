@@ -85,9 +85,13 @@ export function useHubALSession(
       phase.feed.mode === "single_card_on_select" ||
       phase.visualization.mode === "whole_dataset";
     const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
+    // Guard against re-running once predictions are already loaded: without this,
+    // the effect would loop indefinitely because inferenceLoading and modelInfo both
+    // change on every completed inference, re-triggering another dispatch.
     if (
       needsFullSet &&
       isSuggestions &&
+      predictions.length === 0 &&
       selectedDatasetId !== null &&
       snippetSetId !== null &&
       modelFamilyName !== null &&
@@ -112,6 +116,7 @@ export function useHubALSession(
     snippetSetId,
     modelFamilyName,
     inferenceLoading,
+    predictions.length,
     dispatch,
   ]);
 
