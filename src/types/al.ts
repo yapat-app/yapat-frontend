@@ -100,6 +100,7 @@ export interface PAMRunInferenceRequest {
   suggestion_strategy?: PAMSuggestionStrategy;
   k?: number; // used when sample_suggestion=true
   min_confidence?: number;
+  label_scope?: string[];
 }
 
 export interface PAMPrediction {
@@ -138,6 +139,7 @@ export interface PAMInferenceResult {
   suggestion_strategy: PAMSuggestionStrategy;
   k: number | null;
   rows: PAMPrediction[];
+  label_scope?: string[] | null;
 }
 
 export interface FeedbackPayload {
@@ -191,6 +193,12 @@ export interface PAMRetrainRequest {
   dropout?: number;
   device?: string;
   run_inference?: boolean;
+}
+
+export interface PAMTrainingPathDefaults {
+  metadata_path: string;
+  label_config_path: string;
+  source_uri: string;
 }
 
 export interface PAMTrainFromScratchRequest {

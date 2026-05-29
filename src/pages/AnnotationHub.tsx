@@ -145,6 +145,13 @@ export const AnnotationHub: React.FC = () => {
         setTrainDevice={al.setTrainDevice}
         trainRunInference={al.trainRunInference}
         setTrainRunInference={al.setTrainRunInference}
+        isValidateMode={mode === "validate"}
+        localMinConfidence={al.localMinConfidence}
+        setLocalMinConfidence={al.setLocalMinConfidence}
+        localLabelScope={al.localLabelScope}
+        setLocalLabelScope={al.setLocalLabelScope}
+        labelScopeOptions={al.labelScopeOptions}
+        labelScopeLoading={al.labelScopeLoading}
       />
 
       <ClassicFeedConfigModal

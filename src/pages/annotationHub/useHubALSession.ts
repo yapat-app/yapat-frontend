@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { message } from "antd";
-import { useAppDispatch, useAppSelector } from "../../hooks";
+import {
+  useAppDispatch,
+  useAppSelector,
+  usePamTrainingPathDefaults,
+} from "../../hooks";
 import {
   setSelectedDataset,
   setInferenceConfig,
@@ -16,7 +20,12 @@ import { alApi } from "../../services/alApi";
 import type { PAMCheckpoint } from "../../types/al";
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
-import { buildInferenceSuggestionParams, isSuggestionsMode } from "./alInferenceHelpers";
+import {
+  buildInferenceSuggestionParams,
+  buildValidateInferenceParams,
+  isSuggestionsMode,
+} from "./alInferenceHelpers";
+import { fetchPamQuickLabelNames } from "../../utils/fetchPamQuickLabelNames";
 import type { AnnotateMode } from "./types";
 
 export function useHubALSession(
@@ -174,6 +183,10 @@ export function useHubALSession(
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
+  const [localMinConfidence, setLocalMinConfidence] = useState<number | null>(null);
+  const [localLabelScope, setLocalLabelScope] = useState<string[]>([]);
+  const [labelScopeOptions, setLabelScopeOptions] = useState<string[]>([]);
+  const [labelScopeLoading, setLabelScopeLoading] = useState(false);
   const [hasGroundTruthMetadata, setHasGroundTruthMetadata] =
     useState<boolean>(false);
   const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(1);
@@ -181,6 +194,13 @@ export function useHubALSession(
   const [trainLabelConfigPath, setTrainLabelConfigPath] = useState<string>("");
   const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
   const [trainRunInference, setTrainRunInference] = useState<boolean>(false);
+
+  usePamTrainingPathDefaults(
+    selectedDatasetId,
+    hasGroundTruthMetadata,
+    setTrainMetadataPath,
+    setTrainLabelConfigPath,
+  );
 
   useEffect(() => {
     const family = searchParams.get("model_family");
@@ -234,6 +254,67 @@ export function useHubALSession(
     }
   }, [checkpoints]);
 
+  useEffect(() => {
+    if (!isAlLikeMode) return;
+    const ckptId = localCkpt ?? modelCheckpointId;
+    let cancelled = false;
+    setLabelScopeLoading(true);
+    void fetchPamQuickLabelNames(ckptId, selectedDatasetId)
+      .then((names) => {
+        if (cancelled) return;
+        setLabelScopeOptions(names);
+        setLocalLabelScope((prev) => {
+          if (prev.length === 0) return names;
+          const kept = prev.filter((n) => names.includes(n));
+          return kept.length > 0 ? kept : names;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLabelScopeOptions([]);
+          setLocalLabelScope([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLabelScopeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAlLikeMode,
+    localCkpt,
+    modelCheckpointId,
+    selectedDatasetId,
+  ]);
+
+  const buildSuggestionParams = useCallback(
+    (k: number, topKOnly: boolean) => {
+      const scope = localLabelScope.length > 0 ? localLabelScope : undefined;
+      const minConf =
+        localMinConfidence != null && localMinConfidence > 0
+          ? localMinConfidence
+          : null;
+      if (isValidateMode) {
+        return buildValidateInferenceParams(k, scope, minConf);
+      }
+      return buildInferenceSuggestionParams(
+        phase,
+        topKOnly,
+        k,
+        samplingMethod,
+        { labelScope: scope, minConfidence: minConf },
+      );
+    },
+    [
+      isValidateMode,
+      localLabelScope,
+      localMinConfidence,
+      phase,
+      samplingMethod,
+    ],
+  );
+
   const handleDatasetChange = useCallback(
     (value: number) => {
       dispatch(setSelectedDataset(value));
@@ -254,18 +335,10 @@ export function useHubALSession(
       snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
       1;
-    const suggestionParams = isValidateMode
-      ? {
-          sample_suggestion: true as const,
-          suggestion_strategy: "confidence" as const,
-          k: localK,
-        }
-      : buildInferenceSuggestionParams(
-          phase,
-          localTopKOnly,
-          localK,
-          samplingMethod,
-        );
+    const suggestionParams = buildSuggestionParams(
+      localK,
+      isValidateMode ? true : localTopKOnly,
+    );
     const k = suggestionParams.k ?? localK;
     dispatch(
       setInferenceConfig({
@@ -302,8 +375,7 @@ export function useHubALSession(
     phase,
     localTopKOnly,
     localK,
-    samplingMethod,
-    isValidateMode,
+    buildSuggestionParams,
     dispatch,
   ]);
 
@@ -375,18 +447,10 @@ export function useHubALSession(
           snippetSetId !== null &&
           selectedDatasetId !== null
         ) {
-          const suggestionParams = isValidateMode
-            ? {
-                sample_suggestion: true as const,
-                suggestion_strategy: "confidence" as const,
-                k: inferenceK,
-              }
-            : buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              );
+          const suggestionParams = buildSuggestionParams(
+            inferenceK,
+            isValidateMode || isSuggestionsMode(modelInfo),
+          );
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
@@ -414,18 +478,10 @@ export function useHubALSession(
           snippetSetId !== null &&
           selectedDatasetId !== null
         ) {
-          const suggestionParams = isValidateMode
-            ? {
-                sample_suggestion: true as const,
-                suggestion_strategy: "confidence" as const,
-                k: inferenceK,
-              }
-            : buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              );
+          const suggestionParams = buildSuggestionParams(
+            inferenceK,
+            isValidateMode || isSuggestionsMode(modelInfo),
+          );
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
@@ -459,9 +515,8 @@ export function useHubALSession(
     snippetSetId,
     hasReadySnippetSet,
     isValidateMode,
-    samplingMethod,
     inferenceK,
-    phase,
+    buildSuggestionParams,
     modelInfo,
   ]);
 
@@ -545,6 +600,13 @@ export function useHubALSession(
     setTrainDevice,
     trainRunInference,
     setTrainRunInference,
+    localMinConfidence,
+    setLocalMinConfidence,
+    localLabelScope,
+    setLocalLabelScope,
+    labelScopeOptions,
+    labelScopeLoading,
+    isValidateMode,
     handleRunInference,
     handleOpenALSession,
     openInferenceModal,

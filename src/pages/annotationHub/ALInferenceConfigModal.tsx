@@ -43,6 +43,13 @@ export type ALInferenceConfigModalProps = {
   setTrainDevice: (v: "cpu" | "cuda") => void;
   trainRunInference: boolean;
   setTrainRunInference: (v: boolean) => void;
+  isValidateMode?: boolean;
+  localMinConfidence: number | null;
+  setLocalMinConfidence: (v: number | null) => void;
+  localLabelScope: string[];
+  setLocalLabelScope: (v: string[]) => void;
+  labelScopeOptions: string[];
+  labelScopeLoading?: boolean;
 };
 
 export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
@@ -73,10 +80,23 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
   setTrainDevice,
   trainRunInference,
   setTrainRunInference,
+  isValidateMode = false,
+  localMinConfidence,
+  setLocalMinConfidence,
+  localLabelScope,
+  setLocalLabelScope,
+  labelScopeOptions,
+  labelScopeLoading = false,
 }) => {
   const dispatch = useAppDispatch();
 
-  const modalTitle = checkpoints.length > 0 ? "Edit Feed" : "Generate Feed";
+  const modalTitle = isValidateMode
+    ? checkpoints.length > 0
+      ? "Edit Validate Feed"
+      : "Generate Validate Feed"
+    : checkpoints.length > 0
+      ? "Edit Feed"
+      : "Generate Feed";
   const okText = hasGroundTruthMetadata ? "Start Training" : "Run Inference";
 
   const okDisabled = !hasReadySnippetSet
@@ -186,16 +206,24 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="Metadata path (ground truth)" required>
+                <Form.Item
+                  label="Metadata path (ground truth)"
+                  required
+                  extra="Relative to the data root; defaults to &lt;source_uri&gt;/pam_metadata.csv when present."
+                >
                   <Input
-                    placeholder='e.g. "pam/FNJV/metadata.csv"'
+                    placeholder='e.g. "test_dataset4/pam_metadata.csv"'
                     value={trainMetadataPath}
                     onChange={(e) => setTrainMetadataPath(e.target.value)}
                   />
                 </Form.Item>
-                <Form.Item label="Label config path" required>
+                <Form.Item
+                  label="Label config path"
+                  required
+                  extra="Defaults to dataset pam_label_config.json or labels.json."
+                >
                   <Input
-                    placeholder='e.g. "pam/FNJV/labels.json"'
+                    placeholder='e.g. "test_dataset4/pam_label_config.json"'
                     value={trainLabelConfigPath}
                     onChange={(e) => setTrainLabelConfigPath(e.target.value)}
                   />
@@ -220,6 +248,52 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
             )}
           </>
         )}
+        {isValidateMode && (
+          <>
+            <Form.Item
+              label="Confidence labels"
+              tooltip="Noisy-OR confidence uses these model label names: c = 1 − ∏(1 − p(label))."
+            >
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder={
+                  labelScopeLoading
+                    ? "Loading checkpoint labels…"
+                    : "Select labels for confidence ranking"
+                }
+                loading={labelScopeLoading}
+                value={localLabelScope}
+                onChange={(v) => setLocalLabelScope(v)}
+                options={labelScopeOptions.map((name) => ({
+                  label: name,
+                  value: name,
+                }))}
+                style={{ width: "100%" }}
+                maxTagCount="responsive"
+              />
+              <div className="text-xs text-gray-400 mt-1">
+                Leave empty to rank by max probability per snippet (no scoped noisy-OR).
+              </div>
+            </Form.Item>
+            <Form.Item
+              label="Minimum confidence (optional)"
+              tooltip="Filter suggestions after ranking. Uses noisy-OR over the selected labels when set."
+            >
+              <InputNumber
+                min={0}
+                max={1}
+                step={0.05}
+                value={localMinConfidence ?? undefined}
+                onChange={(v) =>
+                  setLocalMinConfidence(v == null || Number.isNaN(v) ? null : v)
+                }
+                style={{ width: "100%" }}
+                placeholder="e.g. 0.7"
+              />
+            </Form.Item>
+          </>
+        )}
         <Form.Item label="Top-K predictions">
           <InputNumber
             min={1}
@@ -228,23 +302,36 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
             onChange={(v) => setLocalK(v ?? 20)}
             style={{ width: "100%" }}
             disabled={
-              !localTopKOnly || (checkpoints.length === 0 && hasGroundTruthMetadata)
+              isValidateMode ||
+              !localTopKOnly ||
+              (checkpoints.length === 0 && hasGroundTruthMetadata)
             }
           />
         </Form.Item>
-        <Form.Item label="Mode">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-gray-600">Return only Top‑K suggestions</div>
-            <Switch
-              checked={localTopKOnly}
-              onChange={setLocalTopKOnly}
-              disabled={checkpoints.length === 0 && hasGroundTruthMetadata}
-            />
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            When disabled, returns all predictions for the selected snippet set.
-          </div>
-        </Form.Item>
+        {!isValidateMode && (
+          <Form.Item label="Mode">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm text-gray-600">Return only Top‑K suggestions</div>
+              <Switch
+                checked={localTopKOnly}
+                onChange={setLocalTopKOnly}
+                disabled={checkpoints.length === 0 && hasGroundTruthMetadata}
+              />
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              When disabled, returns all predictions for the selected snippet set.
+            </div>
+          </Form.Item>
+        )}
+        {isValidateMode && (
+          <Alert
+            type="info"
+            showIcon
+            className="mb-0"
+            message="Validate uses confidence ranking"
+            description="Returns the top-K unannotated snippets ranked by aggregate confidence over your label selection."
+          />
+        )}
       </Form>
     </Modal>
   );

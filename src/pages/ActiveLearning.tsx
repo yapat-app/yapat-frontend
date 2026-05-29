@@ -19,7 +19,11 @@ import { NavigationBar } from "../components/NavigationBar";
 import { ProjectionView } from "../components/al/ProjectionView";
 import { PredictionFeed } from "../components/al/PredictionFeed";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
-import { useAppDispatch, useAppSelector } from "../hooks";
+import {
+  useAppDispatch,
+  useAppSelector,
+  usePamTrainingPathDefaults,
+} from "../hooks";
 import {
   setSelectedDataset,
   setInferenceConfig,
@@ -39,7 +43,6 @@ import type { PAMCheckpoint, PAMRunInferenceRequest, PAMSuggestionMode } from ".
 import type { SnippetSet } from "../types";
 import { usePhaseConfig } from "../studyPhases";
 import type { PhaseConfig } from "../studyPhases/types";
-
 const { Option } = Select;
 
 function buildInferenceSuggestionParams(
@@ -164,6 +167,13 @@ export const ActiveLearning: React.FC = () => {
   const [trainLabelConfigPath, setTrainLabelConfigPath] = useState<string>("");
   const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
   const [trainRunInference, setTrainRunInference] = useState<boolean>(false);
+
+  usePamTrainingPathDefaults(
+    selectedDatasetId,
+    hasGroundTruthMetadata,
+    setTrainMetadataPath,
+    setTrainLabelConfigPath,
+  );
 
   // Load datasets.
   useEffect(() => {

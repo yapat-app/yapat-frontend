@@ -30,6 +30,7 @@ import {
   buildClassicFeedback,
   snippetsToPredictions,
 } from "../../utils/classicFeedSync";
+import { aggregateConfidence } from "../../utils/aggregateConfidence";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
@@ -53,6 +54,8 @@ interface PersistedFeed {
   /** Whether the last run used top-K suggestions vs the full scored set. */
   sampleSuggestion?: boolean;
   suggestionStrategy?: PAMSuggestionStrategy;
+  labelScope?: string[];
+  minConfidence?: number;
   /** True when predictions were too large to store in localStorage. */
   predictionsTruncated?: boolean;
 }
@@ -92,12 +95,21 @@ function buildRestoreInferenceRequest(
     body.k = saved.inferenceK ?? state.inferenceK;
     body.suggestion_strategy = (saved.suggestionStrategy ??
       state.samplingMethod) as PAMSuggestionStrategy;
+    if (saved.labelScope?.length) {
+      body.label_scope = saved.labelScope;
+    }
+    if (saved.minConfidence != null && saved.minConfidence > 0) {
+      body.min_confidence = saved.minConfidence;
+    }
   }
 
   return body;
 }
 
-function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
+function withDisplayFields(
+  rows: PAMPrediction[],
+  labelScope?: string[] | null,
+): PAMPrediction[] {
   return rows.map((r) => {
     const probs = r.predicted_probabilities ?? undefined;
     let bestLabel = r.predicted_labels?.[0] ?? "—";
@@ -110,7 +122,13 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
         }
       }
     }
-    const confidence = Number.isFinite(bestProb) && bestProb > 0 ? bestProb : r.confidence ?? 0;
+    const scopedConfidence = aggregateConfidence(probs, labelScope);
+    const confidence =
+      labelScope?.length && scopedConfidence > 0
+        ? scopedConfidence
+        : Number.isFinite(bestProb) && bestProb > 0
+          ? bestProb
+          : r.confidence ?? 0;
     const mergedScores = {
       ...(r.scores ?? {}),
   // Ensure sampler score keys exist for filtering/coloring.
@@ -150,6 +168,8 @@ function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): vo
       sampleSuggestion,
       suggestionStrategy:
         inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
+      labelScope: inferenceRequest?.label_scope,
+      minConfidence: inferenceRequest?.min_confidence,
       predictionsTruncated: tooLarge,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -610,16 +630,18 @@ const alSlice = createSlice({
         const result: PAMInferenceResult = payload;
         state.modelFamilyName = result.model_family_name;
         state.usedCheckpointId = result.used_checkpoint_id;
+        const labelScope = result.label_scope ?? request.label_scope ?? null;
         state.modelInfo = {
           mode: result.mode,
           suggestion_strategy: result.suggestion_strategy,
           returned_count: result.returned_count,
           total_predictions: result.total_predictions,
           used_checkpoint_id: result.used_checkpoint_id,
+          label_scope: labelScope,
         };
         state.totalScored = result.total_predictions;
         state.feedSource = "pam";
-        state.predictions = withDisplayFields(result.rows);
+        state.predictions = withDisplayFields(result.rows, labelScope);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
         state.retrainLoading = false;
@@ -654,15 +676,19 @@ const alSlice = createSlice({
         const restored: PAMInferenceResult = action.payload;
         state.modelFamilyName = restored.model_family_name;
         state.usedCheckpointId = restored.used_checkpoint_id;
+        const restoredScope =
+          restored.label_scope ??
+          (saved?.labelScope?.length ? saved.labelScope : null);
         state.modelInfo = {
           mode: restored.mode,
           suggestion_strategy: restored.suggestion_strategy,
           returned_count: restored.returned_count,
           total_predictions: restored.total_predictions,
           used_checkpoint_id: restored.used_checkpoint_id,
+          label_scope: restoredScope,
         };
         state.totalScored = restored.total_predictions;
-        state.predictions = withDisplayFields(restored.rows);
+        state.predictions = withDisplayFields(restored.rows, restoredScope);
         if (state.projectionPredictions.length === 0) {
           state.projectionPredictions = state.predictions;
         }
