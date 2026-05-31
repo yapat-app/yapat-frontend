@@ -94,9 +94,7 @@ export function useHubALSession(
       phase.feed.mode === "single_card_on_select" ||
       phase.visualization.mode === "whole_dataset";
     const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
-    // Guard against re-running once predictions are already loaded: without this,
-    // the effect would loop indefinitely because inferenceLoading and modelInfo both
-    // change on every completed inference, re-triggering another dispatch.
+    // Skip if predictions already loaded — avoids re-dispatching after inference completes.
     if (
       needsFullSet &&
       isSuggestions &&
@@ -133,8 +131,7 @@ export function useHubALSession(
     dispatch(hydrateSavedFeed());
   }, [dispatch]);
 
-  // Restore truncated feed from server once per session — only when predictions
-  // are genuinely absent (not just cleared by a tab switch) and we haven't tried yet.
+  // Restore truncated feed from server once per session when predictions are absent.
   useEffect(() => {
     if (inferenceLoading || predictions.length > 0) return;
     if (
@@ -222,7 +219,6 @@ export function useHubALSession(
   }, [searchParams]);
 
   useEffect(() => {
-    // Reset restore guard when the dataset changes so the new dataset can restore.
     hasAttemptedRestoreRef.current = false;
   }, [selectedDatasetId]);
 
@@ -278,14 +274,12 @@ export function useHubALSession(
       .then((names) => {
         if (cancelled) return;
 
-        // Build enriched options using checkpoint hyperparameters when available.
         const ckpt = checkpoints.find((c) => c.id === ckptId);
         const hyper = ckpt?.hyperparameters ?? null;
         const classCounts = hyper?.class_counts ?? {};
         const excludedSet = new Set(hyper?.excluded_species ?? []);
         const LOW_SAMPLE_THRESHOLD = 10;
 
-        // Active (used) species first, then excluded species greyed out.
         const activeOptions: LabelScopeOption[] = names.map((name) => {
           const count = classCounts[name] ?? null;
           let tooltip: string | null = null;
@@ -311,7 +305,6 @@ export function useHubALSession(
         setLocalLabelScope((prev) => {
           const activeNames = activeOptions.map((o) => o.value);
           if (prev.length === 0) return activeNames;
-          // Keep prior selection, drop any that are no longer active.
           const kept = prev.filter((n) => activeNames.includes(n));
           return kept.length > 0 ? kept : activeNames;
         });
@@ -473,9 +466,7 @@ export function useHubALSession(
     dispatch,
   ]);
 
-  // Use the primitive job_id as the dep — the lastRetrainDispatch object reference
-  // changes on every Redux update even when the job_id is the same, which would
-  // restart the polling loop on every render and flood the server with requests.
+  // Poll by job_id primitive — object reference changes would restart the loop.
   const retrainJobId = lastRetrainDispatch?.job_id ?? null;
 
   const lastNotifiedJobIdRef = useRef<number | null>(null);
@@ -493,10 +484,7 @@ export function useHubALSession(
           lastNotifiedJobIdRef.current = stableJobId;
           message.warning("Could not poll retrain job — please retry manually");
         }
-        // Do NOT dispatch runInference here: if the backend is returning job
-        // dispatches on every inference call (e.g. broken checkpoint), a fallback
-        // runInference would immediately produce another job_id, restarting this
-        // polling loop indefinitely. Clear state and let the user retry via UI.
+        // Clear dispatch state; do not auto-run inference (would restart the poll loop).
         dispatch(clearRetrainDispatch());
         return;
       }
@@ -510,20 +498,18 @@ export function useHubALSession(
             message.error("Training failed — please check the model checkpoint and retry");
           }
         }
-        // Clear before any further dispatch so that runInference returning a job
-        // dispatch does not chain into another polling loop for a new job_id.
         dispatch(clearRetrainDispatch());
         if (status === "COMPLETED" && modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
           const suggestionParams = buildSuggestionParams(
             inferenceK,
             isValidateMode || isSuggestionsMode(modelInfo),
           );
+          // Omit force_refresh — job already stored predictions; true would loop.
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
-              force_refresh: true,
               ...suggestionParams,
             }),
           );
