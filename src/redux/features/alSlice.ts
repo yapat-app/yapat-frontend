@@ -660,9 +660,18 @@ const alSlice = createSlice({
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
         state.retrainLoading = false;
-        // Update projection snapshot on first inference or after a retrain.
-        if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
-          state.projectionPredictions = state.predictions;
+        // Always update projection snapshot so colour/score overlays stay in sync
+        // when switching between modes (AL ↔ validate) or after a retrain.
+        state.projectionPredictions = state.predictions;
+
+        // Auto-select the first prediction if nothing is selected or the current
+        // selection is no longer in the new prediction set (e.g. after a mode switch).
+        const newIds = new Set(state.predictions.map((p) => p.snippet_id));
+        if (
+          state.predictions.length > 0 &&
+          (state.selectedSnippetId === null || !newIds.has(state.selectedSnippetId))
+        ) {
+          state.selectedSnippetId = state.predictions[0].snippet_id;
         }
         saveFeed(state, request);
       },
