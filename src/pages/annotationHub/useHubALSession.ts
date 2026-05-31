@@ -272,7 +272,6 @@ export function useHubALSession(
         const ckpt = checkpoints.find((c) => c.id === ckptId);
         const hyper = ckpt?.hyperparameters ?? null;
         const classCounts = hyper?.class_counts ?? {};
-        const excludedSet = new Set(hyper?.excluded_species ?? []);
         const LOW_SAMPLE_THRESHOLD = 10;
 
         const activeOptions: LabelScopeOption[] = names.map((name) => {

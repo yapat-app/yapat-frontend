@@ -98,9 +98,6 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
       : "Generate Feed";
   const okText = "Apply";
 
-  // The latest checkpoint (checkpoints[0]) is always used automatically.
-  const activeCheckpoint = checkpoints[0] ?? null;
-
   const okDisabled = !hasReadySnippetSet
     ? true
     : checkpoints.length === 0
