@@ -185,6 +185,12 @@ export const PredictionFeed: React.FC = () => {
     return ids.join(",");
   }, [predictions]);
 
+  // Clear stale names immediately on dataset change so the previous dataset's
+  // filenames never bleed into the new dataset's cards while the fetch is in flight.
+  useEffect(() => {
+    setRecordingNameById({});
+  }, [selectedDatasetId]);
+
   useEffect(() => {
     if (!selectedDatasetId || !neededRecordingIdsKey) {
       setRecordingNameById({});
