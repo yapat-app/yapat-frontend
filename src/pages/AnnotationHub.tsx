@@ -124,8 +124,6 @@ export const AnnotationHub: React.FC = () => {
         checkpoints={al.checkpoints}
         embeddingMethods={al.embeddingMethods}
         embeddingMethodsLoading={al.embeddingMethodsLoading}
-        localCkpt={al.localCkpt}
-        setLocalCkpt={al.setLocalCkpt}
         localFamily={al.localFamily}
         setLocalFamily={al.setLocalFamily}
         localK={al.localK}

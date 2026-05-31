@@ -189,7 +189,6 @@ export function useHubALSession(
   const [alConfigOpen, setAlConfigOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
-  const [localCkpt, setLocalCkpt] = useState<number | null>(modelCheckpointId);
   const [localFamily, setLocalFamily] = useState<string | null>(modelFamilyName);
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
@@ -245,21 +244,17 @@ export function useHubALSession(
     if (ready?.id != null) setLocalSS(ready.id);
   }, [snippetSets, localSS]);
 
+  // Always use the latest checkpoint (checkpoints[0], sorted desc by date).
+  // No user selection — checkpoint is resolved automatically.
+  const localCkpt = checkpoints[0]?.id ?? null;
+
   useEffect(() => {
     if (checkpoints.length === 0) {
       if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
-      setLocalCkpt(null);
-      return;
-    }
-    if (localCkpt !== null) {
-      const fam =
-        checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? null;
-      if (fam && fam !== localFamily) setLocalFamily(fam);
       return;
     }
     const first = checkpoints[0];
-    if (first) {
-      setLocalCkpt(first.id);
+    if (first && first.model_family_name !== localFamily) {
       setLocalFamily(first.model_family_name ?? null);
     }
   }, [checkpoints]);
@@ -356,6 +351,41 @@ export function useHubALSession(
     ],
   );
 
+  // Auto-refresh the feed whenever the user switches between al/validate modes,
+  // or switches back to an AL-like mode from a classic mode.
+  // Use a ref to skip the initial mount and only react to genuine mode changes.
+  const prevModeRef = useRef<AnnotateMode | null>(null);
+  useEffect(() => {
+    const prev = prevModeRef.current;
+    prevModeRef.current = mode;
+
+    // Skip initial mount.
+    if (prev === null) return;
+    // Only act on transitions into an AL-like mode.
+    if (!isAlLikeMode) return;
+    // No-op if nothing we need to run inference is ready.
+    if (
+      selectedDatasetId === null ||
+      resolvedSnippetSetId === null ||
+      inferenceLoading
+    ) return;
+    // No checkpoint yet — nothing to refresh.
+    if (checkpoints.length === 0) return;
+
+    const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
+    if (!family) return;
+
+    const suggestionParams = buildSuggestionParams(localK, isValidateMode || localTopKOnly);
+    dispatch(
+      runInference({
+        model_family_name: family,
+        dataset_id: selectedDatasetId,
+        snippet_set_id: resolvedSnippetSetId,
+        ...suggestionParams,
+      }),
+    );
+  }, [mode]); // intentionally only react to mode changes — other values read via closure
+
   const handleDatasetChange = useCallback(
     (value: number) => {
       dispatch(setSelectedDataset(value));
@@ -366,11 +396,8 @@ export function useHubALSession(
 
   const handleRunInference = useCallback(() => {
     if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
-    const family =
-      (localFamily ?? "").trim() ||
-      (localCkpt !== null
-        ? checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? ""
-        : "");
+    // localCkpt is always checkpoints[0] — the latest checkpoint.
+    const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
     if (!family) return;
     const embeddingModelId =
       snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
@@ -551,7 +578,6 @@ export function useHubALSession(
     : null;
 
   const openInferenceModal = useCallback(() => {
-    setLocalCkpt(modelCheckpointId);
     setLocalFamily(modelFamilyName);
     setLocalSS(resolvedSnippetSetId);
     setLocalK(inferenceK);
@@ -566,7 +592,6 @@ export function useHubALSession(
     setTrainRunInference(false);
     setAlConfigOpen(true);
   }, [
-    modelCheckpointId,
     modelFamilyName,
     resolvedSnippetSetId,
     inferenceK,
@@ -603,7 +628,6 @@ export function useHubALSession(
     checkpoints,
     snippetSets,
     localCkpt,
-    setLocalCkpt,
     localFamily,
     setLocalFamily,
     localK,

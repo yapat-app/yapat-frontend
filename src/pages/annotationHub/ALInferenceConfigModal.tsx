@@ -25,8 +25,6 @@ export type ALInferenceConfigModalProps = {
   checkpoints: PAMCheckpoint[];
   embeddingMethods: EmbeddingMethod[] | null | undefined;
   embeddingMethodsLoading: boolean;
-  localCkpt: number | null;
-  setLocalCkpt: (v: number | null) => void;
   localFamily: string | null;
   setLocalFamily: (v: string | null) => void;
   localK: number;
@@ -62,8 +60,6 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
   checkpoints,
   embeddingMethods,
   embeddingMethodsLoading,
-  localCkpt,
-  setLocalCkpt,
   localFamily,
   setLocalFamily,
   localK,
@@ -102,6 +98,9 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
       : "Generate Feed";
   const okText = "Apply";
 
+  // The latest checkpoint (checkpoints[0]) is always used automatically.
+  const activeCheckpoint = checkpoints[0] ?? null;
+
   const okDisabled = !hasReadySnippetSet
     ? true
     : checkpoints.length === 0
@@ -110,7 +109,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
           (!Number.isFinite(trainEmbeddingModelId) ||
             !trainMetadataPath.trim() ||
             !trainLabelConfigPath.trim()))
-      : !localCkpt;
+      : false;
 
   return (
     <Modal
@@ -125,28 +124,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
       }}
     >
       <Form layout="vertical" className="mt-4">
-        {checkpoints.length > 0 ? (
-          <Form.Item label="Model Checkpoint" required>
-            <Select
-              placeholder="Select checkpoint"
-              value={localCkpt ?? undefined}
-              onChange={(id: number) => {
-                setLocalCkpt(id);
-                const fam =
-                  checkpoints.find((c) => c.id === id)?.model_family_name ?? null;
-                setLocalFamily(fam);
-              }}
-              style={{ width: "100%" }}
-            >
-              {checkpoints.map((c) => (
-                <Option key={c.id} value={c.id}>
-                  {c.model_family_name} — {c.version}{" "}
-                  {c.is_base ? "(base)" : ""}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-        ) : (
+        {checkpoints.length > 0 ? null : (
           <>
             {!hasReadySnippetSet && (
               <Alert
