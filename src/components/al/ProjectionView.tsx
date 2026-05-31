@@ -150,6 +150,13 @@ export const ProjectionView: React.FC = () => {
   const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("pca");
+  // Plotly revision counter: forces a full re-draw when the selected snippet changes.
+  // Without this, react-plotly.js may not redraw the highlight trace because it
+  // considers trace data changes too minor to trigger a full Plotly.react() call.
+  const [plotRevision, setPlotRevision] = useState(0);
+  useEffect(() => {
+    setPlotRevision((r) => r + 1);
+  }, [selectedSnippetId]);
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
@@ -1112,6 +1119,7 @@ export const ProjectionView: React.FC = () => {
             data={traces}
             layout={{
               autosize: true,
+              datarevision: plotRevision,
               margin: { l: 30, r: 10, t: 10, b: 30 },
               showlegend: false,
               legend: {
@@ -1127,6 +1135,7 @@ export const ProjectionView: React.FC = () => {
               plot_bgcolor: "#f7fafc",
               hovermode: "closest",
             }}
+            revision={plotRevision}
             style={{ width: "100%", height: "100%" }}
             useResizeHandler
             onClick={handlePlotClick}
