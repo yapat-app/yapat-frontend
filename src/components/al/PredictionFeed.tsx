@@ -25,7 +25,7 @@ import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
-import { hydrateClassicAnnotations } from "../../redux/features/alSlice";
+import { hydrateClassicAnnotations, setSelectedSnippet } from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
 
 export const PredictionFeed: React.FC = () => {
@@ -48,8 +48,7 @@ export const PredictionFeed: React.FC = () => {
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
 
-  // Incremental rendering: start with 50 cards, expand as user scrolls near the bottom.
-  // Prevents browser freeze when predictions contains thousands of items.
+  // Paginate cards to avoid mounting thousands of DOM nodes at once.
   const PAGE_SIZE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -83,7 +82,69 @@ export const PredictionFeed: React.FC = () => {
   // Height of the scroll container so each snap card fills exactly one viewport slot.
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
-  useALSync(cardRefs);
+  // Scroll ↔ selection sync: skipScrollIntoViewRef breaks feedback loops;
+  // scrollSyncSuspendedRef ignores transient cards during programmatic scroll.
+  const skipScrollIntoViewRef = useRef(false);
+  const scrollSyncSuspendedRef = useRef(false);
+  const selectedSnippetIdRef = useRef<number | null>(selectedSnippetId);
+  useEffect(() => {
+    selectedSnippetIdRef.current = selectedSnippetId;
+  }, [selectedSnippetId]);
+
+  useALSync(cardRefs, { skipScrollIntoViewRef });
+
+  // Suspend scroll-driven selection while scrollIntoView animates after a projection click.
+  useEffect(() => {
+    if (skipScrollIntoViewRef.current) {
+      skipScrollIntoViewRef.current = false;
+      return;
+    }
+    scrollSyncSuspendedRef.current = true;
+    const t = window.setTimeout(() => {
+      scrollSyncSuspendedRef.current = false;
+    }, 650);
+    return () => window.clearTimeout(t);
+  }, [selectedSnippetId]);
+
+  // Select the card nearest the scroll container center (rAF-throttled).
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || predictions.length === 0) return;
+
+    let rafId: number | null = null;
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        if (scrollSyncSuspendedRef.current) return;
+        const containerRect = container.getBoundingClientRect();
+        const centerY = containerRect.top + containerRect.height / 2;
+        let bestId: number | null = null;
+        let bestDist = Infinity;
+        cardRefs.current.forEach((el, sid) => {
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          // Skip cards entirely outside the container viewport.
+          if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
+          const cardCenter = r.top + r.height / 2;
+          const d = Math.abs(cardCenter - centerY);
+          if (d < bestDist) {
+            bestDist = d;
+            bestId = sid;
+          }
+        });
+        if (bestId !== null && bestId !== selectedSnippetIdRef.current) {
+          skipScrollIntoViewRef.current = true;
+          dispatch(setSelectedSnippet(bestId));
+        }
+      });
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [dispatch, predictions.length, scrollRoot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,8 +154,6 @@ export const PredictionFeed: React.FC = () => {
         return;
       }
       try {
-        // Only fetch annotations for the currently visible window, not all predictions.
-        // More will be fetched as the user scrolls and visibleCount increases.
         const ids = predictions.slice(0, visibleCount).map((p) => p.snippet_id);
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
@@ -138,7 +197,7 @@ export const PredictionFeed: React.FC = () => {
 
     let cancelled = false;
 
-    // Only fetch the recordings we actually need — avoids a 10k-row dump on every feed load.
+    // Fetch only recordings referenced by the current feed.
     const BATCH = 10;
     const batches: number[][] = [];
     for (let i = 0; i < neededIds.length; i += BATCH) {
@@ -213,8 +272,6 @@ export const PredictionFeed: React.FC = () => {
 
   // Blind mode: hydrate per-snippet labels from the backend so they persist across refresh.
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
-  // Stable string key so the effect only re-runs when actual label content changes,
-  // not on every object reference change of the `feedbacks` map.
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
@@ -223,7 +280,6 @@ export const PredictionFeed: React.FC = () => {
         .join("|"),
     [feedbacks],
   );
-  // Keep a ref so the effect body can read feedbacks without adding it to deps.
   const feedbacksRef = useRef(feedbacks);
   feedbacksRef.current = feedbacks;
 
@@ -261,7 +317,6 @@ export const PredictionFeed: React.FC = () => {
     return () => { cancelled = true; };
   }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
 
-  // ── Derived stats for Phase 1 header ────────────────────────────────────
   const labeledCount = useMemo(
     () => predictions.filter((p) => !!feedbacks[p.snippet_id]).length,
     [predictions, feedbacks],
@@ -307,7 +362,6 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
-  // ── Single-card mode (Phase 2.x / 3.x) ───────────────────────────────────
   if (phase.feed.mode === "single_card_on_select") {
     const selected = selectedSnippetId !== null
       ? predictions.find((p) => p.snippet_id === selectedSnippetId)
@@ -349,10 +403,7 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
-  // ── Scrollable top-K mode (Phase 1.x) ────────────────────────────────────
-
-  // Blind mode: snap-scroll feed; each card fills one viewport slot and contains
-  // the spectrogram + inline label area — no separate bottom strip.
+  // Blind mode: snap-scroll feed with one card per viewport slot.
   if (isBlind) {
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -366,7 +417,6 @@ export const PredictionFeed: React.FC = () => {
               const key = p.id ?? p.snippet_id;
               const height = blindSnapCardHeight;
               if (index >= visibleCount) {
-                // Placeholder preserves scroll height without mounting hooks.
                 return (
                   <div
                     key={key}
@@ -376,7 +426,6 @@ export const PredictionFeed: React.FC = () => {
                 );
               }
               if (index === visibleCount - 1) {
-                // Sentinel: expand window when last real card is near the viewport.
                 return (
                   <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
                     <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
@@ -418,10 +467,8 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
-  // ── Guided scrollable feed (non-blind P1.x) ──────────────────────────────
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Fixed header (stats + progress) */}
       <div className="px-4 pt-4 pb-3 flex-shrink-0">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           <Row gutter={12}>
@@ -466,7 +513,6 @@ export const PredictionFeed: React.FC = () => {
         </div>
       </div>
 
-      {/* Scrollable feed */}
       <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           {predictions.map((p, index) => {
