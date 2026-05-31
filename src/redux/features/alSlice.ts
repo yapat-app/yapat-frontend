@@ -600,14 +600,25 @@ const alSlice = createSlice({
       state.lastRetrainJob = null;
       state.retrainLoading = false;
     },
-    hydrateSavedFeed: (state) => {
+    hydrateSavedFeed: (
+      state,
+      action: PayloadAction<{ expectedDatasetId?: number | null } | undefined>,
+    ) => {
       if (state.predictions.length > 0) return;
       const saved = loadFeed();
       if (!saved) return;
 
       const savedId = normalizeDatasetId(saved.selectedDatasetId);
       const currentId = normalizeDatasetId(state.selectedDatasetId);
-      if (currentId !== null && savedId !== null && currentId !== savedId) return;
+      // The dataset we intend to show: explicit payload (from URL) wins, then the
+      // dataset already in state. This closes the hole where, on first mount,
+      // state.selectedDatasetId is still null and a feed from a *different* dataset
+      // would be restored onto the current dataset's view (stale cross-dataset feed).
+      const expectedId =
+        action?.payload?.expectedDatasetId !== undefined
+          ? normalizeDatasetId(action.payload.expectedDatasetId)
+          : currentId;
+      if (expectedId !== null && savedId !== null && expectedId !== savedId) return;
 
       if ((saved.predictions?.length ?? 0) > 0) {
         applyPersistedFeed(state, saved);

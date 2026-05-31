@@ -128,8 +128,16 @@ export function useHubALSession(
   ]);
 
   useEffect(() => {
-    dispatch(hydrateSavedFeed());
-  }, [dispatch]);
+    // Pass the URL's dataset so a persisted feed from a *different* dataset is not
+    // restored onto this view (which would leave the vis unable to locate snippets).
+    const raw = searchParams.get("dataset_id");
+    const urlDatasetId = raw ? Number.parseInt(raw, 10) : null;
+    dispatch(
+      hydrateSavedFeed({
+        expectedDatasetId: Number.isFinite(urlDatasetId as number) ? urlDatasetId : null,
+      }),
+    );
+  }, [dispatch, searchParams]);
 
   // Restore truncated feed from server once per session when predictions are absent.
   useEffect(() => {

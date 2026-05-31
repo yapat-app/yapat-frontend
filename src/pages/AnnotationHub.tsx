@@ -62,7 +62,13 @@ export const AnnotationHub: React.FC = () => {
         dispatch(clearClassicAnnotationFeed());
         // Restore persisted AL feed immediately so predictions are available
         // before restoreFeedFromServer checks them, preventing a spurious re-inference.
-        dispatch(hydrateSavedFeed());
+        // Pass the current dataset so a feed from a different dataset isn't restored.
+        const ds = dsId ? Number.parseInt(dsId, 10) : null;
+        dispatch(
+          hydrateSavedFeed({
+            expectedDatasetId: Number.isFinite(ds as number) ? ds : null,
+          }),
+        );
       }
 
       setSearchParams(params, { replace: true });
