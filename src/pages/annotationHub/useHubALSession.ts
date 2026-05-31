@@ -19,6 +19,14 @@ import {
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
 import type { PAMCheckpoint } from "../../types/al";
+
+export interface LabelScopeOption {
+  value: string;
+  label: string;
+  disabled: boolean;
+  tooltip: string | null;
+  sampleCount: number | null;
+}
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
 import {
@@ -191,7 +199,7 @@ export function useHubALSession(
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
   const [localMinConfidence, setLocalMinConfidence] = useState<number | null>(null);
   const [localLabelScope, setLocalLabelScope] = useState<string[]>([]);
-  const [labelScopeOptions, setLabelScopeOptions] = useState<string[]>([]);
+  const [labelScopeOptions, setLabelScopeOptions] = useState<LabelScopeOption[]>([]);
   const [labelScopeLoading, setLabelScopeLoading] = useState(false);
   const [hasGroundTruthMetadata, setHasGroundTruthMetadata] =
     useState<boolean>(false);
@@ -265,14 +273,47 @@ export function useHubALSession(
     const ckptId = localCkpt ?? modelCheckpointId;
     let cancelled = false;
     setLabelScopeLoading(true);
+
     void fetchPamQuickLabelNames(ckptId, selectedDatasetId)
       .then((names) => {
         if (cancelled) return;
-        setLabelScopeOptions(names);
+
+        // Build enriched options using checkpoint hyperparameters when available.
+        const ckpt = checkpoints.find((c) => c.id === ckptId);
+        const hyper = ckpt?.hyperparameters ?? null;
+        const classCounts = hyper?.class_counts ?? {};
+        const excludedSet = new Set(hyper?.excluded_species ?? []);
+        const LOW_SAMPLE_THRESHOLD = 10;
+
+        // Active (used) species first, then excluded species greyed out.
+        const activeOptions: LabelScopeOption[] = names.map((name) => {
+          const count = classCounts[name] ?? null;
+          let tooltip: string | null = null;
+          if (count !== null) {
+            tooltip = count < LOW_SAMPLE_THRESHOLD
+              ? `${count} training samples — low confidence`
+              : `${count} training samples`;
+          }
+          return { value: name, label: name, disabled: false, tooltip, sampleCount: count };
+        });
+
+        const excludedOptions: LabelScopeOption[] = (hyper?.excluded_species ?? []).map((name) => {
+          const count = classCounts[name] ?? null;
+          const tooltip = count !== null
+            ? `Excluded — only ${count} training sample${count === 1 ? "" : "s"}`
+            : "Excluded — insufficient training samples";
+          return { value: name, label: name, disabled: true, tooltip, sampleCount: count };
+        });
+
+        const allOptions = [...activeOptions, ...excludedOptions];
+        setLabelScopeOptions(allOptions);
+
         setLocalLabelScope((prev) => {
-          if (prev.length === 0) return names;
-          const kept = prev.filter((n) => names.includes(n));
-          return kept.length > 0 ? kept : names;
+          const activeNames = activeOptions.map((o) => o.value);
+          if (prev.length === 0) return activeNames;
+          // Keep prior selection, drop any that are no longer active.
+          const kept = prev.filter((n) => activeNames.includes(n));
+          return kept.length > 0 ? kept : activeNames;
         });
       })
       .catch(() => {
@@ -292,6 +333,7 @@ export function useHubALSession(
     localCkpt,
     modelCheckpointId,
     selectedDatasetId,
+    checkpoints,
   ]);
 
   const buildSuggestionParams = useCallback(

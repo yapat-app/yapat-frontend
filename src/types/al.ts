@@ -270,6 +270,12 @@ export interface ALSnippetLabelsResponse {
   items: ALSnippetLabel[];
 }
 
+export interface PAMCheckpointHyperparameters {
+  used_species?: string[] | null;
+  excluded_species?: string[] | null;
+  class_counts?: Record<string, number> | null;
+}
+
 export interface PAMCheckpoint {
   id: number;
   dataset_id: number;
@@ -282,6 +288,7 @@ export interface PAMCheckpoint {
   created_at: string;
   updated_at?: string | null;
   parent_checkpoint_id?: number | null;
+  hyperparameters?: PAMCheckpointHyperparameters | null;
 }
 
 export type ALFeedSource = "pam" | "classic";

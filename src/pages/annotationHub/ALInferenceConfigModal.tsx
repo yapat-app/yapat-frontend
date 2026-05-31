@@ -7,10 +7,13 @@ import {
   Input,
   Switch,
   Select,
+  Tooltip,
 } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import { useAppDispatch } from "../../hooks";
 import { getAllEmbeddingMethods } from "../../redux/features/embeddingSlice";
 import type { PAMCheckpoint } from "../../types/al";
+import type { LabelScopeOption } from "./useHubALSession";
 import type { EmbeddingMethod } from "../../types";
 
 const { Option } = Select;
@@ -48,7 +51,7 @@ export type ALInferenceConfigModalProps = {
   setLocalMinConfidence: (v: number | null) => void;
   localLabelScope: string[];
   setLocalLabelScope: (v: string[]) => void;
-  labelScopeOptions: string[];
+  labelScopeOptions: LabelScopeOption[];
   labelScopeLoading?: boolean;
 };
 
@@ -265,13 +268,33 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                 loading={labelScopeLoading}
                 value={localLabelScope}
                 onChange={(v) => setLocalLabelScope(v)}
-                options={labelScopeOptions.map((name) => ({
-                  label: name,
-                  value: name,
+                options={labelScopeOptions.map((opt) => ({
+                  value: opt.value,
+                  label: (
+                    <span className={opt.disabled ? "text-gray-400" : undefined}>
+                      {opt.label}
+                      {opt.tooltip && (
+                        <Tooltip title={opt.tooltip}>
+                          <InfoCircleOutlined className="ml-1 text-gray-400" />
+                        </Tooltip>
+                      )}
+                    </span>
+                  ),
+                  disabled: opt.disabled,
                 }))}
                 style={{ width: "100%" }}
                 maxTagCount="responsive"
               />
+              {(() => {
+                const lowSampleCount = labelScopeOptions.filter(
+                  (o) => !o.disabled && o.sampleCount !== null && o.sampleCount < 10
+                ).length;
+                return lowSampleCount > 0 ? (
+                  <div className="text-xs text-yellow-600 mt-1">
+                    ⚠ {lowSampleCount} species {lowSampleCount === 1 ? "has" : "have"} fewer than 10 training samples — probabilities may be unreliable.
+                  </div>
+                ) : null;
+              })()}
               <div className="text-xs text-gray-400 mt-1">
                 Leave empty to rank by the model's top prediction regardless of species.
               </div>
