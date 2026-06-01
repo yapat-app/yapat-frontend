@@ -1,11 +1,4 @@
-/**
- * PredictionFeed — phase-aware snippet feed.
- *
- * Behaviour is driven entirely by `phase.feed.mode`:
- *   • "scrollable_topk"        → annotation-style feed with stats, queue, and cards
- *   • "single_card_on_select"  → only the snippet matching `selectedSnippetId`
- *   • "hidden"                 → renders nothing
- */
+/** PredictionFeed — phase-aware snippet feed. */
 
 import React, {
   useRef,
@@ -48,17 +41,14 @@ export const PredictionFeed: React.FC = () => {
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
 
-  // Paginate cards to avoid mounting thousands of DOM nodes at once.
   const PAGE_SIZE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // Reset visible count whenever the predictions list changes (new feed / dataset).
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [predictions]);
 
-  // Expand the visible window when the sentinel scrolls into view.
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
     if (!sentinel) return;
@@ -79,13 +69,11 @@ export const PredictionFeed: React.FC = () => {
     setScrollRoot(el);
   }, []);
 
-  // Height of the scroll container so each snap card fills exactly one viewport slot.
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
-  // Scroll ↔ selection sync: skipScrollIntoViewRef breaks feedback loops;
-  // scrollSyncSuspendedRef ignores transient cards during programmatic scroll.
   const skipScrollIntoViewRef = useRef(false);
   const scrollSyncSuspendedRef = useRef(false);
+  const cardVisibilityObserverRef = useRef<IntersectionObserver | null>(null);
   const selectedSnippetIdRef = useRef<number | null>(selectedSnippetId);
   useEffect(() => {
     selectedSnippetIdRef.current = selectedSnippetId;
@@ -93,7 +81,6 @@ export const PredictionFeed: React.FC = () => {
 
   useALSync(cardRefs, { skipScrollIntoViewRef });
 
-  // Suspend scroll-driven selection while scrollIntoView animates after a projection click.
   useEffect(() => {
     if (skipScrollIntoViewRef.current) {
       skipScrollIntoViewRef.current = false;
@@ -106,45 +93,76 @@ export const PredictionFeed: React.FC = () => {
     return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
-  // Select the card nearest the scroll container center (rAF-throttled).
+  const selectCenteredCard = useCallback(
+    (opts?: { force?: boolean }) => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      if (!opts?.force && scrollSyncSuspendedRef.current) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const centerY = containerRect.top + containerRect.height / 2;
+      let bestId: number | null = null;
+      let bestDist = Infinity;
+      cardRefs.current.forEach((el, sid) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
+        const cardCenter = r.top + r.height / 2;
+        const d = Math.abs(cardCenter - centerY);
+        if (d < bestDist) {
+          bestDist = d;
+          bestId = sid;
+        }
+      });
+      if (bestId !== null && bestId !== selectedSnippetIdRef.current) {
+        skipScrollIntoViewRef.current = true;
+        dispatch(setSelectedSnippet(bestId));
+      }
+    },
+    [dispatch],
+  );
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || predictions.length === 0) return;
 
     let rafId: number | null = null;
-    const onScroll = () => {
+    const scheduleSelect = () => {
       if (rafId !== null) return;
       rafId = window.requestAnimationFrame(() => {
         rafId = null;
-        if (scrollSyncSuspendedRef.current) return;
-        const containerRect = container.getBoundingClientRect();
-        const centerY = containerRect.top + containerRect.height / 2;
-        let bestId: number | null = null;
-        let bestDist = Infinity;
-        cardRefs.current.forEach((el, sid) => {
-          if (!el) return;
-          const r = el.getBoundingClientRect();
-          // Skip cards entirely outside the container viewport.
-          if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
-          const cardCenter = r.top + r.height / 2;
-          const d = Math.abs(cardCenter - centerY);
-          if (d < bestDist) {
-            bestDist = d;
-            bestId = sid;
-          }
-        });
-        if (bestId !== null && bestId !== selectedSnippetIdRef.current) {
-          skipScrollIntoViewRef.current = true;
-          dispatch(setSelectedSnippet(bestId));
-        }
+        selectCenteredCard();
       });
     };
-    container.addEventListener("scroll", onScroll, { passive: true });
+
+    const observer = new IntersectionObserver(scheduleSelect, {
+      root: container,
+      threshold: [0, 0.25, 0.5, 0.75, 1],
+    });
+    cardVisibilityObserverRef.current = observer;
+    cardRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    container.addEventListener("scroll", scheduleSelect, { passive: true });
+
     return () => {
-      container.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+      cardVisibilityObserverRef.current = null;
+      container.removeEventListener("scroll", scheduleSelect);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [dispatch, predictions.length, scrollRoot]);
+  }, [selectCenteredCard, predictions.length, scrollRoot]);
+
+  useEffect(() => {
+    if (predictions.length === 0) return;
+    const cur = selectedSnippetIdRef.current;
+    const curInFeed =
+      cur !== null && predictions.some((p) => p.snippet_id === cur);
+    if (curInFeed) return;
+    const raf = requestAnimationFrame(() => selectCenteredCard({ force: true }));
+    return () => cancelAnimationFrame(raf);
+  }, [selectCenteredCard, predictions, visibleCount, scrollRoot]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +191,6 @@ export const PredictionFeed: React.FC = () => {
     };
   }, [dispatch, predictions, visibleCount]);
 
-  // Stable set of recording IDs needed by the current prediction list.
   const neededRecordingIdsKey = useMemo(() => {
     const ids = Array.from(
       new Set(
@@ -185,8 +202,6 @@ export const PredictionFeed: React.FC = () => {
     return ids.join(",");
   }, [predictions]);
 
-  // Clear stale names immediately on dataset change so the previous dataset's
-  // filenames never bleed into the new dataset's cards while the fetch is in flight.
   useEffect(() => {
     setRecordingNameById({});
   }, [selectedDatasetId]);
@@ -203,7 +218,6 @@ export const PredictionFeed: React.FC = () => {
 
     let cancelled = false;
 
-    // Fetch only recordings referenced by the current feed.
     const BATCH = 10;
     const batches: number[][] = [];
     for (let i = 0; i < neededIds.length; i += BATCH) {
@@ -243,15 +257,23 @@ export const PredictionFeed: React.FC = () => {
 
   const setCardRef = useCallback(
     (snippetId: number) => (el: HTMLDivElement | null) => {
-      if (el) cardRefs.current.set(snippetId, el);
-      else cardRefs.current.delete(snippetId);
+      const observer = cardVisibilityObserverRef.current;
+      if (el) {
+        const prev = cardRefs.current.get(snippetId);
+        if (prev && prev !== el && observer) observer.unobserve(prev);
+        cardRefs.current.set(snippetId, el);
+        if (observer) observer.observe(el);
+      } else {
+        const prev = cardRefs.current.get(snippetId);
+        if (prev && observer) observer.unobserve(prev);
+        cardRefs.current.delete(snippetId);
+      }
     },
     [],
   );
 
   const isBlind = phase.ui.labelingMode === "blind";
 
-  // Measure the scroll container so each blind card can fill it exactly.
   useLayoutEffect(() => {
     if (!isBlind) return;
 
@@ -276,7 +298,6 @@ export const PredictionFeed: React.FC = () => {
     };
   }, [isBlind, predictions.length]);
 
-  // Blind mode: hydrate per-snippet labels from the backend so they persist across refresh.
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
   const feedbackLabelSignature = useMemo(
     () =>
@@ -409,7 +430,6 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
-  // Blind mode: snap-scroll feed with one card per viewport slot.
   if (isBlind) {
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
