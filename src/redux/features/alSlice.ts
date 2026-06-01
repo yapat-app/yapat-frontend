@@ -58,6 +58,8 @@ interface PersistedFeed {
   minConfidence?: number;
   /** True when predictions were too large to store in localStorage. */
   predictionsTruncated?: boolean;
+  /** Per-snippet annotation/skip state — restored on re-login so done work is not lost. */
+  feedbacks?: Record<number, FeedbackResponse>;
 }
 
 function needsServerRestore(saved: PersistedFeed | null): boolean {
@@ -176,6 +178,7 @@ function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): vo
     labelScope: inferenceRequest?.label_scope,
     minConfidence: inferenceRequest?.min_confidence,
     predictionsTruncated: tooLarge,
+    feedbacks: state.feedbacks,
   };
 
   _saveFeedTimer = setTimeout(() => {
@@ -220,6 +223,11 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
   const rows = withDisplayFields(saved.predictions ?? []);
   state.predictions = rows;
   state.projectionPredictions = rows;
+  if (saved.feedbacks && Object.keys(saved.feedbacks).length > 0) {
+    state.feedbacks = saved.feedbacks;
+    state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
+    state.projectionPredictions = state.predictions;
+  }
   applyPersistedMetadata(state, saved);
 }
 
