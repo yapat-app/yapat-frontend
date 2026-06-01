@@ -89,8 +89,12 @@ export function useHubClassic(
     if (prev) {
       const prevDs = Number(prev.datasetId);
       const datasetChanged = prev.datasetId !== classicDatasetId;
-      const modeChanged = prev.mode !== mode;
-      if (!Number.isNaN(prevDs) && (datasetChanged || modeChanged)) {
+      // NOTE: do NOT save on mode change here. setMode (AnnotationHub) already saves
+      // the outgoing slot synchronously BEFORE swapping the feed. By the time this
+      // post-render effect runs on a mode change, state.snippets has already been
+      // replaced with the new mode's feed — saving here would clobber the previous
+      // mode's slot with the wrong feed. Only handle dataset changes here.
+      if (!Number.isNaN(prevDs) && datasetChanged) {
         dispatch(saveClassicFeedSlot({ datasetId: prevDs, kind: prev.mode }));
       }
     }
