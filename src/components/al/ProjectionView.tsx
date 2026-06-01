@@ -805,9 +805,14 @@ export const ProjectionView: React.FC = () => {
       hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
     };
 
+    // NOTE: use scattergl (not scatter) for the selection markers. Mixing an SVG
+    // `scatter` trace with WebGL `scattergl` traces in the same plot is unreliable —
+    // the SVG markers frequently fail to render over the WebGL canvas, which is why
+    // the selected point was invisible. Keeping everything on the WebGL layer and
+    // appending the selection traces last guarantees they draw on top.
     const selectedRingTrace = selCoord
       ? {
-          type: "scatter" as const,
+          type: "scattergl" as const,
           mode: "markers" as const,
           name: "",
           showlegend: false,
@@ -816,16 +821,16 @@ export const ProjectionView: React.FC = () => {
           y: [selCoord[1]],
           marker: {
             color: "rgba(0,0,0,0)",
-            size: 16,
+            size: 22,
             opacity: 1,
-            line: { width: 1.5, color: SELECTED_COLOR },
+            line: { width: 2, color: SELECTED_COLOR },
           },
         }
       : null;
 
     const selectedDotTrace = selCoord
       ? {
-          type: "scatter" as const,
+          type: "scattergl" as const,
           mode: "markers" as const,
           name: "",
           showlegend: false,
@@ -835,9 +840,9 @@ export const ProjectionView: React.FC = () => {
           text: [selLabel],
           marker: {
             color: SELECTED_COLOR,
-            size: 9,
+            size: 12,
             opacity: 1,
-            line: { width: 1.5, color: LABELED_BORDER_COLOR },
+            line: { width: 2, color: LABELED_BORDER_COLOR },
           },
           hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
         }

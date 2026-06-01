@@ -358,40 +358,23 @@ export function useHubALSession(
     ],
   );
 
-  // Auto-refresh the feed whenever the user switches between al/validate modes,
-  // or switches back to an AL-like mode from a classic mode.
-  // Use a ref to skip the initial mount and only react to genuine mode changes.
+  // Keep a ref to the current feed-loader so the mode-switch effect always calls
+  // the latest version (fresh dataset/checkpoint/params) without re-subscribing.
+  const handleRunInferenceRef = useRef<() => void>(() => {});
+
+  // Reload the respective feed whenever the user switches between al/validate modes
+  // (or back into an AL-like mode from a classic mode). Only reacts to genuine mode
+  // changes — deps are [mode] so unrelated state updates never retrigger it.
   const prevModeRef = useRef<AnnotateMode | null>(null);
   useEffect(() => {
     const prev = prevModeRef.current;
     prevModeRef.current = mode;
 
-    // Skip initial mount.
-    if (prev === null) return;
-    // Only act on transitions into an AL-like mode.
-    if (!isAlLikeMode) return;
-    // No-op if nothing we need to run inference is ready.
-    if (
-      selectedDatasetId === null ||
-      resolvedSnippetSetId === null ||
-      inferenceLoading
-    ) return;
-    // No checkpoint yet — nothing to refresh.
-    if (checkpoints.length === 0) return;
+    if (prev === null || prev === mode) return; // skip initial mount & no-op
+    if (!isAlLikeMode) return;                   // only reload for al / validate
 
-    const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
-    if (!family) return;
-
-    const suggestionParams = buildSuggestionParams(localK, isValidateMode || localTopKOnly);
-    dispatch(
-      runInference({
-        model_family_name: family,
-        dataset_id: selectedDatasetId,
-        snippet_set_id: resolvedSnippetSetId,
-        ...suggestionParams,
-      }),
-    );
-  }, [mode]); // intentionally only react to mode changes — other values read via closure
+    handleRunInferenceRef.current();
+  }, [mode, isAlLikeMode]);
 
   const handleDatasetChange = useCallback(
     (value: number) => {
@@ -453,6 +436,9 @@ export function useHubALSession(
     buildSuggestionParams,
     dispatch,
   ]);
+
+  // Keep the mode-switch effect's runner pointing at the latest handleRunInference.
+  handleRunInferenceRef.current = handleRunInference;
 
   const handleOpenALSession = useCallback(async () => {
     if (checkpoints.length > 0) {
