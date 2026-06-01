@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   clearSnippets,
   saveClassicFeedSlot,
+  restoreClassicFeedSlot,
 } from "../redux/features/snippetSlice";
 import {
   clearClassicAnnotationFeed,
@@ -50,25 +51,41 @@ export const AnnotationHub: React.FC = () => {
       const params: Record<string, string> = { mode: next };
       const dsId = searchParams.get("dataset_id");
       if (dsId) params.dataset_id = dsId;
+      const ds = dsId ? Number.parseInt(dsId, 10) : null;
+      const dsValid = Number.isFinite(ds as number);
+
+      const prevIsClassic =
+        mode === "random" || mode === "similarity" || mode === "filter";
+      const nextIsClassic =
+        next === "random" || next === "similarity" || next === "filter";
+
+      // Save the outgoing classic feed slot whenever we leave a classic mode
+      // (to AL/validate OR to another classic mode), so it can be restored later.
+      if (dsValid && prevIsClassic && next !== mode) {
+        dispatch(saveClassicFeedSlot({ datasetId: ds as number, kind: mode }));
+      }
 
       if (next === "al" || next === "validate") {
-        if (dsId && (mode === "random" || mode === "similarity" || mode === "filter")) {
-          const ds = Number(dsId);
-          if (!Number.isNaN(ds)) {
-            dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
-          }
-        }
         dispatch(clearSnippets());
         dispatch(clearClassicAnnotationFeed());
         // Restore persisted AL feed immediately so predictions are available
         // before restoreFeedFromServer checks them, preventing a spurious re-inference.
         // Pass the current dataset so a feed from a different dataset isn't restored.
-        const ds = dsId ? Number.parseInt(dsId, 10) : null;
         dispatch(
           hydrateSavedFeed({
-            expectedDatasetId: Number.isFinite(ds as number) ? ds : null,
+            expectedDatasetId: dsValid ? (ds as number) : null,
           }),
         );
+      } else if (nextIsClassic && next !== mode) {
+        // Switching between classic modes (e.g. random → similarity): clear the
+        // current feed and restore the target mode's saved slot so the feed
+        // reflects the new mode instead of leaving the old one on screen.
+        dispatch(clearClassicAnnotationFeed());
+        if (dsValid) {
+          dispatch(restoreClassicFeedSlot({ datasetId: ds as number, kind: next }));
+        } else {
+          dispatch(clearSnippets());
+        }
       }
 
       setSearchParams(params, { replace: true });
