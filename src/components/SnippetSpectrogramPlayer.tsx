@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
@@ -58,14 +58,31 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
   const [resolvedDuration, setResolvedDuration] = useState<number | null>(
     durationSec ?? null,
   );
-  /** Bumped after layout so remounted library players measure a stable width. */
-  const [layoutEpoch, setLayoutEpoch] = useState(0);
+  /**
+   * The library reads its render width from the container at mount time and
+   * renders at width 0 if the flex layout hasn't settled yet. Instead of
+   * remounting the player (which re-decodes the audio and recomputes the FFT
+   * every time — the cause of the multi-second grey flash), we measure the
+   * container once via ResizeObserver and only mount the player after a
+   * non-zero width is known. The player then mounts exactly once per snippet.
+   */
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  const [hasWidth, setHasWidth] = useState(false);
 
   useLayoutEffect(() => {
-    setLayoutEpoch((n) => n + 1);
-    const id = requestAnimationFrame(() => setLayoutEpoch((n) => n + 1));
-    return () => cancelAnimationFrame(id);
-  }, [specHeight, showAxisInfo, src, datasetSpectrogram]);
+    const el = measureRef.current;
+    if (!el) return;
+    if (el.clientWidth > 0) {
+      setHasWidth(true);
+      return;
+    }
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setHasWidth(true);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (durationSec != null && durationSec > 0) {
@@ -100,7 +117,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
     return buildTicks(0, dur, 5);
   }, [resolvedDuration]);
 
-  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${layoutEpoch}`;
+  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}`;
 
   return (
     <div
@@ -126,23 +143,25 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
 
         <div className="flex-1 min-w-0 flex flex-col">
           {/* Do not clamp height here — library adds audio controls below the mel SVG. */}
-          <div className="w-full min-w-0">
-            <SpectrogramPlayer
-              key={playerKey}
-              src={src}
-              sampleRate={sampleRate}
-              n_fft={SPECTROGRAM_N_FFT}
-              win_length={SPECTROGRAM_WIN_LENGTH}
-              hop_length={SPECTROGRAM_HOP_LENGTH}
-              f_min={fMin}
-              f_max={fMax}
-              n_mels={SPECTROGRAM_N_MELS}
-              specHeight={plotHeight}
-              navigator={navigator}
-              settings={settings}
-              dark={dark}
-              colormap={colormap}
-            />
+          <div ref={measureRef} className="w-full min-w-0">
+            {hasWidth && (
+              <SpectrogramPlayer
+                key={playerKey}
+                src={src}
+                sampleRate={sampleRate}
+                n_fft={SPECTROGRAM_N_FFT}
+                win_length={SPECTROGRAM_WIN_LENGTH}
+                hop_length={SPECTROGRAM_HOP_LENGTH}
+                f_min={fMin}
+                f_max={fMax}
+                n_mels={SPECTROGRAM_N_MELS}
+                specHeight={plotHeight}
+                navigator={navigator}
+                settings={settings}
+                dark={dark}
+                colormap={colormap}
+              />
+            )}
           </div>
 
           {/* Time axis */}
