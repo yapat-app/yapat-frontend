@@ -218,6 +218,11 @@ export const ProjectionView: React.FC = () => {
   }, [phase.id]);
 
   // Derive embedding model from snippet set when not explicitly selected.
+  // CRITICAL: the FPV projection must use the SAME embedding model as the snippet set
+  // the predictions came from. Otherwise the projection covers a different snippet
+  // population and the selected snippet's coordinate can't be found (no highlight).
+  // We therefore prefer the embedding model of the inference snippet set (`snippetSetId`),
+  // and only fall back to first-ready when that is unknown.
   useEffect(() => {
     let cancelled = false;
     async function deriveEmbeddingModel() {
@@ -227,8 +232,14 @@ export const ProjectionView: React.FC = () => {
       }
       try {
         const sets: SnippetSet[] = await embeddingApi.allSnippetSets(selectedDatasetId);
-        const ready = sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
-        setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
+        // 1) Match the snippet set the predictions actually used.
+        const inferenceSet =
+          snippetSetId != null ? sets.find((s) => s.id === snippetSetId) : undefined;
+        // 2) Otherwise first READY set, else first set.
+        const fallback =
+          sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
+        const chosen = inferenceSet ?? fallback;
+        if (!cancelled) setDerivedEmbeddingModelId(chosen?.embedding_model_id ?? null);
       } catch {
         if (!cancelled) setDerivedEmbeddingModelId(null);
       }
@@ -237,7 +248,7 @@ export const ProjectionView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, embeddingModelId]);
+  }, [selectedDatasetId, embeddingModelId, snippetSetId]);
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 
