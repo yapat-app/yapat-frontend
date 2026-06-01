@@ -217,12 +217,7 @@ export const ProjectionView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase.id]);
 
-  // Derive embedding model from snippet set when not explicitly selected.
-  // CRITICAL: the FPV projection must use the SAME embedding model as the snippet set
-  // the predictions came from. Otherwise the projection covers a different snippet
-  // population and the selected snippet's coordinate can't be found (no highlight).
-  // We therefore prefer the embedding model of the inference snippet set (`snippetSetId`),
-  // and only fall back to first-ready when that is unknown.
+  // Derive embedding model from the dataset's default snippet set when not explicitly set.
   useEffect(() => {
     let cancelled = false;
     async function deriveEmbeddingModel() {
@@ -232,14 +227,8 @@ export const ProjectionView: React.FC = () => {
       }
       try {
         const sets: SnippetSet[] = await embeddingApi.allSnippetSets(selectedDatasetId);
-        // 1) Match the snippet set the predictions actually used.
-        const inferenceSet =
-          snippetSetId != null ? sets.find((s) => s.id === snippetSetId) : undefined;
-        // 2) Otherwise first READY set, else first set.
-        const fallback =
-          sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
-        const chosen = inferenceSet ?? fallback;
-        if (!cancelled) setDerivedEmbeddingModelId(chosen?.embedding_model_id ?? null);
+        const ready = sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
+        if (!cancelled) setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
       } catch {
         if (!cancelled) setDerivedEmbeddingModelId(null);
       }
@@ -248,7 +237,7 @@ export const ProjectionView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, embeddingModelId, snippetSetId]);
+  }, [selectedDatasetId, embeddingModelId]);
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 

@@ -689,9 +689,9 @@ const alSlice = createSlice({
         state.predictions = withDisplayFields(result.rows, labelScope);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
-        // Persist the snippet set used for inference so the projection view derives
-        // its FPV embedding model from the SAME snippet set (auto-inference paths
-        // like mode-switch don't call setInferenceConfig, so capture it here too).
+        // Persist the snippet set used for inference so the projection view can
+        // derive the correct FPV embedding model. Auto-inference paths (mode-switch
+        // etc.) don't call setInferenceConfig, so we capture it here too.
         if (request.snippet_set_id != null) {
           state.snippetSetId = request.snippet_set_id;
         }

@@ -229,6 +229,21 @@ export function useHubALSession(
     hasAttemptedRestoreRef.current = false;
   }, [selectedDatasetId]);
 
+  // Reset per-dataset local state when the dataset changes so stale values from
+  // a previous dataset don't carry over and cause
+  // inference to run on the wrong snippet set for the new dataset.
+  const prevDatasetIdRef = useRef<number | null>(null);
+  if (prevDatasetIdRef.current !== selectedDatasetId) {
+    if (prevDatasetIdRef.current !== null) {
+      // Dataset genuinely changed — clear snippet-set and checkpoint state.
+      // This runs synchronously during render (safe: just resetting derived state).
+      setLocalSS(null);
+      setCheckpoints([]);
+      setSnippetSets([]);
+    }
+    prevDatasetIdRef.current = selectedDatasetId;
+  }
+
   useEffect(() => {
     if (selectedDatasetId === null) return;
     alApi.getCheckpoints(selectedDatasetId).then(setCheckpoints).catch(() => {});
