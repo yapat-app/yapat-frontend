@@ -108,6 +108,7 @@ export interface PAMPrediction {
   model_checkpoint_id: number | null;
   snippet_id: number;
   recording_id?: number | null;
+  duration_sec?: number | null;
   /**
    * Backend is multi-label.
    * UI still expects a primary label + confidence, so we also keep
