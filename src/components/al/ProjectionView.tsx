@@ -150,13 +150,6 @@ export const ProjectionView: React.FC = () => {
   const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("pca");
-  // Plotly revision counter: forces a full re-draw when the selected snippet changes.
-  // Without this, react-plotly.js may not redraw the highlight trace because it
-  // considers trace data changes too minor to trigger a full Plotly.react() call.
-  const [plotRevision, setPlotRevision] = useState(0);
-  useEffect(() => {
-    setPlotRevision((r) => r + 1);
-  }, [selectedSnippetId]);
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
@@ -711,10 +704,12 @@ export const ProjectionView: React.FC = () => {
 
   const colorKey: "actual_label" = "actual_label";
 
-  const traces = useMemo(() => {
-    const backgroundTrace = null;
-
-    if (filtered.length === 0) return backgroundTrace ? [backgroundTrace] : [];
+  // Base layer: the full point cloud. Depends ONLY on the data/filter/colors —
+  // NOT on selectedSnippetId. This keeps the (potentially 30k-point) WebGL buffer
+  // referentially stable while scrolling the feed, which avoids a full re-upload /
+  // redraw on every scroll tick (the main source of lag).
+  const baseTraces = useMemo(() => {
+    if (filtered.length === 0) return [];
 
     const hidden = filtered.filter((f) => !f.visible);
     const visible = filtered.filter((f) => f.visible);
@@ -730,23 +725,9 @@ export const ProjectionView: React.FC = () => {
           customdata: hidden.map((f) => f.p.snippet_id),
           marker: { color: HIDDEN_COLOR, size: 4, opacity: 0.25, line: { width: 0 } },
           hovertemplate: "Snippet #%{customdata} (filtered)<extra></extra>",
-          // Don't let filtered-out points steal hover/click interactions.
           hoverinfo: "skip" as const,
         }
       : null;
-
-    // Resolve selected point coords from filtered data or FPV lookup.
-    let selCoord: [number, number] | null = null;
-    let selLabel = "Unlabeled";
-    if (selectedSnippetId !== null) {
-      const inFiltered = filtered.find((f) => f.p.snippet_id === selectedSnippetId);
-      if (inFiltered) {
-        selCoord = inFiltered.coord;
-        selLabel = (inFiltered.p.scores as any)?.actual_label ?? "Unlabeled";
-      } else if (fpvCoordsBySnippet?.[selectedSnippetId]) {
-        selCoord = fpvCoordsBySnippet[selectedSnippetId];
-      }
-    }
 
     const xs: number[] = [];
     const ys: number[] = [];
@@ -757,13 +738,7 @@ export const ProjectionView: React.FC = () => {
     const lineColors: string[] = [];
     const hoverNames: string[] = [];
 
-    const hasSelection = selCoord !== null;
-    const bgOpacity = hasSelection ? 0.4 : 0.9;
-
     visible.forEach(({ p, coord }) => {
-      // Render selected point in SVG layer above WebGL markers.
-      if (p.snippet_id === selectedSnippetId) return;
-
       xs.push(coord[0]);
       ys.push(coord[1]);
       ids.push(p.snippet_id);
@@ -777,7 +752,7 @@ export const ProjectionView: React.FC = () => {
           ? resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? [])
           : UNLABELED_COLOR,
       );
-      if (isLabeled && !hasSelection) {
+      if (isLabeled) {
         lineWidths.push(1.5);
         lineColors.push("rgba(17,24,39,0.35)");
       } else {
@@ -799,60 +774,70 @@ export const ProjectionView: React.FC = () => {
       marker: {
         color: colors,
         size: sizes,
-        opacity: bgOpacity,
+        opacity: 0.9,
         line: { width: lineWidths, color: lineColors },
       },
       hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
     };
 
-    // NOTE: use scattergl (not scatter) for the selection markers. Mixing an SVG
-    // `scatter` trace with WebGL `scattergl` traces in the same plot is unreliable —
-    // the SVG markers frequently fail to render over the WebGL canvas, which is why
-    // the selected point was invisible. Keeping everything on the WebGL layer and
-    // appending the selection traces last guarantees they draw on top.
-    const selectedRingTrace = selCoord
-      ? {
-          type: "scattergl" as const,
-          mode: "markers" as const,
-          name: "",
-          showlegend: false,
-          hoverinfo: "skip" as const,
-          x: [selCoord[0]],
-          y: [selCoord[1]],
-          marker: {
-            color: "rgba(0,0,0,0)",
-            size: 22,
-            opacity: 1,
-            line: { width: 2, color: SELECTED_COLOR },
-          },
-        }
-      : null;
+    return hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
+  }, [filtered, allCategoricalValues, colorKey]);
 
-    const selectedDotTrace = selCoord
-      ? {
-          type: "scattergl" as const,
-          mode: "markers" as const,
-          name: "",
-          showlegend: false,
-          x: [selCoord[0]],
-          y: [selCoord[1]],
-          customdata: [selectedSnippetId],
-          text: [selLabel],
-          marker: {
-            color: SELECTED_COLOR,
-            size: 12,
-            opacity: 1,
-            line: { width: 2, color: LABELED_BORDER_COLOR },
-          },
-          hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
-        }
-      : null;
+  // Lightweight selection overlay: two single-point traces. Rebuilding these on
+  // every scroll tick is cheap (2 points) and does not touch the base buffer.
+  const selectionTraces = useMemo(() => {
+    if (selectedSnippetId === null) return [];
 
-    const base = hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
-    const withBg = backgroundTrace ? [backgroundTrace, ...base] : base;
-    const withRing = selectedRingTrace ? [...withBg, selectedRingTrace] : withBg;
-    return selectedDotTrace ? [...withRing, selectedDotTrace] : withRing;
-  }, [filtered, selectedSnippetId, fpvCoordsBySnippet, allCategoricalValues, colorKey]);
+    let selCoord: [number, number] | null = null;
+    let selLabel = "Unlabeled";
+    const inFiltered = filtered.find((f) => f.p.snippet_id === selectedSnippetId);
+    if (inFiltered) {
+      selCoord = inFiltered.coord;
+      selLabel = (inFiltered.p.scores as any)?.actual_label ?? "Unlabeled";
+    } else if (fpvCoordsBySnippet?.[selectedSnippetId]) {
+      selCoord = fpvCoordsBySnippet[selectedSnippetId];
+    }
+    if (!selCoord) return [];
+
+    const ring = {
+      type: "scattergl" as const,
+      mode: "markers" as const,
+      name: "",
+      showlegend: false,
+      hoverinfo: "skip" as const,
+      x: [selCoord[0]],
+      y: [selCoord[1]],
+      marker: {
+        color: "rgba(0,0,0,0)",
+        size: 22,
+        opacity: 1,
+        line: { width: 2, color: SELECTED_COLOR },
+      },
+    };
+    const dot = {
+      type: "scattergl" as const,
+      mode: "markers" as const,
+      name: "",
+      showlegend: false,
+      x: [selCoord[0]],
+      y: [selCoord[1]],
+      customdata: [selectedSnippetId],
+      text: [selLabel],
+      marker: {
+        color: SELECTED_COLOR,
+        size: 12,
+        opacity: 1,
+        line: { width: 2, color: LABELED_BORDER_COLOR },
+      },
+      hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
+    };
+    return [ring, dot];
+  }, [selectedSnippetId, filtered, fpvCoordsBySnippet]);
+
+  const traces = useMemo(
+    () => [...baseTraces, ...selectionTraces],
+    [baseTraces, selectionTraces],
+  );
 
   const handlePlotClick = (event: any) => {
     if (!allowPointClick) return;
@@ -1124,7 +1109,6 @@ export const ProjectionView: React.FC = () => {
             data={traces}
             layout={{
               autosize: true,
-              datarevision: plotRevision,
               margin: { l: 30, r: 10, t: 10, b: 30 },
               showlegend: false,
               legend: {
@@ -1140,7 +1124,6 @@ export const ProjectionView: React.FC = () => {
               plot_bgcolor: "#f7fafc",
               hovermode: "closest",
             }}
-            revision={plotRevision}
             style={{ width: "100%", height: "100%" }}
             useResizeHandler
             onClick={handlePlotClick}
