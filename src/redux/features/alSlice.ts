@@ -517,6 +517,10 @@ const alSlice = createSlice({
     ) => {
       const { snippets, datasetId } = action.payload;
       const predictions = snippetsToPredictions(snippets);
+      // If the dataset changed, the previous selection no longer belongs to this
+      // feed — drop it so we don't keep a stale cross-dataset snippet selected.
+      const datasetChanged =
+        normalizeDatasetId(state.selectedDatasetId) !== normalizeDatasetId(datasetId);
       state.feedSource = "classic";
       state.selectedDatasetId = datasetId;
       state.predictions = predictions;
@@ -524,12 +528,27 @@ const alSlice = createSlice({
       state.modelInfo = { mode: "classic" };
       state.inferenceLoading = false;
       state.error = null;
+      if (datasetChanged) {
+        // Clear AL-session scoping so the projection derives the embedding model
+        // from THIS dataset's snippet set, not a stale value from another dataset.
+        state.snippetSetId = null;
+        state.embeddingModelId = null;
+      }
       // Keep usedCheckpointId so quick labels still load from the same labels.json /
       // checkpoint config as Active Learning (staged behaviour). Classic annotations
       // use feedSource === "classic", not PAM feedback.
       state.feedbacks = {};
-      if (predictions.length > 0 && state.selectedSnippetId === null) {
+      // Select the first snippet when nothing is selected, the dataset changed, or
+      // the current selection is no longer part of the new feed.
+      const newIds = new Set(predictions.map((p) => p.snippet_id));
+      const selectionInvalid =
+        state.selectedSnippetId === null ||
+        datasetChanged ||
+        !newIds.has(state.selectedSnippetId);
+      if (predictions.length > 0 && selectionInvalid) {
         state.selectedSnippetId = predictions[0].snippet_id;
+        const pred = predictions[0];
+        state.selectedPredictionId = pred?.id ?? null;
       }
     },
     hydrateClassicFeedbacks: (
