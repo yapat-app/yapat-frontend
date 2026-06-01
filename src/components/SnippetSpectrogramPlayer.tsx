@@ -2,15 +2,12 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
-  SPECTROGRAM_HOP_LENGTH,
-  SPECTROGRAM_N_FFT,
-  SPECTROGRAM_N_MELS,
   SPECTROGRAM_TIME_AXIS_HEIGHT,
-  SPECTROGRAM_WIN_LENGTH,
   formatSpectrogramHz,
   formatSpectrogramTime,
   resolveSpectrogramDisplayRange,
   spectrogramLayoutHeights,
+  spectrogramParamsForSampleRate,
   type DatasetSpectrogramRange,
 } from "../utils/spectrogramConfig";
 
@@ -117,7 +114,12 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
     return buildTicks(0, dur, 5);
   }, [resolvedDuration]);
 
-  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}`;
+  const fftParams = useMemo(
+    () => spectrogramParamsForSampleRate(sampleRate),
+    [sampleRate],
+  );
+
+  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${fftParams.hop_length}`;
 
   return (
     <div
@@ -149,12 +151,12 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
                 key={playerKey}
                 src={src}
                 sampleRate={sampleRate}
-                n_fft={SPECTROGRAM_N_FFT}
-                win_length={SPECTROGRAM_WIN_LENGTH}
-                hop_length={SPECTROGRAM_HOP_LENGTH}
+                n_fft={fftParams.n_fft}
+                win_length={fftParams.win_length}
+                hop_length={fftParams.hop_length}
                 f_min={fMin}
                 f_max={fMax}
-                n_mels={SPECTROGRAM_N_MELS}
+                n_mels={fftParams.n_mels}
                 specHeight={plotHeight}
                 navigator={navigator}
                 settings={settings}
