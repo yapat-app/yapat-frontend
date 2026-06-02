@@ -11,14 +11,14 @@ export function useEnsureTeamTaxonomies(
 ): void {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((s) => s.auth);
-  const taxonomiesStatus = useAppSelector(
-    (s) => s.customTaxonomy.taxonomiesStatus,
-  );
   const resolvedTeamId =
     teamId ?? (user?.team_ids?.length ? user.team_ids[0] : null);
 
+  // Deliberately NOT depending on taxonomiesStatus: the thunk's `condition` guard
+  // already dedupes (skips when succeeded/failed for this team). Including status
+  // here caused the effect to re-fire on every status transition → request storm.
   useEffect(() => {
     if (!enabled || resolvedTeamId == null) return;
     void dispatch(getAllTaxonomies(resolvedTeamId));
-  }, [dispatch, resolvedTeamId, enabled, taxonomiesStatus]);
+  }, [dispatch, resolvedTeamId, enabled]);
 }
