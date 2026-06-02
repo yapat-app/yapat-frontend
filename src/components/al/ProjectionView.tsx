@@ -1,15 +1,12 @@
 /**
  * ProjectionView — phase-aware 2D feature projection.
  *
- * Behaviour driven by `phase.visualization`:
- *   • mode "hidden"            → renders nothing
- *   • mode "predictions_only"  → only points whose snippet is in `predictions`
- *   • mode "whole_dataset"     → full FPV background + (optional) per-snippet
- *                                color filtering / labeled-pool halo / single
- *                                selection on click
+ * Visualization mode (`phase.visualization.mode`):
+ *   • "hidden"           → render nothing
+ *   • "predictions_only" → plot inference predictions only
+ *   • "whole_dataset"    → full FPV point cloud with optional filters and selection
  *
- * Color filter supports an `actual_label` virtual property which is joined
- * client-side from `/api/pam-al/snippet-labels`.
+ * Ground-truth labels are joined client-side as the `actual_label` score property.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -37,9 +34,7 @@ import { usePhaseConfig } from "../../studyPhases";
 
 const { Option } = Select;
 
-// ── Module-level FPV cache — survives component remounts ──────────────────────
-// Points (snippet metadata) are the same for every projection method of a given
-// dataset+embeddingModel pair; projections are per-method.
+// Module-level FPV cache (points are shared per dataset/model; projections are per method).
 const _fpvPointsCache = new Map<string, FPVPointMetadata[]>();
 const _fpvProjectionCache = new Map<string, FPVProjection2D>();
 
@@ -66,13 +61,12 @@ type PlotPoint = {
   scores?: SampleScores;
 };
 
-// ── Default colours ───────────────────────────────────────────────────────────
 const SELECTED_COLOR = "#facc15";
 const HIDDEN_COLOR = "#d1d5db";
-const UNLABELED_COLOR = "#9ca3af"; // grey
+const UNLABELED_COLOR = "#9ca3af";
 const LABELED_BORDER_COLOR = "#111827";
 
-/** Composite ranks in [0, 1]; higher means more informative (visibility threshold selects the tail toward 1). */
+/** Composite score domain; visibility threshold selects the upper tail toward 1. */
 const COMPOSITE_DOMAIN: [number, number] = [0, 1];
 const SAMPLE_SCORE_UPPER_EPS = 1e-9;
 
@@ -105,14 +99,14 @@ function buildCoordsMap(
   return map;
 }
 
-/** When UMAP/t-SNE were not computed, fall back to PCA for display. */
+/** Fallback when the requested projection method is not available yet. */
 const FPV_METHOD_FETCH_FALLBACK: ProjectionMethod = "pca";
 
 function fpvScopeKey(datasetId: number, embeddingModelId: number): string {
   return `${datasetId}:${embeddingModelId}`;
 }
 
-/** Backend 400 when fpv_vis rows do not exist yet (embeddings may still be ready). */
+/** True when the backend reports that FPV projections have not been generated yet. */
 function isProjectionNotReadyMessage(message: string): boolean {
   const lower = message.toLowerCase();
   return (
@@ -130,8 +124,6 @@ function extractFpvErrorDetail(error: unknown): string {
   }
   return String(e?.message ?? "Failed to load projection.");
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export const ProjectionView: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -163,17 +155,15 @@ export const ProjectionView: React.FC = () => {
   >({});
   const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
-  /** When set, GET fpv-dataset returned 400 "not ready" — do not retry until dataset/embed changes or user generates. */
+  /** Scope key when FPV is unavailable; suppresses retries until scope changes or regeneration. */
   const fpvUnavailableScopeRef = useRef<string | null>(null);
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
   const [visRangeOverride, setVisRangeOverride] = useState<{ min: number; max: number; step: number } | null>(null);
 
-  // Study-mode side data — labeled pool + per-snippet ground-truth labels.
   const [labeledSnippetIds, setLabeledSnippetIds] = useState<Set<number>>(new Set());
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
 
-  // ── Phase shortcuts ───────────────────────────────────────────────────────
   const visMode = phase.visualization.mode;
   const visibilityMode = phase.visualization.visibilityFilter.mode;
   const allowedVisProps = phase.visualization.visibilityFilter.allowedProperties;
@@ -189,17 +179,13 @@ export const ProjectionView: React.FC = () => {
     { key: "isomap", label: "Isomap" },
   ];
 
-  // ── Overlay data source (inference snapshot if available, else live) ─────
-  // Used only for the feed / selection panel. The plot in `whole_dataset` mode
-  // is driven by FPV points, not by this list.
+  // Prefer post-retrain snapshot scores; whole_dataset plot uses FPV points instead.
   const rawOverlayPredictions = projectionPredictions.length > 0
     ? projectionPredictions
     : predictions;
 
   const hasOverlayPredictions = rawOverlayPredictions.length > 0;
 
-  // Reset visibility filters whenever the active phase changes — prevents stale key
-  // selections that aren't allowed under the new phase.
   useEffect(() => {
     const visAllowed = allowedVisProps as readonly string[];
     if (visibilityMode === "disabled") {
@@ -214,13 +200,11 @@ export const ProjectionView: React.FC = () => {
         dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
       }
     } else if (visibilityMode === "multi") {
-      // Drop any single-mode selection so the panel renders cleanly.
       dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase.id]);
 
-  // ── Derive embedding model from selected snippet set if missing ──────────
   useEffect(() => {
     let cancelled = false;
     async function deriveEmbeddingModel() {
@@ -244,7 +228,6 @@ export const ProjectionView: React.FC = () => {
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
 
-  // Allow a new fetch attempt when dataset or embedding model changes.
   useEffect(() => {
     fpvUnavailableScopeRef.current = null;
     setFpvError(null);
@@ -257,7 +240,6 @@ export const ProjectionView: React.FC = () => {
     inFlightMethodsRef.current = new Set();
   }, []);
 
-  // Restore cached data into component state for the current dataset+model combo.
   const restoreFromCache = useCallback(
     (dsId: number, emId: number) => {
       const pts = _fpvPointsCache.get(fpvPointsKey(dsId, emId));
@@ -283,7 +265,6 @@ export const ProjectionView: React.FC = () => {
         return;
       }
 
-      // Serve from module cache if already loaded.
       const projKey = fpvProjectionKey(selectedDatasetId, effectiveEmbeddingModelId, targetMethod);
       const cachedProj = _fpvProjectionCache.get(projKey);
       if (cachedProj) {
@@ -372,7 +353,6 @@ export const ProjectionView: React.FC = () => {
     [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState],
   );
 
-  // Load the active projection method (single-method payload for large datasets).
   useEffect(() => {
     if (visMode === "hidden") {
       resetProjectionComponentState();
@@ -384,7 +364,6 @@ export const ProjectionView: React.FC = () => {
     const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
     if (fpvUnavailableScopeRef.current === scopeKey) return;
 
-    // Try to restore from module cache before touching the network.
     const alreadyCached = restoreFromCache(selectedDatasetId, effectiveEmbeddingModelId);
     if (alreadyCached) {
       fpvUnavailableScopeRef.current = null;
@@ -402,7 +381,6 @@ export const ProjectionView: React.FC = () => {
     fetchProjectionMethod,
   ]);
 
-  // When the user picks another method, fetch it on demand if not cached yet.
   useEffect(() => {
     if (visMode === "hidden" || !selectedDatasetId || !effectiveEmbeddingModelId) return;
     const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
@@ -418,7 +396,6 @@ export const ProjectionView: React.FC = () => {
     fetchProjectionMethod,
   ]);
 
-  // Prefetch remaining methods in the background for sidebar thumbnails.
   useEffect(() => {
     if (visMode === "hidden" || fpvPoints.length === 0) return;
     for (const m of ALL_PROJECTION_METHODS) {
@@ -433,7 +410,6 @@ export const ProjectionView: React.FC = () => {
     fetchProjectionMethod,
   ]);
 
-  // ── Load labeled pool + per-snippet labels for study features ─────────────
   useEffect(() => {
     let cancelled = false;
     async function loadLabeledPool() {
@@ -468,7 +444,6 @@ export const ProjectionView: React.FC = () => {
         if (!cancelled) setLabelsBySnippet(map);
         return;
       }
-      // Always load labels so actual_label coloring is always applied.
       if (!selectedDatasetId) {
         if (!cancelled) setLabelsBySnippet({});
         return;
@@ -502,7 +477,6 @@ export const ProjectionView: React.FC = () => {
         embedding_model_id: effectiveEmbeddingModelId,
         run_3d: false,
       });
-      // Invalidate module cache so the fresh projection is fetched.
       clearFpvCache(selectedDatasetId, effectiveEmbeddingModelId);
       resetProjectionComponentState();
       await fetchProjectionMethod(method, { force: true });
@@ -517,9 +491,6 @@ export const ProjectionView: React.FC = () => {
     }
   };
 
-  // ── Fetch live min/max/step for the active visibility filter property ─────
-  // For multi mode we still need ranges per property — fetch the first one only;
-  // ALFilterPanel handles per-property ranges via its own slider state in multi mode.
   const visKey = alFilters.visibility.propertyKey;
   useEffect(() => {
     if (visibilityMode !== "single" || !visKey) {
@@ -535,7 +506,6 @@ export const ProjectionView: React.FC = () => {
     return () => { cancelled = true; };
   }, [visKey, visibilityMode]);
 
-  // ── Coordinates lookup ───────────────────────────────────────────────────
   const fpvCoordsBySnippet: Record<number, [number, number]> | null = useMemo(() => {
     const proj = projectionsByMethod[method];
     if (!proj || fpvPoints.length === 0) return null;
@@ -554,10 +524,7 @@ export const ProjectionView: React.FC = () => {
     return maps;
   }, [fpvPoints, projectionsByMethod]);
 
-  // ── Score join for whole-dataset filtering/coloring ──────────────────────
-  // The FPV dataset response may not contain sampler-suite scores. In phase 3.x
-  // we need uncertainty/diversity/density for visibility/color filters, so we
-  // join scores from the full inference predictions by snippet_id.
+  // FPV metadata may omit sampler scores; join them from inference predictions when available.
   const scoresBySnippet = useMemo(() => {
     const map = new Map<number, SampleScores>();
     for (const p of rawOverlayPredictions) {
@@ -566,13 +533,11 @@ export const ProjectionView: React.FC = () => {
     return map;
   }, [rawOverlayPredictions]);
 
-  // ── Plot points (phase-dependent) ────────────────────────────────────────
   const plotPoints: PlotPoint[] = useMemo(() => {
     if (visMode === "whole_dataset" && fpvPoints.length > 0) {
       return fpvPoints.map((pt) => ({
         snippet_id: pt.snippet_id,
         predicted_label: pt.predicted_labels?.[0] ?? "—",
-        // Prefer scores from AL inference (full set), fall back to FPV metadata.
         scores: scoresBySnippet.get(pt.snippet_id) ?? {
           uncertainty: pt.uncertainty ?? undefined,
           diversity: pt.diversity ?? undefined,
@@ -581,7 +546,6 @@ export const ProjectionView: React.FC = () => {
         },
       }));
     }
-    // predictions_only: plot the inference subset
     return rawOverlayPredictions as unknown as PlotPoint[];
   }, [visMode, fpvPoints, rawOverlayPredictions, scoresBySnippet]);
 
@@ -590,9 +554,6 @@ export const ProjectionView: React.FC = () => {
     return plotPoints.map((p) => fpvCoordsBySnippet[p.snippet_id] ?? ([0, 0] as [number, number]));
   }, [plotPoints, fpvCoordsBySnippet]);
 
-  // ── Default selection (Phase 2/3) ───────────────────────────────────────
-  // In click-to-inspect phases, pick a random point so users start with a
-  // concrete snippet card instead of an empty panel.
   const [didAutoSelectKey, setDidAutoSelectKey] = useState<string | null>(null);
   useEffect(() => {
     const shouldAutoSelect = phase.feed.mode === "single_card_on_select";
@@ -600,7 +561,6 @@ export const ProjectionView: React.FC = () => {
     if (selectedSnippetId !== null) return;
     if (plotPoints.length === 0) return;
 
-    // Only auto-select once per (phase,dataset,snippet_set,projection method).
     const key = `${phase.id}:${selectedDatasetId ?? "na"}:${snippetSetId ?? "na"}:${method}`;
     if (didAutoSelectKey === key) return;
 
@@ -622,8 +582,6 @@ export const ProjectionView: React.FC = () => {
     didAutoSelectKey,
   ]);
 
-  // Overlay predictions stay in Redux and are used by the feed / single-card panel.
-
   const enrichedPlotPoints: PlotPoint[] = useMemo(() => {
     if (Object.keys(labelsBySnippet).length === 0) return plotPoints;
     return plotPoints.map((p) => {
@@ -633,7 +591,6 @@ export const ProjectionView: React.FC = () => {
     });
   }, [plotPoints, labelsBySnippet]);
 
-  // ── Categorical legend support (incl. actual_label) ──────────────────────
   const allCategoricalValues = useMemo(() => {
     const result: Record<string, string[]> = {};
     for (const p of enrichedPlotPoints) {
@@ -648,7 +605,6 @@ export const ProjectionView: React.FC = () => {
     return result;
   }, [enrichedPlotPoints]);
 
-  // ── Visibility filtering (single OR multi) ───────────────────────────────
   const visProp = visKey ? getPropertyByKey(visKey) : null;
   const effectiveRange = useMemo<[number, number]>(
     () => (visRangeOverride
@@ -662,10 +618,8 @@ export const ProjectionView: React.FC = () => {
       let visible = true;
 
       if (visibilityMode === "single" && visProp) {
-        // Composite uses a fixed unit interval regardless of stale API range hints.
         const [pMin, pMax] = visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
         const [normLo, normHi] = alFilters.visibility.range;
-        // Threshold slider: cutoff is normLo mapped into [pMin,pMax]; show [cutoff, pMax].
         const span = pMax - pMin;
         const domainLo = pMin + normLo * span;
         const domainHi = visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
@@ -709,7 +663,6 @@ export const ProjectionView: React.FC = () => {
   ]);
 
   const actualLabelLegend = useMemo(() => {
-    // Legend should only show labels that are present among currently visible points.
     const labels = Array.from(
       new Set(
         filtered
@@ -725,11 +678,16 @@ export const ProjectionView: React.FC = () => {
   }, [filtered]);
 
   const thumbnailPoints = useMemo(() => {
-    // Use all visible points so thumbnails reflect the current filter state.
-    return filtered.filter((f) => f.visible);
+    // Cap thumbnail point count; selection highlight uses the full coords map.
+    const visible = filtered.filter((f) => f.visible);
+    const MAX = 2500;
+    if (visible.length <= MAX) return visible;
+    const stride = Math.ceil(visible.length / MAX);
+    const sampled: typeof visible = [];
+    for (let i = 0; i < visible.length; i += stride) sampled.push(visible[i]);
+    return sampled;
   }, [filtered]);
 
-  // ── Plot traces ──────────────────────────────────────────────────────────
   const colorKey: "actual_label" = "actual_label";
 
   const traces = useMemo(() => {
@@ -751,7 +709,6 @@ export const ProjectionView: React.FC = () => {
           customdata: hidden.map((f) => f.p.snippet_id),
           marker: { color: HIDDEN_COLOR, size: 4, opacity: 0.25, line: { width: 0 } },
           hovertemplate: "Snippet #%{customdata} (filtered)<extra></extra>",
-          // Don't let filtered-out points steal hover/click interactions.
           hoverinfo: "skip" as const,
         }
       : null;
@@ -783,7 +740,6 @@ export const ProjectionView: React.FC = () => {
           : UNLABELED_COLOR,
       );
 
-      // Selected gets a strong outline; labeled gets a subtle outline.
       if (isSelected) {
         lineWidths.push(2.5);
         lineColors.push(LABELED_BORDER_COLOR);
@@ -825,15 +781,12 @@ export const ProjectionView: React.FC = () => {
     const pt = event.points?.[0];
     if (pt?.customdata === undefined) return;
 
-    // Only allow interactions with currently-visible points.
-    // Hidden/filtered points are rendered in a separate trace.
     const hasHiddenTrace = Boolean(filtered.some((f) => !f.visible));
     if (hasHiddenTrace && pt.curveNumber === 0) return;
 
     dispatch(setSelectedSnippet(pt.customdata as number));
   };
 
-  // ── Phase guard: hide entire view when phase says so ─────────────────────
   if (visMode === "hidden") return null;
 
   const visibleCount = filtered.filter((f) => f.visible).length;
@@ -883,7 +836,6 @@ export const ProjectionView: React.FC = () => {
         />
       )}
 
-      {/* ── Secondary controls ────────────────────────────────────────── */}
       <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-100 bg-white flex-wrap">
         {phase.ui.showSamplingMethodSelector && (
           <div className="flex flex-col gap-0.5">
@@ -902,8 +854,6 @@ export const ProjectionView: React.FC = () => {
           </div>
         )}
 
-        {/* Projection type selector removed for the study (locked to t‑SNE). */}
-
         <div className="flex items-center gap-2 flex-wrap ml-auto">
           <span className="text-xs text-gray-400 font-ibm-sans">
             <strong>{visibleCount}</strong> / <strong>{plotPoints.length}</strong> visible
@@ -915,7 +865,6 @@ export const ProjectionView: React.FC = () => {
             </Tag>
           )}
 
-          {/* Actual-label color legend (always-on) */}
           {actualLabelLegend.total > 0 && (
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-[11px] text-gray-400 font-ibm-sans whitespace-nowrap">Legend:</span>
@@ -1016,9 +965,7 @@ export const ProjectionView: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Plot area ─────────────────────────────────────────────────── */}
       <div className="flex-1 relative overflow-hidden flex">
-        {/* Left thumbnail selector */}
         {phase.ui.showProjectionMethodSelector && (
           <div className="w-[168px] flex-shrink-0 border-r border-gray-100 bg-white">
             <div className="px-3 py-2 border-b border-gray-100">
@@ -1061,7 +1008,6 @@ export const ProjectionView: React.FC = () => {
           </div>
         )}
 
-        {/* Plot */}
         <div className="flex-1 relative overflow-hidden min-h-[200px]">
         {isFpvPlotLoading && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#f7fafc]/95">
@@ -1152,7 +1098,6 @@ const MiniProjection: React.FC<{
     );
   }
 
-  // Build coords + colors
   const coords: Array<{ x: number; y: number; id: number; color: string; r: number; stroke?: string; sw?: number }> = [];
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
@@ -1185,8 +1130,18 @@ const MiniProjection: React.FC<{
   const toSvg = (x: number, y: number) => {
     const sx = pad + ((x - minX) / spanX) * (THUMB_W - pad * 2);
     const sy = pad + ((y - minY) / spanY) * (THUMB_H - pad * 2);
-    return [sx, THUMB_H - sy]; // flip y
+    return [sx, THUMB_H - sy];
   };
+
+  // Selected point may be omitted by subsampling; draw it from the full coords map.
+  let selectedScreen: [number, number] | null = null;
+  if (selectedSnippetId !== null) {
+    const sc = coordsBySnippet[selectedSnippetId];
+    if (sc) {
+      const [sx, sy] = toSvg(sc[0], sc[1]);
+      selectedScreen = [sx, sy];
+    }
+  }
 
   return (
     <svg viewBox={`0 0 ${THUMB_W} ${THUMB_H}`} className="w-full h-full">
@@ -1205,6 +1160,16 @@ const MiniProjection: React.FC<{
           />
         );
       })}
+      {selectedScreen && (
+        <circle
+          cx={selectedScreen[0]}
+          cy={selectedScreen[1]}
+          r={2.8}
+          fill="#facc15"
+          stroke="#111827"
+          strokeWidth={1}
+        />
+      )}
     </svg>
   );
 };
