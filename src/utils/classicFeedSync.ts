@@ -19,6 +19,7 @@ export function snippetsToPredictions(snippets: Snippet[]): PAMPrediction[] {
     id: null,
     model_checkpoint_id: null,
     snippet_id: s.id,
+    recording_id: s.recording_id,
     predicted_labels: null,
     predicted_probabilities: null,
     uncertainty: null,

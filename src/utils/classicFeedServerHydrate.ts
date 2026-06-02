@@ -7,7 +7,7 @@ import type { UserFeedSnapshot } from "../types";
 export function pickLatestServerClassicFeed(
   snapshots: UserFeedSnapshot[] | null | undefined,
   datasetId: number,
-  kind: "random" | "similarity",
+  kind: "random" | "similarity" | "filter",
 ): UserFeedSnapshot | null {
   if (!snapshots?.length) return null;
   for (const snap of snapshots) {

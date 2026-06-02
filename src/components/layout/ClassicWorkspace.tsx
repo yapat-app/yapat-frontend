@@ -11,7 +11,17 @@ import { ProjectionView } from "../al/ProjectionView";
 import { PredictionFeed } from "../al/PredictionFeed";
 import { BlindAnnotationHeader } from "../../pages/ActiveLearning";
 
-export const ClassicWorkspace: React.FC = React.memo(function ClassicWorkspace() {
+type ClassicWorkspaceProps = {
+  feedActionLabel: string;
+  onOpenFeedConfig: () => void;
+  feedActionLoading: boolean;
+};
+
+export const ClassicWorkspace: React.FC<ClassicWorkspaceProps> = ({
+  feedActionLabel,
+  onOpenFeedConfig,
+  feedActionLoading,
+}) => {
   return (
     <ResizableSplit
       mode="ratio"
@@ -35,7 +45,13 @@ export const ClassicWorkspace: React.FC = React.memo(function ClassicWorkspace()
       }
       right={
         <div className="flex flex-col h-full overflow-hidden">
-          <BlindAnnotationHeader />
+          <BlindAnnotationHeader
+            actionButton={{
+              label: feedActionLabel,
+              onClick: onOpenFeedConfig,
+              loading: feedActionLoading,
+            }}
+          />
           <div className="flex-1 overflow-hidden">
             <PredictionFeed />
           </div>
@@ -43,4 +59,4 @@ export const ClassicWorkspace: React.FC = React.memo(function ClassicWorkspace()
       }
     />
   );
-});
+};

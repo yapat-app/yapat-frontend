@@ -29,6 +29,7 @@ import {
 
 interface Props {
   prediction: PAMPrediction;
+  recordingName?: string;
   cardRef?: (el: HTMLDivElement | null) => void;
   /** Height in px for the blind snap card (measured from scroll container in PredictionFeed). */
   cardHeightPx?: number;
@@ -42,6 +43,7 @@ interface Props {
 
 export const PredictionCard: React.FC<Props> = ({
   prediction,
+  recordingName,
   cardRef,
   cardHeightPx,
   serverLabels,
@@ -64,6 +66,8 @@ export const PredictionCard: React.FC<Props> = ({
   const isSelected = selectedSnippetId === prediction.snippet_id;
   // feedbacks are keyed by snippet_id
   const hasFeedback = !!feedbacks[prediction.snippet_id];
+  const recordingId = prediction.recording_id;
+  const recordingLabel = recordingName ?? (typeof recordingId === "number" ? `Recording #${recordingId}` : null);
 
   const localRef = useRef<HTMLDivElement | null>(null);
   // Keep the actual element in state so viewport logic re-runs when ref is set.
@@ -85,6 +89,7 @@ export const PredictionCard: React.FC<Props> = ({
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [audioSampleRate, setAudioSampleRate] = useState<number>(16000);
+  const [audioAttempt, setAudioAttempt] = useState(0);
 
   const isBlind = phase.ui.labelingMode === "blind";
   // In blind mode the card fills the viewport; elsewhere use compact heights.
@@ -145,6 +150,10 @@ export const PredictionCard: React.FC<Props> = ({
     }
   }, [cachedAudio]);
 
+  useEffect(() => {
+    setAudioAttempt(0);
+  }, [prediction.snippet_id]);
+
   const shouldLoadAudio = loadAudioImmediately || isSelected || inView;
 
   // Fetch audio when card is visible, selected, or the first feed slot.
@@ -192,6 +201,15 @@ export const PredictionCard: React.FC<Props> = ({
         setAudioBlobUrl(audio.url);
         setAudioSampleRate(audio.sampleRate);
       } else {
+        // First card occasionally races on initial mount; retry eager loads briefly.
+        if (loadAudioImmediately && audioAttempt < 2) {
+          window.setTimeout(() => {
+            if (!controller.signal.aborted) {
+              setAudioAttempt((n) => n + 1);
+            }
+          }, 220);
+          return;
+        }
         setAudioError(true);
       }
     });
@@ -201,7 +219,7 @@ export const PredictionCard: React.FC<Props> = ({
       controller.abort();
       inFlight.delete(snippetId);
     };
-  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected]);
+  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected, audioAttempt]);
 
   const isPhase1 = phase.id.startsWith("P1.");
 
@@ -220,14 +238,35 @@ export const PredictionCard: React.FC<Props> = ({
       >
         {/* ── Header ── */}
         <div className="flex-shrink-0 flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
-          <span className="text-xs text-gray-500 font-ibm-sans flex items-center gap-1">
-            <SoundOutlined /> Snippet #{prediction.snippet_id}
-          </span>
-          {hasFeedback && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
-              Labeled
+          <div className="text-xs text-gray-500 font-ibm-sans flex items-center gap-2">
+            <span className="flex items-center gap-1">
+              <SoundOutlined /> Snippet #{prediction.snippet_id}
             </span>
-          )}
+            {recordingLabel && (
+              <span className="text-gray-400">· {recordingLabel}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {prediction.confidence != null && (
+              <span
+                className={[
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-ibm-mono",
+                  prediction.confidence >= 0.8
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : prediction.confidence >= 0.5
+                    ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                    : "bg-red-50 text-red-600 border border-red-200",
+                ].join(" ")}
+              >
+                {Math.round(prediction.confidence * 100)}%
+              </span>
+            )}
+            {hasFeedback && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                Labeled
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ── Spectrogram ── */}
@@ -265,6 +304,7 @@ export const PredictionCard: React.FC<Props> = ({
                 src={audioBlobUrl}
                 sampleRate={audioSampleRate}
                 datasetSpectrogram={datasetSpectrogram}
+                durationSec={prediction.duration_sec ?? undefined}
                 specHeight={blindSpecHeight}
                 navigator={false}
                 settings={false}
@@ -307,9 +347,28 @@ export const PredictionCard: React.FC<Props> = ({
           <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
             {labelText}
           </span>
-          <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1 flex-shrink-0">
-            <SoundOutlined />#{prediction.snippet_id}
-          </span>
+          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2 flex-shrink-0">
+            {prediction.confidence != null && (
+              <span
+                className={[
+                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-ibm-mono",
+                  prediction.confidence >= 0.8
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : prediction.confidence >= 0.5
+                    ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                    : "bg-red-50 text-red-600 border border-red-200",
+                ].join(" ")}
+              >
+                {Math.round(prediction.confidence * 100)}%
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              <SoundOutlined />#{prediction.snippet_id}
+            </span>
+            {recordingLabel && (
+              <span>{recordingLabel}</span>
+            )}
+          </div>
         </div>
 
         {/* ── Two-column body ── */}
@@ -348,6 +407,7 @@ export const PredictionCard: React.FC<Props> = ({
                     src={audioBlobUrl}
                     sampleRate={audioSampleRate}
                     datasetSpectrogram={datasetSpectrogram}
+                    durationSec={prediction.duration_sec ?? undefined}
                     specHeight={specHeight}
                     navigator={false}
                     settings={false}
@@ -359,7 +419,7 @@ export const PredictionCard: React.FC<Props> = ({
             )}
           </div>
 
-          {/* Right: predicted labels + feedback */}
+          {/* Right: predicted labels + confidence + feedback */}
           <div
             className="w-[40%] flex flex-col gap-3 px-4 py-3"
             onClick={(e) => e.stopPropagation()}
@@ -367,15 +427,36 @@ export const PredictionCard: React.FC<Props> = ({
             {prediction.predicted_labels && prediction.predicted_labels.length > 0 ? (
               <div>
                 <p className="text-xs text-gray-400 font-ibm-sans mb-1">Predicted labels</p>
-                <div className="flex flex-wrap gap-1">
-                  {prediction.predicted_labels.map((lbl) => (
-                    <span
-                      key={lbl}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200"
-                    >
-                      {lbl}
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-1">
+                  {prediction.predicted_labels.map((lbl) => {
+                    const prob = prediction.predicted_probabilities?.[lbl];
+                    const pct = prob != null ? Math.round(prob * 100) : null;
+                    const barColor =
+                      pct == null ? "bg-blue-300"
+                      : pct >= 80 ? "bg-green-500"
+                      : pct >= 50 ? "bg-yellow-400"
+                      : "bg-red-400";
+                    return (
+                      <div key={lbl} className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200 truncate max-w-[60%]">
+                          {lbl}
+                        </span>
+                        {pct != null && (
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <div className="flex-1 h-1.5 rounded-full bg-gray-100">
+                              <div
+                                className={`h-1.5 rounded-full ${barColor} transition-all`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-ibm-mono w-7 text-right flex-shrink-0">
+                              {pct}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
@@ -411,9 +492,14 @@ export const PredictionCard: React.FC<Props> = ({
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-gray-400 font-ibm-sans flex items-center gap-1">
-            <SoundOutlined />#{prediction.snippet_id}
-          </span>
+          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2">
+            <span className="flex items-center gap-1">
+              <SoundOutlined />#{prediction.snippet_id}
+            </span>
+            {recordingLabel && (
+              <span>{recordingLabel}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -459,6 +545,7 @@ export const PredictionCard: React.FC<Props> = ({
                 src={audioBlobUrl}
                 sampleRate={audioSampleRate}
                 datasetSpectrogram={datasetSpectrogram}
+                durationSec={prediction.duration_sec ?? undefined}
                 specHeight={specHeight}
                 navigator={false}
                 settings={false}

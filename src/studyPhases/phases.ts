@@ -44,7 +44,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       samplingStrategy: "composite",
     },
     visualization: {
-      mode: "predictions_only",
+      mode: "whole_dataset",
       showLabeledPool: false,
       allowPointClick: false,
       visibilityFilter: { mode: "disabled", allowedProperties: [] },

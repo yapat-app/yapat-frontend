@@ -9,7 +9,7 @@
  * Form or can be used standalone.
  */
 
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
@@ -29,6 +29,7 @@ interface GBIFSuggestion {
 interface Props {
   value?: string[];
   onChange?: (labels: string[]) => void;
+  getLabelTooltip?: (label: string) => string | null;
   disabled?: boolean;
   placeholder?: string;
   /** Show an always-visible label list below the selector (Annotation-like UI). */
@@ -60,6 +61,7 @@ interface Props {
 export const LabelSelector: React.FC<Props> = ({
   value = [],
   onChange,
+  getLabelTooltip,
   disabled = false,
   placeholder = "Search species…",
   showList = true,
@@ -77,6 +79,14 @@ export const LabelSelector: React.FC<Props> = ({
   const [searchFocused, setSearchFocused] = useState(false);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear pending timer on unmount to avoid orphaned GBIF fetches setting state
+  // on an unmounted component when the label selector is opened and closed quickly.
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
 
   const searchGBIF = useCallback((query: string) => {
     if (!query || query.trim().length < 2) {
@@ -100,10 +110,13 @@ export const LabelSelector: React.FC<Props> = ({
   // Build option groups:
   //  • PAM species list (always present)
   //  • GBIF matches (when user has typed ≥2 chars)
-  const pamOptions = quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const }));
+  const pamOptions = useMemo(
+    () => quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const })),
+    [quickLabels],
+  );
 
   // De-duplicate GBIF results against PAM list.
-  const pamSet = new Set(quickLabels.map((s) => s.toLowerCase()));
+  const pamSet = useMemo(() => new Set(quickLabels.map((s) => s.toLowerCase())), [quickLabels]);
   const gbifOptions = gbifResults
     .filter((r) => {
       const name = r.canonicalName ?? r.scientificName;
@@ -116,11 +129,14 @@ export const LabelSelector: React.FC<Props> = ({
 
   // Filter PAM options by search query for a snappy feel (AntD also filters, but this
   // ensures PAM options surface even during GBIF-debounce delay).
-  const filteredPamOptions = searchQuery
-    ? pamOptions.filter((o) =>
-        o.value.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : pamOptions;
+  const searchQueryLower = useMemo(() => searchQuery.toLowerCase(), [searchQuery]);
+  const filteredPamOptions = useMemo(
+    () =>
+      searchQuery
+        ? pamOptions.filter((o) => o.value.toLowerCase().includes(searchQueryLower))
+        : pamOptions,
+    [pamOptions, searchQuery, searchQueryLower],
+  );
 
   const combinedList = useMemo(() => {
     // In the always-visible list, show the local label list always,
@@ -167,7 +183,7 @@ export const LabelSelector: React.FC<Props> = ({
           <div className="flex-shrink-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
-                Your labels
+                Labels
               </span>
               <button
                 type="button"
@@ -180,18 +196,19 @@ export const LabelSelector: React.FC<Props> = ({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {value.map((lbl) => (
-                <Tag
-                  key={lbl}
-                  color="blue"
-                  closable={!disabled}
-                  onClose={(e) => {
-                    e.preventDefault();
-                    toggle(lbl);
-                  }}
-                  className="text-xs font-semibold rounded-md px-2 py-0.5 m-0"
-                >
-                  {lbl}
-                </Tag>
+                <Tooltip key={lbl} title={getLabelTooltip?.(lbl) ?? undefined}>
+                  <Tag
+                    color="blue"
+                    closable={!disabled}
+                    onClose={(e) => {
+                      e.preventDefault();
+                      toggle(lbl);
+                    }}
+                    className="text-xs font-semibold rounded-md px-2 py-0.5 m-0 cursor-help"
+                  >
+                    {lbl}
+                  </Tag>
+                </Tooltip>
               ))}
             </div>
           </div>

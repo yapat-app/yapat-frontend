@@ -6,7 +6,12 @@ import type { Annotation } from "./index";
 
 export type FeedbackAction = "ACCEPT" | "REJECT" | "MODIFY";
 export type ALColorBy = "prediction" | "uncertainty" | "taxon";
-export type SamplingMethod = "uncertainty" | "diversity" | "density" | "random";
+export type SamplingMethod =
+  | "uncertainty"
+  | "diversity"
+  | "density"
+  | "random"
+  | "confidence";
 export type PAMRetrainStatusValue = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
 export type PAMModelStatusValue = "AVAILABLE" | "LOADING" | "ERROR";
 export type PAMSuggestionMode = "predictions" | "suggestions";
@@ -15,7 +20,8 @@ export type PAMSuggestionStrategy =
   | "uncertainty"
   | "diversity"
   | "density"
-  | "composite";
+  | "composite"
+  | "confidence";
 
 // ── Property & Filter System ──────────────────────────────────────────────────
 
@@ -93,12 +99,16 @@ export interface PAMRunInferenceRequest {
   sample_suggestion?: boolean;
   suggestion_strategy?: PAMSuggestionStrategy;
   k?: number; // used when sample_suggestion=true
+  min_confidence?: number;
+  label_scope?: string[];
 }
 
 export interface PAMPrediction {
   id: number | null;
   model_checkpoint_id: number | null;
   snippet_id: number;
+  recording_id?: number | null;
+  duration_sec?: number | null;
   /**
    * Backend is multi-label.
    * UI still expects a primary label + confidence, so we also keep
@@ -130,6 +140,7 @@ export interface PAMInferenceResult {
   suggestion_strategy: PAMSuggestionStrategy;
   k: number | null;
   rows: PAMPrediction[];
+  label_scope?: string[] | null;
 }
 
 export interface FeedbackPayload {
@@ -183,6 +194,12 @@ export interface PAMRetrainRequest {
   dropout?: number;
   device?: string;
   run_inference?: boolean;
+}
+
+export interface PAMTrainingPathDefaults {
+  metadata_path: string;
+  label_config_path: string;
+  source_uri: string;
 }
 
 export interface PAMTrainFromScratchRequest {
@@ -254,6 +271,12 @@ export interface ALSnippetLabelsResponse {
   items: ALSnippetLabel[];
 }
 
+export interface PAMCheckpointHyperparameters {
+  used_species?: string[] | null;
+  excluded_species?: string[] | null;
+  class_counts?: Record<string, number> | null;
+}
+
 export interface PAMCheckpoint {
   id: number;
   dataset_id: number;
@@ -266,6 +289,7 @@ export interface PAMCheckpoint {
   created_at: string;
   updated_at?: string | null;
   parent_checkpoint_id?: number | null;
+  hyperparameters?: PAMCheckpointHyperparameters | null;
 }
 
 export type ALFeedSource = "pam" | "classic";

@@ -6,8 +6,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Copy patches so the postinstall `patch-package` step can apply them
+COPY patches ./patches
 
+# Install dependencies (runs postinstall -> patch-package)
 RUN npm install
 
 # Copy source code

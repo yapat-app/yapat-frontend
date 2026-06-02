@@ -56,6 +56,7 @@ export interface Annotation {
   id: number;
   snippet_id: number;
   user_id: number;
+  username?: string | null;
   taxon_id: string;
   resolved_name_snapshot: string;
   extra_metadata?: Record<string, any>;
@@ -347,6 +348,7 @@ export interface Recording {
   id: number;
   dataset_id: number;
   name: string;
+  file_name?: string;
   file_path: string;
   duration_sec?: number;
   sample_rate?: number;
@@ -523,8 +525,14 @@ export interface FeedParams {
   dataset_id?: number | null;
   recording_id?: number;
   method?: string;
+  annotation_status?: "any" | "annotated" | "unannotated";
+  location?: string;
   skip?: number;
   limit?: number;
+}
+
+export interface RecordingLocationsResponse {
+  locations: string[];
 }
 
 // ============================================================================

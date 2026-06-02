@@ -26,6 +26,7 @@ import { pickLatestServerClassicFeed } from "../../utils/classicFeedServerHydrat
 import type { Annotation, FeedSimilarityCreate, Snippet } from "../../types";
 import type { AnnotateMode } from "./types";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
+import { datasetApi } from "../../services/api";
 
 export function useHubClassic(
   mode: AnnotateMode,
@@ -33,7 +34,7 @@ export function useHubClassic(
   userId: number | null,
 ) {
   const dispatch = useAppDispatch();
-  const prevClassicRef = useRef<{ datasetId: string; mode: "random" | "similarity" } | null>(
+  const prevClassicRef = useRef<{ datasetId: string; mode: "random" | "similarity" | "filter" } | null>(
     null,
   );
   const serverHydrateTriedRef = useRef<string | null>(null);
@@ -43,6 +44,10 @@ export function useHubClassic(
   const [serverHydrateBusy, setServerHydrateBusy] = useState(false);
   const [classicBootstrapResolved, setClassicBootstrapResolved] = useState(false);
   const [feedLimit, setFeedLimit] = useState(50);
+  const [filterAnnotationStatus, setFilterAnnotationStatus] = useState<"any" | "annotated" | "unannotated">("any");
+  const [filterLocations, setFilterLocations] = useState<string[]>([]);
+  const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null;
     startSec: number;
@@ -56,7 +61,7 @@ export function useHubClassic(
     [],
   );
 
-  const isClassicMode = mode === "random" || mode === "similarity";
+  const isClassicMode = mode === "random" || mode === "similarity" || mode === "filter";
 
   useEffect(() => {
     if (!isClassicMode) {
@@ -84,8 +89,12 @@ export function useHubClassic(
     if (prev) {
       const prevDs = Number(prev.datasetId);
       const datasetChanged = prev.datasetId !== classicDatasetId;
-      const modeChanged = prev.mode !== mode;
-      if (!Number.isNaN(prevDs) && (datasetChanged || modeChanged)) {
+      // NOTE: do NOT save on mode change here. setMode (AnnotationHub) already saves
+      // the outgoing slot synchronously BEFORE swapping the feed. By the time this
+      // post-render effect runs on a mode change, state.snippets has already been
+      // replaced with the new mode's feed — saving here would clobber the previous
+      // mode's slot with the wrong feed. Only handle dataset changes here.
+      if (!Number.isNaN(prevDs) && datasetChanged) {
         dispatch(saveClassicFeedSlot({ datasetId: prevDs, kind: prev.mode }));
       }
     }
@@ -105,7 +114,7 @@ export function useHubClassic(
 
   const { snippets } = useAnnotationWorkflow({
     datasetId: classicDatasetId,
-    enabled: mode !== "al",
+    enabled: isClassicMode,
     skipFeedHistoryAutoLoad: true,
     annotateHubClassic: isClassicMode,
   });
@@ -165,7 +174,7 @@ export function useHubClassic(
   }, [isClassicMode, mode, classicDatasetId, userId, snippets.length, dispatch]);
 
   useEffect(() => {
-    if (mode === "al" || !classicDatasetId) return;
+    if (!isClassicMode || !classicDatasetId) return;
     const datasetId = Number(classicDatasetId);
     if (Number.isNaN(datasetId)) return;
 
@@ -202,21 +211,48 @@ export function useHubClassic(
     return () => {
       cancelled = true;
     };
-  }, [mode, classicDatasetId, classicSnippetIdsKey, dispatch, snippets]);
+  }, [isClassicMode, classicDatasetId, classicSnippetIdsKey, dispatch, snippets]);
 
   useEffect(() => {
-    if (!classicDatasetId || mode === "al") return;
+    if (!classicDatasetId || !isClassicMode) return;
     dispatch(getAllDatasetEmbeddings(Number(classicDatasetId)));
-  }, [classicDatasetId, mode, dispatch]);
+  }, [classicDatasetId, isClassicMode, dispatch]);
+
+  useEffect(() => {
+    if (mode !== "filter" || !classicDatasetId) {
+      setRecordingLocations([]);
+      return;
+    }
+    const ds = Number(classicDatasetId);
+    if (Number.isNaN(ds)) return;
+
+    let cancelled = false;
+    setLocationsLoading(true);
+    void datasetApi
+      .getRecordingLocations(ds)
+      .then((res) => {
+        if (!cancelled) setRecordingLocations(res.locations ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecordingLocations([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLocationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, classicDatasetId]);
 
   const { snippetsLoading, snippets: snippetList, error: snippetError } =
     useAppSelector((s) => s.snippet);
   const hasClassicFeed = snippetList.length > 0;
 
   const classicCanGenerate =
-    mode === "random"
-      ? !!classicDatasetId
-      : !!classicDatasetId && !!similarityState.audioFile;
+    mode === "similarity"
+      ? !!classicDatasetId && !!similarityState.audioFile
+      : !!classicDatasetId; // random and filter only need a dataset
 
   const handleGenerateFeed = useCallback(async () => {
     if (!classicDatasetId) return;
@@ -230,6 +266,16 @@ export function useHubClassic(
       if (mode === "random") {
         rows = await dispatch(
           fetchSnippetFeed({ dataset_id: dsId, limit: feedLimit, method: "random" }),
+        ).unwrap();
+      } else if (mode === "filter") {
+        rows = await dispatch(
+          fetchSnippetFeed({
+            dataset_id: dsId,
+            limit: feedLimit,
+            method: "filter",
+            annotation_status: filterAnnotationStatus,
+            ...(filterLocations.length > 0 ? { location: filterLocations.join(",") } : {}),
+          }),
         ).unwrap();
       } else {
         const { audioFile, startSec, endSec } = similarityState;
@@ -252,7 +298,7 @@ export function useHubClassic(
       dispatch(
         saveClassicFeedSlot({
           datasetId: dsId,
-          kind: mode as "random" | "similarity",
+          kind: mode as "random" | "similarity" | "filter",
         }),
       );
 
@@ -285,6 +331,8 @@ export function useHubClassic(
     classicDatasetId,
     mode,
     feedLimit,
+    filterAnnotationStatus,
+    filterLocations,
     similarityState,
     dispatch,
     hasClassicFeed,
@@ -308,7 +356,7 @@ export function useHubClassic(
         classicBootstrapResolved &&
         !snippetsLoading &&
         !serverHydrateBusy));
-  const generateFeedLabel = hasClassicFeed ? "Generate new feed" : "Generate feed";
+  const generateFeedLabel = hasClassicFeed ? "Edit Feed" : "Generate Feed";
 
   return {
     snippets,
@@ -317,6 +365,12 @@ export function useHubClassic(
     serverHydrateBusy,
     feedLimit,
     setFeedLimit,
+    filterAnnotationStatus,
+    setFilterAnnotationStatus,
+    filterLocations,
+    setFilterLocations,
+    recordingLocations,
+    locationsLoading,
     feedGenerateBusy,
     similarityState,
     handleSimilarityChange,

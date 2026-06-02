@@ -110,6 +110,10 @@ export const useAnnotationWorkflow = ({
     if (lastToastKeyRef.current === toastKey) return;
     lastToastKeyRef.current = toastKey;
 
+    // AnnotationHub classic generation already shows its own toast
+    // (see `useHubClassic`), so suppress this to avoid duplicates.
+    if (annotateHubClassic) return;
+
     if (datasetId) {
       message.open({
         key: toastKey,

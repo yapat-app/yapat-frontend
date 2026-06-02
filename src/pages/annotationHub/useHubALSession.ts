@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { message } from "antd";
-import { useAppDispatch, useAppSelector } from "../../hooks";
+import {
+  useAppDispatch,
+  useAppSelector,
+  usePamTrainingPathDefaults,
+} from "../../hooks";
 import {
   setSelectedDataset,
   setInferenceConfig,
@@ -10,13 +14,27 @@ import {
   restoreFeedFromServer,
   pollRetrainJob,
   trainFromScratch,
+  clearRetrainDispatch,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
 import type { PAMCheckpoint } from "../../types/al";
+
+export interface LabelScopeOption {
+  value: string;
+  label: string;
+  disabled: boolean;
+  tooltip: string | null;
+  sampleCount: number | null;
+}
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
-import { buildInferenceSuggestionParams, isSuggestionsMode } from "./alInferenceHelpers";
+import {
+  buildInferenceSuggestionParams,
+  buildValidateInferenceParams,
+  isSuggestionsMode,
+} from "./alInferenceHelpers";
+import { fetchPamQuickLabelNames } from "../../utils/fetchPamQuickLabelNames";
 import type { AnnotateMode } from "./types";
 
 export function useHubALSession(
@@ -26,6 +44,8 @@ export function useHubALSession(
 ) {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+  const isValidateMode = mode === "validate";
+  const isAlLikeMode = mode === "al" || mode === "validate";
 
   const { embeddingMethods, loading: embeddingMethodsLoading } = useAppSelector(
     (s) => s.embedding,
@@ -69,13 +89,16 @@ export function useHubALSession(
   }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
 
   useEffect(() => {
+    if (isValidateMode) return;
     const needsFullSet =
       phase.feed.mode === "single_card_on_select" ||
       phase.visualization.mode === "whole_dataset";
     const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
+    // Skip if predictions already loaded — avoids re-dispatching after inference completes.
     if (
       needsFullSet &&
       isSuggestions &&
+      predictions.length === 0 &&
       selectedDatasetId !== null &&
       snippetSetId !== null &&
       modelFamilyName !== null &&
@@ -95,19 +118,28 @@ export function useHubALSession(
     phase.feed.mode,
     phase.visualization.mode,
     modelInfo,
+    isValidateMode,
     selectedDatasetId,
     snippetSetId,
     modelFamilyName,
     inferenceLoading,
+    predictions.length,
     dispatch,
   ]);
 
   useEffect(() => {
-    dispatch(hydrateSavedFeed());
-  }, [dispatch]);
+    // Pass the URL's dataset so a persisted feed from a *different* dataset is not
+    // restored onto this view (which would leave the vis unable to locate snippets).
+    const raw = searchParams.get("dataset_id");
+    const urlDatasetId = raw ? Number.parseInt(raw, 10) : null;
+    dispatch(
+      hydrateSavedFeed({
+        expectedDatasetId: Number.isFinite(urlDatasetId as number) ? urlDatasetId : null,
+      }),
+    );
+  }, [dispatch, searchParams]);
 
-  // Restore truncated feed from server once per session — only when predictions
-  // are genuinely absent (not just cleared by a tab switch) and we haven't tried yet.
+  // Restore truncated feed from server once per session when predictions are absent.
   useEffect(() => {
     if (inferenceLoading || predictions.length > 0) return;
     if (
@@ -131,7 +163,7 @@ export function useHubALSession(
   ]);
 
   useEffect(() => {
-    if (mode !== "al") return;
+    if (!isAlLikeMode) return;
     const raw = searchParams.get("dataset_id");
     if (!raw) {
       if (
@@ -139,7 +171,7 @@ export function useHubALSession(
         (predictions.length > 0 || lastInferenceAt)
       ) {
         setSearchParams(
-          { mode: "al", dataset_id: String(selectedDatasetId) },
+          { mode, dataset_id: String(selectedDatasetId) },
           { replace: true },
         );
       }
@@ -154,6 +186,7 @@ export function useHubALSession(
     dispatch,
     searchParams,
     mode,
+    isAlLikeMode,
     selectedDatasetId,
     predictions.length,
     lastInferenceAt,
@@ -164,11 +197,14 @@ export function useHubALSession(
   const [alConfigOpen, setAlConfigOpen] = useState(false);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
   const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
-  const [localCkpt, setLocalCkpt] = useState<number | null>(modelCheckpointId);
   const [localFamily, setLocalFamily] = useState<string | null>(modelFamilyName);
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
+  const [localMinConfidence, setLocalMinConfidence] = useState<number | null>(null);
+  const [localLabelScope, setLocalLabelScope] = useState<string[]>([]);
+  const [labelScopeOptions, setLabelScopeOptions] = useState<LabelScopeOption[]>([]);
+  const [labelScopeLoading, setLabelScopeLoading] = useState(false);
   const [hasGroundTruthMetadata, setHasGroundTruthMetadata] =
     useState<boolean>(false);
   const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(1);
@@ -177,15 +213,36 @@ export function useHubALSession(
   const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
   const [trainRunInference, setTrainRunInference] = useState<boolean>(false);
 
+  usePamTrainingPathDefaults(
+    selectedDatasetId,
+    hasGroundTruthMetadata,
+    setTrainMetadataPath,
+    setTrainLabelConfigPath,
+  );
+
   useEffect(() => {
     const family = searchParams.get("model_family");
     if (family) setLocalFamily(family);
   }, [searchParams]);
 
   useEffect(() => {
-    // Reset restore guard when the dataset changes so the new dataset can restore.
     hasAttemptedRestoreRef.current = false;
   }, [selectedDatasetId]);
+
+  // Reset per-dataset local state when the dataset changes so stale values from
+  // a previous dataset don't carry over and cause
+  // inference to run on the wrong snippet set for the new dataset.
+  const prevDatasetIdRef = useRef<number | null>(null);
+  if (prevDatasetIdRef.current !== selectedDatasetId) {
+    if (prevDatasetIdRef.current !== null) {
+      // Dataset genuinely changed — clear snippet-set and checkpoint state.
+      // This runs synchronously during render (safe: just resetting derived state).
+      setLocalSS(null);
+      setCheckpoints([]);
+      setSnippetSets([]);
+    }
+    prevDatasetIdRef.current = selectedDatasetId;
+  }
 
   useEffect(() => {
     if (selectedDatasetId === null) return;
@@ -196,57 +253,171 @@ export function useHubALSession(
       .catch(() => {});
   }, [selectedDatasetId]);
 
+  const resolvedSnippetSetId = useMemo(() => {
+    if (localSS !== null) return localSS;
+    if (snippetSetId !== null) return snippetSetId;
+    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    return ready?.id ?? null;
+  }, [localSS, snippetSetId, snippetSets]);
+  const hasReadySnippetSet = resolvedSnippetSetId !== null;
+
+  useEffect(() => {
+    if (localSS !== null) return;
+    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    if (ready?.id != null) setLocalSS(ready.id);
+  }, [snippetSets, localSS]);
+
+  // Always use the latest checkpoint (checkpoints[0], sorted desc by date).
+  // No user selection — checkpoint is resolved automatically.
+  const localCkpt = checkpoints[0]?.id ?? null;
+
   useEffect(() => {
     if (checkpoints.length === 0) {
       if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
-      setLocalCkpt(null);
-      return;
-    }
-    if (localCkpt !== null) {
-      const fam =
-        checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? null;
-      if (fam && fam !== localFamily) setLocalFamily(fam);
       return;
     }
     const first = checkpoints[0];
-    if (first) {
-      setLocalCkpt(first.id);
+    if (first && first.model_family_name !== localFamily) {
       setLocalFamily(first.model_family_name ?? null);
     }
   }, [checkpoints]);
 
+  useEffect(() => {
+    if (!isAlLikeMode) return;
+    const ckptId = localCkpt ?? modelCheckpointId;
+    let cancelled = false;
+    setLabelScopeLoading(true);
+
+    void fetchPamQuickLabelNames(ckptId, selectedDatasetId)
+      .then((names) => {
+        if (cancelled) return;
+
+        const ckpt = checkpoints.find((c) => c.id === ckptId);
+        const hyper = ckpt?.hyperparameters ?? null;
+        const classCounts = hyper?.class_counts ?? {};
+        const LOW_SAMPLE_THRESHOLD = 10;
+
+        const activeOptions: LabelScopeOption[] = names.map((name) => {
+          const count = classCounts[name] ?? null;
+          let tooltip: string | null = null;
+          if (count !== null) {
+            tooltip = count < LOW_SAMPLE_THRESHOLD
+              ? `${count} training samples — low confidence`
+              : `${count} training samples`;
+          }
+          return { value: name, label: name, disabled: false, tooltip, sampleCount: count };
+        });
+
+        const excludedOptions: LabelScopeOption[] = (hyper?.excluded_species ?? []).map((name) => {
+          const count = classCounts[name] ?? null;
+          const tooltip = count !== null
+            ? `Excluded — only ${count} training sample${count === 1 ? "" : "s"}`
+            : "Excluded — insufficient training samples";
+          return { value: name, label: name, disabled: true, tooltip, sampleCount: count };
+        });
+
+        const allOptions = [...activeOptions, ...excludedOptions];
+        setLabelScopeOptions(allOptions);
+
+        setLocalLabelScope((prev) => {
+          const activeNames = activeOptions.map((o) => o.value);
+          if (prev.length === 0) return activeNames;
+          const kept = prev.filter((n) => activeNames.includes(n));
+          return kept.length > 0 ? kept : activeNames;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLabelScopeOptions([]);
+          setLocalLabelScope([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLabelScopeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAlLikeMode,
+    localCkpt,
+    modelCheckpointId,
+    selectedDatasetId,
+    checkpoints,
+  ]);
+
+  const buildSuggestionParams = useCallback(
+    (k: number, topKOnly: boolean) => {
+      const scope = localLabelScope.length > 0 ? localLabelScope : undefined;
+      const minConf =
+        localMinConfidence != null && localMinConfidence > 0
+          ? localMinConfidence
+          : null;
+      if (isValidateMode) {
+        return buildValidateInferenceParams(k, scope, minConf);
+      }
+      return buildInferenceSuggestionParams(
+        phase,
+        topKOnly,
+        k,
+        samplingMethod,
+        { labelScope: scope, minConfidence: minConf },
+      );
+    },
+    [
+      isValidateMode,
+      localLabelScope,
+      localMinConfidence,
+      phase,
+      samplingMethod,
+    ],
+  );
+
+  // Keep a ref to the current feed-loader so the mode-switch effect always calls
+  // the latest version (fresh dataset/checkpoint/params) without re-subscribing.
+  const handleRunInferenceRef = useRef<() => void>(() => {});
+
+  // Reload the respective feed whenever the user switches between al/validate modes
+  // (or back into an AL-like mode from a classic mode). Only reacts to genuine mode
+  // changes — deps are [mode] so unrelated state updates never retrigger it.
+  const prevModeRef = useRef<AnnotateMode | null>(null);
+  useEffect(() => {
+    const prev = prevModeRef.current;
+    prevModeRef.current = mode;
+
+    if (prev === null || prev === mode) return; // skip initial mount & no-op
+    if (!isAlLikeMode) return;                   // only reload for al / validate
+
+    handleRunInferenceRef.current();
+  }, [mode, isAlLikeMode]);
+
   const handleDatasetChange = useCallback(
     (value: number) => {
       dispatch(setSelectedDataset(value));
-      setSearchParams({ mode: "al", dataset_id: String(value) });
+      setSearchParams({ mode, dataset_id: String(value) });
     },
-    [dispatch, setSearchParams],
+    [dispatch, setSearchParams, mode],
   );
 
   const handleRunInference = useCallback(() => {
-    if (selectedDatasetId === null || localSS === null) return;
-    const family =
-      (localFamily ?? "").trim() ||
-      (localCkpt !== null
-        ? checkpoints.find((c) => c.id === localCkpt)?.model_family_name ?? ""
-        : "");
+    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
+    // localCkpt is always checkpoints[0] — the latest checkpoint.
+    const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
     if (!family) return;
     const embeddingModelId =
-      snippetSets.find((s) => s.id === localSS)?.embedding_model_id ??
+      snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
       1;
-    const suggestionParams = buildInferenceSuggestionParams(
-      phase,
-      localTopKOnly,
+    const suggestionParams = buildSuggestionParams(
       localK,
-      samplingMethod,
+      isValidateMode ? true : localTopKOnly,
     );
     const k = suggestionParams.k ?? localK;
     dispatch(
       setInferenceConfig({
         modelCheckpointId: localCkpt,
         modelFamilyName: family,
-        snippetSetId: localSS,
+        snippetSetId: resolvedSnippetSetId,
         embeddingModelId,
         k,
       }),
@@ -255,7 +426,7 @@ export function useHubALSession(
       runInference({
         model_family_name: family,
         dataset_id: selectedDatasetId,
-        snippet_set_id: localSS,
+        snippet_set_id: resolvedSnippetSetId,
         ...suggestionParams,
       }),
     );
@@ -268,7 +439,7 @@ export function useHubALSession(
     setAlConfigOpen(false);
   }, [
     selectedDatasetId,
-    localSS,
+    resolvedSnippetSetId,
     localFamily,
     localCkpt,
     checkpoints,
@@ -277,16 +448,19 @@ export function useHubALSession(
     phase,
     localTopKOnly,
     localK,
-    samplingMethod,
+    buildSuggestionParams,
     dispatch,
   ]);
+
+  // Keep the mode-switch effect's runner pointing at the latest handleRunInference.
+  handleRunInferenceRef.current = handleRunInference;
 
   const handleOpenALSession = useCallback(async () => {
     if (checkpoints.length > 0) {
       handleRunInference();
       return;
     }
-    if (selectedDatasetId === null || localSS === null) return;
+    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
     const family = (localFamily ?? "").trim() || "default";
     if (!hasGroundTruthMetadata) {
       handleRunInference();
@@ -298,7 +472,7 @@ export function useHubALSession(
       trainFromScratch({
         dataset_id: selectedDatasetId,
         model_family_name: family,
-        snippet_set_id: localSS ?? undefined,
+        snippet_set_id: resolvedSnippetSetId ?? undefined,
         embedding_model_id: trainEmbeddingModelId,
         metadata_path: trainMetadataPath.trim(),
         label_config_path: trainLabelConfigPath.trim(),
@@ -316,7 +490,7 @@ export function useHubALSession(
     checkpoints.length,
     handleRunInference,
     selectedDatasetId,
-    localSS,
+    resolvedSnippetSetId,
     localFamily,
     hasGroundTruthMetadata,
     trainEmbeddingModelId,
@@ -327,13 +501,14 @@ export function useHubALSession(
     dispatch,
   ]);
 
+  // Poll by job_id primitive — object reference changes would restart the loop.
+  const retrainJobId = lastRetrainDispatch?.job_id ?? null;
+
   const lastNotifiedJobIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!selectedDatasetId) return;
+    if (!selectedDatasetId || retrainJobId === null) return;
     const stableDatasetId: number = selectedDatasetId;
-    const jobId = lastRetrainDispatch?.job_id;
-    if (jobId === undefined || jobId === null) return;
-    const stableJobId: number = jobId;
+    const stableJobId: number = retrainJobId;
     let cancelled = false;
     let timer: number | null = null;
     async function tick() {
@@ -342,28 +517,10 @@ export function useHubALSession(
       if (!pollRetrainJob.fulfilled.match(r)) {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
-          message.warning("Could not poll retrain job — loading current predictions");
+          message.warning("Could not poll retrain job — please retry manually");
         }
-        if (
-          modelFamilyName !== null &&
-          snippetSetId !== null &&
-          selectedDatasetId !== null
-        ) {
-          dispatch(
-            runInference({
-              model_family_name: modelFamilyName,
-              dataset_id: selectedDatasetId,
-              snippet_set_id: snippetSetId,
-              force_refresh: false,
-              ...buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              ),
-            }),
-          );
-        }
+        // Clear dispatch state; do not auto-run inference (would restart the poll loop).
+        dispatch(clearRetrainDispatch());
         return;
       }
       const status = r.payload.status;
@@ -371,28 +528,24 @@ export function useHubALSession(
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
           if (status === "COMPLETED") {
-            message.success("Training completed — checkpoint is ready");
+            message.success("Training completed — click Generate Feed to load predictions");
           } else {
-            message.error("Training failed — loading current predictions");
+            message.error("Training failed — please check the model checkpoint and retry");
           }
         }
-        if (
-          modelFamilyName !== null &&
-          snippetSetId !== null &&
-          selectedDatasetId !== null
-        ) {
+        dispatch(clearRetrainDispatch());
+        if (status === "COMPLETED" && modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
+          const suggestionParams = buildSuggestionParams(
+            inferenceK,
+            isValidateMode || isSuggestionsMode(modelInfo),
+          );
+          // Omit force_refresh — job already stored predictions; true would loop.
           dispatch(
             runInference({
               model_family_name: modelFamilyName,
               dataset_id: selectedDatasetId,
               snippet_set_id: snippetSetId,
-              force_refresh: status === "COMPLETED",
-              ...buildInferenceSuggestionParams(
-                phase,
-                isSuggestionsMode(modelInfo),
-                inferenceK,
-                samplingMethod,
-              ),
+              ...suggestionParams,
             }),
           );
         }
@@ -413,13 +566,14 @@ export function useHubALSession(
     };
   }, [
     dispatch,
-    lastRetrainDispatch,
+    retrainJobId,
     selectedDatasetId,
     modelFamilyName,
     snippetSetId,
-    samplingMethod,
+    hasReadySnippetSet,
+    isValidateMode,
     inferenceK,
-    phase,
+    buildSuggestionParams,
     modelInfo,
   ]);
 
@@ -432,12 +586,11 @@ export function useHubALSession(
     : null;
 
   const openInferenceModal = useCallback(() => {
-    setLocalCkpt(modelCheckpointId);
     setLocalFamily(modelFamilyName);
-    setLocalSS(snippetSetId);
+    setLocalSS(resolvedSnippetSetId);
     setLocalK(inferenceK);
     setLocalTopKOnly(
-      predictions.length === 0 || isSuggestionsMode(modelInfo),
+      isValidateMode || predictions.length === 0 || isSuggestionsMode(modelInfo),
     );
     setHasGroundTruthMetadata(false);
     setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
@@ -447,12 +600,12 @@ export function useHubALSession(
     setTrainRunInference(false);
     setAlConfigOpen(true);
   }, [
-    modelCheckpointId,
     modelFamilyName,
-    snippetSetId,
+    resolvedSnippetSetId,
     inferenceK,
     predictions.length,
     modelInfo,
+    isValidateMode,
     embeddingMethods,
   ]);
 
@@ -465,6 +618,7 @@ export function useHubALSession(
     modelFamilyName,
     samplingMethod,
     snippetSetId,
+    hasReadySnippetSet,
     inferenceK,
     predictions,
     modelInfo,
@@ -482,11 +636,8 @@ export function useHubALSession(
     checkpoints,
     snippetSets,
     localCkpt,
-    setLocalCkpt,
     localFamily,
     setLocalFamily,
-    localSS,
-    setLocalSS,
     localK,
     setLocalK,
     localTopKOnly,
@@ -503,6 +654,13 @@ export function useHubALSession(
     setTrainDevice,
     trainRunInference,
     setTrainRunInference,
+    localMinConfidence,
+    setLocalMinConfidence,
+    localLabelScope,
+    setLocalLabelScope,
+    labelScopeOptions,
+    labelScopeLoading,
+    isValidateMode,
     handleRunInference,
     handleOpenALSession,
     openInferenceModal,

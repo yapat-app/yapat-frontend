@@ -19,7 +19,11 @@ export type AnnotationHubMainProps = {
   showClassicEmpty: boolean;
   classicDatasetId: string | null;
   generateFeedLabel: string;
+  classicGenerateLoading: boolean;
   onOpenClassicFeedConfig: () => void;
+  alFeedActionLabel: string;
+  alFeedActionLoading: boolean;
+  onOpenAlFeedConfig: () => void;
   onBrowseDatasets: () => void;
 };
 
@@ -34,10 +38,15 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
   showClassicEmpty,
   classicDatasetId,
   generateFeedLabel,
+  classicGenerateLoading,
   onOpenClassicFeedConfig,
+  alFeedActionLabel,
+  alFeedActionLoading,
+  onOpenAlFeedConfig,
   onBrowseDatasets,
 }) => {
   const dispatch = useAppDispatch();
+  const isAlLikeMode = mode === "al" || mode === "validate";
 
   if (awaitingHubDatasetBootstrap) {
     return (
@@ -50,7 +59,7 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
 
   return (
     <>
-      {mode === "al" && !selectedDatasetId && isRestoredFeed && (
+      {isAlLikeMode && !selectedDatasetId && isRestoredFeed && (
         <Alert
           type="info"
           showIcon
@@ -75,19 +84,25 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
         />
       )}
 
-      {mode === "al" &&
+      {isAlLikeMode &&
         (!selectedDatasetId && !isRestoredFeed ? (
           <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
             <DatabaseOutlined style={{ fontSize: 48 }} />
             <p className="text-lg font-ibm-sans">
-              Select a dataset to start Active Learning
+              Select a dataset to start {mode === "validate" ? "Validate" : "Active Learning"}
             </p>
             <p className="text-sm font-ibm-sans">
-              Then click &quot;Start Inference&quot; to load predictions.
+              Then click &quot;Generate Feed&quot; to load predictions.
             </p>
           </div>
         ) : (
-          <PhaseLayout />
+          <PhaseLayout
+            actionButton={{
+              label: alFeedActionLabel,
+              loading: alFeedActionLoading,
+              onClick: onOpenAlFeedConfig,
+            }}
+          />
         ))}
 
       {isClassicMode && showClassicSpinner && (
@@ -111,7 +126,9 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
                     ? "Select a dataset above, then generate a feed to start annotating."
                     : mode === "similarity"
                       ? "No saved similarity feed for this dataset yet. Generate one with a reference audio sample."
-                      : "No saved random feed for this dataset yet. Generate one to start annotating."}
+                      : mode === "filter"
+                        ? "No saved filter feed for this dataset yet. Set your filters and generate a feed."
+                        : "No saved random feed for this dataset yet. Generate one to start annotating."}
                 </p>
                 {classicDatasetId && (
                   <Button type="primary" onClick={onOpenClassicFeedConfig}>
@@ -128,7 +145,11 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
       )}
 
       {isClassicMode && !showClassicEmpty && !showClassicSpinner && (
-        <ClassicWorkspace />
+        <ClassicWorkspace
+          feedActionLabel={generateFeedLabel}
+          onOpenFeedConfig={onOpenClassicFeedConfig}
+          feedActionLoading={classicGenerateLoading}
+        />
       )}
     </>
   );

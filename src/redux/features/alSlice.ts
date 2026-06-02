@@ -30,6 +30,7 @@ import {
   buildClassicFeedback,
   snippetsToPredictions,
 } from "../../utils/classicFeedSync";
+import { aggregateConfidence } from "../../utils/aggregateConfidence";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 9;
@@ -53,8 +54,12 @@ interface PersistedFeed {
   /** Whether the last run used top-K suggestions vs the full scored set. */
   sampleSuggestion?: boolean;
   suggestionStrategy?: PAMSuggestionStrategy;
+  labelScope?: string[];
+  minConfidence?: number;
   /** True when predictions were too large to store in localStorage. */
   predictionsTruncated?: boolean;
+  /** Per-snippet annotation/skip state — restored on re-login so done work is not lost. */
+  feedbacks?: Record<number, FeedbackResponse>;
 }
 
 function needsServerRestore(saved: PersistedFeed | null): boolean {
@@ -92,12 +97,21 @@ function buildRestoreInferenceRequest(
     body.k = saved.inferenceK ?? state.inferenceK;
     body.suggestion_strategy = (saved.suggestionStrategy ??
       state.samplingMethod) as PAMSuggestionStrategy;
+    if (saved.labelScope?.length) {
+      body.label_scope = saved.labelScope;
+    }
+    if (saved.minConfidence != null && saved.minConfidence > 0) {
+      body.min_confidence = saved.minConfidence;
+    }
   }
 
   return body;
 }
 
-function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
+function withDisplayFields(
+  rows: PAMPrediction[],
+  labelScope?: string[] | null,
+): PAMPrediction[] {
   return rows.map((r) => {
     const probs = r.predicted_probabilities ?? undefined;
     let bestLabel = r.predicted_labels?.[0] ?? "—";
@@ -110,7 +124,13 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
         }
       }
     }
-    const confidence = Number.isFinite(bestProb) && bestProb > 0 ? bestProb : r.confidence ?? 0;
+    const scopedConfidence = aggregateConfidence(probs, labelScope);
+    const confidence =
+      labelScope?.length && scopedConfidence > 0
+        ? scopedConfidence
+        : Number.isFinite(bestProb) && bestProb > 0
+          ? bestProb
+          : r.confidence ?? 0;
     const mergedScores = {
       ...(r.scores ?? {}),
   // Ensure sampler score keys exist for filtering/coloring.
@@ -129,33 +149,46 @@ function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
   });
 }
 
+let _saveFeedTimer: ReturnType<typeof setTimeout> | null = null;
+
 function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): void {
-  try {
-    const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
-    const sampleSuggestion =
-      inferenceRequest?.sample_suggestion ??
-      (state.modelInfo?.mode as string | undefined) === "suggestions";
-    const data: PersistedFeed = {
-      predictions: tooLarge ? [] : state.predictions,
-      modelInfo: state.modelInfo,
-      totalScored: state.totalScored,
-      modelCheckpointId: state.modelCheckpointId,
-      modelFamilyName: state.modelFamilyName,
-      usedCheckpointId: state.usedCheckpointId,
-      snippetSetId: state.snippetSetId,
-      embeddingModelId: state.embeddingModelId,
-      inferenceK: state.inferenceK,
-      selectedDatasetId: state.selectedDatasetId,
-      lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
-      sampleSuggestion,
-      suggestionStrategy:
-        inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
-      predictionsTruncated: tooLarge,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // Ignore persistence errors (e.g. storage quota).
-  }
+  // Debounce: rapid feedback submissions (e.g. 10 in a row) should only trigger
+  // one synchronous JSON.stringify + localStorage.setItem, not ten.
+  if (_saveFeedTimer !== null) clearTimeout(_saveFeedTimer);
+
+  const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
+  const sampleSuggestion =
+    inferenceRequest?.sample_suggestion ??
+    (state.modelInfo?.mode as string | undefined) === "suggestions";
+  const data: PersistedFeed = {
+    predictions: tooLarge ? [] : state.predictions,
+    modelInfo: state.modelInfo,
+    totalScored: state.totalScored,
+    modelCheckpointId: state.modelCheckpointId,
+    modelFamilyName: state.modelFamilyName,
+    usedCheckpointId: state.usedCheckpointId,
+    snippetSetId: state.snippetSetId,
+    embeddingModelId: state.embeddingModelId,
+    inferenceK: state.inferenceK,
+    selectedDatasetId: state.selectedDatasetId,
+    lastInferenceAt: state.lastInferenceAt ?? new Date().toISOString(),
+    sampleSuggestion,
+    suggestionStrategy:
+      inferenceRequest?.suggestion_strategy ?? state.samplingMethod,
+    labelScope: inferenceRequest?.label_scope,
+    minConfidence: inferenceRequest?.min_confidence,
+    predictionsTruncated: tooLarge,
+    feedbacks: state.feedbacks,
+  };
+
+  _saveFeedTimer = setTimeout(() => {
+    _saveFeedTimer = null;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore persistence errors (e.g. storage quota).
+    }
+  }, 300);
 }
 
 function loadFeed(): PersistedFeed | null {
@@ -190,6 +223,11 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
   const rows = withDisplayFields(saved.predictions ?? []);
   state.predictions = rows;
   state.projectionPredictions = rows;
+  if (saved.feedbacks && Object.keys(saved.feedbacks).length > 0) {
+    state.feedbacks = saved.feedbacks;
+    state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
+    state.projectionPredictions = state.predictions;
+  }
   applyPersistedMetadata(state, saved);
 }
 
@@ -487,6 +525,10 @@ const alSlice = createSlice({
     ) => {
       const { snippets, datasetId } = action.payload;
       const predictions = snippetsToPredictions(snippets);
+      // If the dataset changed, the previous selection no longer belongs to this
+      // feed — drop it so we don't keep a stale cross-dataset snippet selected.
+      const datasetChanged =
+        normalizeDatasetId(state.selectedDatasetId) !== normalizeDatasetId(datasetId);
       state.feedSource = "classic";
       state.selectedDatasetId = datasetId;
       state.predictions = predictions;
@@ -494,12 +536,27 @@ const alSlice = createSlice({
       state.modelInfo = { mode: "classic" };
       state.inferenceLoading = false;
       state.error = null;
+      if (datasetChanged) {
+        // Clear AL-session scoping so the projection derives the embedding model
+        // from THIS dataset's snippet set, not a stale value from another dataset.
+        state.snippetSetId = null;
+        state.embeddingModelId = null;
+      }
       // Keep usedCheckpointId so quick labels still load from the same labels.json /
       // checkpoint config as Active Learning (staged behaviour). Classic annotations
       // use feedSource === "classic", not PAM feedback.
       state.feedbacks = {};
-      if (predictions.length > 0 && state.selectedSnippetId === null) {
+      // Select the first snippet when nothing is selected, the dataset changed, or
+      // the current selection is no longer part of the new feed.
+      const newIds = new Set(predictions.map((p) => p.snippet_id));
+      const selectionInvalid =
+        state.selectedSnippetId === null ||
+        datasetChanged ||
+        !newIds.has(state.selectedSnippetId);
+      if (predictions.length > 0 && selectionInvalid) {
         state.selectedSnippetId = predictions[0].snippet_id;
+        const pred = predictions[0];
+        state.selectedPredictionId = pred?.id ?? null;
       }
     },
     hydrateClassicFeedbacks: (
@@ -515,11 +572,7 @@ const alSlice = createSlice({
       state,
       action: PayloadAction<Record<number, Annotation[]>>,
     ) => {
-      if (state.feedSource !== "classic") return;
-      state.classicAnnotationsBySnippet = {
-        ...state.classicAnnotationsBySnippet,
-        ...action.payload,
-      };
+      state.classicAnnotationsBySnippet = action.payload;
     },
     setClassicSnippetAnnotations: (
       state,
@@ -569,14 +622,30 @@ const alSlice = createSlice({
       state.selectedSnippetId = null;
       state.selectedPredictionId = null;
     },
-    hydrateSavedFeed: (state) => {
+    clearRetrainDispatch: (state) => {
+      state.lastRetrainDispatch = null;
+      state.lastRetrainJob = null;
+      state.retrainLoading = false;
+    },
+    hydrateSavedFeed: (
+      state,
+      action: PayloadAction<{ expectedDatasetId?: number | null } | undefined>,
+    ) => {
       if (state.predictions.length > 0) return;
       const saved = loadFeed();
       if (!saved) return;
 
       const savedId = normalizeDatasetId(saved.selectedDatasetId);
       const currentId = normalizeDatasetId(state.selectedDatasetId);
-      if (currentId !== null && savedId !== null && currentId !== savedId) return;
+      // The dataset we intend to show: explicit payload (from URL) wins, then the
+      // dataset already in state. This closes the hole where, on first mount,
+      // state.selectedDatasetId is still null and a feed from a *different* dataset
+      // would be restored onto the current dataset's view (stale cross-dataset feed).
+      const expectedId =
+        action?.payload?.expectedDatasetId !== undefined
+          ? normalizeDatasetId(action.payload.expectedDatasetId)
+          : currentId;
+      if (expectedId !== null && savedId !== null && expectedId !== savedId) return;
 
       if ((saved.predictions?.length ?? 0) > 0) {
         applyPersistedFeed(state, saved);
@@ -614,22 +683,39 @@ const alSlice = createSlice({
         const result: PAMInferenceResult = payload;
         state.modelFamilyName = result.model_family_name;
         state.usedCheckpointId = result.used_checkpoint_id;
+        const labelScope = result.label_scope ?? request.label_scope ?? null;
         state.modelInfo = {
           mode: result.mode,
           suggestion_strategy: result.suggestion_strategy,
           returned_count: result.returned_count,
           total_predictions: result.total_predictions,
           used_checkpoint_id: result.used_checkpoint_id,
+          label_scope: labelScope,
         };
         state.totalScored = result.total_predictions;
         state.feedSource = "pam";
-        state.predictions = withDisplayFields(result.rows);
+        state.predictions = withDisplayFields(result.rows, labelScope);
         state.lastInferenceAt = new Date().toISOString();
         state.selectedDatasetId = request.dataset_id;
+        // Persist the snippet set used for inference so the projection view can
+        // derive the correct FPV embedding model. Auto-inference paths (mode-switch
+        // etc.) don't call setInferenceConfig, so we capture it here too.
+        if (request.snippet_set_id != null) {
+          state.snippetSetId = request.snippet_set_id;
+        }
         state.retrainLoading = false;
-        // Update projection snapshot on first inference or after a retrain.
-        if (state.projectionPredictions.length === 0 || state.lastRetrainJob !== null) {
-          state.projectionPredictions = state.predictions;
+        // Always update projection snapshot so colour/score overlays stay in sync
+        // when switching between modes (AL ↔ validate) or after a retrain.
+        state.projectionPredictions = state.predictions;
+
+        // Auto-select the first prediction if nothing is selected or the current
+        // selection is no longer in the new prediction set (e.g. after a mode switch).
+        const newIds = new Set(state.predictions.map((p) => p.snippet_id));
+        if (
+          state.predictions.length > 0 &&
+          (state.selectedSnippetId === null || !newIds.has(state.selectedSnippetId))
+        ) {
+          state.selectedSnippetId = state.predictions[0].snippet_id;
         }
         saveFeed(state, request);
       },
@@ -658,15 +744,19 @@ const alSlice = createSlice({
         const restored: PAMInferenceResult = action.payload;
         state.modelFamilyName = restored.model_family_name;
         state.usedCheckpointId = restored.used_checkpoint_id;
+        const restoredScope =
+          restored.label_scope ??
+          (saved?.labelScope?.length ? saved.labelScope : null);
         state.modelInfo = {
           mode: restored.mode,
           suggestion_strategy: restored.suggestion_strategy,
           returned_count: restored.returned_count,
           total_predictions: restored.total_predictions,
           used_checkpoint_id: restored.used_checkpoint_id,
+          label_scope: restoredScope,
         };
         state.totalScored = restored.total_predictions;
-        state.predictions = withDisplayFields(restored.rows);
+        state.predictions = withDisplayFields(restored.rows, restoredScope);
         if (state.projectionPredictions.length === 0) {
           state.projectionPredictions = state.predictions;
         }
@@ -806,6 +896,7 @@ export const {
   setClassicSnippetAnnotations,
   setClassicSnippetFeedback,
   clearClassicAnnotationFeed,
+  clearRetrainDispatch,
 } = alSlice.actions;
 
 export { needsServerRestore };

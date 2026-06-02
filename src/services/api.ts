@@ -547,6 +547,15 @@ export const datasetApi = {
     const response = await api.get(`/api/datasets/${datasetId}/explorer`);
     return response.data;
   },
+
+  getRecordingLocations: async (
+    datasetId: number,
+  ): Promise<import("../types").RecordingLocationsResponse> => {
+    const response = await api.get(
+      `/api/datasets/${datasetId}/recording-locations`,
+    );
+    return response.data;
+  },
 };
 
 // ============================================================================

@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   clearSnippets,
   saveClassicFeedSlot,
+  restoreClassicFeedSlot,
 } from "../redux/features/snippetSlice";
 import {
   clearClassicAnnotationFeed,
@@ -38,26 +39,53 @@ export const AnnotationHub: React.FC = () => {
 
   const rawMode = searchParams.get("mode");
   const mode: AnnotateMode =
-    rawMode === "al" || rawMode === "similarity" ? rawMode : "random";
+    rawMode === "al" ||
+    rawMode === "validate" ||
+    rawMode === "similarity" ||
+    rawMode === "filter"
+      ? rawMode
+      : "random";
 
   const setMode = useCallback(
     (next: AnnotateMode) => {
       const params: Record<string, string> = { mode: next };
       const dsId = searchParams.get("dataset_id");
       if (dsId) params.dataset_id = dsId;
+      const ds = dsId ? Number.parseInt(dsId, 10) : null;
+      const dsValid = Number.isFinite(ds as number);
 
-      if (next === "al") {
-        if (dsId && (mode === "random" || mode === "similarity")) {
-          const ds = Number(dsId);
-          if (!Number.isNaN(ds)) {
-            dispatch(saveClassicFeedSlot({ datasetId: ds, kind: mode }));
-          }
-        }
+      const prevIsClassic =
+        mode === "random" || mode === "similarity" || mode === "filter";
+      const nextIsClassic =
+        next === "random" || next === "similarity" || next === "filter";
+
+      // Save the outgoing classic feed slot whenever we leave a classic mode
+      // (to AL/validate OR to another classic mode), so it can be restored later.
+      if (dsValid && prevIsClassic && next !== mode) {
+        dispatch(saveClassicFeedSlot({ datasetId: ds as number, kind: mode }));
+      }
+
+      if (next === "al" || next === "validate") {
         dispatch(clearSnippets());
         dispatch(clearClassicAnnotationFeed());
         // Restore persisted AL feed immediately so predictions are available
         // before restoreFeedFromServer checks them, preventing a spurious re-inference.
-        dispatch(hydrateSavedFeed());
+        // Pass the current dataset so a feed from a different dataset isn't restored.
+        dispatch(
+          hydrateSavedFeed({
+            expectedDatasetId: dsValid ? (ds as number) : null,
+          }),
+        );
+      } else if (nextIsClassic && next !== mode) {
+        // Switching between classic modes (e.g. random → similarity): clear the
+        // current feed and restore the target mode's saved slot so the feed
+        // reflects the new mode instead of leaving the old one on screen.
+        dispatch(clearClassicAnnotationFeed());
+        if (dsValid) {
+          dispatch(restoreClassicFeedSlot({ datasetId: ds as number, kind: next }));
+        } else {
+          dispatch(clearSnippets());
+        }
       }
 
       setSearchParams(params, { replace: true });
@@ -84,13 +112,6 @@ export const AnnotationHub: React.FC = () => {
         }
         alSelectedDatasetId={al.selectedDatasetId}
         onAlDatasetChange={al.handleDatasetChange}
-        onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
-        classicGenerateLabel={classic.generateFeedLabel}
-        classicGenerateLoading={
-          (classic.snippetsLoading || classic.serverHydrateBusy) &&
-          !classic.hasClassicFeed
-        }
-        onOpenAlInference={al.openInferenceModal}
         inferenceLoading={al.inferenceLoading}
         predictionsLength={al.predictions.length}
         feedbackCountDisplay={al.feedbackCountDisplay}
@@ -111,7 +132,11 @@ export const AnnotationHub: React.FC = () => {
         showClassicEmpty={classic.showClassicEmpty}
         classicDatasetId={classicDatasetId}
         generateFeedLabel={classic.generateFeedLabel}
+        classicGenerateLoading={classic.feedGenerateBusy}
         onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
+        alFeedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
+        alFeedActionLoading={al.inferenceLoading}
+        onOpenAlFeedConfig={al.openInferenceModal}
         onBrowseDatasets={() => navigate("/datasets")}
       />
 
@@ -120,19 +145,15 @@ export const AnnotationHub: React.FC = () => {
         onCancel={() => al.setAlConfigOpen(false)}
         onOk={al.handleOpenALSession}
         checkpoints={al.checkpoints}
-        snippetSets={al.snippetSets}
         embeddingMethods={al.embeddingMethods}
         embeddingMethodsLoading={al.embeddingMethodsLoading}
-        localCkpt={al.localCkpt}
-        setLocalCkpt={al.setLocalCkpt}
         localFamily={al.localFamily}
         setLocalFamily={al.setLocalFamily}
-        localSS={al.localSS}
-        setLocalSS={al.setLocalSS}
         localK={al.localK}
         setLocalK={al.setLocalK}
         localTopKOnly={al.localTopKOnly}
         setLocalTopKOnly={al.setLocalTopKOnly}
+        hasReadySnippetSet={al.hasReadySnippetSet}
         hasGroundTruthMetadata={al.hasGroundTruthMetadata}
         setHasGroundTruthMetadata={al.setHasGroundTruthMetadata}
         trainEmbeddingModelId={al.trainEmbeddingModelId}
@@ -145,6 +166,13 @@ export const AnnotationHub: React.FC = () => {
         setTrainDevice={al.setTrainDevice}
         trainRunInference={al.trainRunInference}
         setTrainRunInference={al.setTrainRunInference}
+        isValidateMode={mode === "validate"}
+        localMinConfidence={al.localMinConfidence}
+        setLocalMinConfidence={al.setLocalMinConfidence}
+        localLabelScope={al.localLabelScope}
+        setLocalLabelScope={al.setLocalLabelScope}
+        labelScopeOptions={al.labelScopeOptions}
+        labelScopeLoading={al.labelScopeLoading}
       />
 
       <ClassicFeedConfigModal
@@ -152,11 +180,17 @@ export const AnnotationHub: React.FC = () => {
         mode={mode}
         feedLimit={classic.feedLimit}
         onFeedLimitChange={classic.setFeedLimit}
+        filterAnnotationStatus={classic.filterAnnotationStatus}
+        onFilterAnnotationStatusChange={classic.setFilterAnnotationStatus}
+        filterLocations={classic.filterLocations}
+        onFilterLocationsChange={classic.setFilterLocations}
+        recordingLocations={classic.recordingLocations}
+        locationsLoading={classic.locationsLoading}
         similarityState={classic.similarityState}
         onSimilarityChange={classic.handleSimilarityChange}
         onCancel={() => classic.setClassicConfigOpen(false)}
         onOk={classic.handleGenerateFeed}
-        okText={classic.generateFeedLabel}
+        okText="Apply"
         okDisabled={!classic.classicCanGenerate || classic.feedGenerateBusy}
         okLoading={classic.feedGenerateBusy}
       />

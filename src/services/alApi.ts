@@ -17,6 +17,7 @@ import type {
   ALLabeledSnippetsResponse,
   ALSnippetLabelsResponse,
   PAMFeedbackCountResponse,
+  PAMTrainingPathDefaults,
 } from "../types/al";
 
 const BASE = "/api/pam-al";
@@ -78,6 +79,12 @@ export const alApi = {
   /** POST /api/pam-al/retrain/manual — dispatch manual retrain job */
   triggerRetrain: async (body: PAMRetrainRequest): Promise<PAMRetrainJobDispatch> => {
     const response = await api.post(`${BASE}/retrain/manual`, body);
+    return response.data;
+  },
+
+  /** GET /api/pam-al/datasets/{id}/training-path-defaults — resolve metadata/label paths */
+  getTrainingPathDefaults: async (datasetId: number): Promise<PAMTrainingPathDefaults> => {
+    const response = await api.get(`${BASE}/datasets/${datasetId}/training-path-defaults`);
     return response.data;
   },
 
