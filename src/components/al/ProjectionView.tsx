@@ -497,17 +497,59 @@ export const ProjectionView: React.FC = () => {
     return buildCoordsMap(fpvPoints, proj);
   }, [fpvPoints, projectionsByMethod, method]);
 
+  // Subsample used ONLY for the four 120x74px sidebar thumbnails. The main plot
+  // renders every point; a thumbnail can't resolve more than a couple thousand,
+  // and building 4 full coordinate maps (4 x ~130k) was a large share of the
+  // load-time freeze. `displayIndices === null` means "use all points".
+  const DISPLAY_MAX_POINTS = 25000;
+  const displayIndices = useMemo<number[] | null>(() => {
+    const n = fpvPoints.length;
+    if (n <= DISPLAY_MAX_POINTS) return null;
+    const stride = Math.ceil(n / DISPLAY_MAX_POINTS);
+    const idx: number[] = [];
+    for (let i = 0; i < n; i += stride) idx.push(i);
+    return idx;
+  }, [fpvPoints.length]);
+
   const fpvCoordsBySnippetForMethod = useMemo(() => {
     if (fpvPoints.length === 0) return null;
     const maps: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> = {};
     for (const m of ALL_PROJECTION_METHODS) {
       const proj = projectionsByMethod[m];
-      if (!proj) continue;
-      const map = buildCoordsMap(fpvPoints, proj);
-      if (map) maps[m] = map;
+      if (!proj || !projectionHasValidCoords(proj) || proj.x.length !== fpvPoints.length) {
+        continue;
+      }
+      const map: Record<number, [number, number]> = {};
+      const iter = displayIndices ?? fpvPoints.map((_, i) => i);
+      for (const i of iter) {
+        const x = proj.x[i];
+        const y = proj.y[i];
+        if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+        map[fpvPoints[i].snippet_id] = [x as number, y as number];
+      }
+      maps[m] = map;
     }
     return maps;
-  }, [fpvPoints, projectionsByMethod]);
+  }, [fpvPoints, projectionsByMethod, displayIndices]);
+
+  // The selected snippet may fall outside the thumbnail subsample, so look up its
+  // coordinate per method directly (one index lookup), and pass it to each
+  // thumbnail so the highlight always shows without rebuilding the base cloud.
+  const selectedCoordByMethod = useMemo(() => {
+    if (selectedSnippetId == null || fpvPoints.length === 0) return null;
+    const idx = fpvPoints.findIndex((p) => p.snippet_id === selectedSnippetId);
+    if (idx < 0) return null;
+    const out: Partial<Record<ProjectionMethod, [number, number]>> = {};
+    for (const m of ALL_PROJECTION_METHODS) {
+      const proj = projectionsByMethod[m];
+      const x = proj?.x[idx];
+      const y = proj?.y[idx];
+      if (x != null && y != null && Number.isFinite(x) && Number.isFinite(y)) {
+        out[m] = [x as number, y as number];
+      }
+    }
+    return out;
+  }, [selectedSnippetId, fpvPoints, projectionsByMethod]);
 
   const scoresBySnippet = useMemo(() => {
     const map = new Map<number, SampleScores>();
@@ -661,7 +703,15 @@ export const ProjectionView: React.FC = () => {
     return { shown, remaining, total: labels.length };
   }, [filtered]);
 
-  const thumbnailPoints = useMemo(() => filtered.filter((f) => f.visible), [filtered]);
+  const thumbnailPoints = useMemo(() => {
+    const visible = filtered.filter((f) => f.visible);
+    const MAX = 2500;
+    if (visible.length <= MAX) return visible;
+    const stride = Math.ceil(visible.length / MAX);
+    const sampled: typeof visible = [];
+    for (let i = 0; i < visible.length; i += stride) sampled.push(visible[i]);
+    return sampled;
+  }, [filtered]);
 
   const colorKey: "actual_label" = "actual_label";
 
@@ -1014,6 +1064,7 @@ export const ProjectionView: React.FC = () => {
                         points={thumbnailPoints}
                         coordsBySnippet={fpvCoordsBySnippetForMethod?.[m.key] ?? null}
                         selectedSnippetId={selectedSnippetId}
+                        selectedCoord={selectedCoordByMethod?.[m.key] ?? null}
                         allActualLabels={allCategoricalValues.actual_label ?? []}
                         loading={isLoadingThumb}
                       />
@@ -1098,10 +1149,12 @@ const MiniProjection: React.FC<{
   points: Array<{ p: any; coord: [number, number]; visible: boolean }>;
   coordsBySnippet: Record<number, [number, number]> | null;
   selectedSnippetId: number | null;
+  /** Selected point's coordinate in THIS method's space (may be outside the subsample). */
+  selectedCoord?: [number, number] | null;
   allActualLabels: string[];
   loading?: boolean;
 }> = React.memo(
-  ({ points, coordsBySnippet, selectedSnippetId, allActualLabels, loading = false }) => {
+  ({ points, coordsBySnippet, selectedSnippetId, selectedCoord = null, allActualLabels, loading = false }) => {
     const base = useMemo(() => {
       if (!coordsBySnippet) return null;
 
@@ -1142,7 +1195,7 @@ const MiniProjection: React.FC<{
       const screen = new Map<number, [number, number]>();
       for (const c of pts) screen.set(c.id, toSvg(c.x, c.y));
 
-      return { pts, screen };
+      return { pts, screen, toSvg };
     }, [points, coordsBySnippet, allActualLabels]);
 
     const baseCircles = useMemo(() => {
@@ -1171,8 +1224,14 @@ const MiniProjection: React.FC<{
     }
     if (!base || !baseCircles) return null;
 
-    const selScreen =
-      selectedSnippetId !== null ? base.screen.get(selectedSnippetId) ?? null : null;
+    // Prefer the explicitly-passed coordinate (works even when the selected
+    // point is outside the subsample); fall back to the in-cloud lookup.
+    const selScreen: [number, number] | null =
+      selectedCoord != null
+        ? base.toSvg(selectedCoord[0], selectedCoord[1])
+        : selectedSnippetId !== null
+        ? base.screen.get(selectedSnippetId) ?? null
+        : null;
     const hasSelection = selScreen !== null;
 
     return (
