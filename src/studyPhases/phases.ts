@@ -76,7 +76,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     ui: {
       showSamplingMethodSelector: false,
       showProjectionMethodSelector: true,
-      showRetrainControls: true,
+      showRetrainControls: false,
+      labelingMode: "blind",
     },
   },
 
@@ -102,7 +103,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     ui: {
       showSamplingMethodSelector: false,
       showProjectionMethodSelector: true,
-      showRetrainControls: true,
+      showRetrainControls: false,
+      labelingMode: "blind",
     },
   },
 
@@ -129,7 +131,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     ui: {
       showSamplingMethodSelector: false,
       showProjectionMethodSelector: true,
-      showRetrainControls: true,
+      showRetrainControls: false,
+      labelingMode: "blind",
     },
   },
 
@@ -153,7 +156,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     ui: {
       showSamplingMethodSelector: false,
       showProjectionMethodSelector: true,
-      showRetrainControls: true,
+      showRetrainControls: false,
+      labelingMode: "blind",
     },
   },
 };

@@ -19,7 +19,7 @@ export const useALSync = (
   cardRefs: MutableRefObject<Map<number, HTMLDivElement>>,
   options?: ALSyncOptions,
 ) => {
-  const { selectedSnippetId } = useAppSelector((state) => state.al);
+  const selectedSnippetId = useAppSelector((state) => state.al.selectedSnippetIds[0] ?? null);
   const skipRef = options?.skipScrollIntoViewRef;
 
   useEffect(() => {

@@ -88,22 +88,32 @@ export function useHubALSession(
     );
   }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
 
+  // Upgrade top-K suggestions to the full dataset when the phase needs it.
+  // A ref guards against repeated dispatches — Immer creates a new modelInfo
+  // object reference on every fulfilled action, which would otherwise re-run
+  // this effect even after the upgrade completed.
+  const hasUpgradedRef = useRef(false);
+  const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
+  // Reset the guard when suggestions mode clears (upgrade completed) or dataset changes.
+  useEffect(() => {
+    if (!isSuggestions) hasUpgradedRef.current = false;
+  }, [isSuggestions]);
+
   useEffect(() => {
     if (isValidateMode) return;
     const needsFullSet =
       phase.feed.mode === "single_card_on_select" ||
       phase.visualization.mode === "whole_dataset";
-    const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
-    // Skip if predictions already loaded — avoids re-dispatching after inference completes.
     if (
       needsFullSet &&
       isSuggestions &&
-      predictions.length === 0 &&
       selectedDatasetId !== null &&
       snippetSetId !== null &&
       modelFamilyName !== null &&
-      !inferenceLoading
+      !inferenceLoading &&
+      !hasUpgradedRef.current
     ) {
+      hasUpgradedRef.current = true;
       dispatch(
         runInference({
           model_family_name: modelFamilyName,
@@ -117,15 +127,15 @@ export function useHubALSession(
     phase.id,
     phase.feed.mode,
     phase.visualization.mode,
-    modelInfo,
+    isSuggestions,
     isValidateMode,
     selectedDatasetId,
     snippetSetId,
     modelFamilyName,
     inferenceLoading,
-    predictions.length,
     dispatch,
   ]);
+
 
   useEffect(() => {
     // Pass the URL's dataset so a persisted feed from a *different* dataset is not
@@ -227,6 +237,8 @@ export function useHubALSession(
 
   useEffect(() => {
     hasAttemptedRestoreRef.current = false;
+    hasAutoInferredRef.current = false;
+    hasUpgradedRef.current = false;
   }, [selectedDatasetId]);
 
   // Reset per-dataset local state when the dataset changes so stale values from
@@ -270,6 +282,54 @@ export function useHubALSession(
   // Always use the latest checkpoint (checkpoints[0], sorted desc by date).
   // No user selection — checkpoint is resolved automatically.
   const localCkpt = checkpoints[0]?.id ?? null;
+
+  // Auto-run inference for the full dataset when a dataset+checkpoint is ready
+  // and there are no predictions yet (fresh session, no prior localStorage).
+  const hasAutoInferredRef = useRef(false);
+  useEffect(() => {
+    if (!isAlLikeMode || isValidateMode) return;
+    if (inferenceLoading || predictions.length > 0 || lastInferenceAt) return;
+    if (selectedDatasetId === null || !localFamily || resolvedSnippetSetId === null) return;
+    if (checkpoints.length === 0) return;
+    if (hasAutoInferredRef.current) return;
+    hasAutoInferredRef.current = true;
+
+    dispatch(
+      setInferenceConfig({
+        modelCheckpointId: localCkpt,
+        modelFamilyName: localFamily,
+        snippetSetId: resolvedSnippetSetId,
+        embeddingModelId:
+          snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ?? 1,
+        k: localK,
+      }),
+    );
+    dispatch(
+      runInference({
+        model_family_name: localFamily,
+        dataset_id: selectedDatasetId,
+        snippet_set_id: resolvedSnippetSetId,
+        sample_suggestion: false,
+      }),
+    );
+    dispatch(
+      fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: localFamily }),
+    );
+  }, [
+    isAlLikeMode,
+    isValidateMode,
+    inferenceLoading,
+    predictions.length,
+    lastInferenceAt,
+    selectedDatasetId,
+    localFamily,
+    resolvedSnippetSetId,
+    checkpoints.length,
+    localCkpt,
+    localK,
+    snippetSets,
+    dispatch,
+  ]);
 
   useEffect(() => {
     if (checkpoints.length === 0) {

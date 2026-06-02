@@ -7,6 +7,7 @@ import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   setSelectedSnippet,
+  toggleSelectedSnippet,
   setSamplingMethod,
   setVisibilityFilter,
   setVisibilityKeys,
@@ -116,10 +117,26 @@ export const ProjectionView: React.FC = () => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
 
+  // Track Shift key state via window listeners — more reliable than reading
+  // event.event?.shiftKey from Plotly, which loses the modifier on the 3rd+
+  // click when Plotly has consumed the event for zoom/select behaviour.
+  const isShiftHeld = useRef(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === "Shift") isShiftHeld.current = true; };
+    const up = (e: KeyboardEvent) => { if (e.key === "Shift") isShiftHeld.current = false; };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
   const {
     predictions,
     projectionPredictions,
-    selectedSnippetId,
+    selectedSnippetIds,
+    activeSnippetId,
     samplingMethod,
     alFilters,
     lastRetrainJob,
@@ -131,6 +148,7 @@ export const ProjectionView: React.FC = () => {
     feedSource,
     feedbacks,
   } = useAppSelector((state) => state.al);
+  const selectedSnippetId = selectedSnippetIds[0] ?? null;
   const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("pca");
@@ -542,7 +560,7 @@ export const ProjectionView: React.FC = () => {
   useEffect(() => {
     const shouldAutoSelect = phase.feed.mode === "single_card_on_select";
     if (!shouldAutoSelect) return;
-    if (selectedSnippetId !== null) return;
+    if (selectedSnippetIds.length > 0) return;
     if (plotPoints.length === 0) return;
 
     const key = `${phase.id}:${selectedDatasetId ?? "na"}:${snippetSetId ?? "na"}:${method}`;
@@ -561,7 +579,7 @@ export const ProjectionView: React.FC = () => {
     snippetSetId,
     method,
     plotPoints,
-    selectedSnippetId,
+    selectedSnippetIds,
     dispatch,
     didAutoSelectKey,
   ]);
@@ -741,53 +759,99 @@ export const ProjectionView: React.FC = () => {
   }, [filtered, allCategoricalValues, colorKey]);
 
   const selectionTraces = useMemo(() => {
-    if (selectedSnippetId === null) return [];
+    if (selectedSnippetIds.length === 0) return [];
 
-    let selCoord: [number, number] | null = null;
-    let selLabel = "Unlabeled";
-    const inFiltered = filtered.find((f) => f.p.snippet_id === selectedSnippetId);
-    if (inFiltered) {
-      selCoord = inFiltered.coord;
-      selLabel = (inFiltered.p.scores as any)?.actual_label ?? "Unlabeled";
-    } else if (fpvCoordsBySnippet?.[selectedSnippetId]) {
-      selCoord = fpvCoordsBySnippet[selectedSnippetId];
+    // Resolve the "active" ID: scroll-synced in multi-select, else the single selection.
+    const effectiveActiveId =
+      selectedSnippetIds.length > 1
+        ? (activeSnippetId ?? selectedSnippetIds[0])
+        : selectedSnippetIds[0];
+
+    const activeRingXs: number[] = [];
+    const activeRingYs: number[] = [];
+    const activeDotXs: number[] = [];
+    const activeDotYs: number[] = [];
+    const activeDotIds: number[] = [];
+    const activeDotLabels: string[] = [];
+
+    const queueRingXs: number[] = [];
+    const queueRingYs: number[] = [];
+    const queueDotXs: number[] = [];
+    const queueDotYs: number[] = [];
+    const queueDotIds: number[] = [];
+    const queueDotLabels: string[] = [];
+
+    for (const id of selectedSnippetIds) {
+      let coord: [number, number] | null = null;
+      let label = "Unlabeled";
+      const inFiltered = filtered.find((f) => f.p.snippet_id === id);
+      if (inFiltered) {
+        coord = inFiltered.coord;
+        label = (inFiltered.p.scores as any)?.actual_label ?? "Unlabeled";
+      } else if (fpvCoordsBySnippet?.[id]) {
+        coord = fpvCoordsBySnippet[id];
+      }
+      if (!coord) continue;
+
+      if (id === effectiveActiveId) {
+        activeRingXs.push(coord[0]); activeRingYs.push(coord[1]);
+        activeDotXs.push(coord[0]); activeDotYs.push(coord[1]);
+        activeDotIds.push(id); activeDotLabels.push(label);
+      } else {
+        queueRingXs.push(coord[0]); queueRingYs.push(coord[1]);
+        queueDotXs.push(coord[0]); queueDotYs.push(coord[1]);
+        queueDotIds.push(id); queueDotLabels.push(label);
+      }
     }
-    if (!selCoord) return [];
 
-    const ring = {
-      type: "scattergl" as const,
-      mode: "markers" as const,
-      name: "",
-      showlegend: false,
-      hoverinfo: "skip" as const,
-      x: [selCoord[0]],
-      y: [selCoord[1]],
-      marker: {
-        color: "rgba(0,0,0,0)",
-        size: 22,
-        opacity: 1,
-        line: { width: 2, color: SELECTED_COLOR },
-      },
-    };
-    const dot = {
-      type: "scattergl" as const,
-      mode: "markers" as const,
-      name: "",
-      showlegend: false,
-      x: [selCoord[0]],
-      y: [selCoord[1]],
-      customdata: [selectedSnippetId],
-      text: [selLabel],
-      marker: {
-        color: SELECTED_COLOR,
-        size: 12,
-        opacity: 1,
-        line: { width: 2, color: LABELED_BORDER_COLOR },
-      },
-      hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
-    };
-    return [ring, dot];
-  }, [selectedSnippetId, filtered, fpvCoordsBySnippet]);
+    const traces: object[] = [];
+
+    // Queued (not currently active): subtle blue ring
+    if (queueRingXs.length > 0) {
+      traces.push({
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "", showlegend: false, hoverinfo: "skip" as const,
+        x: queueRingXs, y: queueRingYs,
+        marker: { color: "rgba(0,0,0,0)", size: 18, opacity: 0.7,
+                   line: { width: 2, color: "#60a5fa" } },
+      });
+      traces.push({
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "", showlegend: false,
+        x: queueDotXs, y: queueDotYs,
+        customdata: queueDotIds, text: queueDotLabels,
+        marker: { color: "#93c5fd", size: 9, opacity: 0.85,
+                   line: { width: 1.5, color: "#3b82f6" } },
+        hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata} (queued)<extra></extra>`,
+      });
+    }
+
+    // Active (currently visible in feed): bright yellow ring
+    if (activeRingXs.length > 0) {
+      traces.push({
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "", showlegend: false, hoverinfo: "skip" as const,
+        x: activeRingXs, y: activeRingYs,
+        marker: { color: "rgba(0,0,0,0)", size: 22, opacity: 1,
+                   line: { width: 2.5, color: SELECTED_COLOR } },
+      });
+      traces.push({
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "", showlegend: false,
+        x: activeDotXs, y: activeDotYs,
+        customdata: activeDotIds, text: activeDotLabels,
+        marker: { color: SELECTED_COLOR, size: 12, opacity: 1,
+                   line: { width: 2, color: LABELED_BORDER_COLOR } },
+        hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
+      });
+    }
+
+    return traces;
+  }, [selectedSnippetIds, activeSnippetId, filtered, fpvCoordsBySnippet]);
 
   const traces = useMemo(
     () => [...baseTraces, ...selectionTraces],
@@ -802,7 +866,12 @@ export const ProjectionView: React.FC = () => {
     const hasHiddenTrace = Boolean(filtered.some((f) => !f.visible));
     if (hasHiddenTrace && pt.curveNumber === 0) return;
 
-    dispatch(setSelectedSnippet(pt.customdata as number));
+    const snippetId = pt.customdata as number;
+    if (isShiftHeld.current && phase.feed.mode === "single_card_on_select") {
+      dispatch(toggleSelectedSnippet(snippetId));
+    } else {
+      dispatch(setSelectedSnippet(snippetId));
+    }
   };
 
   if (visMode === "hidden") return null;

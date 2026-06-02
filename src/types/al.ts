@@ -316,8 +316,12 @@ export interface ALState {
   /** True when the backend indicates a retrain job is already pending/running for the current checkpoint. */
   retrainPending: boolean;
   retrainThreshold: number;
-  selectedSnippetId: number | null;
-  selectedPredictionId: number | null;
+  /** Ordered list of selected snippet IDs (insertion order = selection sequence).
+   *  Plain click → [id].  Shift+click → toggle.  Empty → nothing selected. */
+  selectedSnippetIds: number[];
+  /** The snippet currently visible / active in the feed (scroll-synced).
+   *  In multi-select mode this differs from selectedSnippetIds[0]. */
+  activeSnippetId: number | null;
   selectedDatasetId: number | null;
   colorBy: ALColorBy;
   samplingMethod: SamplingMethod;

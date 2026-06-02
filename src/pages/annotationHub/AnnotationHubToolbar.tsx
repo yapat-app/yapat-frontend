@@ -1,7 +1,6 @@
 import React from "react";
 import {
   Select,
-  Segmented,
   Spin,
   Tag,
   Tooltip,
@@ -11,11 +10,6 @@ import {
   BulbOutlined,
   CheckCircleOutlined,
   HistoryOutlined,
-  UnorderedListOutlined,
-  ThunderboltOutlined,
-  AudioOutlined,
-  FilterOutlined,
-  SafetyOutlined,
 } from "@ant-design/icons";
 import type { Dataset } from "../../types";
 import type { PhaseConfig } from "../../studyPhases/types";
@@ -27,7 +21,6 @@ const { Option } = Select;
 
 export type AnnotationHubToolbarProps = {
   mode: AnnotateMode;
-  setMode: (m: AnnotateMode) => void;
   phase: PhaseConfig;
   allDatasets: Dataset[];
   classicDatasetId: string | null;
@@ -45,7 +38,6 @@ export type AnnotationHubToolbarProps = {
 
 export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
   mode,
-  setMode,
   phase,
   allDatasets,
   classicDatasetId,
@@ -82,39 +74,6 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
 
   return (
     <div className="flex items-center gap-3 px-6 py-2 border-b border-gray-200 bg-white flex-shrink-0 flex-wrap">
-      <Segmented
-        value={mode}
-        onChange={(v) => setMode(v as AnnotateMode)}
-        options={[
-          {
-            label: <span className="font-ibm-sans text-xs px-1">Random</span>,
-            value: "random",
-            icon: <UnorderedListOutlined />,
-          },
-          {
-            label: <span className="font-ibm-sans text-xs px-1">Similarity</span>,
-            value: "similarity",
-            icon: <AudioOutlined />,
-          },
-          {
-            label: <span className="font-ibm-sans text-xs px-1">Filter</span>,
-            value: "filter",
-            icon: <FilterOutlined />,
-          },
-          {
-            label: <span className="font-ibm-sans text-xs px-1">Active Learning</span>,
-            value: "al",
-            icon: <ThunderboltOutlined />,
-          },
-          {
-            label: <span className="font-ibm-sans text-xs px-1">Validate</span>,
-            value: "validate",
-            icon: <SafetyOutlined />,
-          },
-        ]}
-        className="flex-shrink-0"
-      />
-
       <div className="w-px h-5 bg-gray-200 flex-shrink-0" />
 
       {isAlLikeMode && (

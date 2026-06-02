@@ -34,6 +34,7 @@ import {
   restoreFeedFromServer,
   pollRetrainJob,
   trainFromScratch,
+  clearSelectedSnippets,
 } from "../redux/features/alSlice";
 import { getAllEmbeddingMethods } from "../redux/features/embeddingSlice";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
@@ -777,6 +778,31 @@ export const ActiveLearning: React.FC = () => {
   );
 };
 
+/** Reactive right-panel header for P2/P3 phases showing selection count + clear button. */
+const SelectionPanelHeader: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const count = useAppSelector((s) => s.al.selectedSnippetIds.length);
+  return (
+    <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+      <div>
+        <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
+          {count > 1 ? `${count} Snippets Selected` : "Selected Snippet"}
+        </h2>
+        <p className="text-xs text-gray-400 font-ibm-sans">
+          {count > 1
+            ? "Shift+click to add / remove · scroll to annotate"
+            : "Click a point · Shift+click to select multiple"}
+        </p>
+      </div>
+      {count > 1 && (
+        <Button size="small" onClick={() => dispatch(clearSelectedSnippets())}>
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+};
+
 /**
  * Layout chosen from `(phase.feed.mode, phase.visualization.mode)`:
  *   • feed=scrollable + vis=hidden            → full-width feed (Phase 1.1)
@@ -784,13 +810,17 @@ export const ActiveLearning: React.FC = () => {
  *   • feed=single_card + vis=whole_dataset    → vis dominant + side panel (Phase 2/3)
  *   • feed=hidden                             → vis only
  */
-export const PhaseLayout: React.FC<{
-  actionButton?: {
-    label: string;
-    onClick: () => void;
-    loading?: boolean;
-  };
-}> = ({ actionButton }) => {
+export type FeedHeaderActionButton = {
+  label: string;
+  onClick: () => void;
+  loading?: boolean;
+};
+
+export type PhaseLayoutProps = {
+  actionButton?: FeedHeaderActionButton;
+};
+
+export const PhaseLayout: React.FC<PhaseLayoutProps> = ({ actionButton }) => {
   const phase = usePhaseConfig();
   const feedMode = phase.feed.mode;
   const visMode = phase.visualization.mode;
@@ -800,36 +830,10 @@ export const PhaseLayout: React.FC<{
 
   // Phase 1.1: feed only
   if (showFeed && !showVis) {
-    const isBlind = phase.ui.labelingMode === "blind";
     return (
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
-          {isBlind ? <BlindAnnotationHeader actionButton={actionButton} /> : (
-            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-              <div className="flex items-center gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
-                    Annotation Feed
-                  </h2>
-                  <p className="text-xs text-gray-400 font-ibm-sans">
-                    Accept, reject, or modify each prediction
-                  </p>
-                </div>
-                <div className="flex-1" />
-                {actionButton && (
-                  <Button
-                    type="primary"
-                    size="middle"
-                    onClick={actionButton.onClick}
-                    loading={actionButton.loading}
-                    style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
-                  >
-                    {actionButton.label}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
+          <BlindAnnotationHeader actionButton={actionButton} />
           <div className="flex-1 overflow-hidden">
             <PredictionFeed />
           </div>
@@ -840,7 +844,6 @@ export const PhaseLayout: React.FC<{
 
   // Phase 1.2: 50/50 split (feed + limited vis)
   if (showFeed && feedMode === "scrollable_topk" && showVis) {
-    const isBlind = phase.ui.labelingMode === "blind";
     return (
       <ResizableSplit
         mode="ratio"
@@ -860,32 +863,7 @@ export const PhaseLayout: React.FC<{
         }
         right={
           <div className="flex flex-col h-full overflow-hidden">
-            {isBlind ? <BlindAnnotationHeader actionButton={actionButton} /> : (
-              <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
-                      Annotation Feed
-                    </h2>
-                    <p className="text-xs text-gray-400 font-ibm-sans">
-                      Accept, reject, or modify each prediction
-                    </p>
-                  </div>
-                  <div className="flex-1" />
-                  {actionButton && (
-                    <Button
-                      type="primary"
-                      size="middle"
-                      onClick={actionButton.onClick}
-                      loading={actionButton.loading}
-                      style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
-                    >
-                      {actionButton.label}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
+            <BlindAnnotationHeader actionButton={actionButton} />
             <div className="flex-1 overflow-hidden">
               <PredictionFeed />
             </div>
@@ -916,10 +894,7 @@ export const PhaseLayout: React.FC<{
         }
         right={
           <div className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
-            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 bg-white">
-              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">Selected Snippet</h2>
-              <p className="text-xs text-gray-400 font-ibm-sans">Click a point on the projection</p>
-            </div>
+            <SelectionPanelHeader />
             <div className="flex-1 overflow-hidden">
               <PredictionFeed />
             </div>
@@ -949,39 +924,32 @@ export const PhaseLayout: React.FC<{
   return null;
 };
 
-export const BlindAnnotationHeader: React.FC<{
-  actionButton?: {
-    label: string;
-    onClick: () => void;
-    loading?: boolean;
-  };
-}> = ({ actionButton }) => {
-  // Blind mode header intentionally keeps the UI minimal.
+export type BlindAnnotationHeaderProps = {
+  actionButton?: FeedHeaderActionButton;
+};
 
-  return (
-    <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-100">
-      <div className="flex items-center gap-4">
-        <div className="min-w-0 flex-shrink-0 max-w-[360px]">
-          <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
-            Annotation Feed
-          </div>
-          <div className="text-[11px] text-gray-400 font-ibm-sans truncate">
-            Listen to each snippet and add one or more species labels
-          </div>
-        </div>
-        <div className="flex-1" />
-        {actionButton && (
-          <Button
-            type="primary"
-            size="middle"
-            onClick={actionButton.onClick}
-            loading={actionButton.loading}
-            style={{ backgroundColor: "#1e40af", color: "#fff", minWidth: 132 }}
-          >
-            {actionButton.label}
-          </Button>
-        )}
+export const BlindAnnotationHeader: React.FC<BlindAnnotationHeaderProps> = ({
+  actionButton,
+}) => (
+  <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-100 flex items-center justify-between gap-3">
+    <div className="min-w-0">
+      <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
+        Annotation Feed
+      </div>
+      <div className="text-[11px] text-gray-400 font-ibm-sans">
+        Listen to each snippet and add one or more species labels
       </div>
     </div>
-  );
-};
+    {actionButton && (
+      <Button
+        type="primary"
+        size="small"
+        onClick={actionButton.onClick}
+        loading={actionButton.loading}
+        className="flex-shrink-0"
+      >
+        {actionButton.label}
+      </Button>
+    )}
+  </div>
+);

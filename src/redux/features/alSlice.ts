@@ -60,6 +60,10 @@ interface PersistedFeed {
   predictionsTruncated?: boolean;
   /** Per-snippet annotation/skip state — restored on re-login so done work is not lost. */
   feedbacks?: Record<number, FeedbackResponse>;
+  /** Selected snippet IDs (multi-select queue) to restore on refresh. */
+  selectedSnippetIds?: number[];
+  /** Currently active (scroll-synced) snippet to restore on refresh. */
+  activeSnippetId?: number | null;
 }
 
 function needsServerRestore(saved: PersistedFeed | null): boolean {
@@ -179,6 +183,8 @@ function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): vo
     minConfidence: inferenceRequest?.min_confidence,
     predictionsTruncated: tooLarge,
     feedbacks: state.feedbacks,
+    selectedSnippetIds: state.selectedSnippetIds,
+    activeSnippetId: state.activeSnippetId,
   };
 
   _saveFeedTimer = setTimeout(() => {
@@ -229,6 +235,24 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
     state.projectionPredictions = state.predictions;
   }
   applyPersistedMetadata(state, saved);
+
+  // Restore selection — keep only IDs that still exist in the prediction set.
+  if (state.predictions.length > 0) {
+    const predSet = new Set(state.predictions.map((p) => p.snippet_id));
+    const restoredIds = (saved.selectedSnippetIds ?? []).filter((id) => predSet.has(id));
+    if (restoredIds.length > 0) {
+      state.selectedSnippetIds = restoredIds;
+      const restoredActive =
+        saved.activeSnippetId != null && predSet.has(saved.activeSnippetId)
+          ? saved.activeSnippetId
+          : restoredIds[0];
+      state.activeSnippetId = restoredActive;
+    } else {
+      // Saved selection is stale (predictions changed) — default to first.
+      state.selectedSnippetIds = [state.predictions[0].snippet_id];
+      state.activeSnippetId = state.predictions[0].snippet_id;
+    }
+  }
 }
 
 function clearSessionState(state: ALState): void {
@@ -243,8 +267,8 @@ function clearSessionState(state: ALState): void {
   state.lastRetrainDispatch = null;
   state.lastRetrainJob = null;
   state.lastRetrainFailed = false;
-  state.selectedSnippetId = null;
-  state.selectedPredictionId = null;
+  state.selectedSnippetIds = [];
+  state.activeSnippetId = null;
   state.modelCheckpointId = null;
   state.modelFamilyName = null;
   state.usedCheckpointId = null;
@@ -273,8 +297,8 @@ function buildInitialState(): ALState {
     feedbackCount: 0,
     retrainPending: false,
     retrainThreshold: RETRAIN_THRESHOLD,
-    selectedSnippetId: null,
-    selectedPredictionId: null,
+    selectedSnippetIds: [],
+    activeSnippetId: null,
     selectedDatasetId: null,
     colorBy: "prediction",
     samplingMethod: "uncertainty",
@@ -425,15 +449,31 @@ const alSlice = createSlice({
   initialState,
   reducers: {
     setSelectedSnippet: (state, action: PayloadAction<number | null>) => {
-      state.selectedSnippetId = action.payload;
-      if (action.payload !== null) {
-        const pred = state.predictions.find(
-          (p) => p.snippet_id === action.payload,
-        );
-        state.selectedPredictionId = pred?.id ?? null;
+      state.selectedSnippetIds = action.payload !== null ? [action.payload] : [];
+      state.activeSnippetId = action.payload;
+    },
+    toggleSelectedSnippet: (state, action: PayloadAction<number>) => {
+      const id = action.payload;
+      const idx = state.selectedSnippetIds.indexOf(id);
+      if (idx === -1) {
+        state.selectedSnippetIds.push(id);
+        // First toggle-in becomes active if nothing is active yet.
+        if (state.activeSnippetId === null) state.activeSnippetId = id;
       } else {
-        state.selectedPredictionId = null;
+        state.selectedSnippetIds.splice(idx, 1);
+        // If we removed the active one, fall back to the first remaining.
+        if (state.activeSnippetId === id) {
+          state.activeSnippetId = state.selectedSnippetIds[0] ?? null;
+        }
       }
+    },
+    clearSelectedSnippets: (state) => {
+      state.selectedSnippetIds = [];
+      state.activeSnippetId = null;
+    },
+    /** Set the snippet currently visible in the multi-select feed (scroll-driven). */
+    setActiveSnippet: (state, action: PayloadAction<number | null>) => {
+      state.activeSnippetId = action.payload;
     },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
       const nextId = normalizeDatasetId(action.payload);
@@ -549,14 +589,14 @@ const alSlice = createSlice({
       // Select the first snippet when nothing is selected, the dataset changed, or
       // the current selection is no longer part of the new feed.
       const newIds = new Set(predictions.map((p) => p.snippet_id));
+      const currentIds = state.selectedSnippetIds;
       const selectionInvalid =
-        state.selectedSnippetId === null ||
+        currentIds.length === 0 ||
         datasetChanged ||
-        !newIds.has(state.selectedSnippetId);
+        currentIds.every((id) => !newIds.has(id));
       if (predictions.length > 0 && selectionInvalid) {
-        state.selectedSnippetId = predictions[0].snippet_id;
-        const pred = predictions[0];
-        state.selectedPredictionId = pred?.id ?? null;
+        state.selectedSnippetIds = [predictions[0].snippet_id];
+        state.activeSnippetId = predictions[0].snippet_id;
       }
     },
     hydrateClassicFeedbacks: (
@@ -619,8 +659,7 @@ const alSlice = createSlice({
       state.projectionPredictions = [];
       state.feedbacks = {};
       state.modelInfo = {};
-      state.selectedSnippetId = null;
-      state.selectedPredictionId = null;
+      state.selectedSnippetIds = [];
     },
     clearRetrainDispatch: (state) => {
       state.lastRetrainDispatch = null;
@@ -713,9 +752,11 @@ const alSlice = createSlice({
         const newIds = new Set(state.predictions.map((p) => p.snippet_id));
         if (
           state.predictions.length > 0 &&
-          (state.selectedSnippetId === null || !newIds.has(state.selectedSnippetId))
+          (state.selectedSnippetIds.length === 0 ||
+            state.selectedSnippetIds.every((id) => !newIds.has(id)))
         ) {
-          state.selectedSnippetId = state.predictions[0].snippet_id;
+          state.selectedSnippetIds = [state.predictions[0].snippet_id];
+          state.activeSnippetId = state.predictions[0].snippet_id;
         }
         saveFeed(state, request);
       },
@@ -762,6 +803,22 @@ const alSlice = createSlice({
         }
         if (request?.dataset_id != null) {
           state.selectedDatasetId = request.dataset_id;
+        }
+        // Restore selection from localStorage — keep only IDs still in predictions.
+        if (state.predictions.length > 0 && state.selectedSnippetIds.length === 0) {
+          const predSet = new Set(state.predictions.map((p) => p.snippet_id));
+          const restoredIds = (saved?.selectedSnippetIds ?? []).filter((id) => predSet.has(id));
+          if (restoredIds.length > 0) {
+            state.selectedSnippetIds = restoredIds;
+            const restoredActive =
+              saved?.activeSnippetId != null && predSet.has(saved.activeSnippetId)
+                ? saved.activeSnippetId
+                : restoredIds[0];
+            state.activeSnippetId = restoredActive;
+          } else {
+            state.selectedSnippetIds = [state.predictions[0].snippet_id];
+            state.activeSnippetId = state.predictions[0].snippet_id;
+          }
         }
         saveFeed(state, request ?? undefined);
       },
@@ -813,6 +870,8 @@ const alSlice = createSlice({
             state.lastRetrainFailed = true;
           }
         }
+        // Persist updated feedbacks so annotations survive a page refresh.
+        saveFeed(state);
       },
     );
     builder.addCase(submitFeedback.rejected, (state) => {
@@ -877,6 +936,9 @@ const alSlice = createSlice({
 
 export const {
   setSelectedSnippet,
+  toggleSelectedSnippet,
+  clearSelectedSnippets,
+  setActiveSnippet,
   setSelectedDataset,
   setInferenceConfig,
   setColorBy,

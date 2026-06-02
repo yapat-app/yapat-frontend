@@ -59,11 +59,11 @@ export const PredictionCard: React.FC<Props> = ({
       `${datasetSpectrogram?.spectrogram_f_min_hz ?? ""}:${datasetSpectrogram?.spectrogram_f_max_hz ?? ""}`,
     [datasetSpectrogram],
   );
-  const selectedSnippetId = useAppSelector(
-    (state) => state.al.selectedSnippetId,
+  const activeSnippetId = useAppSelector(
+    (state) => state.al.activeSnippetId,
   );
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
-  const isSelected = selectedSnippetId === prediction.snippet_id;
+  const isSelected = activeSnippetId === prediction.snippet_id;
   // feedbacks are keyed by snippet_id
   const hasFeedback = !!feedbacks[prediction.snippet_id];
   const recordingId = prediction.recording_id;

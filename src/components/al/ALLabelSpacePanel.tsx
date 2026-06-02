@@ -24,7 +24,8 @@ export const ALLabelSpacePanel: React.FC = () => {
   const [search, setSearch] = useState("");
 
   const { labelSpace, loading } = useAppSelector((s) => s.customTaxonomy);
-  const { selectedSnippetId, feedbacks, selectedDatasetId, modelFamilyName } = useAppSelector((s) => s.al);
+  const { selectedSnippetIds, feedbacks, selectedDatasetId, modelFamilyName } = useAppSelector((s) => s.al);
+  const selectedSnippetId = selectedSnippetIds[0] ?? null;
 
   const alreadyFeedback = selectedSnippetId !== null
     ? !!feedbacks[selectedSnippetId]

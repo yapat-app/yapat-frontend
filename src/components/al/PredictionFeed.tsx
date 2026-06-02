@@ -18,8 +18,9 @@ import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
-import { hydrateClassicAnnotations, setSelectedSnippet } from "../../redux/features/alSlice";
+import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
+import type { PAMPrediction } from "../../types/al";
 
 export const PredictionFeed: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -27,12 +28,14 @@ export const PredictionFeed: React.FC = () => {
     predictions,
     inferenceLoading,
     error,
-    selectedSnippetId,
+    selectedSnippetIds,
     feedbacks,
     selectedDatasetId,
     snippetSetId,
     feedSource,
   } = useAppSelector((state) => state.al);
+  // Backward-compat scalar used by scroll-sync and single-card paths.
+  const selectedSnippetId = selectedSnippetIds[0] ?? null;
   const isClassicFeed = feedSource === "classic";
   const phase = usePhaseConfig();
 
@@ -114,12 +117,16 @@ export const PredictionFeed: React.FC = () => {
           bestId = sid;
         }
       });
-      if (bestId !== null && bestId !== selectedSnippetIdRef.current) {
+      if (bestId === null) return;
+      if (phase.feed.mode === "single_card_on_select" && selectedSnippetIds.length > 1) {
+        // Multi-select: only update which card is "active" — don't reset the selection.
+        dispatch(setActiveSnippet(bestId));
+      } else if (bestId !== selectedSnippetIdRef.current) {
         skipScrollIntoViewRef.current = true;
         dispatch(setSelectedSnippet(bestId));
       }
     },
-    [dispatch],
+    [dispatch, phase.feed.mode, selectedSnippetIds.length],
   );
 
   useEffect(() => {
@@ -284,11 +291,14 @@ export const PredictionFeed: React.FC = () => {
       if (h > 0) setBlindSnapCardHeight(Math.max(480, h));
     };
 
-    measure();
-    const raf = requestAnimationFrame(measure);
+    // Defer slightly so the new scroll container is fully laid out after
+    // switching between single / multi select branches.
+    const raf = requestAnimationFrame(() => {
+      measure();
+      const el = scrollContainerRef.current;
+      if (el) ro.observe(el);
+    });
     const ro = new ResizeObserver(() => measure());
-    const el = scrollContainerRef.current;
-    if (el) ro.observe(el);
     window.addEventListener("resize", measure);
 
     return () => {
@@ -296,7 +306,9 @@ export const PredictionFeed: React.FC = () => {
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [isBlind, predictions.length]);
+  // Re-run whenever the selection count crosses the single↔multi boundary
+  // so we capture the newly-mounted scroll container element.
+  }, [isBlind, predictions.length, selectedSnippetIds.length]);
 
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
   const feedbackLabelSignature = useMemo(
@@ -370,7 +382,8 @@ export const PredictionFeed: React.FC = () => {
   if (inferenceLoading && predictions.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Spin size="large" tip="Running inference…" />
+        <Spin size="large" />
+        <p className="text-sm text-gray-400 font-ibm-sans mt-3">Running inference…</p>
       </div>
     );
   }
@@ -390,9 +403,58 @@ export const PredictionFeed: React.FC = () => {
   }
 
   if (phase.feed.mode === "single_card_on_select") {
-    const selected = selectedSnippetId !== null
-      ? predictions.find((p) => p.snippet_id === selectedSnippetId)
-      : undefined;
+    // ── Nothing selected ────────────────────────────────────────────────────
+    if (selectedSnippetIds.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full px-6 text-center">
+          <Empty description="Click a point on the projection to inspect that snippet." />
+        </div>
+      );
+    }
+
+    // ── Multi-select: shift+clicked ≥2 points → full-height snap-scroll feed ──
+    if (selectedSnippetIds.length > 1) {
+      const multiSelected = selectedSnippetIds
+        .map((id) => predictions.find((p) => p.snippet_id === id))
+        .filter((p): p is PAMPrediction => p !== undefined);
+
+      return (
+        <div className="flex flex-col h-full min-h-0 overflow-hidden">
+          <div
+            ref={bindScrollContainer}
+            className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"
+            style={{ scrollSnapType: "y mandatory" }}
+          >
+            <div className="flex flex-col gap-3 w-full">
+              {multiSelected.map((p) => (
+                <div
+                  key={p.id ?? p.snippet_id}
+                  className="snap-start shrink-0 w-full"
+                  style={{ height: blindSnapCardHeight }}
+                >
+                  <PredictionCard
+                    prediction={p}
+                    recordingName={
+                      typeof p.recording_id === "number"
+                        ? recordingNameById[p.recording_id]
+                        : undefined
+                    }
+                    cardRef={setCardRef(p.snippet_id)}
+                    cardHeightPx={blindSnapCardHeight}
+                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                    scrollRoot={scrollRoot}
+                    loadAudioImmediately={false}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Single selection (existing behaviour) ───────────────────────────────
+    const selected = predictions.find((p) => p.snippet_id === selectedSnippetIds[0]);
 
     if (!selected) {
       return (
@@ -417,6 +479,7 @@ export const PredictionFeed: React.FC = () => {
                 : undefined
             }
             cardRef={setCardRef(selected.snippet_id)}
+            serverLabels={labelsBySnippet[selected.snippet_id] ?? []}
             scrollRoot={scrollRoot}
             loadAudioImmediately
           />
