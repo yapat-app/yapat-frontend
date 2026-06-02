@@ -110,6 +110,41 @@ export function resolveSpectrogramDisplayRange(
   return { fMin, fMax };
 }
 
+/**
+ * Convert Hz → mel scale (HTK formula used by librosa / react-audio-spectrogram-player).
+ */
+export function hzToMel(hz: number): number {
+  return 2595 * Math.log10(1 + hz / 700);
+}
+
+/**
+ * Convert mel → Hz (inverse of hzToMel).
+ */
+export function melToHz(mel: number): number {
+  return 700 * (Math.pow(10, mel / 2595) - 1);
+}
+
+/**
+ * Build `count` frequency tick values that are evenly spaced on the MEL scale
+ * between fMin and fMax. Because the spectrogram image uses a mel scale
+ * internally, ticks computed this way align visually with the image content —
+ * whereas linearly-spaced ticks appear shifted (e.g. 3 kHz looks like 8 kHz).
+ *
+ * Returns Hz values in descending order (top → bottom of the Y-axis).
+ */
+export function buildMelTicks(fMin: number, fMax: number, count: number): number[] {
+  if (count <= 1 || fMax <= fMin) return [fMax];
+  const melMin = hzToMel(Math.max(0, fMin));
+  const melMax = hzToMel(fMax);
+  const ticks: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const mel = melMin + (i / (count - 1)) * (melMax - melMin);
+    ticks.push(melToHz(mel));
+  }
+  // Reverse so the first item is the top of the axis (highest frequency).
+  return ticks.reverse();
+}
+
 export function formatSpectrogramHz(hz: number): string {
   if (hz >= 1000) {
     const k = hz / 1000;

@@ -3,6 +3,7 @@ import SpectrogramPlayer from "react-audio-spectrogram-player";
 import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   SPECTROGRAM_TIME_AXIS_HEIGHT,
+  buildMelTicks,
   formatSpectrogramHz,
   formatSpectrogramTime,
   resolveSpectrogramDisplayRange,
@@ -104,8 +105,12 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
     () => resolveSpectrogramDisplayRange(sampleRate, datasetSpectrogram),
     [sampleRate, datasetSpectrogram],
   );
+  // Use mel-scale ticks so labels align with the actual frequency positions
+  // in the spectrogram image (which is rendered on a mel scale internally).
+  // Linear ticks cause a systematic offset — e.g. a 3 kHz signal appears
+  // labelled as ~8 kHz when the file is at 22 kHz sample rate.
   const freqTicks = useMemo(
-    () => buildTicks(fMin, fMax, 5).reverse(),
+    () => buildMelTicks(fMin, fMax, 5),
     [fMin, fMax],
   );
   const timeTicks = useMemo(() => {
