@@ -506,23 +506,52 @@ export const ProjectionView: React.FC = () => {
     return () => { cancelled = true; };
   }, [visKey, visibilityMode]);
 
+  // Full coordinate map for the active method (ALL points). This is the only
+  // structure that must cover every snippet: the selection highlight and the
+  // feed<->projection sync look up any snippet's position here. Building one
+  // map of ~130k entries is ~100ms; acceptable and necessary.
   const fpvCoordsBySnippet: Record<number, [number, number]> | null = useMemo(() => {
     const proj = projectionsByMethod[method];
     if (!proj || fpvPoints.length === 0) return null;
     return buildCoordsMap(fpvPoints, proj);
   }, [fpvPoints, projectionsByMethod, method]);
 
+  // Subsample used ONLY for the four 120x74px sidebar thumbnails. The main plot
+  // still renders every point; a thumbnail can't resolve more than a couple
+  // thousand points, and building 4 full coordinate maps (4 x ~130k) was a large
+  // share of the load cost. `displayIndices === null` means "use all points".
+  const DISPLAY_MAX_POINTS = 25000;
+  const displayIndices = useMemo<number[] | null>(() => {
+    const n = fpvPoints.length;
+    if (n <= DISPLAY_MAX_POINTS) return null;
+    const stride = Math.ceil(n / DISPLAY_MAX_POINTS);
+    const idx: number[] = [];
+    for (let i = 0; i < n; i += stride) idx.push(i);
+    return idx;
+  }, [fpvPoints.length]);
+
+  // Per-method coordinate maps for the sidebar thumbnails — built only over the
+  // displayed subsample (4 x ~25k instead of 4 x ~130k).
   const fpvCoordsBySnippetForMethod = useMemo(() => {
     if (fpvPoints.length === 0) return null;
     const maps: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> = {};
     for (const m of ALL_PROJECTION_METHODS) {
       const proj = projectionsByMethod[m];
-      if (!proj) continue;
-      const map = buildCoordsMap(fpvPoints, proj);
-      if (map) maps[m] = map;
+      if (!proj || !projectionHasValidCoords(proj) || proj.x.length !== fpvPoints.length) {
+        continue;
+      }
+      const map: Record<number, [number, number]> = {};
+      const iter = displayIndices ?? fpvPoints.map((_, i) => i);
+      for (const i of iter) {
+        const x = proj.x[i];
+        const y = proj.y[i];
+        if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+        map[fpvPoints[i].snippet_id] = [x as number, y as number];
+      }
+      maps[m] = map;
     }
     return maps;
-  }, [fpvPoints, projectionsByMethod]);
+  }, [fpvPoints, projectionsByMethod, displayIndices]);
 
   // FPV metadata may omit sampler scores; join them from inference predictions when available.
   const scoresBySnippet = useMemo(() => {
@@ -690,10 +719,12 @@ export const ProjectionView: React.FC = () => {
 
   const colorKey: "actual_label" = "actual_label";
 
-  const traces = useMemo(() => {
-    const backgroundTrace = null;
-
-    if (filtered.length === 0) return backgroundTrace ? [backgroundTrace] : [];
+  // Base point cloud — the expensive ~130k-point traces. Deliberately does NOT
+  // depend on selectedSnippetId, so scrolling the feed (which changes selection
+  // on every snippet) does not rebuild the whole cloud. The selected point is
+  // drawn as a tiny separate overlay below.
+  const baseTraces = useMemo(() => {
+    if (filtered.length === 0) return [];
 
     const hidden = filtered.filter((f) => !f.visible);
     const visible = filtered.filter((f) => f.visible);
@@ -727,23 +758,17 @@ export const ProjectionView: React.FC = () => {
       ys.push(coord[1]);
       ids.push(p.snippet_id);
 
-      const isSelected = p.snippet_id === selectedSnippetId;
       const actual = (p.scores as any)?.actual_label as string | undefined;
       const isLabeled = Boolean(actual);
 
-      sizes.push(isSelected ? 13 : isLabeled ? 7 : 6);
+      sizes.push(isLabeled ? 7 : 6);
       colors.push(
-        isSelected
-          ? SELECTED_COLOR
-          : isLabeled
+        isLabeled
           ? resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? [])
           : UNLABELED_COLOR,
       );
 
-      if (isSelected) {
-        lineWidths.push(2.5);
-        lineColors.push(LABELED_BORDER_COLOR);
-      } else if (isLabeled) {
+      if (isLabeled) {
         lineWidths.push(1.5);
         lineColors.push("rgba(17,24,39,0.35)");
       } else {
@@ -772,9 +797,40 @@ export const ProjectionView: React.FC = () => {
       hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
     };
 
-    const base = hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
-    return backgroundTrace ? [backgroundTrace, ...base] : base;
-  }, [filtered, selectedSnippetId, allCategoricalValues, colorKey]);
+    return hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
+  }, [filtered, allCategoricalValues, colorKey]);
+
+  // Selection highlight — a single-point overlay. Rebuilding this on every
+  // scroll is trivial (one point) and never touches the base cloud. Uses the
+  // full coordinate map so any snippet resolves, even ones outside any filter.
+  const selectionTraces = useMemo(() => {
+    if (selectedSnippetId === null || !fpvCoordsBySnippet) return [];
+    const coord = fpvCoordsBySnippet[selectedSnippetId];
+    if (!coord) return [];
+    return [
+      {
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "",
+        showlegend: false,
+        x: [coord[0]],
+        y: [coord[1]],
+        customdata: [selectedSnippetId],
+        marker: {
+          color: SELECTED_COLOR,
+          size: 13,
+          opacity: 1,
+          line: { width: 2.5, color: LABELED_BORDER_COLOR },
+        },
+        hovertemplate: `Snippet #%{customdata}<extra></extra>`,
+      },
+    ];
+  }, [selectedSnippetId, fpvCoordsBySnippet]);
+
+  const traces = useMemo(
+    () => [...baseTraces, ...selectionTraces],
+    [baseTraces, selectionTraces],
+  );
 
   const handlePlotClick = (event: any) => {
     if (!allowPointClick) return;
