@@ -37,6 +37,10 @@ import {
 import { fetchPamQuickLabelNames } from "../../utils/fetchPamQuickLabelNames";
 import type { AnnotateMode } from "./types";
 
+/**
+ * AL / validate session for AnnotationHub: URL sync, inference, feed restore,
+ * retrain polling, and inference modal configuration.
+ */
 export function useHubALSession(
   mode: AnnotateMode,
   searchParams: URLSearchParams,
@@ -138,8 +142,6 @@ export function useHubALSession(
 
 
   useEffect(() => {
-    // Pass the URL's dataset so a persisted feed from a *different* dataset is not
-    // restored onto this view (which would leave the vis unable to locate snippets).
     const raw = searchParams.get("dataset_id");
     const urlDatasetId = raw ? Number.parseInt(raw, 10) : null;
     dispatch(
@@ -149,7 +151,7 @@ export function useHubALSession(
     );
   }, [dispatch, searchParams]);
 
-  // Restore truncated feed from server once per session when predictions are absent.
+  // Restore a truncated feed from the server once when predictions are missing.
   useEffect(() => {
     if (inferenceLoading || predictions.length > 0) return;
     if (
@@ -241,14 +243,10 @@ export function useHubALSession(
     hasUpgradedRef.current = false;
   }, [selectedDatasetId]);
 
-  // Reset per-dataset local state when the dataset changes so stale values from
-  // a previous dataset don't carry over and cause
-  // inference to run on the wrong snippet set for the new dataset.
+  // Clear snippet-set and checkpoint state when the dataset changes.
   const prevDatasetIdRef = useRef<number | null>(null);
   if (prevDatasetIdRef.current !== selectedDatasetId) {
     if (prevDatasetIdRef.current !== null) {
-      // Dataset genuinely changed — clear snippet-set and checkpoint state.
-      // This runs synchronously during render (safe: just resetting derived state).
       setLocalSS(null);
       setCheckpoints([]);
       setSnippetSets([]);
@@ -279,8 +277,6 @@ export function useHubALSession(
     if (ready?.id != null) setLocalSS(ready.id);
   }, [snippetSets, localSS]);
 
-  // Always use the latest checkpoint (checkpoints[0], sorted desc by date).
-  // No user selection — checkpoint is resolved automatically.
   const localCkpt = checkpoints[0]?.id ?? null;
 
   // Auto-run inference for the full dataset when a dataset+checkpoint is ready
@@ -433,20 +429,29 @@ export function useHubALSession(
     ],
   );
 
-  // Keep a ref to the current feed-loader so the mode-switch effect always calls
-  // the latest version (fresh dataset/checkpoint/params) without re-subscribing.
   const handleRunInferenceRef = useRef<() => void>(() => {});
+  const predictionsRef = useRef(predictions);
+  predictionsRef.current = predictions;
+  const modelInfoRef = useRef(modelInfo);
+  modelInfoRef.current = modelInfo;
 
-  // Reload the respective feed whenever the user switches between al/validate modes
-  // (or back into an AL-like mode from a classic mode). Only reacts to genuine mode
-  // changes — deps are [mode] so unrelated state updates never retrigger it.
+  // Reload inference when switching between al and validate (deps limited to mode).
   const prevModeRef = useRef<AnnotateMode | null>(null);
   useEffect(() => {
     const prev = prevModeRef.current;
     prevModeRef.current = mode;
 
-    if (prev === null || prev === mode) return; // skip initial mount & no-op
-    if (!isAlLikeMode) return;                   // only reload for al / validate
+    if (prev === null || prev === mode) return;
+    if (!isAlLikeMode) return;
+
+    // Reuse in-memory validate predictions when returning from another mode.
+    if (
+      mode === "validate" &&
+      predictionsRef.current.length > 0 &&
+      (modelInfoRef.current as Record<string, unknown>)?.suggestion_strategy === "confidence"
+    ) {
+      return;
+    }
 
     handleRunInferenceRef.current();
   }, [mode, isAlLikeMode]);
@@ -461,7 +466,6 @@ export function useHubALSession(
 
   const handleRunInference = useCallback(() => {
     if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
-    // localCkpt is always checkpoints[0] — the latest checkpoint.
     const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
     if (!family) return;
     const embeddingModelId =
@@ -512,7 +516,6 @@ export function useHubALSession(
     dispatch,
   ]);
 
-  // Keep the mode-switch effect's runner pointing at the latest handleRunInference.
   handleRunInferenceRef.current = handleRunInference;
 
   const handleOpenALSession = useCallback(async () => {
@@ -561,7 +564,6 @@ export function useHubALSession(
     dispatch,
   ]);
 
-  // Poll by job_id primitive — object reference changes would restart the loop.
   const retrainJobId = lastRetrainDispatch?.job_id ?? null;
 
   const lastNotifiedJobIdRef = useRef<number | null>(null);
@@ -579,7 +581,6 @@ export function useHubALSession(
           lastNotifiedJobIdRef.current = stableJobId;
           message.warning("Could not poll retrain job — please retry manually");
         }
-        // Clear dispatch state; do not auto-run inference (would restart the poll loop).
         dispatch(clearRetrainDispatch());
         return;
       }
@@ -599,7 +600,7 @@ export function useHubALSession(
             inferenceK,
             isValidateMode || isSuggestionsMode(modelInfo),
           );
-          // Omit force_refresh — job already stored predictions; true would loop.
+          // Predictions were stored by the retrain job; omit force_refresh to avoid a poll loop.
           dispatch(
             runInference({
               model_family_name: modelFamilyName,

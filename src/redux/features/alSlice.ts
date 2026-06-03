@@ -80,7 +80,16 @@ function buildRestoreInferenceRequest(
   const datasetId = normalizeDatasetId(
     state.selectedDatasetId ?? saved.selectedDatasetId,
   );
-  const snippetSetId = state.snippetSetId ?? saved.snippetSetId;
+  // Only use the saved snippetSetId when it belongs to the same dataset as the
+  // current session. Using a snippetSetId from a different dataset (e.g. the
+  // last saved feed was for dataset B but we are now restoring dataset A) would
+  // cause the backend to run inference on the wrong dataset's snippets.
+  const savedDatasetId = normalizeDatasetId(saved.selectedDatasetId);
+  const snippetSetId =
+    state.snippetSetId ??
+    (savedDatasetId !== null && savedDatasetId === datasetId
+      ? saved.snippetSetId
+      : null);
   const modelFamilyName = state.modelFamilyName ?? saved.modelFamilyName;
   if (datasetId === null || snippetSetId === null || !modelFamilyName) {
     return null;
@@ -928,7 +937,10 @@ const alSlice = createSlice({
       }
     });
     builder.addCase(pollRetrainJob.rejected, (state, action) => {
+      // Network error while polling — treat as a failed retrain so the UI
+      // shows the warning banner and the user can retry manually.
       state.retrainLoading = false;
+      state.lastRetrainFailed = true;
       state.error = action.payload as string;
     });
   },

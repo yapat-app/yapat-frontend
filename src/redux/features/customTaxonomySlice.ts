@@ -35,8 +35,11 @@ type TaxonomyThunkState = { customTaxonomy: CustomTaxonomyState };
 
 function shouldSkipTaxonomiesFetch(teamId: number, state: CustomTaxonomyState): boolean {
   if (taxonomiesFetchInFlight.has(teamId)) return true;
+  // Skip when we've already resolved this team — whether it succeeded OR failed.
+  // Without the "failed" guard, a 403/error leaves status="failed", which re-triggers
+  // the effect on every render and produces an infinite request storm.
   if (
-    state.taxonomiesStatus === "succeeded" &&
+    (state.taxonomiesStatus === "succeeded" || state.taxonomiesStatus === "failed") &&
     state.loadedTeamId === teamId
   ) {
     return true;

@@ -81,7 +81,7 @@ export const LabelSpaceActive: React.FC = () => {
   const { labelSpace, conversation, labelRemoved, allTaxonomies } =
     useAppSelector((state) => state.customTaxonomy);
   const { user } = useAppSelector((state) => state.auth);
-  const teamId = user?.team_ids?.[0] ?? 1;
+  const teamId = user?.team_ids?.[0] ?? null;
   useEnsureTeamTaxonomies(teamId);
 
   // Online suggestions (GBIF etc.)

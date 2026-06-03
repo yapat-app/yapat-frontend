@@ -22,7 +22,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const [pamSpecies, setPamSpecies] = useState<string[]>([]);
   const [pamLoading, setPamLoading] = useState(true);
 
-  const teamId = user?.team_ids?.[0] ?? 1;
+  const teamId = user?.team_ids?.[0] ?? null;
 
   useEnsureTeamTaxonomies(teamId, !!user);
 
