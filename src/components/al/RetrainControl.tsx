@@ -6,7 +6,7 @@ import React from "react";
 import { Button, Progress, Tag, Tooltip, Spin, Alert } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { triggerRetrain, runInference, pollRetrainJob } from "../../redux/features/alSlice";
+import { triggerRetrain } from "../../redux/features/alSlice";
 
 interface Props {
   variant?: "full" | "compact";
@@ -18,8 +18,6 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
     feedbackCount,
     retrainThreshold,
     modelFamilyName,
-    snippetSetId,
-    inferenceK,
     retrainLoading,
     lastRetrainJob,
     lastRetrainFailed,
@@ -31,54 +29,13 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
     100,
   );
 
-  const handleManualRetrain = async () => {
+  const handleManualRetrain = () => {
     if (selectedDatasetId === null || modelFamilyName === null) return;
-    const result = await dispatch(
-      triggerRetrain({ dataset_id: selectedDatasetId, model_family_name: modelFamilyName }),
-    );
-    if (!triggerRetrain.fulfilled.match(result) || snippetSetId === null) return;
-    const jobId = result.payload.job_id;
-
-    // Poll job status; the background effect in ActiveLearning.tsx also polls via
-    // lastRetrainDispatch and handles inference refresh — this loop just keeps the
-    // RetrainControl button loading state in sync.
-    let finalStatus: string | null = null;
-    let pollError = false;
-    for (let i = 0; i < 120; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const statusResult = await dispatch(pollRetrainJob(jobId));
-      if (pollRetrainJob.fulfilled.match(statusResult)) {
-        finalStatus = statusResult.payload.status;
-        if (finalStatus === "COMPLETED" || finalStatus === "FAILED") break;
-      } else {
-        // Job not found or network error — recover by loading current predictions.
-        pollError = true;
-        break;
-      }
-    }
-
-    if (finalStatus === "COMPLETED") {
-      dispatch(
-        runInference({
-          model_family_name: modelFamilyName,
-          dataset_id: selectedDatasetId,
-          snippet_set_id: snippetSetId,
-          k: inferenceK,
-          force_refresh: true,
-        }),
-      );
-    } else if (finalStatus === "FAILED" || pollError) {
-      // Fall back to the current active checkpoint's cached predictions.
-      dispatch(
-        runInference({
-          model_family_name: modelFamilyName,
-          dataset_id: selectedDatasetId,
-          snippet_set_id: snippetSetId,
-          k: inferenceK,
-          force_refresh: false,
-        }),
-      );
-    }
+    // Dispatch the job. useHubALSession's retrain-polling effect picks up
+    // lastRetrainDispatch and drives the full poll → inference refresh cycle,
+    // so we don't need a separate loop here. Keeping a second poll would race
+    // with that effect and cause a double force_refresh inference pass.
+    dispatch(triggerRetrain({ dataset_id: selectedDatasetId, model_family_name: modelFamilyName }));
   };
 
   const statusTag = () => {

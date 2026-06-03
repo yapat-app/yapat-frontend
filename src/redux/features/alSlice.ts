@@ -869,7 +869,10 @@ const alSlice = createSlice({
       }
     });
     builder.addCase(pollRetrainJob.rejected, (state, action) => {
+      // Network error while polling — treat as a failed retrain so the UI
+      // shows the warning banner and the user can retry manually.
       state.retrainLoading = false;
+      state.lastRetrainFailed = true;
       state.error = action.payload as string;
     });
   },
