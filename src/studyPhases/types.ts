@@ -99,6 +99,13 @@ export interface UIPhaseConfig {
   showRetrainControls: boolean;
   /** Defaults to "guided" when omitted. */
   labelingMode?: LabelingMode;
+  /**
+   * Controls how the score histogram is presented:
+   *   "embedded"   — histogram rendered inside the ALFilterPanel slider (P2.x default)
+   *   "standalone" — full-width histogram panel above the projection (P3.x)
+   * Defaults to "embedded" when omitted.
+   */
+  histogramStyle?: "embedded" | "standalone";
 }
 
 export interface PhaseConfig {

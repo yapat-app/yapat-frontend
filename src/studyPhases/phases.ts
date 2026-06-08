@@ -138,6 +138,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       showProjectionMethodSelector: true,
       showRetrainControls: false,
       labelingMode: "blind",
+      histogramStyle: "standalone",
     },
   },
 
@@ -163,6 +164,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       showProjectionMethodSelector: true,
       showRetrainControls: false,
       labelingMode: "blind",
+      histogramStyle: "standalone",
     },
   },
 };

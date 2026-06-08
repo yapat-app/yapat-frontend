@@ -14,6 +14,7 @@ import {
   setVisibilityRangeFor,
 } from "../../../redux/features/alSlice";
 import { ALFilterPanel } from "../ALFilterPanel";
+import { ScoreHistogramPanel } from "../ScoreHistogramPanel";
 import { visualisationsApi } from "../../../services/visualisationsApi";
 import { usePhaseConfig } from "../../../studyPhases";
 import { isProjectionNotReadyMessage, type ProjectionMethod } from "./fpvHelpers";
@@ -74,6 +75,7 @@ export const ProjectionView: React.FC = () => {
   const fixedVisValue = phase.visualization.visibilityFilter.fixedValue ?? 0;
   const showLabeledPool = phase.visualization.showLabeledPool;
   const allowPointClick = phase.visualization.allowPointClick;
+  const histogramStyle = phase.ui.histogramStyle ?? "embedded";
 
   const dimRedMethods: Array<{ key: ProjectionMethod; label: string }> = [
     { key: "tsne", label: "t‑SNE" },
@@ -255,7 +257,10 @@ export const ProjectionView: React.FC = () => {
     !fpvError &&
     !isMissingProjection &&
     (fpvGenerateLoading || fpvLoading || loadingMethods.has(method) || !activeProjectionReady);
-  const showFilterPanel = visibilityMode !== "disabled";
+  // "embedded" → ALFilterPanel with histogram inside (P2.x)
+  // "standalone" → ScoreHistogramPanel above projection (P3.x)
+  const showEmbeddedFilter = visibilityMode !== "disabled" && histogramStyle === "embedded";
+  const showStandaloneHistogram = visibilityMode !== "disabled" && histogramStyle === "standalone";
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
 
   if (visMode === "hidden") return null;
@@ -280,7 +285,25 @@ export const ProjectionView: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {showFilterPanel && (
+      {showStandaloneHistogram && (
+        <ScoreHistogramPanel
+          enrichedPlotPoints={enrichedPlotPoints}
+          filtered={filtered}
+          allowedProperties={allowedVisProps}
+          visibilityMode={visibilityMode}
+          alFilters={alFilters}
+          onVisibilityKeyChange={(key) =>
+            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
+          }
+          onVisibilityRangeChange={(range) => dispatch(setVisibilityFilter({ range }))}
+          onMultiVisibilityChange={(keys) => dispatch(setVisibilityKeys(keys))}
+          onMultiVisibilityRangeChange={(key, range) =>
+            dispatch(setVisibilityRangeFor({ key, range }))
+          }
+        />
+      )}
+
+      {showEmbeddedFilter && (
         <ALFilterPanel
           filters={alFilters}
           phaseVisibilityMode={visibilityMode}

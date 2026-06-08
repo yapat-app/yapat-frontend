@@ -201,8 +201,15 @@ export function useProjectionTraces(opts: {
         if (visKey === "composite" && typeof raw === "number") {
           raw = Math.min(COMPOSITE_DOMAIN[1], Math.max(COMPOSITE_DOMAIN[0], raw));
         }
-        if (raw === undefined || raw === null) visible = false;
-        else visible = raw >= domainLo && raw <= domainHi + SAMPLE_SCORE_UPPER_EPS;
+        if (raw === undefined || raw === null) {
+          // Missing score: only hide when an actual constraint is applied.
+          // At the default range (no filtering) unscored points stay visible.
+          const hasConstraint =
+            normLo > 0 || (visSliderStyle !== "threshold" && normHi < 1);
+          visible = !hasConstraint;
+        } else {
+          visible = raw >= domainLo && raw <= domainHi + SAMPLE_SCORE_UPPER_EPS;
+        }
       } else if (visibilityMode === "multi") {
         const keys = alFilters.visibility.propertyKeys ?? [];
         const ranges = alFilters.visibility.ranges ?? {};
@@ -215,8 +222,15 @@ export function useProjectionTraces(opts: {
           const domainHi = pMin + normHi * (pMax - pMin);
           const raw = p.scores?.[key as keyof SampleScores] as number | undefined;
           if (raw === undefined || raw === null) {
-            visible = false;
-            break;
+            // Missing score for this property: only exclude when this property
+            // is actually constraining (threshold raised above its minimum).
+            // Otherwise the property imposes no filter and the point passes it.
+            const hasConstraint = normLo > 0 || normHi < 1;
+            if (hasConstraint) {
+              visible = false;
+              break;
+            }
+            continue;
           }
           let v = raw;
           if (key === "composite" && typeof v === "number") {

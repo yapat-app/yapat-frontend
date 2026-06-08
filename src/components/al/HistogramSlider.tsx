@@ -20,6 +20,16 @@ import React, { useCallback, useMemo, useRef } from "react";
 
 interface HistogramSliderProps {
   values: number[];
+  /** When true, only the bar area is rendered — no track, no handles, no label. */
+  hideSlider?: boolean;
+  /**
+   * When provided, sets the global Y-axis scale and enables stacked bars:
+   *   - Bar total height ∝ totalValues bin count
+   *   - Blue base  = values count (visible samples)
+   *   - Grey cap   = totalValues − values (filtered-out samples)
+   * When omitted, bars are coloured by the slider range as before.
+   */
+  totalValues?: number[];
   min?: number;
   max?: number;
   binCount?: number;
@@ -45,6 +55,8 @@ function computeBins(values: number[], binCount: number, min: number, max: numbe
 
 export const HistogramSlider: React.FC<HistogramSliderProps> = ({
   values,
+  hideSlider = false,
+  totalValues,
   min = 0,
   max = 1,
   binCount = 28,
@@ -59,11 +71,21 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
   const trackRef = useRef<HTMLDivElement>(null);
   const [lo, hi] = range;
 
+  // bins  = highlighted (blue) counts
   const bins = useMemo(
     () => computeBins(values, binCount, min, max),
     [values, binCount, min, max],
   );
-  const maxBin = useMemo(() => Math.max(1, ...bins), [bins]);
+  // totalBins = scale-setting counts (when stacked mode is active)
+  const totalBins = useMemo(
+    () => (totalValues ? computeBins(totalValues, binCount, min, max) : null),
+    [totalValues, binCount, min, max],
+  );
+  // Y-axis scale is driven by whichever dataset is larger
+  const maxBin = useMemo(
+    () => Math.max(1, ...(totalBins ?? bins)),
+    [bins, totalBins],
+  );
 
   // Returns normalised [0,1] x position from a mouse event relative to the track.
   const toNorm = useCallback((clientX: number): number => {
@@ -106,10 +128,38 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
         style={{ height: barHeight }}
         aria-hidden="true"
       >
-        {bins.map((count, i) => {
+        {bins.map((blueCount, i) => {
+          const totalCount = totalBins ? totalBins[i] : blueCount;
+          const heightPct = Math.max(4, (totalCount / maxBin) * 100);
+
+          if (totalBins) {
+            // Stacked mode: blue base (visible) + grey cap (filtered out)
+            const bluePct = totalCount > 0 ? (blueCount / totalCount) * 100 : 0;
+            const greyPct = 100 - bluePct;
+            const tipTotal = totalCount;
+            const tipVisible = blueCount;
+            return (
+              <div
+                key={i}
+                className="flex-1 flex flex-col rounded-t-[2px] overflow-hidden cursor-default"
+                style={{ height: `${heightPct}%` }}
+                title={`${tipVisible} visible / ${tipTotal} total`}
+              >
+                {/* Grey cap — filtered-out samples */}
+                <div
+                  style={{ height: `${greyPct}%`, backgroundColor: "#d1d5db", opacity: 0.45 }}
+                />
+                {/* Blue base — visible samples */}
+                <div
+                  style={{ height: `${bluePct}%`, backgroundColor: accentColor }}
+                />
+              </div>
+            );
+          }
+
+          // Original mode: colour by slider range
           const t = i / (binCount - 1);
           const inRange = mode === "threshold" ? t >= lo : t >= lo && t <= hi;
-          const heightPct = Math.max(4, (count / maxBin) * 100);
           return (
             <div
               key={i}
@@ -119,66 +169,70 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
                 backgroundColor: inRange ? accentColor : "#d1d5db",
                 opacity: inRange ? 1 : 0.4,
               }}
-              title={`${count} sample${count !== 1 ? "s" : ""}`}
+              title={`${blueCount} sample${blueCount !== 1 ? "s" : ""}`}
             />
           );
         })}
       </div>
 
-      {/* Slider track + handles */}
-      <div className="relative h-5 mt-1">
-        {/* Track background */}
-        <div
-          ref={trackRef}
-          className="absolute top-1/2 left-0 right-0 h-[4px] bg-gray-200 rounded-full -translate-y-1/2"
-        >
-          {/* Filled portion */}
-          <div
-            className="absolute top-0 bottom-0 rounded-full"
-            style={{
-              left: `${fillLeft}%`,
-              width: `${fillWidth}%`,
-              backgroundColor: accentColor,
-            }}
-          />
-        </div>
+      {/* Slider track + handles (hidden when hideSlider is true) */}
+      {!hideSlider && (
+        <>
+          <div className="relative h-5 mt-1">
+            {/* Track background */}
+            <div
+              ref={trackRef}
+              className="absolute top-1/2 left-0 right-0 h-[4px] bg-gray-200 rounded-full -translate-y-1/2"
+            >
+              {/* Filled portion */}
+              <div
+                className="absolute top-0 bottom-0 rounded-full"
+                style={{
+                  left: `${fillLeft}%`,
+                  width: `${fillWidth}%`,
+                  backgroundColor: accentColor,
+                }}
+              />
+            </div>
 
-        {/* Lo handle (threshold handle in threshold mode) */}
-        <div
-          className={[
-            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2",
-            "w-[18px] h-[18px] rounded-full bg-white border-2 shadow-md",
-            "transition-shadow duration-100",
-            disabled
-              ? "cursor-not-allowed opacity-50"
-              : "cursor-grab hover:shadow-[0_0_0_6px_rgba(59,130,246,0.15)] active:cursor-grabbing",
-          ].join(" ")}
-          style={{ left: `${lo * 100}%`, borderColor: accentColor }}
-          onMouseDown={startDrag("lo")}
-        />
+            {/* Lo handle */}
+            <div
+              className={[
+                "absolute top-1/2 -translate-x-1/2 -translate-y-1/2",
+                "w-[18px] h-[18px] rounded-full bg-white border-2 shadow-md",
+                "transition-shadow duration-100",
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-grab hover:shadow-[0_0_0_6px_rgba(59,130,246,0.15)] active:cursor-grabbing",
+              ].join(" ")}
+              style={{ left: `${lo * 100}%`, borderColor: accentColor }}
+              onMouseDown={startDrag("lo")}
+            />
 
-        {/* Hi handle (range mode only) */}
-        {mode === "range" && (
-          <div
-            className={[
-              "absolute top-1/2 -translate-x-1/2 -translate-y-1/2",
-              "w-[18px] h-[18px] rounded-full bg-white border-2 shadow-md",
-              "transition-shadow duration-100",
-              disabled
-                ? "cursor-not-allowed opacity-50"
-                : "cursor-grab hover:shadow-[0_0_0_6px_rgba(59,130,246,0.15)] active:cursor-grabbing",
-            ].join(" ")}
-            style={{ left: `${hi * 100}%`, borderColor: accentColor }}
-            onMouseDown={startDrag("hi")}
-          />
-        )}
-      </div>
+            {/* Hi handle (range mode only) */}
+            {mode === "range" && (
+              <div
+                className={[
+                  "absolute top-1/2 -translate-x-1/2 -translate-y-1/2",
+                  "w-[18px] h-[18px] rounded-full bg-white border-2 shadow-md",
+                  "transition-shadow duration-100",
+                  disabled
+                    ? "cursor-not-allowed opacity-50"
+                    : "cursor-grab hover:shadow-[0_0_0_6px_rgba(59,130,246,0.15)] active:cursor-grabbing",
+                ].join(" ")}
+                style={{ left: `${hi * 100}%`, borderColor: accentColor }}
+                onMouseDown={startDrag("hi")}
+              />
+            )}
+          </div>
 
-      {/* Label row */}
-      {label && (
-        <div className="mt-1 text-center text-[11px] text-gray-500 font-ibm-sans">
-          {label}
-        </div>
+          {/* Label row */}
+          {label && (
+            <div className="mt-1 text-center text-[11px] text-gray-500 font-ibm-sans">
+              {label}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
