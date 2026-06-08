@@ -1,6 +1,6 @@
 /** PAM Active Learning slice (backed by /api/pam-al/* endpoints). */
 
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, current, isDraft } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { alApi } from "../../services/alApi";
 import { getErrorMessage } from "../../services/api";
@@ -168,6 +168,15 @@ function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): vo
   // Debounce: rapid feedback submissions (e.g. 10 in a row) should only trigger
   // one synchronous JSON.stringify + localStorage.setItem, not ten.
   if (_saveFeedTimer !== null) clearTimeout(_saveFeedTimer);
+
+  // Unwrap the Immer draft to a plain snapshot BEFORE the debounce timer fires.
+  // `data` below holds references to draft sub-objects (predictions, feedbacks,
+  // selectedSnippetIds, …). Once the reducer finalizes, those proxies are revoked
+  // and the deferred JSON.stringify would throw — silently losing the save. This
+  // is why selection changes (which mutate the draft in place via push/splice)
+  // previously failed to persist while inference (which reassigns plain objects)
+  // appeared to work. current() gives us a plain, post-finalization-safe copy.
+  state = isDraft(state) ? current(state) : state;
 
   const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
   const sampleSuggestion =
@@ -460,6 +469,7 @@ const alSlice = createSlice({
     setSelectedSnippet: (state, action: PayloadAction<number | null>) => {
       state.selectedSnippetIds = action.payload !== null ? [action.payload] : [];
       state.activeSnippetId = action.payload;
+      saveFeed(state);
     },
     toggleSelectedSnippet: (state, action: PayloadAction<number>) => {
       const id = action.payload;
@@ -475,14 +485,17 @@ const alSlice = createSlice({
           state.activeSnippetId = state.selectedSnippetIds[0] ?? null;
         }
       }
+      saveFeed(state);
     },
     clearSelectedSnippets: (state) => {
       state.selectedSnippetIds = [];
       state.activeSnippetId = null;
+      saveFeed(state);
     },
     /** Set the snippet currently visible in the multi-select feed (scroll-driven). */
     setActiveSnippet: (state, action: PayloadAction<number | null>) => {
       state.activeSnippetId = action.payload;
+      saveFeed(state);
     },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
       const nextId = normalizeDatasetId(action.payload);
