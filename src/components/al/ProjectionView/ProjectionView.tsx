@@ -1,0 +1,395 @@
+/** ProjectionView — phase-aware 2D feature projection (orchestrator). */
+
+import React, { useEffect, useRef, useState } from "react";
+import Plot from "react-plotly.js";
+import { Spin } from "antd";
+import { ExperimentOutlined } from "@ant-design/icons";
+import { useAppDispatch, useAppSelector } from "../../../hooks";
+import {
+  setSelectedSnippet,
+  toggleSelectedSnippet,
+  setSamplingMethod,
+  setVisibilityFilter,
+  setVisibilityKeys,
+  setVisibilityRangeFor,
+} from "../../../redux/features/alSlice";
+import { ALFilterPanel } from "../ALFilterPanel";
+import { visualisationsApi } from "../../../services/visualisationsApi";
+import { usePhaseConfig } from "../../../studyPhases";
+import { isProjectionNotReadyMessage, type ProjectionMethod } from "./fpvHelpers";
+import { useFpvData } from "./useFpvData";
+import { useLabeledPool } from "./useLabeledPool";
+import { useProjectionTraces } from "./useProjectionTraces";
+import { ProjectionToolbar } from "./ProjectionToolbar";
+import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
+
+export const ProjectionView: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const phase = usePhaseConfig();
+
+  // Track Shift key state via window listeners — more reliable than reading
+  // event.event?.shiftKey from Plotly, which loses the modifier on the 3rd+
+  // click when Plotly has consumed the event for zoom/select behaviour.
+  const isShiftHeld = useRef(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Shift") isShiftHeld.current = true;
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === "Shift") isShiftHeld.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+
+  const {
+    predictions,
+    projectionPredictions,
+    selectedSnippetIds,
+    activeSnippetId,
+    samplingMethod,
+    alFilters,
+    lastRetrainJob,
+    feedbackCount,
+    retrainLoading,
+    selectedDatasetId,
+    embeddingModelId,
+    snippetSetId,
+    feedSource,
+    feedbacks,
+  } = useAppSelector((state) => state.al);
+  const isClassicFeed = feedSource === "classic";
+
+  const [method, setMethod] = useState<ProjectionMethod>("pca");
+
+  const visMode = phase.visualization.mode;
+  const visibilityMode = phase.visualization.visibilityFilter.mode;
+  const allowedVisProps = phase.visualization.visibilityFilter.allowedProperties;
+  const defaultVisKey = phase.visualization.visibilityFilter.defaultPropertyKey ?? null;
+  const visSliderStyle = phase.visualization.visibilityFilter.sliderStyle ?? "range";
+  const fixedVisValue = phase.visualization.visibilityFilter.fixedValue ?? 0;
+  const showLabeledPool = phase.visualization.showLabeledPool;
+  const allowPointClick = phase.visualization.allowPointClick;
+
+  const dimRedMethods: Array<{ key: ProjectionMethod; label: string }> = [
+    { key: "tsne", label: "t‑SNE" },
+    { key: "umap", label: "UMAP" },
+    { key: "pca", label: "PCA" },
+    { key: "isomap", label: "Isomap" },
+  ];
+
+  const rawOverlayPredictions =
+    projectionPredictions.length > 0 ? projectionPredictions : predictions;
+  const hasOverlayPredictions = rawOverlayPredictions.length > 0;
+
+  // ── Phase-change filter reset ──────────────────────────────────────────────
+
+  useEffect(() => {
+    const visAllowed = allowedVisProps as readonly string[];
+    if (visibilityMode === "disabled") {
+      dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
+      dispatch(setVisibilityKeys([]));
+    } else if (visibilityMode === "fixed") {
+      dispatch(setVisibilityKeys([]));
+      dispatch(setVisibilityFilter({ propertyKey: defaultVisKey, range: [fixedVisValue, 1] }));
+    } else if (visibilityMode === "single") {
+      dispatch(setVisibilityKeys([]));
+      if (
+        alFilters.visibility.propertyKey &&
+        !visAllowed.includes(alFilters.visibility.propertyKey)
+      ) {
+        dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
+      }
+    } else if (visibilityMode === "multi") {
+      dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase.id]);
+
+  // ── FPV data hook ──────────────────────────────────────────────────────────
+
+  const {
+    fpvPoints,
+    projectionsByMethod,
+    fpvLoading,
+    fpvError,
+    fpvGenerateLoading,
+    loadingMethods,
+    effectiveEmbeddingModelId,
+    handleGenerateNow,
+  } = useFpvData({
+    selectedDatasetId,
+    embeddingModelId,
+    snippetSetId,
+    visMode,
+    method,
+  });
+
+  // ── Labeled pool hook ──────────────────────────────────────────────────────
+
+  const { labeledSnippetIds, labelsBySnippet } = useLabeledPool({
+    selectedDatasetId,
+    snippetSetId,
+    showLabeledPool,
+    isClassicFeed,
+    feedbacks,
+    lastRetrainJob,
+    feedbackCount,
+  });
+
+  // ── Visibility range override (async API fetch) ────────────────────────────
+
+  const [visRangeOverride, setVisRangeOverride] = useState<{
+    min: number;
+    max: number;
+    step: number;
+  } | null>(null);
+
+  const visKey = alFilters.visibility.propertyKey;
+  useEffect(() => {
+    if (visibilityMode !== "single" || !visKey) {
+      setVisRangeOverride(null);
+      return;
+    }
+    let cancelled = false;
+    visualisationsApi
+      .getVisRange(visKey)
+      .then((r) => {
+        if (!cancelled) setVisRangeOverride({ min: r.min_value, max: r.max_value, step: r.step });
+      })
+      .catch(() => {
+        if (!cancelled) setVisRangeOverride(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visKey, visibilityMode]);
+
+  // ── Projection traces hook ─────────────────────────────────────────────────
+
+  const {
+    fpvCoordsBySnippetForMethod,
+    selectedCoordByMethod,
+    plotPoints,
+    allCategoricalValues,
+    filtered,
+    visibleCount,
+    thumbnailPoints,
+    actualLabelLegend,
+    traces,
+  } = useProjectionTraces({
+    fpvPoints,
+    projectionsByMethod,
+    rawOverlayPredictions,
+    labelsBySnippet,
+    alFilters,
+    visibilityMode,
+    visSliderStyle,
+    visMode,
+    method,
+    selectedSnippetIds,
+    activeSnippetId,
+    visRangeOverride,
+  });
+
+  // ── Auto-select first point (single_card_on_select phases) ────────────────
+
+  const [didAutoSelectKey, setDidAutoSelectKey] = useState<string | null>(null);
+  useEffect(() => {
+    const shouldAutoSelect = phase.feed.mode === "single_card_on_select";
+    if (!shouldAutoSelect) return;
+    if (selectedSnippetIds.length > 0) return;
+    if (plotPoints.length === 0) return;
+
+    const key = `${phase.id}:${selectedDatasetId ?? "na"}:${snippetSetId ?? "na"}:${method}`;
+    if (didAutoSelectKey === key) return;
+
+    const idx = Math.floor(Math.random() * plotPoints.length);
+    const snippetId = plotPoints[idx]?.snippet_id;
+    if (snippetId == null) return;
+
+    dispatch(setSelectedSnippet(snippetId));
+    setDidAutoSelectKey(key);
+  }, [
+    phase.id,
+    phase.feed.mode,
+    selectedDatasetId,
+    snippetSetId,
+    method,
+    plotPoints,
+    selectedSnippetIds,
+    dispatch,
+    didAutoSelectKey,
+  ]);
+
+  // ── Derived booleans ───────────────────────────────────────────────────────
+
+  const isMissingProjection = isProjectionNotReadyMessage(fpvError ?? "");
+  const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
+  const isWaitingForRetrain = predictions.length > 0 && projectionPredictions.length === 0;
+  const hasAnyTraces = traces.length > 0;
+  const activeProjectionReady =
+    visMode !== "whole_dataset" ||
+    (fpvPoints.length > 0 && Boolean(projectionsByMethod[method]));
+  const isFpvPlotLoading =
+    visMode === "whole_dataset" &&
+    Boolean(selectedDatasetId && effectiveEmbeddingModelId) &&
+    !fpvError &&
+    !isMissingProjection &&
+    (fpvGenerateLoading || fpvLoading || loadingMethods.has(method) || !activeProjectionReady);
+  const showFilterPanel = visibilityMode !== "disabled";
+  const selectedSnippetId = selectedSnippetIds[0] ?? null;
+
+  if (visMode === "hidden") return null;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  const handlePlotClick = (event: any) => {
+    if (!allowPointClick) return;
+    const pt = event.points?.[0];
+    if (pt?.customdata === undefined) return;
+
+    const hasHiddenTrace = Boolean(filtered.some((f) => !f.visible));
+    if (hasHiddenTrace && pt.curveNumber === 0) return;
+
+    const snippetId = pt.customdata as number;
+    if (isShiftHeld.current && phase.feed.mode === "single_card_on_select") {
+      dispatch(toggleSelectedSnippet(snippetId));
+    } else {
+      dispatch(setSelectedSnippet(snippetId));
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {showFilterPanel && (
+        <ALFilterPanel
+          filters={alFilters}
+          phaseVisibilityMode={visibilityMode}
+          phaseColorMode="disabled"
+          allowedVisibilityProperties={allowedVisProps}
+          allowedColorProperties={[]}
+          defaultVisibilityKey={defaultVisKey}
+          visibilitySliderStyle={visSliderStyle}
+          onVisibilityKeyChange={(key) =>
+            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
+          }
+          onVisibilityRangeChange={(range) => dispatch(setVisibilityFilter({ range }))}
+          onMultiVisibilityChange={(keys) => dispatch(setVisibilityKeys(keys))}
+          onMultiVisibilityRangeChange={(key, range) =>
+            dispatch(setVisibilityRangeFor({ key, range }))
+          }
+          onColorKeyChange={() => {}}
+          allCategoricalValues={allCategoricalValues}
+          visibilityRangeOverride={visRangeOverride ?? undefined}
+        />
+      )}
+
+      <ProjectionToolbar
+        visibleCount={visibleCount}
+        totalCount={plotPoints.length}
+        labeledCount={labeledSnippetIds.size}
+        showLabeledPool={showLabeledPool}
+        actualLabelLegend={actualLabelLegend}
+        allActualLabels={allCategoricalValues.actual_label ?? []}
+        visMode={visMode}
+        fpvLoading={fpvLoading}
+        fpvError={fpvError}
+        isMissingProjection={isMissingProjection}
+        canGenerateNow={canGenerateNow}
+        fpvGenerateLoading={fpvGenerateLoading}
+        method={method}
+        lastRetrainJob={lastRetrainJob}
+        isWaitingForRetrain={isWaitingForRetrain}
+        retrainLoading={retrainLoading}
+        showSamplingMethodSelector={phase.ui.showSamplingMethodSelector}
+        samplingMethod={samplingMethod}
+        onSamplingMethodChange={(v) => dispatch(setSamplingMethod(v))}
+        onGenerateNow={handleGenerateNow}
+      />
+
+      <div className="flex-1 relative overflow-hidden flex">
+        {phase.ui.showProjectionMethodSelector && (
+          <ProjectionMethodPanel
+            method={method}
+            dimRedMethods={dimRedMethods}
+            fpvLoading={fpvLoading}
+            loadingMethods={loadingMethods}
+            fpvCoordsBySnippetForMethod={fpvCoordsBySnippetForMethod}
+            selectedSnippetId={selectedSnippetId}
+            selectedCoordByMethod={selectedCoordByMethod}
+            thumbnailPoints={thumbnailPoints}
+            allActualLabels={allCategoricalValues.actual_label ?? []}
+            onMethodChange={setMethod}
+          />
+        )}
+
+        <div className="flex-1 relative overflow-hidden min-h-[200px]">
+          {isFpvPlotLoading && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#f7fafc]/95">
+              <Spin size="large" />
+              <p className="text-sm text-gray-500 font-ibm-sans">
+                Loading feature projection…
+              </p>
+            </div>
+          )}
+
+          {hasOverlayPredictions &&
+            !isClassicFeed &&
+            rawOverlayPredictions.some((p) => !p.scores) && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
+                <ExperimentOutlined className="text-blue-400" />
+                Filter scores are missing — backend scores not yet available
+              </div>
+            )}
+
+          {!isFpvPlotLoading && !hasAnyTraces ? (
+            <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
+              {fpvError
+                ? "Projection not available yet — it's prepared after embeddings finish (or generate it now)."
+                : "Select a dataset and generate embeddings to see the projection."}
+            </div>
+          ) : !isFpvPlotLoading && hasAnyTraces && visibleCount === 0 ? (
+            <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
+              No points in selected range — adjust the visibility filter
+            </div>
+          ) : !isFpvPlotLoading && visMode === "whole_dataset" && fpvError ? (
+            <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
+              Projection not available yet — it will appear once the embedding job finishes (FPV is
+              cached).
+            </div>
+          ) : !isFpvPlotLoading && activeProjectionReady ? (
+            <Plot
+              data={traces}
+              layout={{
+                autosize: true,
+                margin: { l: 30, r: 10, t: 10, b: 30 },
+                showlegend: false,
+                legend: {
+                  font: { size: 10 },
+                  itemsizing: "constant",
+                  bgcolor: "rgba(255,255,255,0.85)",
+                  bordercolor: "#e5e7eb",
+                  borderwidth: 1,
+                },
+                xaxis: { showgrid: false, zeroline: false, showticklabels: false },
+                yaxis: { showgrid: false, zeroline: false, showticklabels: false },
+                paper_bgcolor: "#f7fafc",
+                plot_bgcolor: "#f7fafc",
+                hovermode: "closest",
+              }}
+              style={{ width: "100%", height: "100%" }}
+              useResizeHandler
+              onClick={handlePlotClick}
+              config={{ displayModeBar: false, responsive: true }}
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
