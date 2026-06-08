@@ -262,6 +262,21 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
     isFixedVisibility || (phaseVisibilityMode === "single" && visibilityList.length === 1);
   const useThresholdSlider = isFixedVisibility || visibilitySliderStyle === "threshold";
 
+  // Normalise sliderConfig domain values → [0,1] fractions for HistogramSlider.
+  // sliderConfig.value is in domain units (e.g. 0.0–1.0 for composite, 1–12 for year_cycle).
+  const histRange = useMemo<[number, number]>(() => {
+    if (!sliderConfig) return [0, 1];
+    const { min, max } = sliderConfig;
+    const span = max - min || 1;
+    if (useThresholdSlider) {
+      return [Math.max(0, Math.min(1, (sliderConfig.value[0] - min) / span)), 1];
+    }
+    return [
+      Math.max(0, Math.min(1, (sliderConfig.value[0] - min) / span)),
+      Math.max(0, Math.min(1, (sliderConfig.value[1] - min) / span)),
+    ];
+  }, [sliderConfig, useThresholdSlider]);
+
   useEffect(() => {
     if (phaseVisibilityMode !== "single") return;
     const target = effectiveDefaultKey;
@@ -304,17 +319,22 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
                         min={sliderConfig.min}
                         max={sliderConfig.max}
                         mode={useThresholdSlider ? "threshold" : "range"}
-                        range={
-                          useThresholdSlider
-                            ? [sliderConfig.value[0], 1]
-                            : (sliderConfig.value as [number, number])
-                        }
+                        range={histRange}
                         disabled={isFixedVisibility}
-                        onChange={(newRange) => {
+                        label={
+                          useThresholdSlider
+                            ? `threshold: ${sliderConfig.value[0].toFixed(2)}`
+                            : `${sliderConfig.value[0].toFixed(2)} – ${sliderConfig.value[1].toFixed(2)}`
+                        }
+                        onChange={(newNormRange) => {
+                          const span = sliderConfig.max - sliderConfig.min;
                           if (useThresholdSlider) {
-                            handleThresholdChange(newRange[0]);
+                            handleThresholdChange(sliderConfig.min + newNormRange[0] * span);
                           } else {
-                            handleSliderChange(newRange);
+                            handleSliderChange([
+                              sliderConfig.min + newNormRange[0] * span,
+                              sliderConfig.min + newNormRange[1] * span,
+                            ]);
                           }
                         }}
                       />
