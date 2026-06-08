@@ -15,7 +15,7 @@
  *   result is visible in each distribution.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { HistogramSlider } from "./HistogramSlider";
 import type { ALFilterState, SampleScores } from "../../types/al";
 import type { FilterMode, AllowedProperty } from "../../studyPhases";
