@@ -245,17 +245,18 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
 
   // Special case: single visibility filter with only one available property.
   // Auto-select and optionally render a threshold slider (no dropdown).
+  const isFixedVisibility = phaseVisibilityMode === "fixed";
   const effectiveDefaultKey = useMemo(() => {
-    if (phaseVisibilityMode !== "single") return null;
+    if (phaseVisibilityMode !== "single" && !isFixedVisibility) return null;
     if (defaultVisibilityKey && visibilityList.some((p) => p.key === defaultVisibilityKey)) return defaultVisibilityKey;
     if (visibilityList.length === 1) return visibilityList[0].key;
     return null;
-  }, [phaseVisibilityMode, defaultVisibilityKey, visibilityList]);
+  }, [phaseVisibilityMode, isFixedVisibility, defaultVisibilityKey, visibilityList]);
 
-  // Only hide the dropdown when there is literally only one option.
+  // Hide dropdown when there is only one option, or the filter is fixed.
   const hideVisibilityDropdown =
-    phaseVisibilityMode === "single" && visibilityList.length === 1;
-  const useThresholdSlider = visibilitySliderStyle === "threshold";
+    isFixedVisibility || (phaseVisibilityMode === "single" && visibilityList.length === 1);
+  const useThresholdSlider = isFixedVisibility || visibilitySliderStyle === "threshold";
 
   useEffect(() => {
     if (phaseVisibilityMode !== "single") return;
@@ -278,7 +279,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
               </span>
             </div>
 
-            {phaseVisibilityMode === "single" ? (
+            {(phaseVisibilityMode === "single" || isFixedVisibility) ? (
               <>
                 {!hideVisibilityDropdown && (
                   <Select
@@ -303,6 +304,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
                         onChange={(v) => handleThresholdChange(v as number)}
                         tooltip={{ formatter: sliderConfig.tipFormatter }}
                         included={false}
+                        disabled={isFixedVisibility}
                         styles={{
                           track: { backgroundColor: "#3b82f6" },
                           handle: { borderColor: "#3b82f6" },

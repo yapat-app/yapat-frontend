@@ -25,6 +25,8 @@ export type VisMode =
 export type FilterMode =
   /** No filter UI. */
   | "disabled"
+  /** Filter is applied at a fixed value — no UI shown, user cannot adjust. */
+  | "fixed"
   /** Single-property filter (one slider / one color key). */
   | "single"
   /** Multi-property filter (combination of properties, AND-combined). */
@@ -69,6 +71,8 @@ export interface FilterPhaseConfig {
   defaultPropertyKey?: AllowedProperty;
   /** Slider style for single-mode visibility filter. */
   sliderStyle?: "range" | "threshold";
+  /** Fixed threshold value (0–1) used when mode === "fixed". Points with score below this are hidden. */
+  fixedValue?: number;
 }
 
 export interface VisualizationPhaseConfig {

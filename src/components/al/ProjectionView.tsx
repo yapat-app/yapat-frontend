@@ -173,6 +173,7 @@ export const ProjectionView: React.FC = () => {
   const allowedVisProps = phase.visualization.visibilityFilter.allowedProperties;
   const defaultVisKey = phase.visualization.visibilityFilter.defaultPropertyKey ?? null;
   const visSliderStyle = phase.visualization.visibilityFilter.sliderStyle ?? "range";
+  const fixedVisValue = phase.visualization.visibilityFilter.fixedValue ?? 0;
   const showLabeledPool = phase.visualization.showLabeledPool;
   const allowPointClick = phase.visualization.allowPointClick;
 
@@ -194,6 +195,9 @@ export const ProjectionView: React.FC = () => {
     if (visibilityMode === "disabled") {
       dispatch(setVisibilityFilter({ propertyKey: null, range: [0, 1] }));
       dispatch(setVisibilityKeys([]));
+    } else if (visibilityMode === "fixed") {
+      dispatch(setVisibilityKeys([]));
+      dispatch(setVisibilityFilter({ propertyKey: defaultVisKey, range: [fixedVisValue, 1] }));
     } else if (visibilityMode === "single") {
       dispatch(setVisibilityKeys([]));
       if (

@@ -61,13 +61,18 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
   // ── Phase 2 ─ Whole-dataset vis, single-card-on-click ───────────────────
   "P2.1": {
     id: "P2.1",
-    label: "Phase 2 · Part 1 — Vis with color, no filters",
+    label: "Phase 2 · Part 1 — Vis with color, fixed filter",
     feed: { mode: "single_card_on_select" },
     visualization: {
       mode: "whole_dataset",
       showLabeledPool: true,
       allowPointClick: true,
-      visibilityFilter: { mode: "disabled", allowedProperties: [] },
+      visibilityFilter: {
+        mode: "fixed",
+        allowedProperties: ["composite"],
+        defaultPropertyKey: "composite",
+        fixedValue: 0.5,
+      },
       colorFilter: {
         mode: "single",
         allowedProperties: ["composite", "actual_label"],
