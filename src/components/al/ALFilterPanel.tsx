@@ -18,6 +18,7 @@
 
 import React, { useEffect, useMemo } from "react";
 import { Select, Slider, Tooltip, Tag } from "antd";
+import { HistogramSlider } from "./HistogramSlider";
 import { EyeOutlined, BgColorsOutlined } from "@ant-design/icons";
 import {
   AL_PROPERTIES,
@@ -66,6 +67,8 @@ interface ALFilterPanelProps {
   defaultVisibilityKey?: AllowedProperty | null;
   /** Single-mode slider style. */
   visibilitySliderStyle?: "range" | "threshold";
+  /** Raw score values for the active visibility property — used to draw the histogram. */
+  visibilityScoreValues?: number[];
 
   /** Single-mode visibility callbacks (legacy / phase 2.2). */
   onVisibilityKeyChange: (key: string | null) => void;
@@ -90,6 +93,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   allowedColorProperties,
   defaultVisibilityKey = null,
   visibilitySliderStyle = "range",
+  visibilityScoreValues = [],
   onVisibilityKeyChange,
   onVisibilityRangeChange,
   onMultiVisibilityChange,
@@ -294,7 +298,27 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
 
                 {visProp && sliderConfig && (
                   <div className="px-1 pt-1">
-                    {useThresholdSlider ? (
+                    {visibilityScoreValues.length > 0 ? (
+                      <HistogramSlider
+                        values={visibilityScoreValues}
+                        min={sliderConfig.min}
+                        max={sliderConfig.max}
+                        mode={useThresholdSlider ? "threshold" : "range"}
+                        range={
+                          useThresholdSlider
+                            ? [sliderConfig.value[0], 1]
+                            : (sliderConfig.value as [number, number])
+                        }
+                        disabled={isFixedVisibility}
+                        onChange={(newRange) => {
+                          if (useThresholdSlider) {
+                            handleThresholdChange(newRange[0]);
+                          } else {
+                            handleSliderChange(newRange);
+                          }
+                        }}
+                      />
+                    ) : useThresholdSlider ? (
                       <Slider
                         min={sliderConfig.min}
                         max={sliderConfig.max}

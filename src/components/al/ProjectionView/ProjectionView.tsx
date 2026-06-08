@@ -1,6 +1,6 @@
 /** ProjectionView — phase-aware 2D feature projection (orchestrator). */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Plot from "react-plotly.js";
 import { Spin } from "antd";
 import { ExperimentOutlined } from "@ant-design/icons";
@@ -175,6 +175,7 @@ export const ProjectionView: React.FC = () => {
     fpvCoordsBySnippetForMethod,
     selectedCoordByMethod,
     plotPoints,
+    enrichedPlotPoints,
     allCategoricalValues,
     filtered,
     visibleCount,
@@ -195,6 +196,19 @@ export const ProjectionView: React.FC = () => {
     activeSnippetId,
     visRangeOverride,
   });
+
+  // ── Score values for histogram (active visibility property) ──────────────
+
+  const visibilityScoreValues = useMemo<number[]>(() => {
+    const key = alFilters.visibility.propertyKey;
+    if (!key || enrichedPlotPoints.length === 0) return [];
+    const out: number[] = [];
+    for (const p of enrichedPlotPoints) {
+      const v = p.scores?.[key as keyof typeof p.scores];
+      if (typeof v === "number" && Number.isFinite(v)) out.push(v);
+    }
+    return out;
+  }, [alFilters.visibility.propertyKey, enrichedPlotPoints]);
 
   // ── Auto-select first point (single_card_on_select phases) ────────────────
 
@@ -275,6 +289,7 @@ export const ProjectionView: React.FC = () => {
           allowedColorProperties={[]}
           defaultVisibilityKey={defaultVisKey}
           visibilitySliderStyle={visSliderStyle}
+          visibilityScoreValues={visibilityScoreValues}
           onVisibilityKeyChange={(key) =>
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
           }
