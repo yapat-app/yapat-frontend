@@ -46,7 +46,7 @@ function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
   return null;
 }
 
-function isPhaseLocked(): boolean {
+export function isPhaseLocked(): boolean {
   const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env
     ?.VITE_STUDY_PHASE_LOCK;
   return v === "1" || v === "true" || v === "yes";

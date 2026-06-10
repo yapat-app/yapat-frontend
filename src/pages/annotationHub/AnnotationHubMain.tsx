@@ -21,9 +21,9 @@ export type AnnotationHubMainProps = {
   generateFeedLabel: string;
   classicGenerateLoading: boolean;
   onOpenClassicFeedConfig: () => void;
-  alFeedActionLabel: string;
+  alFeedActionLabel?: string;
   alFeedActionLoading: boolean;
-  onOpenAlFeedConfig: () => void;
+  onOpenAlFeedConfig?: () => void;
   onBrowseDatasets: () => void;
 };
 
@@ -97,11 +97,11 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
           </div>
         ) : (
           <PhaseLayout
-            actionButton={{
+            actionButton={alFeedActionLabel && onOpenAlFeedConfig ? {
               label: alFeedActionLabel,
               loading: alFeedActionLoading,
               onClick: onOpenAlFeedConfig,
-            }}
+            } : undefined}
           />
         ))}
 

@@ -8,6 +8,7 @@ import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppSelector } from "../hooks";
+import { isPhaseLocked } from "../studyPhases";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubClassic } from "./annotationHub/useHubClassic";
@@ -70,9 +71,9 @@ export const AnnotationHub: React.FC = () => {
         generateFeedLabel={classic.generateFeedLabel}
         classicGenerateLoading={classic.feedGenerateBusy}
         onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
-        alFeedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
+        alFeedActionLabel={isPhaseLocked() ? undefined : (al.predictions.length > 0 ? "Edit Feed" : "Generate Feed")}
         alFeedActionLoading={al.inferenceLoading}
-        onOpenAlFeedConfig={al.openInferenceModal}
+        onOpenAlFeedConfig={isPhaseLocked() ? undefined : al.openInferenceModal}
         onBrowseDatasets={() => navigate("/datasets")}
       />
 
