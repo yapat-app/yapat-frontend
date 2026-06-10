@@ -312,17 +312,18 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
           </div>
 
           {multiData.length > 0 ? (
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-row gap-6">
               {multiData.map((row) => (
-                <PropertyRow
-                  key={row.key}
-                  label={row.label}
-                  color={row.color}
-                  allValues={row.allValues}
-                  visibleValues={row.visibleValues}
-                  normRange={row.normRange}
-                  onSliderChange={(newNorm) => handleMultiSlider(row.key, [newNorm[0], 1])}
-                />
+                <div key={row.key} className="flex-1 min-w-0">
+                  <PropertyRow
+                    label={row.label}
+                    color={row.color}
+                    allValues={row.allValues}
+                    visibleValues={row.visibleValues}
+                    normRange={row.normRange}
+                    onSliderChange={(newNorm) => handleMultiSlider(row.key, [newNorm[0], 1])}
+                  />
+                </div>
               ))}
             </div>
           ) : (

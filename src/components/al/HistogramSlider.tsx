@@ -226,6 +226,22 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
             )}
           </div>
 
+          {/* Axis tick labels */}
+          <div className="relative mt-0.5 h-3">
+            {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+              const val = min + t * (max - min);
+              return (
+                <span
+                  key={t}
+                  className="absolute text-[10px] text-gray-400 font-ibm-sans -translate-x-1/2"
+                  style={{ left: `${t * 100}%` }}
+                >
+                  {val.toFixed(2)}
+                </span>
+              );
+            })}
+          </div>
+
           {/* Label row */}
           {label && (
             <div className="mt-1 text-center text-[11px] text-gray-500 font-ibm-sans">
