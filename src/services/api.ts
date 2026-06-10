@@ -479,6 +479,7 @@ export const recordingApi = {
     dataset_id?: number;
     skip?: number;
     limit?: number;
+    ids?: string;
   }): Promise<Recording[]> => {
     const response = await api.get("/api/recordings/", { params });
     return response.data;

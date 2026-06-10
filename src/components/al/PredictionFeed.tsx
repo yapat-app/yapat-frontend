@@ -227,36 +227,28 @@ export const PredictionFeed: React.FC = () => {
       .filter((n) => Number.isFinite(n));
 
     const datasetId = selectedDatasetId;
-    const neededSet = new Set(neededIds);
     let cancelled = false;
 
     async function fetchNames() {
+      if (cancelled) return;
+      // Fetch only the specific recording IDs we need in a single request.
+      const recs = await recordingApi.getAll({
+        dataset_id: datasetId,
+        ids: neededIds.join(","),
+        limit: neededIds.length,
+      });
+      if (cancelled) return;
       const next: Record<number, string> = {};
-      // Page through the dataset's recordings in bulk (one request per ~1000)
-      // instead of fetching each recording id individually — the per-id loop
-      // fired thousands of GET /api/recordings/{id} calls and stalled the feed.
-      const PAGE = 1000;
-      let skip = 0;
-      for (;;) {
-        if (cancelled) return;
-        const page = await recordingApi.getAll({
-          dataset_id: datasetId,
-          skip,
-          limit: PAGE,
-        });
-        for (const rec of page) {
-          const id = Number(rec.id);
-          if (!Number.isFinite(id) || !neededSet.has(id)) continue;
-          const name =
-            (typeof rec.file_name === "string" && rec.file_name) ||
-            (typeof rec.name === "string" && rec.name) ||
-            null;
-          if (name) next[id] = name;
-        }
-        if (page.length < PAGE) break;
-        skip += PAGE;
+      for (const rec of recs) {
+        const id = Number(rec.id);
+        if (!Number.isFinite(id)) continue;
+        const name =
+          (typeof rec.file_name === "string" && rec.file_name) ||
+          (typeof rec.name === "string" && rec.name) ||
+          null;
+        if (name) next[id] = name;
       }
-      if (!cancelled) setRecordingNameById(next);
+      setRecordingNameById(next);
     }
 
     void fetchNames().catch(() => {
@@ -508,18 +500,9 @@ export const PredictionFeed: React.FC = () => {
           style={{ scrollSnapType: "y mandatory" }}
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {predictions.map((p, index) => {
+            {predictions.slice(0, visibleCount).map((p, index) => {
               const key = p.id ?? p.snippet_id;
               const height = blindSnapCardHeight;
-              if (index >= visibleCount) {
-                return (
-                  <div
-                    key={key}
-                    className="snap-start shrink-0 w-full rounded-lg bg-gray-50 border border-gray-100"
-                    style={{ height }}
-                  />
-                );
-              }
               if (index === visibleCount - 1) {
                 return (
                   <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
@@ -550,6 +533,12 @@ export const PredictionFeed: React.FC = () => {
                 </div>
               );
             })}
+            {predictions.length > visibleCount && (
+              <div
+                className="snap-start shrink-0 w-full"
+                style={{ height: (predictions.length - visibleCount) * (blindSnapCardHeight + 12) }}
+              />
+            )}
 
             {inferenceLoading && (
               <div className="flex justify-center py-4">
@@ -610,17 +599,8 @@ export const PredictionFeed: React.FC = () => {
 
       <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
-          {predictions.map((p, index) => {
+          {predictions.slice(0, visibleCount).map((p, index) => {
             const key = p.id ?? p.snippet_id;
-            if (index >= visibleCount) {
-              return (
-                <div
-                  key={key}
-                  className="rounded-lg bg-gray-50 border border-gray-100"
-                  style={{ height: 220 }}
-                />
-              );
-            }
             if (index === visibleCount - 1) {
               return (
                 <React.Fragment key={key}>
@@ -646,6 +626,9 @@ export const PredictionFeed: React.FC = () => {
               />
             );
           })}
+          {predictions.length > visibleCount && (
+            <div style={{ height: (predictions.length - visibleCount) * (220 + 12) }} />
+          )}
 
           {inferenceLoading && (
             <div className="flex justify-center py-4">
