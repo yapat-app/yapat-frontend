@@ -7,6 +7,7 @@ import { Button } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
+import { usePhaseConfig } from "../studyPhases";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -17,9 +18,10 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
     (state: any) => state.annotation,
   );
   const navigate = useNavigate();
+  const phase = usePhaseConfig();
 
   const handleStartAL = () => {
-    navigate(`/annotate?mode=al&dataset_id=${dataset.id}`);
+    navigate(`/annotate?mode=al&dataset_id=${dataset.id}&phase=${phase.id}`);
   };
 
   const datasetTypeLabel = (dataset.dataset_type ?? "PAM").replaceAll("_", " ");

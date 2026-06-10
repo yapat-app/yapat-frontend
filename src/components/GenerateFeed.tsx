@@ -11,6 +11,7 @@ import {
   fetchSnippetFeed,
 } from "../redux/features/snippetSlice";
 import { useNavigate } from "react-router-dom";
+import { usePhaseConfig } from "../studyPhases";
 import {
   Select,
   Modal,
@@ -40,6 +41,7 @@ export const GenerateFeedModal = ({
 }) => {
   const dispatch = useAppDispatch();
   const navigator = useNavigate();
+  const phase = usePhaseConfig();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
   const { snippetsLoading } = useAppSelector((state) => state.snippet);
@@ -76,7 +78,7 @@ export const GenerateFeedModal = ({
 
   useEffect(() => {
     if (feed || (snippets.length > 0 && isModalOpen)) {
-      navigator(`/annotate?dataset_id=${selectedDatasetId}`);
+      navigator(`/annotate?dataset_id=${selectedDatasetId}&phase=${phase.id}`);
     }
   }, [embeddingCreated, feed, snippets]);
 

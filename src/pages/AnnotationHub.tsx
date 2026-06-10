@@ -4,11 +4,11 @@
  * Composed from `annotationHub/*` modules (hooks, toolbar, modals, main pane).
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppSelector } from "../hooks";
-import { isPhaseLocked } from "../studyPhases";
+import { isPhaseLocked, usePhaseConfig } from "../studyPhases";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubClassic } from "./annotationHub/useHubClassic";
@@ -30,6 +30,19 @@ export const AnnotationHub: React.FC = () => {
 
   // User study: lock to AL mode only.
   const mode: AnnotateMode = "al";
+
+  const phase = usePhaseConfig();
+
+  // Keep ?phase= in the URL so shared links and page reloads always carry it.
+  useEffect(() => {
+    if (!searchParams.get("phase")) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("phase", phase.id);
+        return next;
+      }, { replace: true });
+    }
+  }, [phase.id, searchParams, setSearchParams]);
 
   const classicDatasetId = searchParams.get("dataset_id");
   const classic = useHubClassic(mode, classicDatasetId, user?.id ?? null);
