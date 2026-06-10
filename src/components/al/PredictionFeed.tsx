@@ -199,15 +199,18 @@ export const PredictionFeed: React.FC = () => {
   }, [dispatch, predictions, visibleCount]);
 
   const neededRecordingIdsKey = useMemo(() => {
+    // Only fetch names for currently visible predictions — computing over all
+    // 24k+ predictions would trigger hundreds of paginated bulk requests.
     const ids = Array.from(
       new Set(
         predictions
+          .slice(0, visibleCount)
           .map((p) => p.recording_id)
           .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
       ),
     );
     return ids.join(",");
-  }, [predictions]);
+  }, [predictions, visibleCount]);
 
   useEffect(() => {
     setRecordingNameById({});
