@@ -191,7 +191,7 @@ export function useProjectionTraces(opts: {
     return enrichedPlotPoints.map((p, i) => {
       let visible = true;
 
-      if (visibilityMode === "single" && visProp) {
+      if ((visibilityMode === "single" || visibilityMode === "fixed") && visProp) {
         const [pMin, pMax] = visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
         const [normLo, normHi] = alFilters.visibility.range;
         const span = pMax - pMin;
@@ -232,10 +232,7 @@ export function useProjectionTraces(opts: {
             }
             continue;
           }
-          let v = raw;
-          if (key === "composite" && typeof v === "number") {
-            v = Math.min(COMPOSITE_DOMAIN[1], Math.max(COMPOSITE_DOMAIN[0], v));
-          }
+          const v = Math.min(pMax, Math.max(pMin, raw));
           if (v < domainLo || v > domainHi + SAMPLE_SCORE_UPPER_EPS) {
             visible = false;
             break;

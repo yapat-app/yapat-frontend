@@ -12,6 +12,7 @@ import {
   setVisibilityFilter,
   setVisibilityKeys,
   setVisibilityRangeFor,
+  resetVisibilityFilter,
 } from "../../../redux/features/alSlice";
 import { ALFilterPanel } from "../ALFilterPanel";
 import { ScoreHistogramPanel } from "../ScoreHistogramPanel";
@@ -300,6 +301,7 @@ export const ProjectionView: React.FC = () => {
           onMultiVisibilityRangeChange={(key, range) =>
             dispatch(setVisibilityRangeFor({ key, range }))
           }
+          onReset={() => dispatch(resetVisibilityFilter())}
         />
       )}
 
@@ -317,6 +319,7 @@ export const ProjectionView: React.FC = () => {
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
           }
           onVisibilityRangeChange={(range) => dispatch(setVisibilityFilter({ range }))}
+          onResetVisibility={() => dispatch(resetVisibilityFilter())}
           onMultiVisibilityChange={(keys) => dispatch(setVisibilityKeys(keys))}
           onMultiVisibilityRangeChange={(key, range) =>
             dispatch(setVisibilityRangeFor({ key, range }))

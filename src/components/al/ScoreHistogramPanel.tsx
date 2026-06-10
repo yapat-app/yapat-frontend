@@ -46,6 +46,7 @@ interface ScoreHistogramPanelProps {
   onVisibilityRangeChange: (range: [number, number]) => void;
   onMultiVisibilityChange?: (keys: string[]) => void;
   onMultiVisibilityRangeChange?: (key: string, range: [number, number]) => void;
+  onReset?: () => void;
 }
 
 const SCORE_MIN = 0;
@@ -118,6 +119,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   onVisibilityRangeChange,
   onMultiVisibilityChange,
   onMultiVisibilityRangeChange,
+  onReset,
 }) => {
   const isMulti = visibilityMode === "multi";
 
@@ -202,6 +204,12 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     [visiblePoints, singleActiveKey],
   );
 
+  // True when any active filter has a threshold above 0.
+  const isFiltered = useMemo(() => {
+    if (!isMulti) return (alFilters.visibility.range?.[0] ?? 0) > 0;
+    return multiActiveKeys.some((k) => (alFilters.visibility.ranges?.[k]?.[0] ?? 0) > 0);
+  }, [isMulti, alFilters.visibility.range, alFilters.visibility.ranges, multiActiveKeys]);
+
   // One entry per active property (preserve allowedProperties ordering).
   const multiData = useMemo(() => {
     return (allowedProperties as string[])
@@ -224,12 +232,23 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
           Score Distribution
         </span>
-        <span className="text-[11px] text-gray-500 font-ibm-sans">
-          <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
-          {" / "}
-          <strong className="text-gray-700">{enrichedPlotPoints.length.toLocaleString()}</strong>
-          {" visible"}
-        </span>
+        <div className="flex items-center gap-2">
+          {isFiltered && onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
+            >
+              Reset
+            </button>
+          )}
+          <span className="text-[11px] text-gray-500 font-ibm-sans">
+            <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
+            {" / "}
+            <strong className="text-gray-700">{enrichedPlotPoints.length.toLocaleString()}</strong>
+            {" visible"}
+          </span>
+        </div>
       </div>
 
       {/* ── P3.1: exclusive tabs + one histogram ─────────────────────── */}

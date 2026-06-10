@@ -73,6 +73,7 @@ interface ALFilterPanelProps {
   /** Single-mode visibility callbacks (legacy / phase 2.2). */
   onVisibilityKeyChange: (key: string | null) => void;
   onVisibilityRangeChange: (range: [number, number]) => void;
+  onResetVisibility?: () => void;
 
   /** Multi-mode visibility callbacks (phase 3.2). */
   onMultiVisibilityChange?: (keys: string[]) => void;
@@ -96,6 +97,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   visibilityScoreValues = [],
   onVisibilityKeyChange,
   onVisibilityRangeChange,
+  onResetVisibility,
   onMultiVisibilityChange,
   onMultiVisibilityRangeChange,
   onColorKeyChange,
@@ -291,11 +293,22 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
       <div className="flex flex-wrap gap-6 items-start">
         {showVisibility && (
           <div className="flex flex-col gap-2 min-w-[200px] flex-1">
-            <div className="flex items-center gap-1.5">
-              <EyeOutlined className="text-gray-400 text-xs" />
-              <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
-                Visibility Filter {phaseVisibilityMode === "multi" ? "(combine)" : ""}
-              </span>
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <EyeOutlined className="text-gray-400 text-xs" />
+                <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
+                  Visibility Filter {phaseVisibilityMode === "multi" ? "(combine)" : ""}
+                </span>
+              </div>
+              {!isFixedVisibility && onResetVisibility && (filters.visibility.range?.[0] ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={onResetVisibility}
+                  className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
+                >
+                  Reset
+                </button>
+              )}
             </div>
 
             {(phaseVisibilityMode === "single" || isFixedVisibility) ? (
