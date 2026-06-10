@@ -223,32 +223,35 @@ export const PredictionFeed: React.FC = () => {
       .map(Number)
       .filter((n) => Number.isFinite(n));
 
+    const datasetId = selectedDatasetId;
+    const neededSet = new Set(neededIds);
     let cancelled = false;
-
-    const BATCH = 10;
-    const batches: number[][] = [];
-    for (let i = 0; i < neededIds.length; i += BATCH) {
-      batches.push(neededIds.slice(i, i + BATCH));
-    }
 
     async function fetchNames() {
       const next: Record<number, string> = {};
-      for (const batch of batches) {
+      // Page through the dataset's recordings in bulk (one request per ~1000)
+      // instead of fetching each recording id individually — the per-id loop
+      // fired thousands of GET /api/recordings/{id} calls and stalled the feed.
+      const PAGE = 1000;
+      let skip = 0;
+      for (;;) {
         if (cancelled) return;
-        const results = await Promise.allSettled(
-          batch.map((id) => recordingApi.getById(id)),
-        );
-        for (const r of results) {
-          if (r.status !== "fulfilled") continue;
-          const rec = r.value;
+        const page = await recordingApi.getAll({
+          dataset_id: datasetId,
+          skip,
+          limit: PAGE,
+        });
+        for (const rec of page) {
           const id = Number(rec.id);
-          if (!Number.isFinite(id)) continue;
+          if (!Number.isFinite(id) || !neededSet.has(id)) continue;
           const name =
             (typeof rec.file_name === "string" && rec.file_name) ||
             (typeof rec.name === "string" && rec.name) ||
             null;
           if (name) next[id] = name;
         }
+        if (page.length < PAGE) break;
+        skip += PAGE;
       }
       if (!cancelled) setRecordingNameById(next);
     }
