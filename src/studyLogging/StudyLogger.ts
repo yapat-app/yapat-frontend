@@ -36,6 +36,11 @@ function parseBool(v: string | undefined): boolean {
 }
 
 function isEnabled(): boolean {
+  // Runtime override (injected by entrypoint.sh into window.__ENV__) takes
+  // precedence over the build-time env var so the flag can be toggled without
+  // rebuilding the Docker image.
+  const runtime = (window as any).__ENV__?.VITE_STUDY_LOGGING_ENABLED;
+  if (runtime !== undefined) return parseBool(runtime);
   return parseBool(import.meta.env.VITE_STUDY_LOGGING_ENABLED as string | undefined);
 }
 

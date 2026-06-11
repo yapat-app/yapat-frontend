@@ -4,7 +4,11 @@ set -e
 # Generate runtime config.js file
 cat > /usr/share/nginx/html/config.js <<EOF
 window.__ENV__ = {
-  VITE_YAPAT_BACKEND_URL: "${VITE_YAPAT_BACKEND_URL:-http://localhost:8000}"
+  VITE_YAPAT_BACKEND_URL: "${VITE_YAPAT_BACKEND_URL:-http://localhost:8000}",
+  VITE_STUDY_LOGGING_ENABLED: "${VITE_STUDY_LOGGING_ENABLED:-1}",
+  VITE_STUDY_PHASE: "${VITE_STUDY_PHASE:-}",
+  VITE_STUDY_PHASE_LOCK: "${VITE_STUDY_PHASE_LOCK:-0}",
+  VITE_STUDY_PHASE_ALLOWED: "${VITE_STUDY_PHASE_ALLOWED:-}"
 };
 EOF
 
