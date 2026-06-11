@@ -62,7 +62,11 @@ type VisibilityListener = (hidden: boolean) => void;
 const MIN_SESSION_MS = 2000;
 
 class StudyLogger {
-  private enabled = isEnabled();
+  private _enabled: boolean | null = null;
+  private get enabled(): boolean {
+    if (this._enabled === null) this._enabled = isEnabled();
+    return this._enabled;
+  }
   private started = false;
   private startedAt: number | null = null;
   private phaseId: string | null = null;
@@ -83,6 +87,10 @@ class StudyLogger {
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  isStarted(): boolean {
+    return this.started;
   }
 
   setPhaseId(id: string | null): void {

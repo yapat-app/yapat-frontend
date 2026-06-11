@@ -10,11 +10,12 @@ let installed = false;
 
 export function installDevInspector(): void {
   if (installed) return;
-  if (!import.meta.env.DEV || !studyLogger.isEnabled()) return;
+  if (!studyLogger.isEnabled()) return;
   installed = true;
   (window as any).__studyLog = {
     recent: () => studyLogger.recentEvents(),
     flush: () => studyLogger.flush("manual"),
     enabled: () => studyLogger.isEnabled(),
+    started: () => studyLogger.isStarted(),
   };
 }
