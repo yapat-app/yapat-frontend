@@ -18,6 +18,7 @@ import {
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
+import { studyLogger } from "../../studyLogging";
 import type { PAMCheckpoint } from "../../types/al";
 
 export interface LabelScopeOption {
@@ -567,10 +568,14 @@ export function useHubALSession(
   const retrainJobId = lastRetrainDispatch?.job_id ?? null;
 
   const lastNotifiedJobIdRef = useRef<number | null>(null);
+  const retrainStartedAtRef = useRef<Record<number, number>>({});
   useEffect(() => {
     if (!selectedDatasetId || retrainJobId === null) return;
     const stableDatasetId: number = selectedDatasetId;
     const stableJobId: number = retrainJobId;
+    if (retrainStartedAtRef.current[stableJobId] === undefined) {
+      retrainStartedAtRef.current[stableJobId] = performance.now();
+    }
     let cancelled = false;
     let timer: number | null = null;
     async function tick() {
@@ -589,6 +594,12 @@ export function useHubALSession(
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
           if (status === "COMPLETED") {
+            const startedAt = retrainStartedAtRef.current[stableJobId];
+            studyLogger.log(
+              "retrain_complete",
+              { durationMs: startedAt ? Math.round(performance.now() - startedAt) : 0, modelFamilyName },
+              startedAt ? { durationMs: Math.round(performance.now() - startedAt) } : undefined,
+            );
             message.success("Training completed — click Generate Feed to load predictions");
           } else {
             message.error("Training failed — please check the model checkpoint and retry");

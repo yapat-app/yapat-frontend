@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FolderOpenOutlined,
   AudioOutlined,
+  BarChartOutlined,
   TagsOutlined,
   HistoryOutlined,
   TeamOutlined,
@@ -99,6 +100,19 @@ const CARDS: ServiceCard[] = [
     bgColor: "bg-rose-50",
     borderColor: "border-rose-200 hover:border-rose-400",
     roles: ["admin", "team_owner"],
+  },
+  {
+    key: "study-logs",
+    icon: <BarChartOutlined className="text-2xl" />,
+    title: "Study Logs",
+    description:
+      "Browse per-participant interaction events captured during the user study. Inspect sessions, filter by event type, and export CSV.",
+    route: "/study-logs",
+    color: "text-violet-600",
+    bgColor: "bg-violet-50",
+    borderColor: "border-violet-200 hover:border-violet-400",
+    badge: "",
+    roles: ["admin"] as Array<"admin" | "team_owner" | "user">,
   },
   {
     key: "docs",

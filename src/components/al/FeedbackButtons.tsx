@@ -18,6 +18,7 @@ import {
 } from "../../redux/features/alSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
+import { studyLogger } from "../../studyLogging";
 import { LabelSelector } from "./LabelSelector";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
@@ -141,6 +142,12 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
           "Retraining started — predictions will refresh when ready.",
         );
       }
+
+      studyLogger.log(
+        "feedback_submit",
+        { action, labels: labels ?? [] },
+        { snippetId: prediction.snippet_id },
+      );
 
       setSaveState("saved");
       // Auto-dismiss the "Saved" indicator so it doesn't linger.

@@ -12,6 +12,7 @@ import React, { useState, useMemo } from "react";
 import { Select, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
+import { studyLogger } from "../../studyLogging";
 
 const MAX_VISIBLE_LABELS = 300;
 
@@ -93,7 +94,21 @@ export const LabelSelector: React.FC<Props> = ({
     if (!onChange) return;
     const normalized = (value ?? []);
     const exists = normalized.some((x) => x.toLowerCase() === label.toLowerCase());
-    onChange(exists ? normalized.filter((x) => x.toLowerCase() !== label.toLowerCase()) : [...normalized, label]);
+    const next = exists
+      ? normalized.filter((x) => x.toLowerCase() !== label.toLowerCase())
+      : [...normalized, label];
+    studyLogger.log("label_toggle", {
+      label,
+      op: exists ? "remove" : "add",
+      labelsAfter: next,
+    });
+    onChange(next);
+  };
+
+  const clearAll = () => {
+    if (!onChange) return;
+    studyLogger.log("label_clear", { labelsBefore: value ?? [] });
+    onChange([]);
   };
 
   // ── Compact inline mode ───────────────────────────────────────────────────
@@ -110,7 +125,7 @@ export const LabelSelector: React.FC<Props> = ({
               </span>
               <button
                 type="button"
-                onClick={() => onChange?.([])}
+                onClick={clearAll}
                 disabled={disabled}
                 className="text-[11px] text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
               >
@@ -276,7 +291,7 @@ export const LabelSelector: React.FC<Props> = ({
                   <Button
                     size="small"
                     type="text"
-                    onClick={() => onChange?.([])}
+                    onClick={clearAll}
                     disabled={disabled || labelsLoading}
                     className="text-[11px]"
                   >

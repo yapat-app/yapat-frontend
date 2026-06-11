@@ -17,6 +17,7 @@ import { PredictionCard } from "./PredictionCard";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
+import { studyLogger, usePanelDwell } from "../../studyLogging";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
@@ -78,6 +79,11 @@ export const PredictionFeed: React.FC = () => {
   const scrollSyncSuspendedRef = useRef(false);
   const cardVisibilityObserverRef = useRef<IntersectionObserver | null>(null);
   const selectedSnippetIdRef = useRef<number | null>(selectedSnippetId);
+  // Last snippet id logged as the active/centered card (dedupes scroll spam).
+  const lastActiveLoggedRef = useRef<number | null>(null);
+
+  // Dwell tracking for the annotation feed panel.
+  usePanelDwell("feed");
   useEffect(() => {
     selectedSnippetIdRef.current = selectedSnippetId;
   }, [selectedSnippetId]);
@@ -118,6 +124,14 @@ export const PredictionFeed: React.FC = () => {
         }
       });
       if (bestId === null) return;
+      if (bestId !== lastActiveLoggedRef.current) {
+        lastActiveLoggedRef.current = bestId;
+        studyLogger.log(
+          "feed_active_snippet_change",
+          { snippetId: bestId, source: opts?.force ? "programmatic" : "scroll" },
+          { snippetId: bestId },
+        );
+      }
       if (phase.feed.mode === "single_card_on_select" && selectedSnippetIds.length > 1) {
         // Multi-select: only update which card is "active" — don't reset the selection.
         dispatch(setActiveSnippet(bestId));

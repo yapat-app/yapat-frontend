@@ -18,6 +18,7 @@ import { ALFilterPanel } from "../ALFilterPanel";
 import { ScoreHistogramPanel } from "../ScoreHistogramPanel";
 import { visualisationsApi } from "../../../services/visualisationsApi";
 import { usePhaseConfig } from "../../../studyPhases";
+import { studyLogger, usePanelDwell } from "../../../studyLogging";
 import { isProjectionNotReadyMessage, type ProjectionMethod } from "./fpvHelpers";
 import { useFpvData } from "./useFpvData";
 import { useLabeledPool } from "./useLabeledPool";
@@ -67,6 +68,9 @@ export const ProjectionView: React.FC = () => {
   const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("pca");
+
+  // Dwell tracking for the visualisation panel.
+  usePanelDwell("visualization");
 
   const visMode = phase.visualization.mode;
   const visibilityMode = phase.visualization.visibilityFilter.mode;
@@ -277,10 +281,37 @@ export const ProjectionView: React.FC = () => {
     if (hasHiddenTrace && pt.curveNumber === 0) return;
 
     const snippetId = pt.customdata as number;
+    studyLogger.log(
+      "vis_point_click",
+      { snippetId, shiftHeld: isShiftHeld.current, projectionMethod: method },
+      { snippetId },
+    );
     if (isShiftHeld.current && phase.feed.mode === "single_card_on_select") {
       dispatch(toggleSelectedSnippet(snippetId));
     } else {
       dispatch(setSelectedSnippet(snippetId));
+    }
+  };
+
+  // Log a hover only after the cursor dwells on a point for ≥ 2s.
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handlePlotHover = (event: any) => {
+    const pt = event.points?.[0];
+    if (pt?.customdata === undefined) return;
+    const snippetId = pt.customdata as number;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      studyLogger.log(
+        "vis_point_hover",
+        { snippetId, projectionMethod: method },
+        { snippetId, durationMs: 2000 },
+      );
+    }, 2000);
+  };
+  const handlePlotUnhover = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
     }
   };
 
@@ -293,14 +324,36 @@ export const ProjectionView: React.FC = () => {
           allowedProperties={allowedVisProps}
           visibilityMode={visibilityMode}
           alFilters={alFilters}
-          onVisibilityKeyChange={(key) =>
-            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
-          }
-          onVisibilityRangeChange={(range) => dispatch(setVisibilityFilter({ range }))}
-          onMultiVisibilityChange={(keys) => dispatch(setVisibilityKeys(keys))}
-          onMultiVisibilityRangeChange={(key, range) =>
-            dispatch(setVisibilityRangeFor({ key, range }))
-          }
+          onVisibilityKeyChange={(key) => {
+            if (key) studyLogger.log("histogram_property_select", { property: key });
+            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }));
+          }}
+          onVisibilityRangeChange={(range) => {
+            studyLogger.log("visibility_threshold_change", {
+              property: alFilters.visibility.propertyKey ?? "",
+              value: range[0],
+            });
+            dispatch(setVisibilityFilter({ range }));
+          }}
+          onMultiVisibilityChange={(keys) => {
+            const prev = alFilters.visibility.propertyKeys ?? [];
+            const added = keys.find((k) => !prev.includes(k));
+            const removed = prev.find((k) => !keys.includes(k));
+            studyLogger.log("histogram_multi_toggle", {
+              property: added ?? removed ?? "",
+              enabled: Boolean(added),
+              keysAfter: keys,
+            });
+            dispatch(setVisibilityKeys(keys));
+          }}
+          onMultiVisibilityRangeChange={(key, range) => {
+            studyLogger.log("visibility_range_change", {
+              property: key,
+              min: range[0],
+              max: range[1],
+            });
+            dispatch(setVisibilityRangeFor({ key, range }));
+          }}
           onReset={() => dispatch(resetVisibilityFilter())}
         />
       )}
@@ -315,15 +368,27 @@ export const ProjectionView: React.FC = () => {
           defaultVisibilityKey={defaultVisKey}
           visibilitySliderStyle={visSliderStyle}
           visibilityScoreValues={visibilityScoreValues}
-          onVisibilityKeyChange={(key) =>
-            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }))
-          }
-          onVisibilityRangeChange={(range) => dispatch(setVisibilityFilter({ range }))}
+          onVisibilityKeyChange={(key) => {
+            if (key) studyLogger.log("histogram_property_select", { property: key });
+            dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }));
+          }}
+          onVisibilityRangeChange={(range) => {
+            studyLogger.log("visibility_threshold_change", {
+              property: alFilters.visibility.propertyKey ?? "",
+              value: range[0],
+            });
+            dispatch(setVisibilityFilter({ range }));
+          }}
           onResetVisibility={() => dispatch(resetVisibilityFilter())}
           onMultiVisibilityChange={(keys) => dispatch(setVisibilityKeys(keys))}
-          onMultiVisibilityRangeChange={(key, range) =>
-            dispatch(setVisibilityRangeFor({ key, range }))
-          }
+          onMultiVisibilityRangeChange={(key, range) => {
+            studyLogger.log("visibility_range_change", {
+              property: key,
+              min: range[0],
+              max: range[1],
+            });
+            dispatch(setVisibilityRangeFor({ key, range }));
+          }}
           onColorKeyChange={() => {}}
           allCategoricalValues={allCategoricalValues}
           visibilityRangeOverride={visRangeOverride ?? undefined}
@@ -426,6 +491,8 @@ export const ProjectionView: React.FC = () => {
               style={{ width: "100%", height: "100%" }}
               useResizeHandler
               onClick={handlePlotClick}
+              onHover={handlePlotHover}
+              onUnhover={handlePlotUnhover}
               config={{ displayModeBar: false, responsive: true }}
             />
           ) : null}

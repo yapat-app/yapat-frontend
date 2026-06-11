@@ -44,6 +44,7 @@ import type { PAMCheckpoint, PAMRunInferenceRequest, PAMSuggestionMode } from ".
 import type { SnippetSet } from "../types";
 import { usePhaseConfig } from "../studyPhases";
 import type { PhaseConfig } from "../studyPhases/types";
+import { studyLogger } from "../studyLogging";
 const { Option } = Select;
 
 function buildInferenceSuggestionParams(
@@ -824,6 +825,13 @@ export const PhaseLayout: React.FC<PhaseLayoutProps> = ({ actionButton }) => {
   const phase = usePhaseConfig();
   const feedMode = phase.feed.mode;
   const visMode = phase.visualization.mode;
+
+  // Study interaction logging: one session per AL view mount (no-op when the
+  // feature flag is off). sessionId persists in sessionStorage across remounts.
+  useEffect(() => {
+    studyLogger.start();
+    return () => studyLogger.stop();
+  }, []);
 
   const showVis = visMode !== "hidden";
   const showFeed = feedMode !== "hidden";

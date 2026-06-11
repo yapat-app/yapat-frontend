@@ -823,3 +823,59 @@ export const isNetworkError = (error: any): boolean => {
 export const isAuthError = (error: any): boolean => {
   return error.response?.status === 401 || error.response?.status === 403;
 };
+
+// ============================================================================
+// Study Logs Admin API
+// ============================================================================
+
+import type {
+  StudyLogUser,
+  StudyLogSession,
+  StudyLogEventsPage,
+} from "../types/studyLogs";
+
+export const studyLogsApi = {
+  /** All users who have study events. */
+  listUsers: async (): Promise<StudyLogUser[]> => {
+    const res = await api.get("/api/study-events/admin/users");
+    return res.data;
+  },
+
+  /** Sessions for a given user. */
+  listSessions: async (userId: number): Promise<StudyLogSession[]> => {
+    const res = await api.get(`/api/study-events/admin/users/${userId}/sessions`);
+    return res.data;
+  },
+
+  /** Paginated + filtered events for a session. */
+  getSessionEvents: async (
+    sessionId: string,
+    params: { event_type?: string; phase_id?: string; limit?: number; offset?: number }
+  ): Promise<StudyLogEventsPage> => {
+    const res = await api.get(`/api/study-events/admin/sessions/${sessionId}/events`, {
+      params,
+    });
+    return res.data;
+  },
+
+  /** Trigger a CSV download for all events in a session. */
+  exportSessionCsv: (sessionId: string): void => {
+    // Build a URL that triggers the browser's native download via an <a> click.
+    // The axios instance carries the auth header — we can't use it for a file
+    // download, so we read the token from localStorage and append it as a bearer
+    // header via a temporary fetch + blob URL instead.
+    const token = localStorage.getItem("accessToken") ?? "";
+    fetch(`/api/study-events/admin/sessions/${sessionId}/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `study_events_${sessionId.slice(0, 8)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  },
+};

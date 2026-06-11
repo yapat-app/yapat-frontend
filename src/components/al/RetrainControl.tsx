@@ -7,6 +7,7 @@ import { Button, Progress, Tag, Tooltip, Spin, Alert } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { triggerRetrain } from "../../redux/features/alSlice";
+import { studyLogger } from "../../studyLogging";
 
 interface Props {
   variant?: "full" | "compact";
@@ -31,6 +32,7 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
 
   const handleManualRetrain = () => {
     if (selectedDatasetId === null || modelFamilyName === null) return;
+    studyLogger.log("retrain_manual_click", {});
     // Dispatch the job. useHubALSession's retrain-polling effect picks up
     // lastRetrainDispatch and drives the full poll → inference refresh cycle,
     // so we don't need a separate loop here. Keeping a second poll would race

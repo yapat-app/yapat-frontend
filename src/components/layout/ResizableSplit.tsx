@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { studyLogger } from "../../studyLogging";
 
 type Mode = "ratio" | "right_px";
 
@@ -63,6 +64,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
     const el = containerRef.current;
     if (!el) return;
     let dragging = false;
+    let latestValue = mode === "ratio" ? ratio : rightPx;
     let raf = 0;
     const fireResize = () => {
       if (raf) return;
@@ -91,9 +93,11 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
         const minL = minLeftPx / w;
         const minR = minRightPx / w;
         const next = clamp(x / w, minL, 1 - minR);
+        latestValue = next;
         setRatio(next);
       } else {
         const nextRight = clamp(w - x, minRightPanelPx, Math.min(maxRightPanelPx, w - 120));
+        latestValue = nextRight;
         setRightPx(nextRight);
       }
       fireResize();
@@ -101,6 +105,15 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
     window.addEventListener("pointermove", onPointerMove);
     const onPointerUp = () => {
       delete (document.body.dataset as any).rsDragging;
+      // Log only on a real drag, with the final committed size.
+      if (dragging) {
+        studyLogger.log("split_resize", {
+          mode,
+          value: Math.round(latestValue * 1000) / 1000,
+          viewportW: window.innerWidth,
+          viewportH: window.innerHeight,
+        });
+      }
       fireResize();
     };
     window.addEventListener("pointerup", onPointerUp);

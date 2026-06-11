@@ -5,6 +5,7 @@ import { resolveColor } from "../../../utils/alColors";
 import type { PAMRetrainJobStatus, SamplingMethod } from "../../../types/al";
 import type { VisMode } from "../../../studyPhases";
 import type { ProjectionMethod } from "./fpvHelpers";
+import { studyLogger } from "../../../studyLogging";
 
 const { Option } = Select;
 
@@ -61,7 +62,10 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
           <Select
             size="small"
             value={samplingMethod}
-            onChange={(v: SamplingMethod) => onSamplingMethodChange(v)}
+            onChange={(v: SamplingMethod) => {
+              studyLogger.log("sampling_method_change", { method: v });
+              onSamplingMethodChange(v);
+            }}
             style={{ width: 140 }}
           >
             <Option value="uncertainty">Uncertainty</Option>

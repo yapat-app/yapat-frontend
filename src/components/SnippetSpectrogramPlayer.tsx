@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
+import { useAudioInstrumentation } from "../studyLogging";
 import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   SPECTROGRAM_TIME_AXIS_HEIGHT,
@@ -48,6 +49,9 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
   colormap = "viridis",
   showAxisInfo = true,
 }) => {
+  // Instrument the library's internal <audio> element (play/pause/seek/volume).
+  useAudioInstrumentation();
+
   const { plotHeight, blockHeight } = useMemo(
     () => spectrogramLayoutHeights(specHeight, showAxisInfo),
     [specHeight, showAxisInfo],

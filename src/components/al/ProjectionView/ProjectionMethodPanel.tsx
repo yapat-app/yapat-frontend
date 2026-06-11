@@ -1,6 +1,7 @@
 import React from "react";
 import { MiniProjection } from "./MiniProjection";
 import type { PlotPoint, ProjectionMethod } from "./fpvHelpers";
+import { studyLogger } from "../../../studyLogging";
 
 export interface ProjectionMethodPanelProps {
   method: ProjectionMethod;
@@ -44,7 +45,12 @@ export const ProjectionMethodPanel: React.FC<ProjectionMethodPanelProps> = ({
             <button
               key={m.key}
               type="button"
-              onClick={() => onMethodChange(m.key)}
+              onClick={() => {
+                if (m.key !== method) {
+                  studyLogger.log("projection_method_change", { from: method, to: m.key });
+                }
+                onMethodChange(m.key);
+              }}
               disabled={fpvLoading && active}
               className={[
                 "text-left rounded-xl border px-2.5 py-2 transition-all",

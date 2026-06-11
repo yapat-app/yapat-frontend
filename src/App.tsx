@@ -12,13 +12,19 @@ import { Taxonomies } from "./pages/Taxonomies";
 import { Wssed } from "./pages/Wssed";
 import HomePage from "./pages/HomePage";
 import { Dashboard } from "./pages/Dashboard";
+import { StudyLogsIndex } from "./pages/studyLogs/StudyLogsIndex";
+import { StudyLogsUser } from "./pages/studyLogs/StudyLogsUser";
+import { StudyLogsSession } from "./pages/studyLogs/StudyLogsSession";
 import { StudyPhaseProvider } from "./studyPhases";
+import { LoggerContextBridge } from "./studyLogging";
+import AdminOnlyGuard from "./routes/AdminOnlyGuard";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 import WssedAccessGuard from "./routes/WssedAccessGuard";
 
 function App() {
   return (
     <StudyPhaseProvider>
+      <LoggerContextBridge />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/home" element={<HomePage />} />
@@ -49,6 +55,31 @@ function App() {
           }
         />
         <Route path="/docs" element={<YapatUserManual />} />
+        {/* Admin-only study log viewer */}
+        <Route
+          path="/study-logs"
+          element={
+            <AdminOnlyGuard>
+              <StudyLogsIndex />
+            </AdminOnlyGuard>
+          }
+        />
+        <Route
+          path="/study-logs/:userId"
+          element={
+            <AdminOnlyGuard>
+              <StudyLogsUser />
+            </AdminOnlyGuard>
+          }
+        />
+        <Route
+          path="/study-logs/:userId/:sessionId"
+          element={
+            <AdminOnlyGuard>
+              <StudyLogsSession />
+            </AdminOnlyGuard>
+          }
+        />
       </Routes>
     </StudyPhaseProvider>
   );
