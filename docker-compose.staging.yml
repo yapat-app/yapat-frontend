@@ -1,0 +1,23 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yapat-stg-frontend
+    ports:
+      - "3001:80"
+    environment:
+      - VITE_YAPAT_BACKEND_URL=${VITE_YAPAT_BACKEND_URL:-https://iml-userstudy.ni.dfki.de}
+      - VITE_STUDY_LOGGING_ENABLED=${VITE_STUDY_LOGGING_ENABLED:-1}
+      - VITE_STUDY_PHASE=${VITE_STUDY_PHASE:-P1.1}
+      - VITE_STUDY_PHASE_LOCK=${VITE_STUDY_PHASE_LOCK:-1}
+      - VITE_STUDY_PHASE_ALLOWED=${VITE_STUDY_PHASE_ALLOWED:-P1.1,P1.2,P2.1,P2.2,P3.1,P3.2}
+      - VITE_STUDY_FLOW_ENABLED=${VITE_STUDY_FLOW_ENABLED:-1}
+      - VITE_STUDY_PHASE_DURATION_MINUTES=${VITE_STUDY_PHASE_DURATION_MINUTES:-30}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
