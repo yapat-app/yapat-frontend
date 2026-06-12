@@ -53,6 +53,7 @@ export type StudyLogEvent =
   // ── Retrain ─────────────────────────────────────────────────────────
   | { eventType: "retrain_manual_click"; payload: Record<string, never> }
   | { eventType: "retrain_complete"; payload: { durationMs: number; modelFamilyName: string | null } }
+  | { eventType: "retrain_failed"; payload: { modelFamilyName: string | null; error: string } }
 
   // ── Audio ───────────────────────────────────────────────────────────
   | { eventType: "audio_play_segment"; payload: { fromMs: number; toMs: number } }

@@ -614,7 +614,24 @@ export const PredictionFeed: React.FC = () => {
       <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           {predictions.slice(0, visibleCount).map((p, index) => {
-            const key = p.id ?? p.snippet_id;
+            const key = p._isDivider ? `divider-${p.snippet_id}` : (p.id ?? p.snippet_id);
+
+            if (p._isDivider) {
+              return (
+                <div
+                  key={key}
+                  className="flex items-center gap-3 py-1"
+                  aria-label="Model updated"
+                >
+                  <div className="flex-1 h-px bg-blue-100" />
+                  <span className="text-[11px] text-blue-400 font-ibm-sans whitespace-nowrap select-none">
+                    ↻ Model updated · New suggestions below
+                  </span>
+                  <div className="flex-1 h-px bg-blue-100" />
+                </div>
+              );
+            }
+
             if (index === visibleCount - 1) {
               return (
                 <React.Fragment key={key}>

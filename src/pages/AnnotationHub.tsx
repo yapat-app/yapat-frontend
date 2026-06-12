@@ -13,6 +13,7 @@ import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubClassic } from "./annotationHub/useHubClassic";
 import { useHubALSession } from "./annotationHub/useHubALSession";
+import { useAutoRetrain } from "../hooks/useAutoRetrain";
 import { AnnotationHubToolbar } from "./annotationHub/AnnotationHubToolbar";
 import { AnnotationHubMain } from "./annotationHub/AnnotationHubMain";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
@@ -47,6 +48,7 @@ export const AnnotationHub: React.FC = () => {
   const classicDatasetId = searchParams.get("dataset_id");
   const classic = useHubClassic(mode, classicDatasetId, user?.id ?? null);
   const al = useHubALSession(mode, searchParams, setSearchParams);
+  useAutoRetrain();
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">

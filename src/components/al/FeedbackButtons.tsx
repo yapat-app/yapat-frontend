@@ -52,7 +52,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     snippetSetId,
     inferenceK,
     samplingMethod,
-    retrainThreshold,
     feedSource,
   } = useAppSelector((state) => state.al);
 
@@ -126,7 +125,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     setSubmitting(true);
     setSaveState("saving");
     try {
-      const fb = await dispatch(
+      await dispatch(
         submitFeedback({
           dataset_id: selectedDatasetId,
           model_family_name: modelFamilyName,
@@ -136,12 +135,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
         }),
       ).unwrap();
 
-      if (fb.retrain_triggered) {
-        message.info(
-          `Model update triggered (${fb.feedback_count_since_retrain}/${retrainThreshold}). ` +
-          "Retraining started — predictions will refresh when ready.",
-        );
-      }
 
       studyLogger.log(
         "feedback_submit",

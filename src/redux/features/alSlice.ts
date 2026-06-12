@@ -33,7 +33,7 @@ import {
 import { aggregateConfidence } from "../../utils/aggregateConfidence";
 
 // Default retrain threshold (kept in sync with backend when available).
-const RETRAIN_THRESHOLD = 9;
+const RETRAIN_THRESHOLD = 10;
 const STORAGE_KEY = "yapat_al_last_feed";
 const MAX_PERSISTED_PREDICTIONS = 5000;
 
@@ -370,6 +370,27 @@ export const runInference = createAsyncThunk(
   },
 );
 
+/**
+ * Fetch a small batch of fresh suggestions after a retrain and APPEND them to
+ * the existing predictions (Phase 1 scrollable feed only). A divider sentinel
+ * is inserted between the old and new predictions so the feed renders a visual
+ * "Model updated" marker without replacing or scrolling the current view.
+ */
+export const fetchAndAppendSuggestions = createAsyncThunk(
+  "al/fetchAndAppendSuggestions",
+  async (body: PAMRunInferenceRequest, { rejectWithValue }) => {
+    try {
+      const result = await alApi.runInference(body);
+      if (isInferenceJobDispatch(result)) {
+        return rejectWithValue("Background job started — cannot append in this state");
+      }
+      return result as PAMInferenceResult;
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 export const submitFeedback = createAsyncThunk(
   "al/submitFeedback",
   async (payload: FeedbackPayload, { rejectWithValue }) => {
@@ -687,6 +708,7 @@ const alSlice = createSlice({
       state.lastRetrainDispatch = null;
       state.lastRetrainJob = null;
       state.retrainLoading = false;
+      // Note: appendPredictionsWithDivider is handled in extraReducers (needs withDisplayFields).
     },
     hydrateSavedFeed: (
       state,
@@ -955,6 +977,39 @@ const alSlice = createSlice({
       state.retrainLoading = false;
       state.lastRetrainFailed = true;
       state.error = action.payload as string;
+    });
+
+    builder.addCase(fetchAndAppendSuggestions.fulfilled, (state, action) => {
+      const result = action.payload;
+      const labelScope = result.label_scope ?? null;
+      const newRows = withDisplayFields(result.rows, labelScope);
+
+      // Filter out snippet IDs already present in the feed (including dividers).
+      const existingIds = new Set(
+        state.predictions.filter((p) => !p._isDivider).map((p) => p.snippet_id),
+      );
+      const freshRows = newRows.filter((p) => !existingIds.has(p.snippet_id));
+      if (freshRows.length === 0) return;
+
+      // Use a negative timestamp so each retrain gets a unique divider key.
+      const divider: PAMPrediction = {
+        _isDivider: true,
+        snippet_id: -Date.now(),
+        id: null,
+        model_checkpoint_id: null,
+        predicted_labels: null,
+        predicted_label: null,
+        confidence: null,
+        ranking_score: null,
+        created_at: null,
+      };
+
+      state.predictions = [...state.predictions, divider, ...freshRows];
+      // projectionPredictions intentionally not updated — the projection overlay
+      // stays stable so Phase 1 users are not visually disrupted.
+    });
+    builder.addCase(fetchAndAppendSuggestions.rejected, () => {
+      // Silently ignore — the existing feed is unaffected.
     });
   },
 });

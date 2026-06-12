@@ -129,6 +129,8 @@ export interface PAMPrediction {
   embedding_2d?: [number, number];
   /** Sampler + metadata scores attached by the backend */
   scores?: SampleScores;
+  /** Frontend-only: marks this entry as a divider card between pre- and post-retrain suggestions. */
+  _isDivider?: boolean;
 }
 
 export interface PAMInferenceResult {

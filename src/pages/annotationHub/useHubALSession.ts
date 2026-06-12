@@ -15,6 +15,7 @@ import {
   pollRetrainJob,
   trainFromScratch,
   clearRetrainDispatch,
+  fetchAndAppendSuggestions,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -548,7 +549,6 @@ export function useHubALSession(
       message.error("Failed to dispatch training job");
       return;
     }
-    message.success(`Training job ${result.payload.job_id} dispatched`);
     setAlConfigOpen(false);
   }, [
     checkpoints.length,
@@ -584,7 +584,6 @@ export function useHubALSession(
       if (!pollRetrainJob.fulfilled.match(r)) {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
-          message.warning("Could not poll retrain job — please retry manually");
         }
         dispatch(clearRetrainDispatch());
         return;
@@ -600,26 +599,42 @@ export function useHubALSession(
               { durationMs: startedAt ? Math.round(performance.now() - startedAt) : 0, modelFamilyName },
               startedAt ? { durationMs: Math.round(performance.now() - startedAt) } : undefined,
             );
-            message.success("Training completed — click Generate Feed to load predictions");
           } else {
-            message.error("Training failed — please check the model checkpoint and retry");
+            const detail = r.payload.error_message;
+            studyLogger.log("retrain_failed", { modelFamilyName, error: detail ?? "unknown" });
           }
         }
         dispatch(clearRetrainDispatch());
         if (status === "COMPLETED" && modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
-          const suggestionParams = buildSuggestionParams(
-            inferenceK,
-            isValidateMode || isSuggestionsMode(modelInfo),
-          );
-          // Predictions were stored by the retrain job; omit force_refresh to avoid a poll loop.
-          dispatch(
-            runInference({
-              model_family_name: modelFamilyName,
-              dataset_id: selectedDatasetId,
-              snippet_set_id: snippetSetId,
-              ...suggestionParams,
-            }),
-          );
+          if (phase.feed.mode === "scrollable_topk") {
+            // Scrollable feed: append fresh suggestions without disrupting scroll position.
+            dispatch(
+              fetchAndAppendSuggestions({
+                model_family_name: modelFamilyName,
+                dataset_id: selectedDatasetId,
+                snippet_set_id: snippetSetId,
+                sample_suggestion: true,
+                suggestion_strategy: "uncertainty",
+                k: inferenceK,
+                force_refresh: true,
+              }),
+            );
+          } else {
+            // single_card_on_select (P2+, P3+): silently replace the prediction pool.
+            // The user is navigating via the projection, so no scroll position is lost.
+            const suggestionParams = buildSuggestionParams(
+              inferenceK,
+              isValidateMode || isSuggestionsMode(modelInfo),
+            );
+            dispatch(
+              runInference({
+                model_family_name: modelFamilyName,
+                dataset_id: selectedDatasetId,
+                snippet_set_id: snippetSetId,
+                ...suggestionParams,
+              }),
+            );
+          }
         }
         try {
           const updated = await alApi.getCheckpoints(stableDatasetId);
@@ -647,6 +662,7 @@ export function useHubALSession(
     inferenceK,
     buildSuggestionParams,
     modelInfo,
+    phase,
   ]);
 
   const isRestoredFeed = lastInferenceAt !== null && predictions.length > 0;
