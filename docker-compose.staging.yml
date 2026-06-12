@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: yapat-stg-frontend
     ports:
-      - "3001:80"
+      - "3100:80"
     environment:
       - VITE_YAPAT_BACKEND_URL=${VITE_YAPAT_BACKEND_URL:-https://iml-userstudy.ni.dfki.de}
       - VITE_STUDY_LOGGING_ENABLED=${VITE_STUDY_LOGGING_ENABLED:-1}
