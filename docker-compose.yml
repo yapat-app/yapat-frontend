@@ -12,6 +12,8 @@ services:
       - VITE_STUDY_PHASE=${VITE_STUDY_PHASE:-}
       - VITE_STUDY_PHASE_LOCK=${VITE_STUDY_PHASE_LOCK:-0}
       - VITE_STUDY_PHASE_ALLOWED=${VITE_STUDY_PHASE_ALLOWED:-}
+      - VITE_STUDY_FLOW_ENABLED=${VITE_STUDY_FLOW_ENABLED:-}
+      - VITE_STUDY_PHASE_DURATION_MINUTES=${VITE_STUDY_PHASE_DURATION_MINUTES:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
