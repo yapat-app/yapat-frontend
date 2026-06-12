@@ -289,7 +289,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
   }, [phaseVisibilityMode, effectiveDefaultKey, filters.visibility.propertyKey, onVisibilityKeyChange]);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-3 border-b border-gray-100 bg-white">
+    <div data-tour="filter-panel" className="flex flex-col gap-4 px-4 py-3 border-b border-gray-100 bg-white">
       <div className="flex flex-wrap gap-6 items-start">
         {showVisibility && (
           <div className="flex flex-col gap-2 min-w-[200px] flex-1">

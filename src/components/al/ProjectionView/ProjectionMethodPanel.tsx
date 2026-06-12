@@ -31,7 +31,7 @@ export const ProjectionMethodPanel: React.FC<ProjectionMethodPanelProps> = ({
   onMethodChange,
 }) => {
   return (
-    <div className="w-[168px] flex-shrink-0 border-r border-gray-100 bg-white">
+    <div data-tour="projection-method" className="w-[168px] flex-shrink-0 border-r border-gray-100 bg-white">
       <div className="px-3 py-2 border-b border-gray-100">
         <div className="text-xs font-ibm-mono font-semibold text-gray-700">Projection</div>
         <div className="text-[11px] text-gray-400">Pick a method</div>

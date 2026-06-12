@@ -114,7 +114,7 @@ export const LabelSelector: React.FC<Props> = ({
   // ── Compact inline mode ───────────────────────────────────────────────────
   if (compact) {
     return (
-      <div className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
+      <div data-tour="labeling" className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
 
         {/* ── Current labels — shown as dismissible AntD Tags ── */}
         {value.length > 0 && (

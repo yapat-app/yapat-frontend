@@ -45,6 +45,7 @@ import type { SnippetSet } from "../types";
 import { usePhaseConfig } from "../studyPhases";
 import type { PhaseConfig } from "../studyPhases/types";
 import { studyLogger } from "../studyLogging";
+import { isFlowEnabled } from "../studyFlow";
 const { Option } = Select;
 
 function buildInferenceSuggestionParams(
@@ -784,7 +785,7 @@ const SelectionPanelHeader: React.FC = () => {
   const dispatch = useAppDispatch();
   const count = useAppSelector((s) => s.al.selectedSnippetIds.length);
   return (
-    <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+    <div data-tour="selection-panel" className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
       <div>
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700">
           {count > 1 ? `${count} Snippets Selected` : "Selected Snippet"}
@@ -826,9 +827,11 @@ export const PhaseLayout: React.FC<PhaseLayoutProps> = ({ actionButton }) => {
   const feedMode = phase.feed.mode;
   const visMode = phase.visualization.mode;
 
-  // Study interaction logging: one session per AL view mount (no-op when the
-  // feature flag is off). sessionId persists in sessionStorage across remounts.
+  // When the guided study flow is active, StudyFlowProvider owns the logger
+  // lifecycle (start on running, stop on timer expire). Only take over here
+  // in dev/non-study use where the flow is disabled.
   useEffect(() => {
+    if (isFlowEnabled()) return;
     studyLogger.start();
     return () => studyLogger.stop();
   }, []);
@@ -840,7 +843,7 @@ export const PhaseLayout: React.FC<PhaseLayoutProps> = ({ actionButton }) => {
   if (showFeed && !showVis) {
     return (
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div data-tour="feed" className="flex-1 flex flex-col overflow-hidden">
           <BlindAnnotationHeader actionButton={actionButton} />
           <div className="flex-1 overflow-hidden">
             <PredictionFeed />

@@ -16,6 +16,7 @@ import type { PhaseConfig } from "../../studyPhases/types";
 import { clearSavedFeed } from "../../redux/features/alSlice";
 import { useAppDispatch } from "../../hooks";
 import type { AnnotateMode } from "./types";
+import { PhaseTimer } from "../../studyFlow";
 
 const { Option } = Select;
 
@@ -123,6 +124,8 @@ export const AnnotationHubToolbar: React.FC<AnnotationHubToolbarProps> = ({
           </Tag>
         </Tooltip>
       )}
+
+      {isAlLikeMode && <PhaseTimer />}
 
       {isAlLikeMode && predictionsLength > 0 && (
         <div className="flex items-center gap-3 text-xs font-ibm-sans text-gray-500">

@@ -244,7 +244,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-2.5 px-4 py-3 border-b border-gray-100 bg-white">
+    <div data-tour="score-histogram" className="flex flex-col gap-2.5 px-4 py-3 border-b border-gray-100 bg-white">
       {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">

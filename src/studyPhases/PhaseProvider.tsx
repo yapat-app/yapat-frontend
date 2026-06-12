@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { DEFAULT_PHASE_ID, STUDY_PHASES, getPhaseConfig } from "./phases";
 import { PhaseContext, type PhaseContextValue } from "./context";
 
@@ -102,6 +102,7 @@ interface Props {
 
 export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { pathname } = useLocation();
   // Support both `?phase=P2.1` (canonical) and `?p=P2.1` (short alias),
   // plus a recovery path for malformed URLs.
   const urlValue = getUrlPhaseValue(searchParams);
@@ -110,8 +111,10 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
     resolveInitialPhaseId(urlValue),
   );
 
-  // When locked, always keep the URL in sync with the effective phase so
-  // participants don't end up with misleading `?phase=...` values.
+  // When locked, keep the URL in sync with the effective phase — but only on
+  // the annotate route. Other pages (dashboard, datasets, …) should not have
+  // ?phase= injected into their URLs.
+  const isAnnotatePage = pathname === "/annotate";
   useEffect(() => {
     if (!isPhaseLocked()) return;
     const allowed = getAllowedPhaseIds();
@@ -120,13 +123,14 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
       setPhaseIdState(urlValue);
       return;
     }
+    if (!isAnnotatePage) return;
     const current = searchParams.get("phase") ?? searchParams.get("p");
     if (current === phaseId) return;
     const next = new URLSearchParams(searchParams);
     next.set("phase", phaseId);
     next.delete("p");
     setSearchParams(next, { replace: true });
-  }, [phaseId, searchParams, setSearchParams, urlValue]);
+  }, [phaseId, searchParams, setSearchParams, urlValue, isAnnotatePage]);
 
   // Keep state in sync if the URL changes (deep links / participant flow).
   useEffect(() => {
@@ -157,11 +161,16 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
     } catch {
       // ignore
     }
-    const next = new URLSearchParams(searchParams);
-    // Always write the canonical param name.
-    next.set("phase", id);
-    next.delete("p");
-    setSearchParams(next, { replace: true });
+    // Only write ?phase= into the URL when on the annotate page; other routes
+    // (dashboard, datasets, …) should not have the param injected.
+    if (isAnnotatePage) {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("phase", id);
+        next.delete("p");
+        return next;
+      }, { replace: true });
+    }
   };
 
   const value = useMemo<PhaseContextValue>(

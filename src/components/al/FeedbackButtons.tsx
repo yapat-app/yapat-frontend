@@ -19,6 +19,7 @@ import {
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
+import { useStudyFlow } from "../../studyFlow";
 import { LabelSelector } from "./LabelSelector";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
@@ -31,6 +32,7 @@ interface Props {
 export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+  const { isTourActive } = useStudyFlow();
   const isBlind = phase.ui.labelingMode === "blind";
 
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
@@ -59,7 +61,8 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   const existingFeedback = feedbacks[prediction.snippet_id];
   const isDone = !!existingFeedback;
   const hasCheckpoint = usedCheckpointId !== null;
-  const feedbackDisabled = submitting || (!isClassicFeed && !hasCheckpoint);
+  // During the guided tour, disable all labeling so actions are preview-only.
+  const feedbackDisabled = isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
   const submittedLabels = existingFeedback

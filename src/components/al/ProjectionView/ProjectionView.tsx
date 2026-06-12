@@ -316,7 +316,7 @@ export const ProjectionView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-tour="projection" className="flex flex-col h-full">
       {showStandaloneHistogram && (
         <ScoreHistogramPanel
           enrichedPlotPoints={enrichedPlotPoints}
@@ -356,7 +356,7 @@ export const ProjectionView: React.FC = () => {
             dispatch(setVisibilityRangeFor({ key, range }));
           }}
           onReset={() => dispatch(resetVisibilityFilter())}
-          sliderMode="range"
+          sliderMode={visSliderStyle}
         />
       )}
 
@@ -475,6 +475,9 @@ export const ProjectionView: React.FC = () => {
               data={traces}
               layout={{
                 autosize: true,
+                // Stable uirevision tells Plotly to keep the user's current zoom/pan
+                // when traces update (e.g. after a point click or filter change).
+                uirevision: "stable",
                 margin: { l: 30, r: 10, t: 10, b: 30 },
                 showlegend: false,
                 legend: {

@@ -24,6 +24,15 @@ export type StudyLogEvent =
   | { eventType: "phase_change"; payload: { from: string | null; to: string } }
   | { eventType: "log_dropped"; payload: { count: number } }
 
+  // ── Guided study flow ───────────────────────────────────────────────
+  | { eventType: "phase_instructions_shown"; payload: { phase: string } }
+  | { eventType: "phase_tour_start"; payload: { phase: string; stepKeys: string[] } }
+  | { eventType: "phase_tour_complete"; payload: { phase: string; completed: boolean } }
+  | { eventType: "phase_timer_start"; payload: { phase: string; durationSec: number } }
+  | { eventType: "phase_timer_expire"; payload: { phase: string } }
+  | { eventType: "phase_auto_advance"; payload: { from: string; to: string } }
+  | { eventType: "study_complete"; payload: { phases: string[] } }
+
   // ── Panel / layout ──────────────────────────────────────────────────
   | { eventType: "panel_enter"; payload: { panel: PanelName } }
   | { eventType: "panel_exit"; payload: { panel: PanelName } }

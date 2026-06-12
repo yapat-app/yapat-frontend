@@ -18,6 +18,7 @@ import { AnnotationHubToolbar } from "./annotationHub/AnnotationHubToolbar";
 import { AnnotationHubMain } from "./annotationHub/AnnotationHubMain";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { ClassicFeedConfigModal } from "./annotationHub/ClassicFeedConfigModal";
+import { StudyFlowOverlays } from "../studyFlow";
 
 export const AnnotationHub: React.FC = () => {
   const navigate = useNavigate();
@@ -146,6 +147,8 @@ export const AnnotationHub: React.FC = () => {
         okDisabled={!classic.classicCanGenerate || classic.feedGenerateBusy}
         okLoading={classic.feedGenerateBusy}
       />
+
+      <StudyFlowOverlays />
     </div>
   );
 };

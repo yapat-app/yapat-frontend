@@ -16,6 +16,7 @@ import { StudyLogsIndex } from "./pages/studyLogs/StudyLogsIndex";
 import { StudyLogsUser } from "./pages/studyLogs/StudyLogsUser";
 import { StudyLogsSession } from "./pages/studyLogs/StudyLogsSession";
 import { StudyPhaseProvider } from "./studyPhases";
+import { StudyFlowProvider } from "./studyFlow";
 import { LoggerContextBridge } from "./studyLogging";
 import AdminOnlyGuard from "./routes/AdminOnlyGuard";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
@@ -24,6 +25,7 @@ import WssedAccessGuard from "./routes/WssedAccessGuard";
 function App() {
   return (
     <StudyPhaseProvider>
+      <StudyFlowProvider>
       <LoggerContextBridge />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -81,6 +83,7 @@ function App() {
           }
         />
       </Routes>
+      </StudyFlowProvider>
     </StudyPhaseProvider>
   );
 }

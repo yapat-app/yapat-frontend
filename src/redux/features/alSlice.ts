@@ -1005,6 +1005,11 @@ const alSlice = createSlice({
       };
 
       state.predictions = [...state.predictions, divider, ...freshRows];
+      // Update the timestamp so the toolbar shows when the feed was last refreshed,
+      // not the stale initial-inference time.
+      state.lastInferenceAt = new Date().toISOString();
+      // Persist the combined feed so a reload after retrain keeps the new snippets.
+      saveFeed(state);
       // projectionPredictions intentionally not updated — the projection overlay
       // stays stable so Phase 1 users are not visually disrupted.
     });

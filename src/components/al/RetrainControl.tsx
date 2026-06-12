@@ -8,6 +8,7 @@ import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { triggerRetrain } from "../../redux/features/alSlice";
 import { studyLogger } from "../../studyLogging";
+import { useStudyFlow } from "../../studyFlow";
 
 interface Props {
   variant?: "full" | "compact";
@@ -15,6 +16,7 @@ interface Props {
 
 export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
   const dispatch = useAppDispatch();
+  const { isTourActive } = useStudyFlow();
   const {
     feedbackCount,
     retrainThreshold,
@@ -31,7 +33,7 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
   );
 
   const handleManualRetrain = () => {
-    if (selectedDatasetId === null || modelFamilyName === null) return;
+    if (isTourActive || selectedDatasetId === null || modelFamilyName === null) return;
     studyLogger.log("retrain_manual_click", {});
     // Dispatch the job. useHubALSession's retrain-polling effect picks up
     // lastRetrainDispatch and drives the full poll → inference refresh cycle,
@@ -77,7 +79,7 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
             icon={<ReloadOutlined />}
             size="small"
             loading={retrainLoading}
-            disabled={retrainLoading || selectedDatasetId === null || modelFamilyName === null}
+            disabled={isTourActive || retrainLoading || selectedDatasetId === null || modelFamilyName === null}
             onClick={handleManualRetrain}
           >
             Retrain
@@ -88,7 +90,7 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm p-4">
+    <div data-tour="retrain" className="rounded-lg border border-gray-200 bg-white shadow-sm p-4">
       <div className="flex items-center justify-between mb-2 ">
         <span className="text-sm font-semibold font-ibm-mono text-gray-700 flex items-center gap-1">
           <ThunderboltOutlined className="text-amber-500" />
