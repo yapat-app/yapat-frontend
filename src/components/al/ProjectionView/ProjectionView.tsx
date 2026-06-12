@@ -329,9 +329,10 @@ export const ProjectionView: React.FC = () => {
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }));
           }}
           onVisibilityRangeChange={(range) => {
-            studyLogger.log("visibility_threshold_change", {
+            studyLogger.log("visibility_range_change", {
               property: alFilters.visibility.propertyKey ?? "",
-              value: range[0],
+              min: range[0],
+              max: range[1],
             });
             dispatch(setVisibilityFilter({ range }));
           }}
@@ -355,6 +356,7 @@ export const ProjectionView: React.FC = () => {
             dispatch(setVisibilityRangeFor({ key, range }));
           }}
           onReset={() => dispatch(resetVisibilityFilter())}
+          sliderMode="range"
         />
       )}
 

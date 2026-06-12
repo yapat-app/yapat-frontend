@@ -47,6 +47,7 @@ interface ScoreHistogramPanelProps {
   onMultiVisibilityChange?: (keys: string[]) => void;
   onMultiVisibilityRangeChange?: (key: string, range: [number, number]) => void;
   onReset?: () => void;
+  sliderMode?: "range" | "threshold";
 }
 
 const SCORE_MIN = 0;
@@ -71,6 +72,7 @@ interface PropertyRowProps {
   visibleValues: number[];
   normRange: [number, number];
   onSliderChange: (newNorm: [number, number]) => void;
+  mode?: "range" | "threshold";
 }
 
 const PropertyRow: React.FC<PropertyRowProps> = ({
@@ -80,6 +82,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   visibleValues,
   normRange,
   onSliderChange,
+  mode = "threshold",
 }) => (
   <div className="flex flex-col gap-0.5">
     <div className="flex items-center justify-between text-[11px] font-ibm-sans">
@@ -90,7 +93,15 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
         {label}
       </span>
       <span className="text-gray-400">
-        ≥ <strong style={{ color }}>{normRange[0].toFixed(2)}</strong>
+        {mode === "range" ? (
+          <>
+            <strong style={{ color }}>{normRange[0].toFixed(2)}</strong>
+            {" – "}
+            <strong style={{ color }}>{normRange[1].toFixed(2)}</strong>
+          </>
+        ) : (
+          <>≥ <strong style={{ color }}>{normRange[0].toFixed(2)}</strong></>
+        )}
       </span>
     </div>
     <HistogramSlider
@@ -98,7 +109,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       totalValues={allValues}
       min={SCORE_MIN}
       max={SCORE_MAX}
-      mode="threshold"
+      mode={mode}
       range={normRange}
       onChange={onSliderChange}
       barHeight={40}
@@ -120,6 +131,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   onMultiVisibilityChange,
   onMultiVisibilityRangeChange,
   onReset,
+  sliderMode = "threshold",
 }) => {
   const isMulti = visibilityMode === "multi";
 
@@ -166,12 +178,18 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     [onVisibilityKeyChange],
   );
   const handleSingleSlider = useCallback(
-    (newNorm: [number, number]) => onVisibilityRangeChange([newNorm[0], 1]),
-    [onVisibilityRangeChange],
+    (newNorm: [number, number]) =>
+      onVisibilityRangeChange(
+        sliderMode === "range" ? newNorm : [newNorm[0], 1],
+      ),
+    [onVisibilityRangeChange, sliderMode],
   );
   const singleNormRange = useMemo<[number, number]>(
-    () => [alFilters.visibility.range?.[0] ?? 0, 1],
-    [alFilters.visibility.range],
+    () => [
+      alFilters.visibility.range?.[0] ?? 0,
+      sliderMode === "range" ? (alFilters.visibility.range?.[1] ?? 1) : 1,
+    ],
+    [alFilters.visibility.range, sliderMode],
   );
 
   // ── P3.2 handlers ────────────────────────────────────────────────────────
@@ -286,6 +304,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               visibleValues={singleVisibleValues}
               normRange={singleNormRange}
               onSliderChange={handleSingleSlider}
+              mode={sliderMode}
             />
           ) : (
             <EmptyState />
@@ -340,7 +359,13 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     allValues={row.allValues}
                     visibleValues={row.visibleValues}
                     normRange={row.normRange}
-                    onSliderChange={(newNorm) => handleMultiSlider(row.key, [newNorm[0], 1])}
+                    onSliderChange={(newNorm) =>
+                      handleMultiSlider(
+                        row.key,
+                        sliderMode === "range" ? newNorm : [newNorm[0], 1],
+                      )
+                    }
+                    mode={sliderMode}
                   />
                 </div>
               ))}
