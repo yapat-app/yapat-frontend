@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Input, Modal, Spin, Tag, Tooltip, message } from "antd";
+import { Button, Input, Modal, Spin, Tooltip, message } from "antd";
 import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
