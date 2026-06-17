@@ -394,6 +394,11 @@ export interface TeamMember {
 
 export type DatasetType = "PAM" | "FOCAL_RECORDINGS";
 
+export interface QuickLabel {
+  taxon_id: string;
+  display_name: string;
+}
+
 export interface Dataset {
   id: number | string;
   name: string;
@@ -404,6 +409,7 @@ export interface Dataset {
   default_snippet_set_id?: number | null;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  quick_labels?: QuickLabel[] | null;
   created_at?: string;
   updated_at?: string;
   is_ready_for_feed?: boolean;

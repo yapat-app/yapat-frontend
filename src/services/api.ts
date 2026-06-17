@@ -307,6 +307,16 @@ export const taxonomyApi = {
     return response.data;
   },
 
+  envoSuggest: async (
+    query: string,
+    limit: number = 10,
+  ): Promise<import("../types").QuickLabel[]> => {
+    const response = await api.get("/api/taxonomy/envo/suggest", {
+      params: { q: query, limit },
+    });
+    return response.data;
+  },
+
   //Full-text search over species with filtering
 
   search: async (params: {
@@ -555,6 +565,19 @@ export const datasetApi = {
     const response = await api.get(
       `/api/datasets/${datasetId}/recording-locations`,
     );
+    return response.data;
+  },
+
+  getQuickLabels: async (datasetId: number): Promise<import("../types").QuickLabel[]> => {
+    const response = await api.get(`/api/datasets/${datasetId}/quick-labels`);
+    return response.data;
+  },
+
+  putQuickLabels: async (
+    datasetId: number,
+    labels: import("../types").QuickLabel[],
+  ): Promise<import("../types").QuickLabel[]> => {
+    const response = await api.put(`/api/datasets/${datasetId}/quick-labels`, labels);
     return response.data;
   },
 };
