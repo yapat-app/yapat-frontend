@@ -1,6 +1,6 @@
 /**
  * Shared quick-label list for blind annotation (classic + AL).
- * PAM labels.json / checkpoint label_config first; custom taxonomy fills gaps.
+ * Priority: dataset's stored quick_labels → PAM labels.json / checkpoint label_config.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "../hooks";
@@ -11,6 +11,7 @@ import {
   labelNamesFromTaxonomyNodes,
   mergeQuickLabelNames,
 } from "../utils/quickLabelList";
+import { datasetApi } from "../services/api";
 
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const { user } = useAppSelector((s) => s.auth);
@@ -23,26 +24,38 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const [pamLoading, setPamLoading] = useState(true);
 
   const teamId = user?.team_ids?.[0] ?? null;
-
   useEnsureTeamTaxonomies(teamId, !!user);
 
   useEffect(() => {
     let cancelled = false;
     setPamLoading(true);
-    void fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId)
-      .then((list) => {
-        if (!cancelled) setPamSpecies(list);
-      })
-      .catch(() => {
-        if (!cancelled) setPamSpecies([]);
-      })
-      .finally(() => {
-        if (!cancelled) setPamLoading(false);
-      });
 
-    return () => {
-      cancelled = true;
+    const load = async () => {
+      // Priority 1: dataset's stored quick_labels
+      if (selectedDatasetId != null) {
+        try {
+          const stored = await datasetApi.getQuickLabels(Number(selectedDatasetId));
+          if (!cancelled && stored.length > 0) {
+            setPamSpecies(stored.map((l) => l.display_name));
+            setPamLoading(false);
+            return;
+          }
+        } catch { /* fall through to checkpoint fallback */ }
+      }
+
+      // Priority 2: checkpoint species list (existing behaviour)
+      try {
+        const list = await fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId);
+        if (!cancelled) setPamSpecies(list);
+      } catch {
+        if (!cancelled) setPamSpecies([]);
+      } finally {
+        if (!cancelled) setPamLoading(false);
+      }
     };
+
+    void load();
+    return () => { cancelled = true; };
   }, [usedCheckpointId, selectedDatasetId]);
 
   const taxonomyNames = useMemo(() => {
@@ -61,7 +74,6 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
   return {
     labels,
-    loading:
-      pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
+    loading: pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
   };
 }
