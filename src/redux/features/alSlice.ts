@@ -151,6 +151,7 @@ function withDisplayFields(
       diversity: (r.diversity ?? (r.scores as any)?.diversity) ?? undefined,
       density: (r.density ?? (r.scores as any)?.density) ?? undefined,
       composite: (r.composite_score ?? (r.scores as any)?.composite) ?? undefined,
+      confidence: confidence > 0 ? confidence : undefined,
     };
     return {
       ...r,

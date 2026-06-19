@@ -43,6 +43,15 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: true,
     supportsColor: true,
   },
+  {
+    key: "confidence",
+    label: "Confidence",
+    category: "sampler",
+    filterMode: "continuous",
+    range: [0, 1],
+    supportsVisibility: true,
+    supportsColor: true,
+  },
 
   // ── Metadata ───────────────────────────────────────────────────────────────
   {

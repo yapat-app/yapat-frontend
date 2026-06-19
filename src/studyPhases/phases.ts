@@ -124,13 +124,13 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       allowPointClick: true,
       visibilityFilter: {
         mode: "single",
-        allowedProperties: ["uncertainty", "diversity", "density"],
+        allowedProperties: ["uncertainty", "diversity", "density", "confidence"],
         defaultPropertyKey: "uncertainty",
         sliderStyle: "threshold",
       },
       colorFilter: {
         mode: "single",
-        allowedProperties: ["uncertainty", "diversity", "density", "actual_label"],
+        allowedProperties: ["uncertainty", "diversity", "density", "confidence", "actual_label"],
       },
     },
     ui: {
@@ -152,11 +152,11 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       allowPointClick: true,
       visibilityFilter: {
         mode: "multi",
-        allowedProperties: ["uncertainty", "diversity", "density"],
+        allowedProperties: ["uncertainty", "diversity", "density", "confidence"],
       },
       colorFilter: {
         mode: "single",
-        allowedProperties: ["uncertainty", "diversity", "density", "actual_label"],
+        allowedProperties: ["uncertainty", "diversity", "density", "confidence", "actual_label"],
       },
     },
     ui: {

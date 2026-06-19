@@ -153,7 +153,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
         target: "filter-panel",
         title: "Sampling properties",
         description:
-          "Switch between Uncertainty, Diversity and Density to prioritise different kinds of informative snippets. Drag the threshold to focus on the top-scoring ones.",
+          "Switch between Uncertainty, Diversity, Density and Confidence to prioritise different kinds of informative snippets. Confidence reflects how certain the model is about its prediction. Drag the threshold to focus on the top-scoring ones.",
         placement: "right",
       },
     ],
@@ -173,7 +173,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
         target: "filter-panel",
         title: "Combine multiple filters",
         description:
-          "Toggle several properties on at once — the map keeps only snippets that pass all of them combined. Each property has its own threshold slider.",
+          "Toggle several properties on at once — Uncertainty, Diversity, Density and Confidence — the map keeps only snippets that pass all of them combined. Each property has its own threshold slider.",
         placement: "right",
       },
     ],

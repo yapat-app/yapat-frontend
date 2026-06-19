@@ -31,6 +31,7 @@ export interface SampleScores {
   diversity?: number;
   density?: number;
   composite?: number;
+  confidence?: number;
   year_cycle?: number;   
   day_cycle?: number;    // 0–23  (hour)
   sound_type?: string;   // "Bio" | "Anthro" | "Geo"

@@ -41,6 +41,7 @@ export type AllowedProperty =
   | "uncertainty"
   | "diversity"
   | "density"
+  | "confidence"
   | "actual_label"
   | "year_cycle"
   | "day_cycle"
