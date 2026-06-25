@@ -273,6 +273,23 @@ export const feedApi = {
     return response.data;
   },
 
+  similarityBySnippetId: async (data: {
+    reference_snippet_id: number;
+    dataset_id: number;
+    limit?: number;
+    snippet_set_id?: number;
+  }): Promise<Snippet[]> => {
+    const response = await api.get("api/feed/similarity-snippet", {
+      params: {
+        reference_snippet_id: data.reference_snippet_id,
+        dataset_id: data.dataset_id,
+        ...(data.limit != null ? { limit: data.limit } : {}),
+        ...(data.snippet_set_id != null ? { snippet_set_id: data.snippet_set_id } : {}),
+      },
+    });
+    return response.data;
+  },
+
   similarity: async (data: FeedSimilarityCreate): Promise<Feed[]> => {
     const formData = new FormData();
     formData.append("audio_file", data.audio_file); // file field

@@ -23,7 +23,11 @@ import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from 
 import type { Annotation } from "../../types";
 import type { PAMPrediction } from "../../types/al";
 
-export const PredictionFeed: React.FC = () => {
+interface PredictionFeedProps {
+  onFindSimilar?: (snippetId: number) => void;
+}
+
+export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar }) => {
   const dispatch = useAppDispatch();
   const {
     predictions,
@@ -494,6 +498,7 @@ export const PredictionFeed: React.FC = () => {
             serverLabels={labelsBySnippet[selected.snippet_id] ?? []}
             scrollRoot={scrollRoot}
             loadAudioImmediately
+            onFindSimilar={onFindSimilar}
           />
           {phase.ui.showRetrainControls && (
             <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
@@ -529,6 +534,7 @@ export const PredictionFeed: React.FC = () => {
                       serverLabels={labelsBySnippet[p.snippet_id] ?? []}
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
+                      onFindSimilar={onFindSimilar}
                     />
                   </div>
                 );
@@ -543,6 +549,7 @@ export const PredictionFeed: React.FC = () => {
                     serverLabels={labelsBySnippet[p.snippet_id] ?? []}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
+                    onFindSimilar={onFindSimilar}
                   />
                 </div>
               );
@@ -642,6 +649,7 @@ export const PredictionFeed: React.FC = () => {
                     cardRef={setCardRef(p.snippet_id)}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
+                    onFindSimilar={onFindSimilar}
                   />
                 </React.Fragment>
               );
@@ -654,6 +662,7 @@ export const PredictionFeed: React.FC = () => {
                 cardRef={setCardRef(p.snippet_id)}
                 scrollRoot={scrollRoot}
                 loadAudioImmediately={index === 0}
+                onFindSimilar={onFindSimilar}
               />
             );
           })}

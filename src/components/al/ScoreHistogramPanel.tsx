@@ -48,6 +48,7 @@ interface ScoreHistogramPanelProps {
   onMultiVisibilityRangeChange?: (key: string, range: [number, number]) => void;
   onReset?: () => void;
   sliderMode?: "range" | "threshold";
+  compact?: boolean;
 }
 
 const SCORE_MIN = 0;
@@ -73,6 +74,7 @@ interface PropertyRowProps {
   normRange: [number, number];
   onSliderChange: (newNorm: [number, number]) => void;
   mode?: "range" | "threshold";
+  hideLabel?: boolean;
 }
 
 const PropertyRow: React.FC<PropertyRowProps> = ({
@@ -83,15 +85,18 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   normRange,
   onSliderChange,
   mode = "threshold",
+  hideLabel = false,
 }) => (
   <div className="flex flex-col gap-0.5">
-    <div className="flex items-center justify-between text-[11px] font-ibm-sans">
-      <span
-        className="font-semibold uppercase tracking-wide"
-        style={{ color }}
-      >
-        {label}
-      </span>
+    <div className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}>
+      {!hideLabel && (
+        <span
+          className="font-semibold uppercase tracking-wide"
+          style={{ color }}
+        >
+          {label}
+        </span>
+      )}
       <span className="text-gray-400">
         {mode === "range" ? (
           <>
@@ -132,6 +137,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   onMultiVisibilityRangeChange,
   onReset,
   sliderMode = "threshold",
+  compact = false,
 }) => {
   const isMulti = visibilityMode === "multi";
 
@@ -245,56 +251,59 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div data-tour="score-histogram" className="flex flex-col gap-2.5 px-4 py-3 border-b border-gray-100 bg-white">
-      {/* Header row */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
-          Score Distribution
-        </span>
-        <div className="flex items-center gap-2">
-          {isFiltered && onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
-            >
-              Reset
-            </button>
-          )}
-          <span className="text-[11px] text-gray-500 font-ibm-sans">
-            <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
-            {" / "}
-            <strong className="text-gray-700">{enrichedPlotPoints.length.toLocaleString()}</strong>
-            {" visible"}
+      {!compact && (
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
+            Score Distribution
           </span>
+          <div className="flex items-center gap-2">
+            {isFiltered && onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
+              >
+                Reset
+              </button>
+            )}
+            <span className="text-[11px] text-gray-500 font-ibm-sans">
+              <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
+              {" / "}
+              <strong className="text-gray-700">{enrichedPlotPoints.length.toLocaleString()}</strong>
+              {" visible"}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── P3.1: exclusive tabs + one histogram ─────────────────────── */}
       {!isMulti && (
         <>
-          <div className="flex gap-2 flex-wrap">
-            {allowedProperties.map((prop) => {
-              const def = getPropertyByKey(prop);
-              const isActive = prop === singleActiveKey;
-              const color = propertyColor(prop);
-              return (
-                <button
-                  key={prop}
-                  type="button"
-                  onClick={() => handleSingleTabChange(prop)}
-                  className={[
-                    "px-3 py-1 rounded-full border text-xs font-medium transition-all",
-                    isActive
-                      ? "text-white font-semibold shadow-sm"
-                      : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700",
-                  ].join(" ")}
-                  style={isActive ? { backgroundColor: color, borderColor: color } : undefined}
-                >
-                  {def?.label ?? prop}
-                </button>
-              );
-            })}
-          </div>
+          {!compact && (
+            <div className="flex gap-2 flex-wrap">
+              {allowedProperties.map((prop) => {
+                const def = getPropertyByKey(prop);
+                const isActive = prop === singleActiveKey;
+                const color = propertyColor(prop);
+                return (
+                  <button
+                    key={prop}
+                    type="button"
+                    onClick={() => handleSingleTabChange(prop)}
+                    className={[
+                      "px-3 py-1 rounded-full border text-xs font-medium transition-all",
+                      isActive
+                        ? "text-white font-semibold shadow-sm"
+                        : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700",
+                    ].join(" ")}
+                    style={isActive ? { backgroundColor: color, borderColor: color } : undefined}
+                  >
+                    {def?.label ?? prop}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {singleAllValues.length > 0 ? (
             <PropertyRow
@@ -305,6 +314,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               normRange={singleNormRange}
               onSliderChange={handleSingleSlider}
               mode={sliderMode}
+              hideLabel={compact}
             />
           ) : (
             <EmptyState />

@@ -291,6 +291,13 @@ export interface FeedSimilarityCreate {
   snippet_set_id?: number;
 }
 
+export interface FeedSimilarityBySnippetId {
+  reference_snippet_id: number;
+  dataset_id: number;
+  limit?: number;
+  snippet_set_id?: number;
+}
+
 /** Snapshot from GET /api/feed/history — last stored feeds per user (see backend UserFeed). */
 export interface UserFeedSnapshot {
   id: number;

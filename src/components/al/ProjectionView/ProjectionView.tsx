@@ -26,7 +26,29 @@ import { useProjectionTraces } from "./useProjectionTraces";
 import { ProjectionToolbar } from "./ProjectionToolbar";
 import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
 
-export const ProjectionView: React.FC = () => {
+export interface ProjectionThumbnailData {
+  thumbnailPoints: Array<{ p: { snippet_id: number; scores?: Record<string, number> }; coord: [number, number]; visible: boolean }>;
+  fpvCoordsBySnippetForMethod: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> | null;
+  selectedSnippetId: number | null;
+  selectedCoordByMethod: Partial<Record<ProjectionMethod, [number, number]>> | null;
+  allActualLabels: string[];
+  loadingMethods: Set<ProjectionMethod>;
+  fpvLoading: boolean;
+}
+
+interface ProjectionViewProps {
+  /** When provided externally, hides the internal method panel and uses this value. */
+  projectionMethod?: ProjectionMethod;
+  onProjectionMethodChange?: (m: ProjectionMethod) => void;
+  /** Called with thumbnail data so a parent can render its own method selector. */
+  onThumbnailData?: (data: ProjectionThumbnailData) => void;
+}
+
+export const ProjectionView: React.FC<ProjectionViewProps> = ({
+  projectionMethod: externalMethod,
+  onProjectionMethodChange,
+  onThumbnailData,
+}) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
 
@@ -67,7 +89,12 @@ export const ProjectionView: React.FC = () => {
   } = useAppSelector((state) => state.al);
   const isClassicFeed = feedSource === "classic";
 
-  const [method, setMethod] = useState<ProjectionMethod>("pca");
+  const [internalMethod, setInternalMethod] = useState<ProjectionMethod>("pca");
+  const method = externalMethod ?? internalMethod;
+  const setMethod = (m: ProjectionMethod) => {
+    setInternalMethod(m);
+    onProjectionMethodChange?.(m);
+  };
 
   // Dwell tracking for the visualisation panel.
   usePanelDwell("visualization");
@@ -204,6 +231,32 @@ export const ProjectionView: React.FC = () => {
     visRangeOverride,
   });
 
+  // ── Expose thumbnail data to parent when an external method is provided ──────
+
+  const selectedSnippetId = selectedSnippetIds[0] ?? null;
+
+  useEffect(() => {
+    if (!onThumbnailData) return;
+    onThumbnailData({
+      thumbnailPoints,
+      fpvCoordsBySnippetForMethod,
+      selectedSnippetId,
+      selectedCoordByMethod,
+      allActualLabels: allCategoricalValues.actual_label ?? [],
+      loadingMethods,
+      fpvLoading,
+    });
+  }, [
+    onThumbnailData,
+    thumbnailPoints,
+    fpvCoordsBySnippetForMethod,
+    selectedSnippetId,
+    selectedCoordByMethod,
+    allCategoricalValues.actual_label,
+    loadingMethods,
+    fpvLoading,
+  ]);
+
   // ── Score values for histogram (active visibility property) ──────────────
 
   const visibilityScoreValues = useMemo<number[]>(() => {
@@ -262,11 +315,11 @@ export const ProjectionView: React.FC = () => {
     !fpvError &&
     !isMissingProjection &&
     (fpvGenerateLoading || fpvLoading || loadingMethods.has(method) || !activeProjectionReady);
-  // "embedded" → ALFilterPanel with histogram inside (P2.x)
+  // "embedded"   → ALFilterPanel with histogram inside (P2.x)
   // "standalone" → ScoreHistogramPanel above projection (P3.x)
+  // "none"       → filter UI lives outside (e.g. V2 sidebar); show nothing here
   const showEmbeddedFilter = visibilityMode !== "disabled" && histogramStyle === "embedded";
   const showStandaloneHistogram = visibilityMode !== "disabled" && histogramStyle === "standalone";
-  const selectedSnippetId = selectedSnippetIds[0] ?? null;
 
   if (visMode === "hidden") return null;
 
@@ -421,7 +474,7 @@ export const ProjectionView: React.FC = () => {
       />
 
       <div className="flex-1 relative overflow-hidden flex">
-        {phase.ui.showProjectionMethodSelector && (
+        {phase.ui.showProjectionMethodSelector && !externalMethod && (
           <ProjectionMethodPanel
             method={method}
             dimRedMethods={dimRedMethods}

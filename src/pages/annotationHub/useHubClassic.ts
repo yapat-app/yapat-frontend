@@ -219,7 +219,7 @@ export function useHubClassic(
   }, [classicDatasetId, isClassicMode, dispatch]);
 
   useEffect(() => {
-    if (mode !== "filter" || !classicDatasetId) {
+    if (!isClassicMode || !classicDatasetId) {
       setRecordingLocations([]);
       return;
     }

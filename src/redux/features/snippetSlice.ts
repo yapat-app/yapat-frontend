@@ -121,6 +121,20 @@ export const fetchSimilaritySnippetFeed = createAsyncThunk(
   }
 );
 
+export const fetchSimilarityBySnippetIdFeed = createAsyncThunk(
+  "snippet/fetchSimilarityBySnippetIdFeed",
+  async (
+    data: { reference_snippet_id: number; dataset_id: number; limit?: number; snippet_set_id?: number },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await feedApi.similarityBySnippetId(data);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 //Fetch all snippets with optional filtering
 
 export const fetchSnippets = createAsyncThunk(
@@ -374,6 +388,34 @@ export const snippetSlice = createSlice({
         }
       })
       .addCase(fetchSimilaritySnippetFeed.rejected, (state, action) => {
+        state.snippetsLoading = false;
+        state.snippetsFetched = false;
+        state.error = action.payload as string;
+      })
+      // Fetch similarity feed by snippet ID
+      .addCase(fetchSimilarityBySnippetIdFeed.pending, (state) => {
+        state.snippetsLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchSimilarityBySnippetIdFeed.fulfilled, (state, action) => {
+        state.snippetsLoading = false;
+        state.snippetsFetched = true;
+        state.snippets = action.payload;
+        state.hasMore = action.payload.length > 0;
+        if (action.payload.length > 0) {
+          state.currentSnippet = action.payload[0];
+          state.currentIndex = 0;
+        } else {
+          state.currentSnippet = null;
+          state.currentIndex = 0;
+        }
+        const dsId = action.meta.arg.dataset_id;
+        if (typeof dsId === "number" && Number.isFinite(dsId)) {
+          const bucket = ensureClassicBucket(state.classicFeedCache, dsId);
+          bucket.similarity = snapshotFromState(state);
+        }
+      })
+      .addCase(fetchSimilarityBySnippetIdFeed.rejected, (state, action) => {
         state.snippetsLoading = false;
         state.snippetsFetched = false;
         state.error = action.payload as string;

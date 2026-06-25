@@ -104,9 +104,10 @@ export interface UIPhaseConfig {
    * Controls how the score histogram is presented:
    *   "embedded"   — histogram rendered inside the ALFilterPanel slider (P2.x default)
    *   "standalone" — full-width histogram panel above the projection (P3.x)
+   *   "none"       — filter UI suppressed; handled externally (e.g., V2 sidebar)
    * Defaults to "embedded" when omitted.
    */
-  histogramStyle?: "embedded" | "standalone";
+  histogramStyle?: "embedded" | "standalone" | "none";
 }
 
 export interface PhaseConfig {

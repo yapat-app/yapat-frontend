@@ -1,0 +1,307 @@
+/**
+ * V2AnnotationHub — redesigned annotation page at /v2AnnotationHub.
+ *
+ * Layout changes from V1:
+ * - Persistent left sidebar (220px) for Sort + Filter controls
+ * - Simplified top toolbar: Dataset selector · Generate Feed · Status tags
+ * - Projection method as horizontal chip row at top of scatter plot (no left thumbnail sidebar)
+ * - "Find similar" icon button on every snippet card
+ */
+
+import React, { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Select, Button, Tag, Tooltip, Spin } from "antd";
+import {
+  DatabaseOutlined,
+  BulbOutlined,
+  CheckCircleOutlined,
+  HistoryOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
+import { NavigationBar } from "../components/NavigationBar";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import { clearSavedFeed } from "../redux/features/alSlice";
+import type { AnnotateMode } from "./annotationHub/types";
+import { useHubDatasets } from "./annotationHub/useHubDatasets";
+import { useHubALSession } from "./annotationHub/useHubALSession";
+import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
+import { V2AnnotationHubSidebar } from "./v2AnnotationHub/V2AnnotationHubSidebar";
+import { V2ALWorkspace } from "./v2AnnotationHub/V2ALWorkspace";
+import { datasetApi } from "../services/api";
+
+const { Option } = Select;
+
+export const V2AnnotationHub: React.FC = () => {
+  const dispatch = useAppDispatch();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAppSelector((s) => s.auth);
+  const { allDatasets, awaitingHubDatasetBootstrap } = useHubDatasets(
+    searchParams,
+    setSearchParams,
+    user,
+  );
+
+  const rawMode = searchParams.get("mode");
+  const mode: AnnotateMode =
+    rawMode === "al" ||
+    rawMode === "validate" ||
+    rawMode === "similarity" ||
+    rawMode === "filter"
+      ? rawMode
+      : "random";
+
+  const setMode = useCallback(
+    (next: AnnotateMode) => {
+      const params: Record<string, string> = { mode: next };
+      const dsId = searchParams.get("dataset_id");
+      if (dsId) params.dataset_id = dsId;
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const al = useHubALSession(mode, searchParams, setSearchParams, {
+    treatAllModesAsAl: true,
+  });
+  const [filterAnnotationStatus, setFilterAnnotationStatus] =
+    useState<"any" | "annotated" | "unannotated">("any");
+  const [filterLocations, setFilterLocations] = useState<string[]>([]);
+  const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (al.selectedDatasetId === null) return;
+
+    let cancelled = false;
+    void datasetApi
+      .getRecordingLocations(al.selectedDatasetId)
+      .then((res) => {
+        if (!cancelled) setRecordingLocations(res.locations ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRecordingLocations([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [al.selectedDatasetId]);
+
+  const visibleRecordingLocations =
+    al.selectedDatasetId === null ? [] : recordingLocations;
+
+  // ── Find Similar handler ─────────────────────────────────────────────────
+  const handleFindSimilar = useCallback(
+    () => {
+      setMode("similarity");
+    },
+    [setMode],
+  );
+
+  if (awaitingHubDatasetBootstrap) {
+    return (
+      <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
+        <NavigationBar />
+        <div className="flex flex-1 flex-col items-center justify-center gap-3">
+          <Spin size="large" />
+          <p className="text-sm text-gray-500 font-ibm-sans">Loading workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  const feedActionLabel = al.predictions.length > 0 ? "Edit Feed" : "Generate Feed";
+
+  return (
+    <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
+      <NavigationBar />
+
+      {/* ── Simplified toolbar ── */}
+      <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-white flex-shrink-0 flex-wrap">
+        {/* Breadcrumb */}
+        <span className="text-xs font-ibm-mono text-gray-400 hidden sm:inline">
+          Annotation Hub
+        </span>
+        <div className="w-px h-4 bg-gray-200 hidden sm:block" />
+
+        {/* Dataset selector */}
+        <div className="flex items-center gap-2">
+          <DatabaseOutlined className="text-gray-400 text-sm" />
+          <Select
+            placeholder="Select dataset"
+            value={al.selectedDatasetId ?? undefined}
+            onChange={al.handleDatasetChange}
+            style={{ width: 200 }}
+            size="middle"
+            showSearch
+            optionFilterProp="children"
+          >
+            {allDatasets.map((d) => (
+              <Option key={d.id} value={d.id}>{d.name}</Option>
+            ))}
+          </Select>
+        </div>
+
+        {/* Generate Feed button */}
+        <Button
+          type="primary"
+          size="middle"
+          loading={al.inferenceLoading}
+          onClick={al.openInferenceModal}
+          disabled={!al.selectedDatasetId}
+        >
+          {feedActionLabel}
+        </Button>
+
+        {/* Status tags */}
+        <div className="flex items-center gap-2 ml-auto">
+          {al.predictions.length > 0 && (
+            <>
+              <Tooltip title="Total predictions">
+                <span className="flex items-center gap-1 text-xs font-ibm-sans text-gray-500">
+                  <BulbOutlined className="text-blue-400" />
+                  {al.predictions.length} predictions
+                </span>
+              </Tooltip>
+              <Tooltip title="Feedbacks since last retrain">
+                <span className="flex items-center gap-1 text-xs font-ibm-sans text-gray-500">
+                  <CheckCircleOutlined className="text-green-500" />
+                  {al.feedbackCountDisplay.shown}/{al.retrainThreshold}
+                  {al.feedbackCountDisplay.pending && (
+                    <Tag color="gold" className="ml-1 text-[10px]">Training…</Tag>
+                  )}
+                </span>
+              </Tooltip>
+              {al.lastRetrainJob && (
+                <Tag
+                  color={
+                    ({
+                      PENDING: "default",
+                      RUNNING: "processing",
+                      COMPLETED: "success",
+                      FAILED: "error",
+                    } as Record<string, string>)[al.lastRetrainJob.status] ?? "default"
+                  }
+                  className="text-xs"
+                >
+                  Model: {al.lastRetrainJob.status}
+                </Tag>
+              )}
+            </>
+          )}
+          {al.isRestoredFeed && (
+            <Tooltip title="Showing saved feed from a previous session. Click to clear.">
+              <Tag
+                icon={<HistoryOutlined />}
+                color="blue"
+                closable
+                onClose={() => dispatch(clearSavedFeed())}
+                className="cursor-pointer text-xs"
+              >
+                Saved · {al.savedFeedLabel}
+              </Tag>
+            </Tooltip>
+          )}
+          {al.inferenceLoading && <Spin size="small" />}
+        </div>
+      </div>
+
+      {/* ── Main content ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left sidebar — Sort + Filter */}
+        <V2AnnotationHubSidebar
+          mode={mode}
+          setMode={setMode}
+          filterAnnotationStatus={filterAnnotationStatus}
+          onFilterAnnotationStatusChange={setFilterAnnotationStatus}
+          filterLocations={filterLocations}
+          onFilterLocationsChange={setFilterLocations}
+          recordingLocations={visibleRecordingLocations}
+          locationsLoading={false}
+          localLabelScope={al.localLabelScope}
+          setLocalLabelScope={al.setLocalLabelScope}
+          localMinConfidence={al.localMinConfidence}
+          setLocalMinConfidence={al.setLocalMinConfidence}
+          labelScopeOptions={al.labelScopeOptions}
+          labelScopeLoading={al.labelScopeLoading}
+          onResetFilters={() => {
+            setFilterAnnotationStatus("any");
+            setFilterLocations([]);
+            al.setLocalLabelScope([]);
+            al.setLocalMinConfidence(null);
+          }}
+        />
+
+        {/* Center + Right: workspace area */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+          {al.isRestoredFeed && !al.selectedDatasetId && (
+            <div className="mx-4 mt-3 flex-shrink-0 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm font-ibm-sans text-blue-800">
+              <HistoryOutlined />
+              <span>
+                Showing saved feed from <strong>{al.savedFeedLabel}</strong> — select the original dataset to run new inference.
+              </span>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => dispatch(clearSavedFeed())}
+                className="ml-auto"
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
+          {!al.selectedDatasetId && !al.isRestoredFeed && (
+            <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
+              <DatabaseOutlined style={{ fontSize: 48 }} />
+              <p className="text-lg font-ibm-sans">
+                Select a dataset to start {mode === "validate" ? "Validate" : "Active Learning"}
+              </p>
+              <p className="text-sm font-ibm-sans">Then click "Generate Feed" to load predictions.</p>
+            </div>
+          )}
+
+          {(al.selectedDatasetId || al.isRestoredFeed) && (
+            <V2ALWorkspace onFindSimilar={handleFindSimilar} />
+          )}
+        </div>
+      </div>
+
+      {/* ── Modals ── */}
+      <ALInferenceConfigModal
+        open={al.alConfigOpen}
+        onCancel={() => al.setAlConfigOpen(false)}
+        onOk={al.handleOpenALSession}
+        checkpoints={al.checkpoints}
+        embeddingMethods={al.embeddingMethods}
+        embeddingMethodsLoading={al.embeddingMethodsLoading}
+        localFamily={al.localFamily}
+        setLocalFamily={al.setLocalFamily}
+        localK={al.localK}
+        setLocalK={al.setLocalK}
+        localTopKOnly={al.localTopKOnly}
+        setLocalTopKOnly={al.setLocalTopKOnly}
+        hasReadySnippetSet={al.hasReadySnippetSet}
+        hasGroundTruthMetadata={al.hasGroundTruthMetadata}
+        setHasGroundTruthMetadata={al.setHasGroundTruthMetadata}
+        trainEmbeddingModelId={al.trainEmbeddingModelId}
+        setTrainEmbeddingModelId={al.setTrainEmbeddingModelId}
+        trainMetadataPath={al.trainMetadataPath}
+        setTrainMetadataPath={al.setTrainMetadataPath}
+        trainLabelConfigPath={al.trainLabelConfigPath}
+        setTrainLabelConfigPath={al.setTrainLabelConfigPath}
+        trainDevice={al.trainDevice}
+        setTrainDevice={al.setTrainDevice}
+        trainRunInference={al.trainRunInference}
+        setTrainRunInference={al.setTrainRunInference}
+        isValidateMode={mode === "validate"}
+        localMinConfidence={al.localMinConfidence}
+        setLocalMinConfidence={al.setLocalMinConfidence}
+        localLabelScope={al.localLabelScope}
+        setLocalLabelScope={al.setLocalLabelScope}
+        labelScopeOptions={al.labelScopeOptions}
+        labelScopeLoading={al.labelScopeLoading}
+      />
+    </div>
+  );
+};

@@ -47,11 +47,13 @@ export function useHubALSession(
   mode: AnnotateMode,
   searchParams: URLSearchParams,
   setSearchParams: ReturnType<typeof import("react-router-dom").useSearchParams>[1],
+  options?: { treatAllModesAsAl?: boolean },
 ) {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
   const isValidateMode = mode === "validate";
-  const isAlLikeMode = mode === "al" || mode === "validate";
+  const isAlLikeMode =
+    options?.treatAllModesAsAl || mode === "al" || mode === "validate";
 
   const { embeddingMethods, loading: embeddingMethodsLoading } = useAppSelector(
     (s) => s.embedding,

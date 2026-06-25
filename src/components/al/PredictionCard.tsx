@@ -10,8 +10,8 @@ import React, {
   useLayoutEffect,
   useCallback,
 } from "react";
-import { Skeleton } from "antd";
-import { SoundOutlined } from "@ant-design/icons";
+import { Skeleton, Tooltip, Button } from "antd";
+import { SoundOutlined, AudioOutlined } from "@ant-design/icons";
 import { SnippetSpectrogramPlayer } from "../SnippetSpectrogramPlayer";
 import type { SnippetAudioResult } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../hooks";
@@ -39,6 +39,8 @@ interface Props {
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
   loadAudioImmediately?: boolean;
+  /** V2 hub: called when the user wants to find similar snippets to this one. */
+  onFindSimilar?: (snippetId: number) => void;
 }
 
 export const PredictionCard: React.FC<Props> = ({
@@ -49,6 +51,7 @@ export const PredictionCard: React.FC<Props> = ({
   serverLabels,
   scrollRoot,
   loadAudioImmediately = false,
+  onFindSimilar,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -247,6 +250,17 @@ export const PredictionCard: React.FC<Props> = ({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {onFindSimilar && (
+              <Tooltip title="Find similar snippets">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<AudioOutlined />}
+                  className="text-gray-400 hover:text-blue-500 px-1"
+                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
+                />
+              </Tooltip>
+            )}
             {prediction.confidence != null && (
               <span
                 className={[
@@ -348,6 +362,17 @@ export const PredictionCard: React.FC<Props> = ({
             {labelText}
           </span>
           <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2 flex-shrink-0">
+            {onFindSimilar && (
+              <Tooltip title="Find similar snippets">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<AudioOutlined />}
+                  className="text-gray-400 hover:text-blue-500 px-1"
+                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
+                />
+              </Tooltip>
+            )}
             {prediction.confidence != null && (
               <span
                 className={[
@@ -493,6 +518,17 @@ export const PredictionCard: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2">
+            {onFindSimilar && (
+              <Tooltip title="Find similar snippets">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<AudioOutlined />}
+                  className="text-gray-400 hover:text-blue-500 px-1"
+                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
+                />
+              </Tooltip>
+            )}
             <span className="flex items-center gap-1">
               <SoundOutlined />#{prediction.snippet_id}
             </span>

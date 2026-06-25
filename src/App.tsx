@@ -6,6 +6,7 @@ import { Datasets } from "./pages/Datasets";
 import { Teams } from "./pages/Teams";
 import { ManageTeam } from "./pages/ManageTeam";
 import { AnnotationHub } from "./pages/AnnotationHub";
+import { V2AnnotationHub } from "./pages/V2AnnotationHub";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
@@ -46,6 +47,7 @@ function App() {
         <Route path="/pre-annotation" element={<Taxonomies />} />
         <Route path="/history" element={<FeedHistory />} />
         <Route path="/annotate" element={<AnnotationHub />} />
+        <Route path="/v2AnnotationHub" element={<V2AnnotationHub />} />
         {/* Legacy route — redirect to unified hub in AL mode */}
         <Route path="/active-learning" element={<Navigate to="/annotate?mode=al" replace />} />
         <Route
