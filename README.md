@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# YAPAT Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite frontend for the YAPAT (Yet Another PAM Annotation Tool) project.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 18+
+- A running [YAPAT backend](../yapat-backend/README.md) (default: `http://localhost:8000`)
 
-## React Compiler
+## Quick Start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-## Expanding the ESLint configuration
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env — at minimum set VITE_YAPAT_BACKEND_URL
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+3. **Start the dev server**
+   ```bash
+   npm run dev
+   ```
+   The app will be available at http://localhost:3000
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Environment Variables
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Copy `.env.example` to `.env` and adjust as needed.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `VITE_YAPAT_BACKEND_URL` | Yes | — | URL of the YAPAT backend API (e.g. `http://localhost:8000`) |
+| `VITE_YAPAT_FRONTEND_URL` | No | — | Public URL of this frontend (used for CORS/links) |
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Scripts
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Build for production (output to `dist/`) |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run ESLint |
