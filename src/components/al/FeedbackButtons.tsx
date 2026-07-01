@@ -55,6 +55,12 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     feedSource,
   } = useAppSelector((state) => state.al);
 
+  const teamMembers = useAppSelector((s) => s.team.teamMembers);
+  const teamMemberNameById = useMemo(
+    () => new Map(teamMembers.map((m) => [m.user_id, m.username])),
+    [teamMembers],
+  );
+
   const isClassicFeed = feedSource === "classic";
   const existingFeedback = feedbacks[prediction.snippet_id];
   const isDone = !!existingFeedback;
@@ -180,7 +186,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   for (const ann of snippetAnnotations) {
     const label = (ann.resolved_name_snapshot ?? "").trim();
     if (!label) continue;
-    const who = (ann.username ?? `user:${ann.user_id}`).trim();
+    const who = (ann.username ?? teamMemberNameById.get(ann.user_id) ?? `user:${ann.user_id}`).trim();
     if (!labelContributors[label]) labelContributors[label] = [];
     if (!labelContributors[label].includes(who)) {
       labelContributors[label].push(who);

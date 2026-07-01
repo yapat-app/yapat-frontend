@@ -19,6 +19,7 @@ import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 import { hydrateClassicAnnotations, setSelectedSnippet } from "../../redux/features/alSlice";
+import { fetchTeamMembers } from "../../redux/features/teamSlice";
 import type { Annotation } from "../../types";
 
 export const PredictionFeed: React.FC = () => {
@@ -35,6 +36,16 @@ export const PredictionFeed: React.FC = () => {
   } = useAppSelector((state) => state.al);
   const isClassicFeed = feedSource === "classic";
   const phase = usePhaseConfig();
+
+  const currentUser = useAppSelector((s) => s.auth.user);
+  const teamMembers = useAppSelector((s) => s.team.teamMembers);
+
+  // Fetch team members once so contributor names resolve correctly in FeedbackButtons.
+  useEffect(() => {
+    if (teamMembers.length > 0) return;
+    const teamId = currentUser?.team_ids?.[0];
+    if (teamId) dispatch(fetchTeamMembers(teamId));
+  }, [currentUser?.team_ids?.[0]]);
 
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
