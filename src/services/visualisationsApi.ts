@@ -4,7 +4,7 @@
  */
 
 import api from "../axios/axiosInstance";
-import type { FPVRequest, FPVResponse, FPVDatasetRequest, FPVVisibilityRangeResponse } from "../types/visualisation";
+import type { FPVRequest, FPVResponse, FPVDatasetRequest, FPVGenerateAck, FPVVisibilityRangeResponse } from "../types/visualisation";
 
 const BASE = "/api/visualisations";
 
@@ -21,8 +21,10 @@ export const visualisationsApi = {
     return response.data;
   },
 
-  /** POST /api/visualisations/fpv-dataset — compute and store dataset-level projections */
-  generateFPVDataset: async (body: FPVDatasetRequest): Promise<FPVResponse> => {
+  /** POST /api/visualisations/fpv-dataset — enqueue dataset-level projection
+   * generation on a Celery worker. Returns as soon as the job is queued, not
+   * when it's done; poll getFPVDataset() until it succeeds. */
+  generateFPVDataset: async (body: FPVDatasetRequest): Promise<FPVGenerateAck> => {
     const response = await api.post(`${BASE}/fpv-dataset`, body);
     return response.data;
   },

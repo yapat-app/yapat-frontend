@@ -19,6 +19,15 @@ export type FPVDatasetRequest = {
   method?: "pca" | "umap" | "tsne" | "isomap";
 };
 
+/** Response from POST /fpv-dataset: the job is queued on a Celery worker,
+ * not computed inline. Poll GET /fpv-dataset until it succeeds. */
+export type FPVGenerateAck = {
+  status: "queued";
+  task_id: string;
+  dataset_id: number;
+  embedding_model_id: number;
+};
+
 export type FPVPointMetadata = {
   snippet_id: number;
   predicted_labels: string[];
