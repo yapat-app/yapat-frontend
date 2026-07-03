@@ -289,15 +289,23 @@ export function useHubALSession(
   useEffect(() => {
     if (!isAlLikeMode || isValidateMode) return;
     if (inferenceLoading || predictions.length > 0 || lastInferenceAt) return;
-    if (selectedDatasetId === null || !localFamily || resolvedSnippetSetId === null) return;
+    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
     if (checkpoints.length === 0) return;
     if (hasAutoInferredRef.current) return;
+
+    // Read the family from `checkpoints` directly, not `localFamily` — a
+    // later effect corrects `localFamily` from the same `checkpoints` value,
+    // but same-commit effects can't see each other's updates, so this one
+    // would otherwise latch onto a stale placeholder family and infer with
+    // the wrong model_family_name.
+    const effectiveFamily = checkpoints[0]?.model_family_name ?? localFamily;
+    if (!effectiveFamily) return;
     hasAutoInferredRef.current = true;
 
     dispatch(
       setInferenceConfig({
         modelCheckpointId: localCkpt,
-        modelFamilyName: localFamily,
+        modelFamilyName: effectiveFamily,
         snippetSetId: resolvedSnippetSetId,
         embeddingModelId:
           snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ?? 1,
@@ -306,14 +314,14 @@ export function useHubALSession(
     );
     dispatch(
       runInference({
-        model_family_name: localFamily,
+        model_family_name: effectiveFamily,
         dataset_id: selectedDatasetId,
         snippet_set_id: resolvedSnippetSetId,
         sample_suggestion: false,
       }),
     );
     dispatch(
-      fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: localFamily }),
+      fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: effectiveFamily }),
     );
   }, [
     isAlLikeMode,

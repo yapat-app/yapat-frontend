@@ -362,6 +362,8 @@ export interface Recording {
   channels?: number;
   created_at: string;
   updated_at?: string;
+  /** Backend-derived metadata (parsed from the filename) — location is the only key the frontend currently reads. */
+  extra_metadata?: { location?: string; [key: string]: unknown } | null;
 }
 
 export interface RecordingCreate {

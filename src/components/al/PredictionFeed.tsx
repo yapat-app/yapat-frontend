@@ -21,13 +21,65 @@ import { studyLogger, usePanelDwell } from "../../studyLogging";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
-import type { PAMPrediction } from "../../types/al";
+import type { PAMPrediction, SampleScores } from "../../types/al";
+import type { SortField } from "../../types/sort";
+import { isPointVisible } from "../../pages/annotationHub/useScoreHistogramData";
+import {
+  SCORE_VISIBILITY_MODE,
+  SCORE_SLIDER_STYLE,
+} from "../../pages/annotationHub/scoreFilterConfig";
+import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
+
+function getSortValue(prediction: PAMPrediction, property: SortField["property"]): number {
+  if (property === "time") return 0; // no backing data yet — no-op
+  if (property === "confidence") return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
+  if (property === "composite") return prediction.composite_score ?? prediction.scores?.composite ?? -Infinity;
+  const key = property as keyof SampleScores;
+  const v = prediction.scores?.[key];
+  return typeof v === "number" ? v : -Infinity;
+}
+
+function applySortFields(predictions: PAMPrediction[], sortFields?: SortField[]): PAMPrediction[] {
+  const active = (sortFields ?? []).filter((f) => !f.disabled);
+  if (active.length === 0) return predictions;
+  return [...predictions].sort((a, b) => {
+    for (const field of active) {
+      const av = getSortValue(a, field.property);
+      const bv = getSortValue(b, field.property);
+      if (av === bv) continue;
+      const cmp = av < bv ? -1 : 1;
+      return field.direction === "asc" ? cmp : -cmp;
+    }
+    return 0;
+  });
+}
 
 interface PredictionFeedProps {
   onFindSimilar?: (snippetId: number) => void;
+  /** Suppress the per-card header (a sticky header is rendered above the feed instead). */
+  hideCardHeader?: boolean;
+  /** Client-side multi-field sort applied before rendering the feed. */
+  sortFields?: SortField[];
+  /**
+   * Turns on the live client-side filter pipeline below (status, tags,
+   * location, model scores). Defaults to off so callers that never pass any
+   * of the filter props keep showing every prediction, unfiltered.
+   */
+  enableClientFilters?: boolean;
+  filterAnnotationStatus?: "any" | "annotated" | "unannotated";
+  filterLocations?: string[];
+  localLabelScope?: string[];
 }
 
-export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar }) => {
+export const PredictionFeed: React.FC<PredictionFeedProps> = ({
+  onFindSimilar,
+  hideCardHeader = false,
+  sortFields,
+  enableClientFilters = false,
+  filterAnnotationStatus = "any",
+  filterLocations = [],
+  localLabelScope = [],
+}) => {
   const dispatch = useAppDispatch();
   const {
     predictions,
@@ -38,6 +90,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
     selectedDatasetId,
     snippetSetId,
     feedSource,
+    alFilters,
   } = useAppSelector((state) => state.al);
   // Backward-compat scalar used by scroll-sync and single-card paths.
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
@@ -48,14 +101,74 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
+  const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
 
   const PAGE_SIZE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
+    scrollContainerRef.current = el;
+    setScrollRoot(el);
+  }, []);
+
+  const recordingLocationById = useRecordingLocations(
+    enableClientFilters ? selectedDatasetId : null,
+  );
+
+  const filteredAndSorted = useMemo(() => {
+    if (!enableClientFilters) return applySortFields(predictions, sortFields);
+
+    let result = predictions;
+
+    if (filterAnnotationStatus !== "any") {
+      const wantAnnotated = filterAnnotationStatus === "annotated";
+      result = result.filter((p) => {
+        const hasLabel =
+          Boolean(feedbacks[p.snippet_id]) || (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0;
+        return hasLabel === wantAnnotated;
+      });
+    }
+
+    if (localLabelScope.length > 0) {
+      const scopeSet = new Set(localLabelScope);
+      result = result.filter((p) => (p.predicted_labels ?? []).some((label) => scopeSet.has(label)));
+    }
+
+    if (filterLocations.length > 0) {
+      const locationSet = new Set(filterLocations);
+      result = result.filter((p) => {
+        if (typeof p.recording_id !== "number") return false;
+        const location = recordingLocationById.get(p.recording_id);
+        return location !== undefined && locationSet.has(location);
+      });
+    }
+
+    result = result.filter((p) =>
+      isPointVisible(p.scores, alFilters, SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE),
+    );
+
+    return applySortFields(result, sortFields);
+  }, [
+    enableClientFilters,
+    predictions,
+    feedbacks,
+    labelsBySnippet,
+    filterAnnotationStatus,
+    localLabelScope,
+    filterLocations,
+    recordingLocationById,
+    alFilters,
+    sortFields,
+  ]);
+
+  // Reset pagination whenever the filtered list changes, following React's
+  // "adjust state during render" pattern (avoids a cascading effect render).
+  const [prevFilteredForPaging, setPrevFilteredForPaging] = useState(filteredAndSorted);
+  if (filteredAndSorted !== prevFilteredForPaging) {
+    setPrevFilteredForPaging(filteredAndSorted);
     setVisibleCount(PAGE_SIZE);
-  }, [predictions]);
+  }
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
@@ -63,19 +176,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, predictions.length));
+          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredAndSorted.length));
         }
       },
       { root: scrollContainerRef.current, rootMargin: "200px" },
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [predictions.length, scrollRoot]);
-
-  const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
-    scrollContainerRef.current = el;
-    setScrollRoot(el);
-  }, []);
+  }, [filteredAndSorted.length, scrollRoot]);
 
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
@@ -230,15 +338,18 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
     return ids.join(",");
   }, [predictions, visibleCount]);
 
-  useEffect(() => {
+  // Clear cached recording names when the dataset changes or there is nothing
+  // to name, following the "adjust state during render" pattern.
+  const namesSourceKey =
+    selectedDatasetId && neededRecordingIdsKey ? String(selectedDatasetId) : null;
+  const [prevNamesSourceKey, setPrevNamesSourceKey] = useState(namesSourceKey);
+  if (namesSourceKey !== prevNamesSourceKey) {
+    setPrevNamesSourceKey(namesSourceKey);
     setRecordingNameById({});
-  }, [selectedDatasetId]);
+  }
 
   useEffect(() => {
-    if (!selectedDatasetId || !neededRecordingIdsKey) {
-      setRecordingNameById({});
-      return;
-    }
+    if (!selectedDatasetId || !neededRecordingIdsKey) return;
     const neededIds = neededRecordingIdsKey
       .split(",")
       .map(Number)
@@ -326,7 +437,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
   // so we capture the newly-mounted scroll container element.
   }, [isBlind, predictions.length, selectedSnippetIds.length]);
 
-  const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
@@ -336,7 +446,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
     [feedbacks],
   );
   const feedbacksRef = useRef(feedbacks);
-  feedbacksRef.current = feedbacks;
+  useEffect(() => {
+    feedbacksRef.current = feedbacks;
+  }, [feedbacks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -430,9 +542,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
 
     // ── Multi-select: shift+clicked ≥2 points → full-height snap-scroll feed ──
     if (selectedSnippetIds.length > 1) {
-      const multiSelected = selectedSnippetIds
-        .map((id) => predictions.find((p) => p.snippet_id === id))
-        .filter((p): p is PAMPrediction => p !== undefined);
+      const multiSelected = applySortFields(
+        selectedSnippetIds
+          .map((id) => predictions.find((p) => p.snippet_id === id))
+          .filter((p): p is PAMPrediction => p !== undefined),
+        sortFields,
+      );
 
       return (
         <div className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -460,6 +575,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
                     serverLabels={labelsBySnippet[p.snippet_id] ?? []}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={false}
+                    hideHeader={hideCardHeader}
                   />
                 </div>
               ))}
@@ -499,6 +615,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
             scrollRoot={scrollRoot}
             loadAudioImmediately
             onFindSimilar={onFindSimilar}
+            hideHeader={hideCardHeader}
           />
           {phase.ui.showRetrainControls && (
             <div className="sticky bottom-0 bg-[#f7fafc] pt-2 pb-0">
@@ -511,6 +628,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
   }
 
   if (isBlind) {
+    if (enableClientFilters && filteredAndSorted.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full px-6 text-center">
+          <Empty description="No snippets match the current filters." />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
         <div
@@ -519,7 +643,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
           style={{ scrollSnapType: "y mandatory" }}
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {predictions.slice(0, visibleCount).map((p, index) => {
+            {filteredAndSorted.slice(0, visibleCount).map((p, index) => {
               const key = p.id ?? p.snippet_id;
               const height = blindSnapCardHeight;
               if (index === visibleCount - 1) {
@@ -535,6 +659,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
                       onFindSimilar={onFindSimilar}
+                      hideHeader={hideCardHeader}
                     />
                   </div>
                 );
@@ -550,14 +675,15 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({ onFindSimilar })
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                     onFindSimilar={onFindSimilar}
+                    hideHeader={hideCardHeader}
                   />
                 </div>
               );
             })}
-            {predictions.length > visibleCount && (
+            {filteredAndSorted.length > visibleCount && (
               <div
                 className="snap-start shrink-0 w-full"
-                style={{ height: (predictions.length - visibleCount) * (blindSnapCardHeight + 12) }}
+                style={{ height: (filteredAndSorted.length - visibleCount) * (blindSnapCardHeight + 12) }}
               />
             )}
 

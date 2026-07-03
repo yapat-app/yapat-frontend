@@ -102,12 +102,28 @@ export interface UIPhaseConfig {
   labelingMode?: LabelingMode;
   /**
    * Controls how the score histogram is presented:
-   *   "embedded"   — histogram rendered inside the ALFilterPanel slider (P2.x default)
-   *   "standalone" — full-width histogram panel above the projection (P3.x)
-   *   "none"       — filter UI suppressed; handled externally (e.g., V2 sidebar)
+   *   "embedded"   — histogram rendered inside the ALFilterPanel slider
+   *   "standalone" — full-width histogram panel above the projection
+   *   "none"       — filter UI suppressed; handled externally (e.g., the Annotation Hub sidebar)
    * Defaults to "embedded" when omitted.
    */
   histogramStyle?: "embedded" | "standalone" | "none";
+}
+
+/** Which sidebar filter sections are shown (Annotation Hub only). */
+export interface SidebarPhaseConfig {
+  /** Date range / Time of day / Location / Species section. */
+  sampleProperties: boolean;
+  /** Uncertainty / Diversity / Density / Confidence / Composite section. */
+  modelScores: boolean;
+}
+
+/** Which sort-field categories are offered (Annotation Hub only). */
+export interface SortPhaseConfig {
+  /** Non-model sort fields (currently: Time — disabled, no backend data yet). */
+  nonModel: boolean;
+  /** Model-derived sort fields (confidence/composite/uncertainty/diversity/density). */
+  model: boolean;
 }
 
 export interface PhaseConfig {
@@ -116,4 +132,6 @@ export interface PhaseConfig {
   feed: FeedPhaseConfig;
   visualization: VisualizationPhaseConfig;
   ui: UIPhaseConfig;
+  sidebar: SidebarPhaseConfig;
+  sort: SortPhaseConfig;
 }

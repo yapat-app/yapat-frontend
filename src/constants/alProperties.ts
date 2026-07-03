@@ -118,6 +118,23 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
 export const getPropertyByKey = (key: string): PropertyDefinition | undefined =>
   AL_PROPERTIES.find((p) => p.key === key);
 
+/**
+ * Accent colour per sampler property — shared by the Model scores sidebar
+ * (histogram rows) and the sort chips so the same property always reads
+ * as the same colour.
+ */
+const PROPERTY_COLORS: Record<string, string> = {
+  uncertainty: "#3b82f6", // blue
+  diversity:   "#10b981", // emerald
+  density:     "#f59e0b", // amber
+  confidence:  "#8b5cf6", // violet
+  composite:   "#ec4899", // pink
+};
+
+export function propertyColor(key: string): string {
+  return PROPERTY_COLORS[key] ?? "#3b82f6";
+}
+
 export const visibilityProperties = (): PropertyDefinition[] =>
   AL_PROPERTIES.filter((p) => p.supportsVisibility);
 

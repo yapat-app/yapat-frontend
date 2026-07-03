@@ -19,15 +19,21 @@ import { ScoreHistogramPanel } from "../ScoreHistogramPanel";
 import { visualisationsApi } from "../../../services/visualisationsApi";
 import { usePhaseConfig } from "../../../studyPhases";
 import { studyLogger, usePanelDwell } from "../../../studyLogging";
-import { isProjectionNotReadyMessage, type ProjectionMethod } from "./fpvHelpers";
+import { isProjectionNotReadyMessage, type PlotPoint, type ProjectionMethod } from "./fpvHelpers";
 import { useFpvData } from "./useFpvData";
 import { useLabeledPool } from "./useLabeledPool";
 import { useProjectionTraces } from "./useProjectionTraces";
 import { ProjectionToolbar } from "./ProjectionToolbar";
 import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
+import { useRecordingLocations } from "../../../pages/annotationHub/useRecordingLocations";
+
+/** Minimal structural type for the Plotly click/hover events we consume. */
+type PlotlyPointEvent = {
+  points?: Array<{ customdata?: unknown; curveNumber?: number }>;
+};
 
 export interface ProjectionThumbnailData {
-  thumbnailPoints: Array<{ p: { snippet_id: number; scores?: Record<string, number> }; coord: [number, number]; visible: boolean }>;
+  thumbnailPoints: Array<{ p: PlotPoint; coord: [number, number]; visible: boolean }>;
   fpvCoordsBySnippetForMethod: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> | null;
   selectedSnippetId: number | null;
   selectedCoordByMethod: Partial<Record<ProjectionMethod, [number, number]>> | null;
@@ -36,18 +42,31 @@ export interface ProjectionThumbnailData {
   fpvLoading: boolean;
 }
 
+/**
+ * Sidebar client filters, mirrored from PredictionFeed's pipeline so the
+ * projection hides exactly the points the feed hides.
+ */
+export interface ProjectionClientFilters {
+  annotationStatus: "any" | "annotated" | "unannotated";
+  locations: string[];
+  labelScope: string[];
+}
+
 interface ProjectionViewProps {
   /** When provided externally, hides the internal method panel and uses this value. */
   projectionMethod?: ProjectionMethod;
   onProjectionMethodChange?: (m: ProjectionMethod) => void;
   /** Called with thumbnail data so a parent can render its own method selector. */
   onThumbnailData?: (data: ProjectionThumbnailData) => void;
+  /** When provided, points failing these filters render as hidden (grey). */
+  clientFilters?: ProjectionClientFilters;
 }
 
 export const ProjectionView: React.FC<ProjectionViewProps> = ({
   projectionMethod: externalMethod,
   onProjectionMethodChange,
   onThumbnailData,
+  clientFilters,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -175,6 +194,72 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     feedbackCount,
   });
 
+  // ── Client filters → extra visibility predicate ────────────────────────
+  // Mirrors PredictionFeed's client filter pipeline (annotation status,
+  // species scope, location) so the projection and the feed stay in sync.
+
+  const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
+  const recordingLocationById = useRecordingLocations(
+    wantsLocationFilter ? selectedDatasetId : null,
+  );
+
+  const recordingIdBySnippet = useMemo(() => {
+    if (!wantsLocationFilter) return null;
+    const map = new Map<number, number>();
+    for (const p of rawOverlayPredictions) {
+      if (typeof p.recording_id === "number") map.set(p.snippet_id, p.recording_id);
+    }
+    return map;
+  }, [wantsLocationFilter, rawOverlayPredictions]);
+
+  const wantsScopeFilter = (clientFilters?.labelScope.length ?? 0) > 0;
+  const predictedLabelsBySnippet = useMemo(() => {
+    if (!wantsScopeFilter) return null;
+    const map = new Map<number, string[]>();
+    for (const pt of fpvPoints) {
+      if (pt.predicted_labels?.length) map.set(pt.snippet_id, pt.predicted_labels);
+    }
+    for (const p of rawOverlayPredictions) {
+      if (p.predicted_labels?.length) map.set(p.snippet_id, p.predicted_labels);
+    }
+    return map;
+  }, [wantsScopeFilter, fpvPoints, rawOverlayPredictions]);
+
+  const extraVisible = useMemo(() => {
+    if (!clientFilters) return undefined;
+    const { annotationStatus, locations, labelScope } = clientFilters;
+    const locationSet = locations.length > 0 ? new Set(locations) : null;
+    const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
+    if (annotationStatus === "any" && !locationSet && !scopeSet) return undefined;
+
+    return (snippetId: number): boolean => {
+      if (annotationStatus !== "any") {
+        const hasLabel =
+          Boolean(feedbacks[snippetId]) ||
+          (labelsBySnippet[snippetId]?.length ?? 0) > 0;
+        if (hasLabel !== (annotationStatus === "annotated")) return false;
+      }
+      if (scopeSet) {
+        const labels = predictedLabelsBySnippet?.get(snippetId);
+        if (!labels || !labels.some((l) => scopeSet.has(l))) return false;
+      }
+      if (locationSet) {
+        const recId = recordingIdBySnippet?.get(snippetId);
+        if (recId === undefined) return false;
+        const location = recordingLocationById.get(recId);
+        if (location === undefined || !locationSet.has(location)) return false;
+      }
+      return true;
+    };
+  }, [
+    clientFilters,
+    feedbacks,
+    labelsBySnippet,
+    predictedLabelsBySnippet,
+    recordingIdBySnippet,
+    recordingLocationById,
+  ]);
+
   // ── Visibility range override (async API fetch) ────────────────────────────
 
   const [visRangeOverride, setVisRangeOverride] = useState<{
@@ -229,6 +314,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     selectedSnippetIds,
     activeSnippetId,
     visRangeOverride,
+    extraVisible,
   });
 
   // ── Expose thumbnail data to parent when an external method is provided ──────
@@ -315,17 +401,21 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     !fpvError &&
     !isMissingProjection &&
     (fpvGenerateLoading || fpvLoading || loadingMethods.has(method) || !activeProjectionReady);
-  // "embedded"   → ALFilterPanel with histogram inside (P2.x)
-  // "standalone" → ScoreHistogramPanel above projection (P3.x)
-  // "none"       → filter UI lives outside (e.g. V2 sidebar); show nothing here
+  // "embedded"   → ALFilterPanel with histogram inside
+  // "standalone" → ScoreHistogramPanel above projection
+  // "none"       → filter UI lives outside (e.g. Annotation Hub sidebar); show nothing here
   const showEmbeddedFilter = visibilityMode !== "disabled" && histogramStyle === "embedded";
   const showStandaloneHistogram = visibilityMode !== "disabled" && histogramStyle === "standalone";
+
+  // Log a hover only after the cursor dwells on a point for ≥ 2s.
+  // Declared before the early return below — hooks must run unconditionally.
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (visMode === "hidden") return null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const handlePlotClick = (event: any) => {
+  const handlePlotClick = (event: PlotlyPointEvent) => {
     if (!allowPointClick) return;
     const pt = event.points?.[0];
     if (pt?.customdata === undefined) return;
@@ -346,9 +436,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     }
   };
 
-  // Log a hover only after the cursor dwells on a point for ≥ 2s.
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handlePlotHover = (event: any) => {
+  const handlePlotHover = (event: PlotlyPointEvent) => {
     const pt = event.points?.[0];
     if (pt?.customdata === undefined) return;
     const snippetId = pt.customdata as number;

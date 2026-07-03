@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
 import { Login } from "./pages/Login";
 import { SignUp } from "./pages/SignUp";
@@ -6,7 +6,6 @@ import { Datasets } from "./pages/Datasets";
 import { Teams } from "./pages/Teams";
 import { ManageTeam } from "./pages/ManageTeam";
 import { AnnotationHub } from "./pages/AnnotationHub";
-import { V2AnnotationHub } from "./pages/V2AnnotationHub";
 import { YapatUserManual } from "./pages/Documentation";
 import { FeedHistory } from "./pages/FeedHistory";
 import { Taxonomies } from "./pages/Taxonomies";
@@ -22,6 +21,11 @@ import { LoggerContextBridge } from "./studyLogging";
 import AdminOnlyGuard from "./routes/AdminOnlyGuard";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 import WssedAccessGuard from "./routes/WssedAccessGuard";
+
+function RedirectWithSearch({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+}
 
 function App() {
   return (
@@ -47,8 +51,8 @@ function App() {
         <Route path="/pre-annotation" element={<Taxonomies />} />
         <Route path="/history" element={<FeedHistory />} />
         <Route path="/annotate" element={<AnnotationHub />} />
-        <Route path="/v2AnnotationHub" element={<V2AnnotationHub />} />
-        {/* Legacy route — redirect to unified hub in AL mode */}
+        {/* Legacy routes — redirect to the unified hub */}
+        <Route path="/v2AnnotationHub" element={<RedirectWithSearch to="/annotate" />} />
         <Route path="/active-learning" element={<Navigate to="/annotate?mode=al" replace />} />
         <Route
           path="/wssed"

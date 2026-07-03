@@ -19,17 +19,7 @@ import React, { useCallback, useEffect, useMemo } from "react";
 import { HistogramSlider } from "./HistogramSlider";
 import type { ALFilterState, SampleScores } from "../../types/al";
 import type { FilterMode, AllowedProperty } from "../../studyPhases";
-import { getPropertyByKey } from "../../constants/alProperties";
-
-// ── Per-property colours ──────────────────────────────────────────────────────
-const PROPERTY_COLORS: Record<string, string> = {
-  uncertainty: "#3b82f6", // blue
-  diversity:   "#10b981", // emerald
-  density:     "#f59e0b", // amber
-};
-function propertyColor(key: string): string {
-  return PROPERTY_COLORS[key] ?? "#3b82f6";
-}
+import { getPropertyByKey, propertyColor } from "../../constants/alProperties";
 
 interface FilteredPoint {
   p: { snippet_id: number; scores?: SampleScores };
@@ -75,6 +65,7 @@ interface PropertyRowProps {
   onSliderChange: (newNorm: [number, number]) => void;
   mode?: "range" | "threshold";
   hideLabel?: boolean;
+  compact?: boolean;
 }
 
 const PropertyRow: React.FC<PropertyRowProps> = ({
@@ -86,6 +77,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   onSliderChange,
   mode = "threshold",
   hideLabel = false,
+  compact = false,
 }) => (
   <div className="flex flex-col gap-0.5">
     <div className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}>
@@ -117,7 +109,8 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       mode={mode}
       range={normRange}
       onChange={onSliderChange}
-      barHeight={40}
+      barHeight={compact ? 26 : 40}
+      hideAxis={compact}
       accentColor={color}
     />
   </div>
@@ -250,8 +243,14 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div data-tour="score-histogram" className="flex flex-col gap-2.5 px-4 py-3 border-b border-gray-100 bg-white">
-      {!compact && (
+    <div
+      data-tour="score-histogram"
+      className={[
+        "flex flex-col gap-2.5 bg-white",
+        compact ? "" : "px-4 py-3 border-b border-gray-100",
+      ].join(" ")}
+    >
+      {!compact ? (
         <div className="flex items-center justify-between flex-wrap gap-2">
           <span className="text-xs font-semibold text-gray-600 font-ibm-sans tracking-wide uppercase">
             Score Distribution
@@ -274,6 +273,26 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
             </span>
           </div>
         </div>
+      ) : (
+        isFiltered && (
+          <div className="flex items-center justify-between text-[11px] font-ibm-sans">
+            <span className="text-gray-500">
+              <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
+              {" / "}
+              {enrichedPlotPoints.length.toLocaleString()}
+              {" visible"}
+            </span>
+            {onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="text-blue-500 hover:text-blue-700 underline"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )
       )}
 
       {/* ── P3.1: exclusive tabs + one histogram ─────────────────────── */}
@@ -315,6 +334,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               onSliderChange={handleSingleSlider}
               mode={sliderMode}
               hideLabel={compact}
+              compact={compact}
             />
           ) : (
             <EmptyState />
@@ -322,8 +342,91 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         </>
       )}
 
-      {/* ── P3.2: toggle pills + one compact row per active property ──── */}
-      {isMulti && (
+      {/* ── P3.2 (compact): unified rows — header doubles as toggle ────── */}
+      {isMulti && compact && (
+        <div className="flex flex-col gap-2">
+          {(allowedProperties as string[]).map((prop) => {
+            const def = getPropertyByKey(prop);
+            const label = def?.label ?? prop;
+            const color = propertyColor(prop);
+            const isActive = multiActiveKeys.includes(prop);
+            const isLastActive = isActive && multiActiveKeys.length === 1;
+            const row = multiData.find((r) => r.key === prop);
+
+            return (
+              <div
+                key={prop}
+                className={[
+                  "rounded-lg border transition-colors",
+                  isActive ? "border-gray-200 px-2.5 py-2" : "border-dashed border-gray-200 px-2.5 py-1.5",
+                ].join(" ")}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleMultiToggle(prop)}
+                  disabled={isLastActive}
+                  title={isLastActive ? "At least one filter must stay active" : undefined}
+                  className={[
+                    "flex w-full items-center justify-between gap-2 text-left",
+                    isLastActive ? "cursor-not-allowed" : "cursor-pointer",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "flex items-center gap-1.5 text-[11px] font-ibm-sans font-semibold",
+                      isActive ? "text-gray-800" : "text-gray-400",
+                    ].join(" ")}
+                  >
+                    <span
+                      className="h-[7px] w-[7px] flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: isActive ? color : "#d1d5db" }}
+                    />
+                    {label}
+                  </span>
+                  {isActive && row ? (
+                    <span className="text-[11px] font-ibm-sans text-gray-400">
+                      ≥ <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-ibm-sans text-gray-300">+</span>
+                  )}
+                </button>
+
+                {isActive && row && (
+                  row.allValues.length === 0 ? (
+                    <p className="mt-1.5 text-[11px] text-gray-300 font-ibm-sans">
+                      No score data for this property
+                    </p>
+                  ) : (
+                    <div className="mt-1.5">
+                      <HistogramSlider
+                        values={row.visibleValues}
+                        totalValues={row.allValues}
+                        min={SCORE_MIN}
+                        max={SCORE_MAX}
+                        mode={sliderMode}
+                        range={row.normRange}
+                        onChange={(newNorm) =>
+                          handleMultiSlider(
+                            row.key,
+                            sliderMode === "range" ? newNorm : [newNorm[0], 1],
+                          )
+                        }
+                        barHeight={26}
+                        hideAxis
+                        accentColor={color}
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── P3.2 (standalone): toggle pills + one row per active property ── */}
+      {isMulti && !compact && (
         <>
           <div className="flex gap-2 flex-wrap">
             {allowedProperties.map((prop) => {
@@ -353,7 +456,6 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                   }
                 >
                   {def?.label ?? prop}
-                  {isActive && <span className="ml-1 opacity-80">✓</span>}
                 </button>
               );
             })}
@@ -376,6 +478,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       )
                     }
                     mode={sliderMode}
+                    compact={false}
                   />
                 </div>
               ))}

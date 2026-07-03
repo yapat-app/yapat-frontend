@@ -39,8 +39,10 @@ interface Props {
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
   loadAudioImmediately?: boolean;
-  /** V2 hub: called when the user wants to find similar snippets to this one. */
+  /** Called when the user wants to find similar snippets to this one. */
   onFindSimilar?: (snippetId: number) => void;
+  /** Suppress the inline blind-mode header (a sticky header is rendered above the feed instead). */
+  hideHeader?: boolean;
 }
 
 export const PredictionCard: React.FC<Props> = ({
@@ -52,6 +54,7 @@ export const PredictionCard: React.FC<Props> = ({
   scrollRoot,
   loadAudioImmediately = false,
   onFindSimilar,
+  hideHeader = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -95,8 +98,6 @@ export const PredictionCard: React.FC<Props> = ({
   const [audioAttempt, setAudioAttempt] = useState(0);
 
   const isBlind = phase.ui.labelingMode === "blind";
-  // In blind mode the card fills the viewport; elsewhere use compact heights.
-  const specHeight = isBlind ? 0 : phase.id.startsWith("P1.") ? 140 : 220;
 
   // ── Blind-mode height computation ──────────────────────────────────────
   // Card fills the scroll-snap viewport. Spectrogram takes the upper portion;
@@ -111,11 +112,6 @@ export const PredictionCard: React.FC<Props> = ({
     [blindSpecHeight],
   );
 
-  const compactSpecBlockHeight = useMemo(
-    () => spectrogramLayoutHeights(specHeight).blockHeight,
-    [specHeight],
-  );
-
   const computeBlindSpecHeightRef = useRef<() => void>(() => {});
 
   computeBlindSpecHeightRef.current = () => {
@@ -123,7 +119,7 @@ export const PredictionCard: React.FC<Props> = ({
       typeof cardHeightPx === "number"
         ? cardHeightPx
         : Math.max(560, window.innerHeight - 180);
-    const available = cardH - HEADER_H - BODY_PAD_Y - LABEL_AREA_H - 8;
+    const available = cardH - (hideHeader ? 0 : HEADER_H) - BODY_PAD_Y - LABEL_AREA_H - 8;
     const melBudget = available - spectrogramChromeHeight();
     setBlindSpecHeight(Math.max(120, Math.min(600, melBudget)));
   };
@@ -224,22 +220,20 @@ export const PredictionCard: React.FC<Props> = ({
     };
   }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected, audioAttempt]);
 
-  const isPhase1 = phase.id.startsWith("P1.");
-
-  // ── Blind mode (P1.1 / P1.2): spectrogram + inline label area ─────────────
-  if (isBlind) {
-    return (
-      <div
-        ref={setRefs}
-        onClick={() => dispatch(setSelectedSnippet(prediction.snippet_id))}
-        className={[
-          "rounded-xl border bg-white shadow-sm cursor-pointer transition-all duration-200 h-full flex flex-col overflow-hidden",
-          isSelected
-            ? "border-yellow-400 ring-2 ring-yellow-200 shadow-md"
-            : "border-gray-200 hover:border-gray-300 hover:shadow",
-        ].join(" ")}
-      >
-        {/* ── Header ── */}
+  // ── Blind-mode card: spectrogram + inline label area ──────────────────────
+  return (
+    <div
+      ref={setRefs}
+      onClick={() => dispatch(setSelectedSnippet(prediction.snippet_id))}
+      className={[
+        "rounded-xl border bg-white shadow-sm cursor-pointer transition-all duration-200 h-full flex flex-col overflow-hidden",
+        isSelected
+          ? "border-yellow-400 ring-2 ring-yellow-200 shadow-md"
+          : "border-gray-200 hover:border-gray-300 hover:shadow",
+      ].join(" ")}
+    >
+      {/* ── Header ── */}
+      {!hideHeader && (
         <div className="flex-shrink-0 flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
           <div className="text-xs text-gray-500 font-ibm-sans flex items-center gap-2">
             <span className="flex items-center gap-1">
@@ -282,323 +276,61 @@ export const PredictionCard: React.FC<Props> = ({
             )}
           </div>
         </div>
+      )}
 
-        {/* ── Spectrogram ── */}
-        <div
-          className="flex-shrink-0 px-5 pt-3 pb-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!audioBlobUrl && !audioError && shouldLoadAudio && (
-            <Skeleton.Input
-              active
-              block
-              style={{ height: blindSpecBlockHeight, borderRadius: 12, width: "100%" }}
-            />
-          )}
-          {!audioBlobUrl && !audioError && !shouldLoadAudio && (
-            <div
-              className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-              style={{ height: blindSpecBlockHeight }}
-            >
-              Scroll to load audio
-            </div>
-          )}
-          {audioError && (
-            <div
-              className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-              style={{ height: blindSpecBlockHeight }}
-            >
-              Audio unavailable
-            </div>
-          )}
-          {audioBlobUrl && (
-            <div className="w-full flex-shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
-              <SnippetSpectrogramPlayer
-                key={`${prediction.snippet_id}|${spectrogramBandKey}|${blindSpecHeight}`}
-                src={audioBlobUrl}
-                sampleRate={audioSampleRate}
-                datasetSpectrogram={datasetSpectrogram}
-                durationSec={prediction.duration_sec ?? undefined}
-                specHeight={blindSpecHeight}
-                navigator={false}
-                settings={false}
-                dark={false}
-                colormap="viridis"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* ── Inline label area ── */}
-        <div
-          className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
-          style={{ height: LABEL_AREA_H }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <FeedbackButtons prediction={prediction} {...({ serverLabels } as any)} />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Guided Phase 1 (P1.2 etc.): compact two-column card ──────────────────
-  if (isPhase1) {
-    const labelText = prediction.predicted_label ?? "—";
-    return (
+      {/* ── Spectrogram ── */}
       <div
-        ref={setRefs}
-        onClick={() => dispatch(setSelectedSnippet(prediction.snippet_id))}
-        className={[
-          "rounded-lg border bg-white shadow-sm cursor-pointer transition-all duration-200",
-          isSelected
-            ? "border-yellow-400 ring-2 ring-yellow-200 shadow-md"
-            : "border-gray-200 hover:border-gray-300 hover:shadow",
-          // Do not dim annotated snippets; keep them fully visible.
-        ].join(" ")}
-      >
-        {/* ── Header row ── */}
-        <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2 border-b border-gray-100">
-          <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
-            {labelText}
-          </span>
-          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2 flex-shrink-0">
-            {onFindSimilar && (
-              <Tooltip title="Find similar snippets">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<AudioOutlined />}
-                  className="text-gray-400 hover:text-blue-500 px-1"
-                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
-                />
-              </Tooltip>
-            )}
-            {prediction.confidence != null && (
-              <span
-                className={[
-                  "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold font-ibm-mono",
-                  prediction.confidence >= 0.8
-                    ? "bg-green-50 text-green-700 border border-green-200"
-                    : prediction.confidence >= 0.5
-                    ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                    : "bg-red-50 text-red-600 border border-red-200",
-                ].join(" ")}
-              >
-                {Math.round(prediction.confidence * 100)}%
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <SoundOutlined />#{prediction.snippet_id}
-            </span>
-            {recordingLabel && (
-              <span>{recordingLabel}</span>
-            )}
-          </div>
-        </div>
-
-        {/* ── Two-column body ── */}
-        <div className="flex gap-0">
-          {/* Left: spectrogram */}
-          <div
-            className="w-[60%] border-r border-gray-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {!audioBlobUrl && !audioError && shouldLoadAudio && (
-              <div className="px-4 py-3">
-                <Skeleton.Input active block style={{ height: compactSpecBlockHeight, borderRadius: 6 }} />
-              </div>
-            )}
-            {!audioBlobUrl && !audioError && !shouldLoadAudio && (
-              <div
-                className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-                style={{ minHeight: compactSpecBlockHeight }}
-              >
-                Scroll to load audio
-              </div>
-            )}
-            {audioError && (
-              <div
-                className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-                style={{ minHeight: compactSpecBlockHeight }}
-              >
-                Audio unavailable
-              </div>
-            )}
-            {audioBlobUrl && (
-              <div className="px-4 py-3">
-                <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
-                  <SnippetSpectrogramPlayer
-                    key={`${prediction.snippet_id}|${spectrogramBandKey}|${specHeight}`}
-                    src={audioBlobUrl}
-                    sampleRate={audioSampleRate}
-                    datasetSpectrogram={datasetSpectrogram}
-                    durationSec={prediction.duration_sec ?? undefined}
-                    specHeight={specHeight}
-                    navigator={false}
-                    settings={false}
-                    dark={false}
-                    colormap="viridis"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right: predicted labels + confidence + feedback */}
-          <div
-            className="w-[40%] flex flex-col gap-3 px-4 py-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {prediction.predicted_labels && prediction.predicted_labels.length > 0 ? (
-              <div>
-                <p className="text-xs text-gray-400 font-ibm-sans mb-1">Predicted labels</p>
-                <div className="flex flex-col gap-1">
-                  {prediction.predicted_labels.map((lbl) => {
-                    const prob = prediction.predicted_probabilities?.[lbl];
-                    const pct = prob != null ? Math.round(prob * 100) : null;
-                    const barColor =
-                      pct == null ? "bg-blue-300"
-                      : pct >= 80 ? "bg-green-500"
-                      : pct >= 50 ? "bg-yellow-400"
-                      : "bg-red-400";
-                    return (
-                      <div key={lbl} className="flex items-center gap-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200 truncate max-w-[60%]">
-                          {lbl}
-                        </span>
-                        {pct != null && (
-                          <div className="flex items-center gap-1 flex-1 min-w-0">
-                            <div className="flex-1 h-1.5 rounded-full bg-gray-100">
-                              <div
-                                className={`h-1.5 rounded-full ${barColor} transition-all`}
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-500 font-ibm-mono w-7 text-right flex-shrink-0">
-                              {pct}%
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic font-ibm-sans">No label predicted</p>
-            )}
-            <div className="border-t border-gray-100" />
-            <FeedbackButtons prediction={prediction} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Phase 2 / 3: original stacked layout ─────────────────────────────────
-  const labelText = prediction.predicted_label ?? "—";
-  return (
-    <div
-      ref={setRefs}
-      onClick={() => dispatch(setSelectedSnippet(prediction.snippet_id))}
-      className={[
-        "rounded-lg border bg-white shadow-sm cursor-pointer transition-all duration-200",
-        isSelected
-          ? "border-yellow-400 ring-2 ring-yellow-200 shadow-md"
-          : "border-gray-200 hover:border-gray-300 hover:shadow",
-        // Do not dim annotated snippets; keep them fully visible.
-      ].join(" ")}
-    >
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="font-ibm-mono font-semibold text-sm text-gray-800 truncate">
-            {labelText}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="text-xs text-gray-400 font-ibm-sans flex items-center gap-2">
-            {onFindSimilar && (
-              <Tooltip title="Find similar snippets">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<AudioOutlined />}
-                  className="text-gray-400 hover:text-blue-500 px-1"
-                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
-                />
-              </Tooltip>
-            )}
-            <span className="flex items-center gap-1">
-              <SoundOutlined />#{prediction.snippet_id}
-            </span>
-            {recordingLabel && (
-              <span>{recordingLabel}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Spectrogram + audio player (SpectrogramPlayer handles both) ── */}
-      <div
+        className="flex-shrink-0 px-5 pt-3 pb-2"
         onClick={(e) => e.stopPropagation()}
-        className="border-t border-gray-100"
       >
-        {/* Loading skeleton — shown until the blob URL is ready */}
-            {!audioBlobUrl && !audioError && shouldLoadAudio && (
-          <div className="px-4 py-3">
-            <Skeleton.Input
-              active
-              block
-              style={{ height: compactSpecBlockHeight, borderRadius: 6 }}
-            />
-          </div>
+        {!audioBlobUrl && !audioError && shouldLoadAudio && (
+          <Skeleton.Input
+            active
+            block
+            style={{ height: blindSpecBlockHeight, borderRadius: 12, width: "100%" }}
+          />
         )}
-
-        {/* Not loading yet (lazy) */}
-            {!audioBlobUrl && !audioError && !shouldLoadAudio && (
-          <div className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic" style={{ minHeight: compactSpecBlockHeight }}>
+        {!audioBlobUrl && !audioError && !shouldLoadAudio && (
+          <div
+            className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
+            style={{ height: blindSpecBlockHeight }}
+          >
             Scroll to load audio
           </div>
         )}
-
-        {/* Error state */}
         {audioError && (
           <div
-            className="flex items-center justify-center bg-gray-50 text-xs text-gray-400 italic"
-            style={{ minHeight: compactSpecBlockHeight }}
+            className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
+            style={{ height: blindSpecBlockHeight }}
           >
             Audio unavailable
           </div>
         )}
-
-        {/* Player — rendered once the blob URL is available */}
         {audioBlobUrl && (
-          <div className="px-4 py-3">
-            <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
-              <SnippetSpectrogramPlayer
-                key={`${prediction.snippet_id}|${spectrogramBandKey}|${specHeight}`}
-                src={audioBlobUrl}
-                sampleRate={audioSampleRate}
-                datasetSpectrogram={datasetSpectrogram}
-                durationSec={prediction.duration_sec ?? undefined}
-                specHeight={specHeight}
-                navigator={false}
-                settings={false}
-                dark={false}
-                colormap="viridis"
-              />
-            </div>
+          <div className="w-full flex-shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
+            <SnippetSpectrogramPlayer
+              key={`${prediction.snippet_id}|${spectrogramBandKey}|${blindSpecHeight}`}
+              src={audioBlobUrl}
+              sampleRate={audioSampleRate}
+              datasetSpectrogram={datasetSpectrogram}
+              durationSec={prediction.duration_sec ?? undefined}
+              specHeight={blindSpecHeight}
+              navigator={false}
+              settings={false}
+              dark={false}
+              colormap="viridis"
+            />
           </div>
         )}
       </div>
 
-      {/* ── Feedback buttons ── */}
+      {/* ── Inline label area ── */}
       <div
+        className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
+        style={{ height: LABEL_AREA_H }}
         onClick={(e) => e.stopPropagation()}
-        className="px-4 py-3 border-t border-gray-100"
       >
-        <FeedbackButtons prediction={prediction} />
+        <FeedbackButtons prediction={prediction} {...({ serverLabels } as any)} />
       </div>
     </div>
   );

@@ -170,13 +170,9 @@ function saveFeed(state: ALState, inferenceRequest?: PAMRunInferenceRequest): vo
   // one synchronous JSON.stringify + localStorage.setItem, not ten.
   if (_saveFeedTimer !== null) clearTimeout(_saveFeedTimer);
 
-  // Unwrap the Immer draft to a plain snapshot BEFORE the debounce timer fires.
-  // `data` below holds references to draft sub-objects (predictions, feedbacks,
-  // selectedSnippetIds, …). Once the reducer finalizes, those proxies are revoked
-  // and the deferred JSON.stringify would throw — silently losing the save. This
-  // is why selection changes (which mutate the draft in place via push/splice)
-  // previously failed to persist while inference (which reassigns plain objects)
-  // appeared to work. current() gives us a plain, post-finalization-safe copy.
+  // Unwrap the Immer draft to a plain snapshot before the debounce timer fires —
+  // draft proxies are revoked once the reducer finalizes, so a deferred
+  // JSON.stringify over draft sub-objects would throw and silently lose the save.
   state = isDraft(state) ? current(state) : state;
 
   const tooLarge = state.predictions.length > MAX_PERSISTED_PREDICTIONS;
@@ -297,8 +293,31 @@ function clearSessionState(state: ALState): void {
   state.error = null;
 }
 
+/**
+ * The dataset_id the URL asks for at store-init time, if any. Read directly
+ * from location.search (rather than react-router's useSearchParams, which
+ * isn't available this early) so buildInitialState() can tell whether a
+ * localStorage-persisted feed actually belongs to the dataset the user is
+ * navigating to — mirrors the expectedDatasetId guard in hydrateSavedFeed.
+ */
+function getUrlDatasetId(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("dataset_id");
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function buildInitialState(): ALState {
   const saved = loadFeed();
+  const urlDatasetId = getUrlDatasetId();
+  const savedDatasetId = normalizeDatasetId(saved?.selectedDatasetId ?? null);
+  // A saved feed for a *different* dataset than the URL asks for is stale for
+  // this navigation — restoring its snippetSetId/modelFamilyName alongside
+  // the URL's dataset_id would send a cross-dataset combination the backend
+  // rejects ("snippet_set_id=X belongs to dataset_id=Y, not dataset_id=Z").
+  const savedMatchesUrl =
+    urlDatasetId === null || savedDatasetId === null || urlDatasetId === savedDatasetId;
   const base: ALState = {
     feedSource: null,
     classicAnnotationsBySnippet: {},
@@ -335,7 +354,14 @@ function buildInitialState(): ALState {
     lastInferenceAt: null,
   };
 
-  if (saved && (saved.predictions?.length ?? 0) > 0) {
+  if (!savedMatchesUrl) {
+    // The URL asks for a different dataset than the persisted feed belongs
+    // to — start clean with the URL's dataset selected rather than seeding
+    // the store with another dataset's snippetSetId/modelFamilyName. The
+    // usual URL-driven effects (see useHubALSession) then load this
+    // dataset's own feed normally.
+    base.selectedDatasetId = urlDatasetId;
+  } else if (saved && (saved.predictions?.length ?? 0) > 0) {
     applyPersistedFeed(base, saved);
   } else if (saved && needsServerRestore(saved)) {
     applyPersistedMetadata(base, saved);
@@ -751,6 +777,17 @@ const alSlice = createSlice({
       (state, action) => {
         const request = action.meta.arg as PAMRunInferenceRequest;
         state.inferenceLoading = false;
+
+        // Discard stale responses: if the user switched datasets while this
+        // request was in flight, applying it would overwrite
+        // snippetSetId/selectedDatasetId with the previous dataset's values,
+        // and the next request would send a cross-dataset snippet_set_id
+        // that the backend rejects.
+        const currentDatasetId = normalizeDatasetId(state.selectedDatasetId);
+        const requestDatasetId = normalizeDatasetId(request.dataset_id);
+        if (currentDatasetId !== null && currentDatasetId !== requestDatasetId) {
+          return;
+        }
 
         const payload = action.payload;
 

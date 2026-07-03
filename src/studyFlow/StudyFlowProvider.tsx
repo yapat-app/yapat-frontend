@@ -93,9 +93,9 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     if (firstUncompleted === undefined) {
       // Every phase in the sequence is done. Navigate to the last phase so its
       // "complete" stage is the active one. Without this, phaseId stays at
-      // whatever PhaseProvider resolved on init (e.g. P1.1 from the env var),
-      // and P1.1's stored "transition" stage would trigger the transition effect
-      // which would incorrectly advance to P1.2 on the next render cycle.
+      // whatever PhaseProvider resolved on init (e.g. P1 from the env var),
+      // and P1's stored "transition" stage would trigger the transition effect
+      // which would incorrectly advance to P2 on the next render cycle.
       const last = sequence[sequence.length - 1];
       if (last) {
         update((prev) => ({
@@ -103,7 +103,7 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
           phases: { ...prev.phases, [last]: { stage: "complete", startedAt: null } },
         }));
         // Calling setPhase changes phaseId → the transition effect re-runs with
-        // stage="complete" and bails out, cancelling any pending P1.x timeout.
+        // stage="complete" and bails out, cancelling any pending timeout.
         if (last !== phaseId) setPhaseRef.current(last);
       }
       return;

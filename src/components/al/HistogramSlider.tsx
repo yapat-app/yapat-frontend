@@ -22,6 +22,8 @@ interface HistogramSliderProps {
   values: number[];
   /** When true, only the bar area is rendered — no track, no handles, no label. */
   hideSlider?: boolean;
+  /** When true, the axis tick labels (0.00 … 1.00) are omitted for a denser layout. */
+  hideAxis?: boolean;
   /**
    * When provided, sets the global Y-axis scale and enables stacked bars:
    *   - Bar total height ∝ totalValues bin count
@@ -56,6 +58,7 @@ function computeBins(values: number[], binCount: number, min: number, max: numbe
 export const HistogramSlider: React.FC<HistogramSliderProps> = ({
   values,
   hideSlider = false,
+  hideAxis = false,
   totalValues,
   min = 0,
   max = 1,
@@ -227,20 +230,22 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
           </div>
 
           {/* Axis tick labels */}
-          <div className="relative mt-0.5 h-3">
-            {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-              const val = min + t * (max - min);
-              return (
-                <span
-                  key={t}
-                  className="absolute text-[10px] text-gray-400 font-ibm-sans -translate-x-1/2"
-                  style={{ left: `${t * 100}%` }}
-                >
-                  {val.toFixed(2)}
-                </span>
-              );
-            })}
-          </div>
+          {!hideAxis && (
+            <div className="relative mt-0.5 h-3">
+              {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+                const val = min + t * (max - min);
+                return (
+                  <span
+                    key={t}
+                    className="absolute text-[10px] text-gray-400 font-ibm-sans -translate-x-1/2"
+                    style={{ left: `${t * 100}%` }}
+                  >
+                    {val.toFixed(2)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           {/* Label row */}
           {label && (

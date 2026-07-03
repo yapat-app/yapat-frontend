@@ -15,7 +15,7 @@ import type { FilterMode } from "../../studyPhases";
 
 const SCORE_UPPER_EPS = 1e-9;
 
-function isPointVisible(
+export function isPointVisible(
   scores: SampleScores | undefined,
   alFilters: ALFilterState,
   visibilityMode: FilterMode,
@@ -51,7 +51,10 @@ function isPointVisible(
       const domainHi = pMin + normHi * (pMax - pMin);
       const raw = scores?.[key as keyof SampleScores] as number | undefined;
       if (raw === undefined || raw === null) {
-        if (normLo > 0 || normHi < 1) return false;
+        // Missing score: the histogram/slider never represents unscored
+        // points, so a threshold must not hide them — otherwise combining a
+        // slider with e.g. the "Labeled" filter (whose labeled-pool snippets
+        // often have no sampler scores) empties the view entirely.
         continue;
       }
       const v = Math.min(pMax, Math.max(pMin, raw));

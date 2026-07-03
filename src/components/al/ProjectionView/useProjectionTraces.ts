@@ -46,6 +46,13 @@ export function useProjectionTraces(opts: {
   selectedSnippetIds: number[];
   activeSnippetId: number | null;
   visRangeOverride: { min: number; max: number; step: number } | null;
+  /**
+   * Optional extra visibility predicate (e.g. sidebar client filters:
+   * annotation status, location, species). Combined with the score filters —
+   * a point is visible only when it passes BOTH, keeping the projection in
+   * sync with the feed's filter pipeline.
+   */
+  extraVisible?: (snippetId: number) => boolean;
 }): UseProjectionTracesResult {
   const {
     fpvPoints,
@@ -60,6 +67,7 @@ export function useProjectionTraces(opts: {
     selectedSnippetIds,
     activeSnippetId,
     visRangeOverride,
+    extraVisible,
   } = opts;
 
   const visKey = alFilters.visibility.propertyKey;
@@ -189,9 +197,9 @@ export function useProjectionTraces(opts: {
 
   const filtered = useMemo(() => {
     return enrichedPlotPoints.map((p, i) => {
-      let visible = true;
+      let visible = extraVisible ? extraVisible(p.snippet_id) : true;
 
-      if ((visibilityMode === "single" || visibilityMode === "fixed") && visProp) {
+      if (visible && (visibilityMode === "single" || visibilityMode === "fixed") && visProp) {
         const [pMin, pMax] = visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
         const [normLo, normHi] = alFilters.visibility.range;
         const span = pMax - pMin;
@@ -210,7 +218,7 @@ export function useProjectionTraces(opts: {
         } else {
           visible = raw >= domainLo && raw <= domainHi + SAMPLE_SCORE_UPPER_EPS;
         }
-      } else if (visibilityMode === "multi") {
+      } else if (visible && visibilityMode === "multi") {
         const keys = alFilters.visibility.propertyKeys ?? [];
         const ranges = alFilters.visibility.ranges ?? {};
         for (const key of keys) {
@@ -222,14 +230,11 @@ export function useProjectionTraces(opts: {
           const domainHi = pMin + normHi * (pMax - pMin);
           const raw = p.scores?.[key as keyof SampleScores] as number | undefined;
           if (raw === undefined || raw === null) {
-            // Missing score for this property: only exclude when this property
-            // is actually constraining (threshold raised above its minimum).
-            // Otherwise the property imposes no filter and the point passes it.
-            const hasConstraint = normLo > 0 || normHi < 1;
-            if (hasConstraint) {
-              visible = false;
-              break;
-            }
+            // Missing score: sliders only constrain points that have the
+            // score (mirrors isPointVisible in useScoreHistogramData, keeping
+            // the projection in sync with the feed). Labeled-pool points
+            // outside the prediction set have no sampler scores — hiding
+            // them here would empty the view whenever a threshold is set.
             continue;
           }
           const v = Math.min(pMax, Math.max(pMin, raw));
@@ -251,6 +256,7 @@ export function useProjectionTraces(opts: {
     effectiveRange,
     visibilityMode,
     visSliderStyle,
+    extraVisible,
   ]);
 
   const visibleCount = useMemo(() => filtered.filter((f) => f.visible).length, [filtered]);
@@ -260,7 +266,7 @@ export function useProjectionTraces(opts: {
       new Set(
         filtered
           .filter((f) => f.visible)
-          .map((f) => (f.p.scores as any)?.actual_label as string | undefined)
+          .map((f) => f.p.scores?.actual_label)
           .filter((v): v is string => Boolean(v)),
       ),
     ).sort();
@@ -280,7 +286,7 @@ export function useProjectionTraces(opts: {
     return sampled;
   }, [filtered]);
 
-  const colorKey: "actual_label" = "actual_label";
+  const colorKey = "actual_label" as const;
 
   const baseTraces = useMemo(() => {
     if (filtered.length === 0) return [];
@@ -318,7 +324,7 @@ export function useProjectionTraces(opts: {
       ys.push(coord[1]);
       ids.push(p.snippet_id);
 
-      const actual = (p.scores as any)?.actual_label as string | undefined;
+      const actual = p.scores?.actual_label;
       const isLabeled = Boolean(actual);
 
       sizes.push(isLabeled ? 7 : 6);
@@ -387,7 +393,7 @@ export function useProjectionTraces(opts: {
       const inFiltered = filtered.find((f) => f.p.snippet_id === id);
       if (inFiltered) {
         coord = inFiltered.coord;
-        label = (inFiltered.p.scores as any)?.actual_label ?? "Unlabeled";
+        label = inFiltered.p.scores?.actual_label ?? "Unlabeled";
       } else if (fpvCoordsBySnippet?.[id]) {
         coord = fpvCoordsBySnippet[id];
       }

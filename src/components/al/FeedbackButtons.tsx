@@ -1,15 +1,13 @@
 /**
  * FeedbackButtons — renders feedback UI appropriate for the active study phase.
  *
- * "guided" mode (default): Accept / Reject / Modify label (existing flow).
- * "blind"  mode (P1.1):    No predicted labels shown; user selects one or more
- *                           labels from the PAM species list / GBIF search and
- *                           submits them via a MODIFY action.
+ * "blind" mode: No predicted labels shown; user selects one or more labels
+ *               from the PAM species list / GBIF search and submits them
+ *               via a MODIFY action.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Tag, Spin, message, Tooltip, Input } from "antd";
-import { CheckOutlined, CloseOutlined, EditOutlined } from "@ant-design/icons";
+import { Spin, message, Tooltip } from "antd";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   runInference,
@@ -39,11 +37,8 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   const classicAnnotationsBySnippet = useAppSelector(
     (state) => state.al.classicAnnotationsBySnippet,
   );
-  const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  // Guided mode: free-text input
-  const [customLabel, setCustomLabel] = useState("");
   // Blind mode: multi-select via LabelSelector
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
 
@@ -59,7 +54,6 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
 
   const isClassicFeed = feedSource === "classic";
   const existingFeedback = feedbacks[prediction.snippet_id];
-  const isDone = !!existingFeedback;
   const hasCheckpoint = usedCheckpointId !== null;
   // During the guided tour, disable all labeling so actions are preview-only.
   const feedbackDisabled = isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
@@ -230,178 +224,49 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
     };
   }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
 
-  // ── Blind mode ────────────────────────────────────────────────────────────
-  if (isBlind) {
-    return (
-      <div className="flex flex-col gap-1.5 h-full min-h-0">
-        {/* Transient status — only shown while something is happening */}
-        {(saveState === "saving" || saveState === "error") && (
-          <div className="flex-shrink-0 flex items-center gap-2">
-            {saveState === "saving" && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                <Spin size="small" /> Saving…
-              </span>
-            )}
-            {saveState === "error" && (
-              <span className="text-[11px] font-semibold text-red-500">Save failed — try again</span>
-            )}
-          </div>
-        )}
-        {!isClassicFeed && !hasCheckpoint && (
-          <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
-            <span className="flex-shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
-              No model checkpoint — feedback disabled
-            </span>
-          </Tooltip>
-        )}
-
-        {/* Compact label picker — fills remaining space */}
-        <LabelSelector
-          value={selectedLabels}
-          onChange={(labels) => {
-            setSelectedLabels(labels);
-            setSaveState("idle");
-          }}
-          getLabelTooltip={(lbl) =>
-            labelContributors[lbl]?.length
-              ? `Annotated by: ${labelContributors[lbl].join(", ")}`
-              : "Annotator unknown"
-          }
-          disabled={feedbackDisabled}
-          compact
-          showList
-          fillHeight
-          showSelectedRow={false}
-          hideSelectedInInput
-        />
-      </div>
-    );
-  }
-
-  // ── Guided mode (default) ─────────────────────────────────────────────────
-  const modifyInline = modifyOpen ? (
-    <div className="mt-2 flex flex-col gap-2">
-      <Input
-        size="small"
-        placeholder="Correct label (press Enter to confirm)"
-        value={customLabel}
-        onChange={(e) => setCustomLabel(e.target.value)}
-        onPressEnter={() => customLabel.trim() && submit("MODIFY", [customLabel.trim()])}
-        autoFocus
-      />
-      <div className="flex gap-2 justify-end">
-        <Button
-          size="small"
-          onClick={() => {
-            setCustomLabel("");
-            setModifyOpen(false);
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          size="small"
-          type="primary"
-          disabled={!customLabel.trim()}
-          onClick={() => submit("MODIFY", [customLabel.trim()])}
-        >
-          Confirm
-        </Button>
-      </div>
-    </div>
-  ) : null;
-
-  if (isDone) {
-    const colorMap: Record<FeedbackAction, string> = {
-      ACCEPT: "success",
-      REJECT: "error",
-      MODIFY: "processing",
-    };
-    const labelMap: Record<FeedbackAction, string> = {
-      ACCEPT: "Accepted",
-      REJECT: "Rejected",
-      MODIFY: `Modified → ${(existingFeedback.final_labels ?? []).join(", ")}`,
-    };
-    return (
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-3 items-center">
-          <Tag color={colorMap[existingFeedback.action]} className="text-xs">
-            {labelMap[existingFeedback.action]}
-          </Tag>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            disabled={feedbackDisabled}
-            onClick={() => setModifyOpen((v) => !v)}
-          >
-            Modify Label
-          </Button>
-        </div>
-        {existingFeedback.action === "MODIFY" &&
-          (existingFeedback.final_labels ?? []).length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {(existingFeedback.final_labels ?? []).map((lbl) => (
-                <Tooltip
-                  key={lbl}
-                  title={
-                    labelContributors[lbl]?.length
-                      ? `Annotated by: ${labelContributors[lbl].join(", ")}`
-                      : "Annotator unknown"
-                  }
-                >
-                  <Tag className="cursor-help">{lbl}</Tag>
-                </Tooltip>
-              ))}
-            </div>
-          )}
-        {modifyInline}
-      </div>
-    );
-  }
-
+  // ── Blind-mode annotation UI ─────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-1 items-center">
-        {submitting && <Spin size="small" />}
-        <Tooltip
-          title={
-            hasCheckpoint
-              ? null
-              : "Bootstrap mode: no checkpoint available yet. Train/register a checkpoint to enable feedback."
-          }
-        >
-          <span className="inline-flex gap-1 items-center">
-            <Button
-              size="small"
-              type="primary"
-              icon={<CheckOutlined />}
-              style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
-              disabled={feedbackDisabled}
-              onClick={() => submit("ACCEPT")}
-            >
-              Accept
-            </Button>
-            <Button
-              size="small"
-              danger
-              icon={<CloseOutlined />}
-              disabled={feedbackDisabled}
-              onClick={() => submit("REJECT")}
-            >
-              Reject
-            </Button>
+    <div className="flex flex-col gap-1.5 h-full min-h-0">
+      {/* Transient status — only shown while something is happening */}
+      {(saveState === "saving" || saveState === "error") && (
+        <div className="flex-shrink-0 flex items-center gap-2">
+          {saveState === "saving" && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+              <Spin size="small" /> Saving…
+            </span>
+          )}
+          {saveState === "error" && (
+            <span className="text-[11px] font-semibold text-red-500">Save failed — try again</span>
+          )}
+        </div>
+      )}
+      {!isClassicFeed && !hasCheckpoint && (
+        <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
+          <span className="flex-shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
+            No model checkpoint — feedback disabled
           </span>
         </Tooltip>
-        <Button
-          size="small"
-          icon={<EditOutlined />}
-          disabled={feedbackDisabled}
-          onClick={() => setModifyOpen((v) => !v)}
-        >
-          Modify
-        </Button>
-      </div>
-      {modifyInline}
+      )}
+
+      {/* Compact label picker — fills remaining space */}
+      <LabelSelector
+        value={selectedLabels}
+        onChange={(labels) => {
+          setSelectedLabels(labels);
+          setSaveState("idle");
+        }}
+        getLabelTooltip={(lbl) =>
+          labelContributors[lbl]?.length
+            ? `Annotated by: ${labelContributors[lbl].join(", ")}`
+            : "Annotator unknown"
+        }
+        disabled={feedbackDisabled}
+        compact
+        showList
+        fillHeight
+        showSelectedRow={false}
+        hideSelectedInInput
+      />
     </div>
   );
 };
