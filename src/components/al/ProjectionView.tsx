@@ -143,6 +143,12 @@ export const ProjectionView: React.FC = () => {
   const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
+  const unmountedRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
   const [visRangeOverride, setVisRangeOverride] = useState<{ min: number; max: number; step: number } | null>(null);
@@ -451,6 +457,14 @@ export const ProjectionView: React.FC = () => {
   const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
   const isMissingProjection = isProjectionNotReadyMessage(fpvError ?? "");
 
+  // Generation runs on a Celery worker now (PCA/UMAP/t-SNE/Isomap over the
+  // full embedding matrix can take minutes on large datasets) instead of
+  // inline in the POST response, so the POST just enqueues the job and
+  // returns immediately. Poll GET /fpv-dataset until it stops 400ing with
+  // "generate projections first" -- that's how we know the worker is done.
+  const FPV_POLL_INTERVAL_MS = 4000;
+  const FPV_POLL_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+
   const handleGenerateNow = async () => {
     if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
     setFpvGenerateLoading(true);
@@ -464,15 +478,49 @@ export const ProjectionView: React.FC = () => {
       });
       clearFpvCache(selectedDatasetId, effectiveEmbeddingModelId);
       resetProjectionComponentState();
+
+      const deadline = Date.now() + FPV_POLL_TIMEOUT_MS;
+      let ready = false;
+      while (Date.now() < deadline) {
+        if (unmountedRef.current) return;
+        try {
+          const fpv = await visualisationsApi.getFPVDataset({
+            dataset_id: selectedDatasetId,
+            embedding_model_id: effectiveEmbeddingModelId,
+            run_3d: false,
+            method,
+          });
+          if (projectionHasValidCoords(fpv.projections_2d[method]) && fpv.points.length > 0) {
+            ready = true;
+            break;
+          }
+        } catch (e: unknown) {
+          const detail = extractFpvErrorDetail(e);
+          if (!isProjectionNotReadyMessage(detail)) throw e;
+          // Still generating -- keep polling.
+        }
+        await new Promise((resolve) => setTimeout(resolve, FPV_POLL_INTERVAL_MS));
+      }
+      if (unmountedRef.current) return;
+
+      if (!ready) {
+        setFpvError(
+          "Projection generation is taking longer than expected. It may still finish in the " +
+            "background — switching methods or reopening this dataset later will pick it up.",
+        );
+        return;
+      }
+
       await fetchProjectionMethod(method, { force: true });
       for (const m of ALL_PROJECTION_METHODS) {
         if (m !== method) void fetchProjectionMethod(m, { background: true, force: true });
       }
     } catch (e: any) {
+      if (unmountedRef.current) return;
       resetProjectionComponentState();
       setFpvError(String(e?.response?.data?.detail ?? e?.message ?? "Failed to generate projection."));
     } finally {
-      setFpvGenerateLoading(false);
+      if (!unmountedRef.current) setFpvGenerateLoading(false);
     }
   };
 
