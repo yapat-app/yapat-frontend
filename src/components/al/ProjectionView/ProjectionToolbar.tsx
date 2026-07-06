@@ -4,7 +4,6 @@ import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { resolveColor } from "../../../utils/alColors";
 import type { PAMRetrainJobStatus, SamplingMethod } from "../../../types/al";
 import type { VisMode } from "../../../studyPhases";
-import type { ProjectionMethod } from "./fpvHelpers";
 import { studyLogger } from "../../../studyLogging";
 
 const { Option } = Select;
@@ -22,7 +21,6 @@ export interface ProjectionToolbarProps {
   isMissingProjection: boolean;
   canGenerateNow: boolean;
   fpvGenerateLoading: boolean;
-  method: ProjectionMethod;
   lastRetrainJob: PAMRetrainJobStatus | null;
   isWaitingForRetrain: boolean;
   retrainLoading: boolean;
@@ -45,7 +43,6 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
   isMissingProjection,
   canGenerateNow,
   fpvGenerateLoading,
-  method,
   lastRetrainJob,
   isWaitingForRetrain,
   retrainLoading,
@@ -92,20 +89,21 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
             <span className="text-[11px] text-gray-400 font-ibm-sans whitespace-nowrap">
               Legend:
             </span>
-            <div
-              className={[
-                "min-w-0 max-w-[min(52vw,720px)]",
-                "overflow-x-auto",
-                "[scrollbar-width:thin]",
-                "[-webkit-overflow-scrolling:touch]",
-              ].join(" ")}
-            >
-              <div className="flex items-center gap-1.5 py-0.5 pr-1">
+            <div className="relative min-w-0 max-w-[min(52vw,720px)]">
+              <div
+                className={[
+                  "flex items-center gap-1.5 py-0.5 pr-5",
+                  "overflow-x-auto",
+                  "[scrollbar-width:none] [-ms-overflow-style:none]",
+                  "[&::-webkit-scrollbar]:hidden",
+                  "[-webkit-overflow-scrolling:touch]",
+                ].join(" ")}
+              >
                 {actualLabelLegend.shown.map((lbl) => (
                   <span
                     key={lbl}
                     className={[
-                      "inline-flex items-center gap-1.5",
+                      "inline-flex items-center gap-1.5 flex-shrink-0",
                       "px-2 py-0.5",
                       "rounded-full",
                       "border border-gray-200",
@@ -131,11 +129,13 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                 ))}
                 {actualLabelLegend.remaining > 0 &&
                   actualLabelLegend.total > actualLabelLegend.shown.length && (
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">
                       +{actualLabelLegend.remaining}
                     </span>
                   )}
               </div>
+              {/* Fade hint that the pill row scrolls horizontally. */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white to-transparent" />
             </div>
           </div>
         )}
@@ -151,11 +151,6 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
               Projection unavailable
             </Tag>
           </Tooltip>
-        )}
-        {visMode === "whole_dataset" && !fpvLoading && !fpvError && (
-          <Tag color="blue" className="text-xs">
-            {method === "tsne" ? "t‑SNE" : method.toUpperCase()}
-          </Tag>
         )}
 
         {visMode === "whole_dataset" && isMissingProjection && canGenerateNow && (

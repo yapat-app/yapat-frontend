@@ -1,9 +1,13 @@
-import React from "react";
-import { Select, Tooltip, Segmented } from "antd";
+import React, { useMemo, useState } from "react";
+import { Empty, Input, Popover, Select, Spin, Tooltip, Segmented } from "antd";
 import {
+  CheckOutlined,
+  CloseCircleOutlined,
+  DownOutlined,
   InfoCircleOutlined,
   ReloadOutlined,
   EnvironmentOutlined,
+  SearchOutlined,
   TagsOutlined,
   AudioOutlined,
 } from "@ant-design/icons";
@@ -63,6 +67,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showModelScores,
 }) => {
   const dispatch = useAppDispatch();
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
+  const [labelSearch, setLabelSearch] = useState("");
 
   const { enrichedPlotPoints, filtered, alFilters } = useScoreHistogramData(
     SCORE_VISIBILITY_MODE,
@@ -75,6 +81,101 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     localLabelScope.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
   const hasActiveFilters = activeFilterCount > 0;
+  const selectedLabelSet = useMemo(() => new Set(localLabelScope), [localLabelScope]);
+  const filteredLabelOptions = useMemo(() => {
+    const q = labelSearch.trim().toLowerCase();
+    if (!q) return labelScopeOptions;
+    return labelScopeOptions.filter((opt) => opt.label.toLowerCase().includes(q));
+  }, [labelScopeOptions, labelSearch]);
+  const labelSummary =
+    localLabelScope.length === 0
+      ? "All labels"
+      : `${localLabelScope.length} label${localLabelScope.length === 1 ? "" : "s"} selected`;
+
+  const toggleLabelScope = (label: string) => {
+    if (selectedLabelSet.has(label)) {
+      setLocalLabelScope(localLabelScope.filter((v) => v !== label));
+      return;
+    }
+    setLocalLabelScope([...localLabelScope, label]);
+  };
+
+  const labelPickerContent = (
+    <div className="w-[240px] overflow-hidden rounded-lg bg-white">
+      <div className="border-b border-gray-100 p-2">
+        <Input
+          size="small"
+          allowClear
+          autoFocus
+          placeholder="Search labels"
+          prefix={<SearchOutlined className="text-gray-400" />}
+          value={labelSearch}
+          onChange={(e) => setLabelSearch(e.target.value)}
+          className="font-ibm-sans"
+        />
+      </div>
+      <div className="max-h-[260px] overflow-y-auto p-1.5">
+        {labelScopeLoading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-xs text-gray-400">
+            <Spin size="small" /> Loading labels
+          </div>
+        ) : filteredLabelOptions.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={<span className="text-xs text-gray-400">No labels</span>}
+          />
+        ) : (
+          filteredLabelOptions.map((opt) => {
+            const selected = selectedLabelSet.has(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={opt.disabled}
+                onClick={() => toggleLabelScope(opt.value)}
+                className={[
+                  "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs font-semibold font-ibm-sans transition-colors",
+                  selected ? "bg-blue-50 text-blue-800" : "text-gray-700 hover:bg-gray-50",
+                  opt.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                ].join(" ")}
+              >
+                <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                {opt.tooltip && (
+                  <Tooltip title={opt.tooltip}>
+                    <InfoCircleOutlined
+                      className="flex-shrink-0 text-gray-400"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </Tooltip>
+                )}
+                <span
+                  className={[
+                    "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border",
+                    selected
+                      ? "border-blue-500 bg-blue-500 text-white"
+                      : "border-gray-300 bg-white text-transparent",
+                  ].join(" ")}
+                >
+                  <CheckOutlined className="text-[9px]" />
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+      {localLabelScope.length > 0 && (
+        <div className="border-t border-gray-100 p-2">
+          <button
+            type="button"
+            onClick={() => setLocalLabelScope([])}
+            className="w-full rounded-md px-2 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+          >
+            Clear selected labels
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <aside className="flex h-full w-[272px] flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
@@ -155,39 +256,67 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
               </div>
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
-                  <TagsOutlined className="text-gray-400" /> Species
+                  <TagsOutlined className="text-gray-400" /> Labels
                 </p>
-                <Select
-                  mode="multiple"
-                  allowClear
-                  size="small"
-                  variant="borderless"
-                  placeholder={labelScopeLoading ? "Loading…" : "All species"}
-                  loading={labelScopeLoading}
-                  value={localLabelScope}
-                  onChange={setLocalLabelScope}
-                  style={{ width: "100%" }}
-                  options={labelScopeOptions.map((opt) => ({
-                    value: opt.value,
-                    label: (
-                      <span className={opt.disabled ? "text-gray-400" : undefined}>
-                        {opt.label}
-                        {opt.tooltip && (
-                          <Tooltip title={opt.tooltip}>
-                            <InfoCircleOutlined className="ml-1 text-gray-400" />
-                          </Tooltip>
-                        )}
-                      </span>
-                    ),
-                    disabled: opt.disabled,
-                  }))}
-                  maxTagCount={1}
-                  className={[
-                    "[&_.ant-select-selector]:!rounded-lg [&_.ant-select-selector]:!border-none [&_.ant-select-selector]:!bg-gray-50",
-                    "[&_.ant-select-selector]:!shadow-[inset_0_0_0_1px_#e5e7eb] hover:[&_.ant-select-selector]:!shadow-[inset_0_0_0_1px_#d1d5db]",
-                    "[&_.ant-select-selection-item]:!rounded-full [&_.ant-select-selection-item]:!border-none [&_.ant-select-selection-item]:!bg-white [&_.ant-select-selection-item]:!text-gray-700",
-                  ].join(" ")}
-                />
+                <Popover
+                  trigger="click"
+                  placement="bottomLeft"
+                  open={labelPickerOpen}
+                  onOpenChange={(open) => {
+                    setLabelPickerOpen(open);
+                    if (!open) setLabelSearch("");
+                  }}
+                  content={labelPickerContent}
+                  arrow={false}
+                  styles={{ content: { padding: 0 } }}
+                >
+                  <button
+                    type="button"
+                    className={[
+                      "flex h-8 w-full items-center gap-2 rounded-lg bg-gray-50 px-2.5 text-left font-ibm-sans transition-all",
+                      "shadow-[inset_0_0_0_1px_#e5e7eb] hover:bg-white hover:shadow-[inset_0_0_0_1px_#d1d5db]",
+                      labelPickerOpen ? "bg-white shadow-[inset_0_0_0_1px_#60a5fa]" : "",
+                    ].join(" ")}
+                  >
+                    <span
+                      className={[
+                        "min-w-0 flex-1 truncate text-xs",
+                        localLabelScope.length > 0 ? "font-semibold text-gray-800" : "text-gray-400",
+                      ].join(" ")}
+                    >
+                      {labelSummary}
+                    </span>
+                    {localLabelScope.length > 0 && (
+                      <Tooltip title="Clear labels">
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Clear labels"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLocalLabelScope([]);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setLocalLabelScope([]);
+                            }
+                          }}
+                          className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-gray-400 transition-colors hover:text-red-500"
+                        >
+                          <CloseCircleOutlined className="text-[12px]" />
+                        </span>
+                      </Tooltip>
+                    )}
+                    <DownOutlined
+                      className={[
+                        "flex-shrink-0 text-[10px] text-gray-400 transition-transform",
+                        labelPickerOpen ? "rotate-180" : "",
+                      ].join(" ")}
+                    />
+                  </button>
+                </Popover>
               </div>
             </>
           )}

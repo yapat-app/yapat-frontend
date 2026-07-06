@@ -551,7 +551,6 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         isMissingProjection={isMissingProjection}
         canGenerateNow={canGenerateNow}
         fpvGenerateLoading={fpvGenerateLoading}
-        method={method}
         lastRetrainJob={lastRetrainJob}
         isWaitingForRetrain={isWaitingForRetrain}
         retrainLoading={retrainLoading}

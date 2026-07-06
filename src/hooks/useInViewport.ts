@@ -100,9 +100,13 @@ export function useInViewport(
     );
 
     obs.observe(element);
+    // One immediate synchronous check avoids a "not loaded yet" flash on
+    // first mount (IntersectionObserver's own first callback can lag a
+    // frame or two). Beyond that, rely on the observer's async callback —
+    // it doesn't force layout. Re-checking via chained rAFs here did
+    // (getBoundingClientRect twice more), which is real per-mount cost
+    // during fast scrolling when many cards mount in quick succession.
     sync();
-    const raf1 = requestAnimationFrame(sync);
-    const raf2 = requestAnimationFrame(() => requestAnimationFrame(sync));
 
     const resizeObs =
       typeof ResizeObserver !== "undefined"
@@ -115,8 +119,6 @@ export function useInViewport(
       cancelled = true;
       obs.disconnect();
       resizeObs?.disconnect();
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
     };
   }, [element, root, rootMargin, threshold]);
 

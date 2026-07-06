@@ -28,6 +28,7 @@ import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { usePhaseConfig } from "../studyPhases";
 import { datasetApi } from "../services/api";
+import { useQuickLabelList } from "../hooks/useQuickLabelList";
 
 const { Option } = Select;
 
@@ -69,6 +70,7 @@ export const AnnotationHub: React.FC = () => {
     useState<"any" | "annotated" | "unannotated">("any");
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
+  const quickLabelList = useQuickLabelList();
 
   useEffect(() => {
     if (al.selectedDatasetId === null) return;
@@ -136,17 +138,6 @@ export const AnnotationHub: React.FC = () => {
             ))}
           </Select>
         </div>
-
-        {/* Generate Feed button */}
-        <Button
-          type="primary"
-          size="middle"
-          loading={al.inferenceLoading}
-          onClick={al.openInferenceModal}
-          disabled={!al.selectedDatasetId}
-        >
-          {feedActionLabel}
-        </Button>
 
         {/* Status tags */}
         <div className="flex items-center gap-2 ml-auto">
@@ -265,6 +256,12 @@ export const AnnotationHub: React.FC = () => {
               filterAnnotationStatus={filterAnnotationStatus}
               filterLocations={filterLocations}
               localLabelScope={al.localLabelScope}
+              feedActionLabel={feedActionLabel}
+              feedActionLoading={al.inferenceLoading}
+              feedActionDisabled={!al.selectedDatasetId}
+              onFeedAction={al.openInferenceModal}
+              quickLabels={quickLabelList.labels}
+              quickLabelsLoading={quickLabelList.loading}
             />
           )}
         </div>

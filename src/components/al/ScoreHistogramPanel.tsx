@@ -385,7 +385,15 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                   </span>
                   {isActive && row ? (
                     <span className="text-[11px] font-ibm-sans text-gray-400">
-                      ≥ <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong>
+                      {sliderMode === "range" ? (
+                        <>
+                          <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong>
+                          {" – "}
+                          <strong style={{ color }}>{row.normRange[1].toFixed(2)}</strong>
+                        </>
+                      ) : (
+                        <>≥ <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong></>
+                      )}
                     </span>
                   ) : (
                     <span className="text-[11px] font-ibm-sans text-gray-300">+</span>

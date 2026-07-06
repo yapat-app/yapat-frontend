@@ -36,12 +36,13 @@ export function getAvailableSortOptions(allowNonModel: boolean, allowModel: bool
   );
 }
 
+/**
+ * No sort field is active by default — the feed starts in the backend's
+ * native order (composite-ranked scored snippets first, unscored/labeled
+ * ones after) rather than pre-sorted by any one property.
+ */
 export function defaultSortFields(allowNonModel: boolean, allowModel: boolean): SortField[] {
-  void allowNonModel; // "time" stays a (disabled) dropdown option, never a default row
-  const fields: SortField[] = [];
-  if (allowModel) {
-    fields.push({ id: makeId(), property: "confidence", direction: "desc" });
-    fields.push({ id: makeId(), property: "composite", direction: "desc" });
-  }
-  return fields;
+  void allowNonModel;
+  void allowModel;
+  return [];
 }

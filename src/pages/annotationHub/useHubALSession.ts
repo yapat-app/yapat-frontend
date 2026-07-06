@@ -387,11 +387,15 @@ export function useHubALSession(
         const allOptions = [...activeOptions, ...excludedOptions];
         setLabelScopeOptions(allOptions);
 
+        // Don't auto-select every species — an empty scope already means "no
+        // restriction" wherever it's consumed (training scope falls back to
+        // undefined; the sidebar Species filter shows unfiltered). Auto-filling
+        // it made the Filters panel look like a species filter was actively
+        // applied on first load, when the user hadn't chosen one.
         setLocalLabelScope((prev) => {
           const activeNames = activeOptions.map((o) => o.value);
-          if (prev.length === 0) return activeNames;
           const kept = prev.filter((n) => activeNames.includes(n));
-          return kept.length > 0 ? kept : activeNames;
+          return kept;
         });
       })
       .catch(() => {

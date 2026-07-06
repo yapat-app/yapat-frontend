@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from "react";
-import { Tooltip } from "antd";
+import { Tooltip, Button } from "antd";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
   ProjectionView,
@@ -37,6 +37,13 @@ type WorkspaceProps = {
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
   filterLocations: string[];
   localLabelScope: string[];
+  /** Feed action button ("Generate Feed" / "Edit Feed") — lives on the feed side. */
+  feedActionLabel: string;
+  feedActionLoading: boolean;
+  feedActionDisabled: boolean;
+  onFeedAction: () => void;
+  quickLabels: string[];
+  quickLabelsLoading: boolean;
 };
 
 export const Workspace: React.FC<WorkspaceProps> = ({
@@ -44,6 +51,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   filterAnnotationStatus,
   filterLocations,
   localLabelScope,
+  feedActionLabel,
+  feedActionLoading,
+  feedActionDisabled,
+  onFeedAction,
+  quickLabels,
+  quickLabelsLoading,
 }) => {
   const phase = usePhaseConfig();
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
@@ -83,6 +96,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
   const rightPanel = (
     <div className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
+        <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
+          Feed
+        </h2>
+        <Button
+          type="primary"
+          size="small"
+          loading={feedActionLoading}
+          disabled={feedActionDisabled}
+          onClick={onFeedAction}
+        >
+          {feedActionLabel}
+        </Button>
+      </div>
       <SortPanel
         fields={sortFields}
         onChange={setSortFields}
@@ -99,6 +126,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           filterAnnotationStatus={filterAnnotationStatus}
           filterLocations={filterLocations}
           localLabelScope={localLabelScope}
+          quickLabels={quickLabels}
+          quickLabelsLoading={quickLabelsLoading}
         />
       </div>
     </div>

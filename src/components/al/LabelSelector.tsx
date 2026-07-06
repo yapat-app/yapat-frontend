@@ -2,7 +2,7 @@
  * LabelSelector — multi-label picker for the "blind" labeling mode.
  *
  * Sources:
- *  1. PAM species list fetched from the backend (checkpoint-specific or default).
+ *  1. Dataset-wide quick-label list supplied by the owning page.
  *
  * The component exposes `value` / `onChange` so it plugs directly into AntD
  * Form or can be used standalone.
@@ -11,7 +11,6 @@
 import React, { useState, useMemo } from "react";
 import { Select, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
-import { useQuickLabelList } from "../../hooks/useQuickLabelList";
 import { studyLogger } from "../../studyLogging";
 
 const MAX_VISIBLE_LABELS = 300;
@@ -40,6 +39,9 @@ interface Props {
    * instead of the fixed `max-h-[380px]`. Use when this lives inside a bounded panel.
    */
   fillHeight?: boolean;
+  /** Dataset-wide quick labels supplied by the owning page. */
+  quickLabels: string[];
+  labelsLoading: boolean;
   /**
    * Compact inline mode — no outer border, no section headers, no source badges.
    * Renders a search input + a flat wrapping row of small label chips.
@@ -59,10 +61,10 @@ export const LabelSelector: React.FC<Props> = ({
   showSelectedRow = true,
   embedded = false,
   fillHeight = false,
+  quickLabels,
+  labelsLoading,
   compact = false,
 }) => {
-  const { labels: quickLabels, loading: labelsLoading } = useQuickLabelList();
-
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (query: string) => {

@@ -30,11 +30,19 @@ import {
 interface Props {
   prediction: PAMPrediction;
   recordingName?: string;
-  cardRef?: (el: HTMLDivElement | null) => void;
+  /**
+   * A single stable callback shared by every card (not curried/cached per
+   * card by the caller) — the card identifies itself via its own snippet id
+   * so the prop reference never changes, which React.memo relies on.
+   */
+  cardRef?: (snippetId: number, el: HTMLDivElement | null) => void;
   /** Height in px for the blind snap card (measured from scroll container in PredictionFeed). */
   cardHeightPx?: number;
   /** Labels hydrated from /api/pam-al/snippet-labels (survive refresh). */
   serverLabels?: string[];
+  /** Dataset-wide quick labels resolved once by AnnotationHub. */
+  quickLabels?: string[];
+  quickLabelsLoading?: boolean;
   /** Scroll container for lazy-load visibility (must match feed overflow root). */
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
@@ -45,12 +53,14 @@ interface Props {
   hideHeader?: boolean;
 }
 
-export const PredictionCard: React.FC<Props> = ({
+const PredictionCardImpl: React.FC<Props> = ({
   prediction,
   recordingName,
   cardRef,
   cardHeightPx,
   serverLabels,
+  quickLabels = [],
+  quickLabelsLoading = false,
   scrollRoot,
   loadAudioImmediately = false,
   onFindSimilar,
@@ -78,19 +88,42 @@ export const PredictionCard: React.FC<Props> = ({
   const localRef = useRef<HTMLDivElement | null>(null);
   // Keep the actual element in state so viewport logic re-runs when ref is set.
   const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null);
+  const snippetId = prediction.snippet_id;
   const setRefs = useCallback(
     (el: HTMLDivElement | null) => {
       localRef.current = el;
       setCardEl(el);
-      if (cardRef) cardRef(el);
+      if (cardRef) cardRef(snippetId, el);
     },
-    [cardRef],
+    [cardRef, snippetId],
   );
 
   const inView = useInViewport(cardEl, {
     root: scrollRoot ?? null,
     rootMargin: "600px 0px",
   });
+
+  // Debounce every path that can trigger an audio fetch + spectrogram
+  // render (~75ms+ of real DSP work, measured). During a fast scroll
+  // (fling / scrollbar drag), each of these fires for a *different* card on
+  // nearly every frame: `loadAudioImmediately` follows the virtualized
+  // window's first index, `isSelected` follows the scroll-centered card
+  // (auto-selected as the feed scrolls), and `inView` follows the
+  // intersection observer. Loading eagerly on all three meant dozens of
+  // distinct snippets were fully decoded+rendered per second during a fast
+  // scroll even though the user never landed on any of them — that's what
+  // made scrolling feel stuck. Only start the expensive work once the same
+  // card has actually held one of these states for a beat.
+  const wantsAudio = loadAudioImmediately || isSelected || inView;
+  const [settledWantsAudio, setSettledWantsAudio] = useState(false);
+  useEffect(() => {
+    if (!wantsAudio) {
+      setSettledWantsAudio(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSettledWantsAudio(true), 150);
+    return () => window.clearTimeout(t);
+  }, [wantsAudio]);
 
   const [audioError, setAudioError] = useState(false);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
@@ -153,7 +186,7 @@ export const PredictionCard: React.FC<Props> = ({
     setAudioAttempt(0);
   }, [prediction.snippet_id]);
 
-  const shouldLoadAudio = loadAudioImmediately || isSelected || inView;
+  const shouldLoadAudio = settledWantsAudio;
 
   // Fetch audio when card is visible, selected, or the first feed slot.
   useLayoutEffect(() => {
@@ -330,11 +363,23 @@ export const PredictionCard: React.FC<Props> = ({
         style={{ height: LABEL_AREA_H }}
         onClick={(e) => e.stopPropagation()}
       >
-        <FeedbackButtons prediction={prediction} {...({ serverLabels } as any)} />
+        <FeedbackButtons
+          prediction={prediction}
+          serverLabels={serverLabels}
+          quickLabels={quickLabels}
+          quickLabelsLoading={quickLabelsLoading}
+        />
       </div>
     </div>
   );
 };
+
+// Scrolling the virtualized feed re-renders PredictionFeed on every frame;
+// without this, every currently-mounted card (spectrogram, audio player,
+// label buttons) would re-render on every scroll tick regardless of whether
+// its own props actually changed.
+export const PredictionCard = React.memo(PredictionCardImpl);
+PredictionCard.displayName = "PredictionCard";
 
 // ── Audio cache (module-level) ────────────────────────────────────────────────
 

@@ -25,9 +25,17 @@ interface Props {
   prediction: PAMPrediction;
   /** Labels hydrated from /api/pam-al/snippet-labels to survive refresh. */
   serverLabels?: string[];
+  /** Dataset-wide quick labels resolved once by AnnotationHub. */
+  quickLabels?: string[];
+  quickLabelsLoading?: boolean;
 }
 
-export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) => {
+export const FeedbackButtons: React.FC<Props> = ({
+  prediction,
+  serverLabels,
+  quickLabels = [],
+  quickLabelsLoading = false,
+}) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
   const { isTourActive } = useStudyFlow();
@@ -261,6 +269,8 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
             : "Annotator unknown"
         }
         disabled={feedbackDisabled}
+        quickLabels={quickLabels}
+        labelsLoading={quickLabelsLoading}
         compact
         showList
         fillHeight

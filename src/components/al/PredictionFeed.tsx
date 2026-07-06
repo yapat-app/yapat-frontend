@@ -21,7 +21,7 @@ import { studyLogger, usePanelDwell } from "../../studyLogging";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
-import type { PAMPrediction, SampleScores } from "../../types/al";
+import type { ALFilterState, PAMPrediction, SampleScores } from "../../types/al";
 import type { SortField } from "../../types/sort";
 import { isPointVisible } from "../../pages/annotationHub/useScoreHistogramData";
 import {
@@ -29,6 +29,12 @@ import {
   SCORE_SLIDER_STYLE,
 } from "../../pages/annotationHub/scoreFilterConfig";
 import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
+
+const FEED_PAGE_SIZE = 50;
+// Stable reference for "no server labels yet" — `labelsBySnippet[id] ?? []`
+// would otherwise allocate a new array every render, breaking memoization
+// on the PredictionCard consuming it as `serverLabels`.
+const EMPTY_LABELS: string[] = [];
 
 function getSortValue(prediction: PAMPrediction, property: SortField["property"]): number {
   if (property === "time") return 0; // no backing data yet — no-op
@@ -54,6 +60,16 @@ function applySortFields(predictions: PAMPrediction[], sortFields?: SortField[])
   });
 }
 
+function hasActiveScoreVisibilityFilters(alFilters: ALFilterState): boolean {
+  const visibility = alFilters.visibility;
+  const keys = visibility.propertyKeys ?? [];
+  const ranges = visibility.ranges ?? {};
+  return keys.some((key: string) => {
+    const [lo, hi] = ranges[key] ?? [0, 1];
+    return lo > 0 || hi < 1;
+  });
+}
+
 interface PredictionFeedProps {
   onFindSimilar?: (snippetId: number) => void;
   /** Suppress the per-card header (a sticky header is rendered above the feed instead). */
@@ -69,6 +85,8 @@ interface PredictionFeedProps {
   filterAnnotationStatus?: "any" | "annotated" | "unannotated";
   filterLocations?: string[];
   localLabelScope?: string[];
+  quickLabels?: string[];
+  quickLabelsLoading?: boolean;
 }
 
 export const PredictionFeed: React.FC<PredictionFeedProps> = ({
@@ -79,6 +97,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   filterAnnotationStatus = "any",
   filterLocations = [],
   localLabelScope = [],
+  quickLabels = [],
+  quickLabelsLoading = false,
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -96,6 +116,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
   const isClassicFeed = feedSource === "classic";
   const phase = usePhaseConfig();
+  const isBlind = phase.ui.labelingMode === "blind";
 
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -103,17 +124,73 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
 
-  const PAGE_SIZE = 50;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const isUserScrollingRef = useRef(false);
+  const userScrollIdleTimerRef = useRef<number | null>(null);
 
   const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
     scrollContainerRef.current = el;
     setScrollRoot(el);
   }, []);
 
+  // Flag the feed as being actively scrolled by the user so useALSync's
+  // scrollIntoView doesn't fight native scroll momentum / CSS scroll-snap.
+  // Cheap: sets a ref + resets an idle timer, no React state / re-render.
+  const markUserScrolling = useCallback(() => {
+    isUserScrollingRef.current = true;
+    if (userScrollIdleTimerRef.current !== null) {
+      window.clearTimeout(userScrollIdleTimerRef.current);
+    }
+    userScrollIdleTimerRef.current = window.setTimeout(() => {
+      isUserScrollingRef.current = false;
+      userScrollIdleTimerRef.current = null;
+    }, 180);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (userScrollIdleTimerRef.current !== null) {
+        window.clearTimeout(userScrollIdleTimerRef.current);
+      }
+    };
+  }, []);
+
   const recordingLocationById = useRecordingLocations(
     enableClientFilters ? selectedDatasetId : null,
+  );
+  const sortFieldsKey = useMemo(
+    () =>
+      (sortFields ?? [])
+        .filter((f) => !f.disabled)
+        .map((f) => `${f.property}:${f.direction}`)
+        .join("|"),
+    [sortFields],
+  );
+  const scoreVisibilityKey = useMemo(() => {
+    const visibility = alFilters.visibility;
+    const keys = visibility.propertyKeys ?? [];
+    return keys
+      .map((key) => `${key}:${(visibility.ranges?.[key] ?? [0, 1]).join(",")}`)
+      .join("|");
+  }, [alFilters.visibility]);
+  const feedViewKey = useMemo(
+    () =>
+      [
+        enableClientFilters ? "filters:on" : "filters:off",
+        filterAnnotationStatus,
+        filterLocations.join("\u0000"),
+        localLabelScope.join("\u0000"),
+        sortFieldsKey,
+        scoreVisibilityKey,
+      ].join("\u0001"),
+    [
+      enableClientFilters,
+      filterAnnotationStatus,
+      filterLocations,
+      localLabelScope,
+      sortFieldsKey,
+      scoreVisibilityKey,
+    ],
   );
 
   const filteredAndSorted = useMemo(() => {
@@ -144,9 +221,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
-    result = result.filter((p) =>
-      isPointVisible(p.scores, alFilters, SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE),
-    );
+    if (hasActiveScoreVisibilityFilters(alFilters)) {
+      result = result.filter((p) =>
+        isPointVisible(p.scores, alFilters, SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE),
+      );
+    }
 
     return applySortFields(result, sortFields);
   }, [
@@ -167,8 +246,20 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const [prevFilteredForPaging, setPrevFilteredForPaging] = useState(filteredAndSorted);
   if (filteredAndSorted !== prevFilteredForPaging) {
     setPrevFilteredForPaging(filteredAndSorted);
-    setVisibleCount(PAGE_SIZE);
+    setVisibleCount(FEED_PAGE_SIZE);
   }
+
+  const prevFeedViewKeyRef = useRef(feedViewKey);
+  useLayoutEffect(() => {
+    if (prevFeedViewKeyRef.current === feedViewKey) return;
+    prevFeedViewKeyRef.current = feedViewKey;
+    // `visibleCount` is already reset during render (the prevFilteredForPaging
+    // pattern above) since a feed-view change produces a new filtered list.
+    // Here we only reset the DOM scroll position; the blind-window recompute
+    // effect then re-derives the visible card window from the new scrollTop.
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = 0;
+  }, [feedViewKey]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
@@ -176,7 +267,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, filteredAndSorted.length));
+          setVisibleCount((prev) => Math.min(prev + FEED_PAGE_SIZE, filteredAndSorted.length));
         }
       },
       { root: scrollContainerRef.current, rootMargin: "200px" },
@@ -186,6 +277,71 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   }, [filteredAndSorted.length, scrollRoot]);
 
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
+
+  // ── Blind feed windowing ────────────────────────────────────────────────
+  // Every snippet renders as a fixed-height snap slot so native CSS
+  // scroll-snap stays smooth and the scrollbar maps linearly across the whole
+  // list. Only cards inside a small window around the viewport mount as real
+  // audio cards — the rest are cheap placeholders. The window is derived from
+  // the *live* scrollTop, so dragging the scrollbar far down instantly mounts
+  // the cards at that position instead of leaving blank placeholders.
+  const BLIND_WINDOW_OVERSCAN = 3;
+  const BLIND_SLOT_GAP_PX = 12; // matches the gap-3 between cards
+  const [blindWindow, setBlindWindow] = useState<{ start: number; end: number }>({
+    start: 0,
+    end: 8,
+  });
+  const blindSlotSize = blindSnapCardHeight + BLIND_SLOT_GAP_PX;
+  const filteredLen = filteredAndSorted.length;
+  const recomputeBlindWindow = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const first = Math.floor(el.scrollTop / blindSlotSize);
+    const last = Math.ceil((el.scrollTop + el.clientHeight) / blindSlotSize);
+    const start = Math.max(0, first - BLIND_WINDOW_OVERSCAN);
+    const end = Math.min(filteredLen, last + BLIND_WINDOW_OVERSCAN);
+    // Only re-render when the window boundaries actually change — cards are
+    // hundreds of px tall, so this fires roughly once per card of scroll.
+    setBlindWindow((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+  }, [blindSlotSize, filteredLen]);
+
+  const blindScrollRafRef = useRef<number | null>(null);
+  const handleBlindScroll = useCallback(() => {
+    markUserScrolling();
+    if (blindScrollRafRef.current !== null) return;
+    blindScrollRafRef.current = window.requestAnimationFrame(() => {
+      blindScrollRafRef.current = null;
+      recomputeBlindWindow();
+    });
+  }, [markUserScrolling, recomputeBlindWindow]);
+
+  useEffect(() => {
+    return () => {
+      if (blindScrollRafRef.current !== null) cancelAnimationFrame(blindScrollRafRef.current);
+    };
+  }, []);
+
+  // Re-window when the list, container, or card height changes (runs before
+  // paint so newly-visible cards mount without a blank frame).
+  useLayoutEffect(() => {
+    if (!isBlind) return;
+    recomputeBlindWindow();
+  }, [isBlind, filteredAndSorted, blindSnapCardHeight, scrollRoot, recomputeBlindWindow]);
+
+  // Predictions currently mounted as real cards — drives contributor /
+  // recording-name hydration below. Blind feed follows the scroll window,
+  // other feeds page through `predictions`.
+  const visiblePredictionWindow = useMemo(
+    () =>
+      isBlind
+        ? filteredAndSorted.slice(blindWindow.start, blindWindow.end)
+        : predictions.slice(0, visibleCount),
+    [isBlind, filteredAndSorted, blindWindow, predictions, visibleCount],
+  );
+  const visiblePredictionWindowKey = useMemo(
+    () => visiblePredictionWindow.map((p) => p.snippet_id).join(","),
+    [visiblePredictionWindow],
+  );
 
   const skipScrollIntoViewRef = useRef(false);
   const scrollSyncSuspendedRef = useRef(false);
@@ -200,7 +356,42 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedSnippetIdRef.current = selectedSnippetId;
   }, [selectedSnippetId]);
 
-  useALSync(cardRefs, { skipScrollIntoViewRef });
+  const selectionFeedViewKeyRef = useRef(feedViewKey);
+  useEffect(() => {
+    if (!enableClientFilters) return;
+
+    const feedViewChanged = selectionFeedViewKeyRef.current !== feedViewKey;
+    selectionFeedViewKeyRef.current = feedViewKey;
+
+    if (feedViewChanged) {
+      const firstSnippetId = filteredAndSorted[0]?.snippet_id ?? null;
+      skipScrollIntoViewRef.current = true;
+      dispatch(setSelectedSnippet(firstSnippetId));
+      return;
+    }
+
+    if (filteredAndSorted.length === 0) {
+      if (selectedSnippetId !== null) {
+        skipScrollIntoViewRef.current = true;
+        dispatch(setSelectedSnippet(null));
+      }
+      return;
+    }
+
+    if (
+      selectedSnippetId !== null &&
+      filteredAndSorted.some((p) => p.snippet_id === selectedSnippetId)
+    ) {
+      return;
+    }
+
+    const firstSnippetId = filteredAndSorted[0]?.snippet_id;
+    if (firstSnippetId === undefined) return;
+    skipScrollIntoViewRef.current = true;
+    dispatch(setSelectedSnippet(firstSnippetId));
+  }, [dispatch, enableClientFilters, feedViewKey, filteredAndSorted, selectedSnippetId]);
+
+  useALSync(cardRefs, { skipScrollIntoViewRef, isUserScrollingRef });
 
   useEffect(() => {
     if (skipScrollIntoViewRef.current) {
@@ -260,7 +451,19 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     if (!container || predictions.length === 0) return;
 
     let rafId: number | null = null;
+    let settleTimer: number | null = null;
     const scheduleSelect = () => {
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        settleTimer = null;
+        if (rafId !== null) return;
+        rafId = window.requestAnimationFrame(() => {
+          rafId = null;
+          selectCenteredCard();
+        });
+      }, 120);
+    };
+    const scheduleSelectNow = () => {
       if (rafId !== null) return;
       rafId = window.requestAnimationFrame(() => {
         rafId = null;
@@ -268,7 +471,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     };
 
-    const observer = new IntersectionObserver(scheduleSelect, {
+    const observer = new IntersectionObserver(scheduleSelectNow, {
       root: container,
       threshold: [0, 0.25, 0.5, 0.75, 1],
     });
@@ -283,6 +486,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       observer.disconnect();
       cardVisibilityObserverRef.current = null;
       container.removeEventListener("scroll", scheduleSelect);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [selectCenteredCard, predictions.length, scrollRoot]);
@@ -305,7 +509,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         return;
       }
       try {
-        const ids = predictions.slice(0, visibleCount).map((p) => p.snippet_id);
+        const ids = visiblePredictionWindow.map((p) => p.snippet_id);
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const bySnippet: Record<number, Annotation[]> = {};
@@ -322,21 +526,20 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [dispatch, predictions, visibleCount]);
+  }, [dispatch, predictions.length, visiblePredictionWindowKey, visiblePredictionWindow]);
 
   const neededRecordingIdsKey = useMemo(() => {
     // Only fetch names for currently visible predictions — computing over all
     // 24k+ predictions would trigger hundreds of paginated bulk requests.
     const ids = Array.from(
       new Set(
-        predictions
-          .slice(0, visibleCount)
+        visiblePredictionWindow
           .map((p) => p.recording_id)
           .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
       ),
     );
     return ids.join(",");
-  }, [predictions, visibleCount]);
+  }, [visiblePredictionWindow]);
 
   // Clear cached recording names when the dataset changes or there is nothing
   // to name, following the "adjust state during render" pattern.
@@ -389,24 +592,24 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
   }, [selectedDatasetId, neededRecordingIdsKey]);
 
-  const setCardRef = useCallback(
-    (snippetId: number) => (el: HTMLDivElement | null) => {
-      const observer = cardVisibilityObserverRef.current;
-      if (el) {
-        const prev = cardRefs.current.get(snippetId);
-        if (prev && prev !== el && observer) observer.unobserve(prev);
-        cardRefs.current.set(snippetId, el);
-        if (observer) observer.observe(el);
-      } else {
-        const prev = cardRefs.current.get(snippetId);
-        if (prev && observer) observer.unobserve(prev);
-        cardRefs.current.delete(snippetId);
-      }
-    },
-    [],
-  );
-
-  const isBlind = phase.ui.labelingMode === "blind";
+  // A single stable callback (created once, never recreated) passed
+  // identically to every card — PredictionCard (wrapped in React.memo) calls
+  // it with its own snippet id. Currying a fresh/cached closure per id here
+  // would either break memoization (new function every render) or require
+  // reading a ref cache during render (not allowed) — this sidesteps both.
+  const registerCard = useCallback((snippetId: number, el: HTMLDivElement | null) => {
+    const observer = cardVisibilityObserverRef.current;
+    if (el) {
+      const prev = cardRefs.current.get(snippetId);
+      if (prev && prev !== el && observer) observer.unobserve(prev);
+      cardRefs.current.set(snippetId, el);
+      if (observer) observer.observe(el);
+    } else {
+      const prev = cardRefs.current.get(snippetId);
+      if (prev && observer) observer.unobserve(prev);
+      cardRefs.current.delete(snippetId);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     if (!isBlind) return;
@@ -570,9 +773,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                         ? recordingNameById[p.recording_id]
                         : undefined
                     }
-                    cardRef={setCardRef(p.snippet_id)}
+                    cardRef={registerCard}
                     cardHeightPx={blindSnapCardHeight}
-                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                    serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
+                    quickLabels={quickLabels}
+                    quickLabelsLoading={quickLabelsLoading}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={false}
                     hideHeader={hideCardHeader}
@@ -610,8 +815,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                 ? recordingNameById[selected.recording_id]
                 : undefined
             }
-            cardRef={setCardRef(selected.snippet_id)}
-            serverLabels={labelsBySnippet[selected.snippet_id] ?? []}
+            cardRef={registerCard}
+            serverLabels={labelsBySnippet[selected.snippet_id] ?? EMPTY_LABELS}
+            quickLabels={quickLabels}
+            quickLabelsLoading={quickLabelsLoading}
             scrollRoot={scrollRoot}
             loadAudioImmediately
             onFindSimilar={onFindSimilar}
@@ -641,51 +848,39 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           ref={bindScrollContainer}
           className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"
           style={{ scrollSnapType: "y mandatory" }}
+          onScroll={handleBlindScroll}
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {filteredAndSorted.slice(0, visibleCount).map((p, index) => {
+            {filteredAndSorted.map((p, index) => {
               const key = p.id ?? p.snippet_id;
               const height = blindSnapCardHeight;
-              if (index === visibleCount - 1) {
-                return (
-                  <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
-                    <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
+              // Every snippet keeps a fixed-height snap slot so the scrollbar
+              // stays full-length and native CSS scroll-snap works. Only cards
+              // inside the scroll-driven window mount as real audio cards; the
+              // rest are cheap placeholders that still snap.
+              const inWindow = index >= blindWindow.start && index < blindWindow.end;
+              return (
+                <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
+                  {inWindow ? (
                     <PredictionCard
                       prediction={p}
                       recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
-                      cardRef={setCardRef(p.snippet_id)}
+                      cardRef={registerCard}
                       cardHeightPx={height}
-                      serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                      serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
+                      quickLabels={quickLabels}
+                      quickLabelsLoading={quickLabelsLoading}
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
                       onFindSimilar={onFindSimilar}
                       hideHeader={hideCardHeader}
                     />
-                  </div>
-                );
-              }
-              return (
-                <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
-                  <PredictionCard
-                    prediction={p}
-                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
-                    cardRef={setCardRef(p.snippet_id)}
-                    cardHeightPx={height}
-                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                    scrollRoot={scrollRoot}
-                    loadAudioImmediately={index === 0}
-                    onFindSimilar={onFindSimilar}
-                    hideHeader={hideCardHeader}
-                  />
+                  ) : (
+                    <div className="w-full h-full rounded-lg bg-gray-50 border border-gray-100" />
+                  )}
                 </div>
               );
             })}
-            {filteredAndSorted.length > visibleCount && (
-              <div
-                className="snap-start shrink-0 w-full"
-                style={{ height: (filteredAndSorted.length - visibleCount) * (blindSnapCardHeight + 12) }}
-              />
-            )}
 
             {inferenceLoading && (
               <div className="flex justify-center py-4">
@@ -772,7 +967,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                   <PredictionCard
                     prediction={p}
                     recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
-                    cardRef={setCardRef(p.snippet_id)}
+                    cardRef={registerCard}
+                    quickLabels={quickLabels}
+                    quickLabelsLoading={quickLabelsLoading}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                     onFindSimilar={onFindSimilar}
@@ -785,7 +982,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                 key={key}
                 prediction={p}
                 recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
-                cardRef={setCardRef(p.snippet_id)}
+                cardRef={registerCard}
+                quickLabels={quickLabels}
+                quickLabelsLoading={quickLabelsLoading}
                 scrollRoot={scrollRoot}
                 loadAudioImmediately={index === 0}
                 onFindSimilar={onFindSimilar}
