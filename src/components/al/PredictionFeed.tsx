@@ -279,14 +279,18 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
   // ── Blind feed windowing ────────────────────────────────────────────────
-  // Every snippet renders as a fixed-height snap slot so native CSS
-  // scroll-snap stays smooth and the scrollbar maps linearly across the whole
-  // list. Only cards inside a small window around the viewport mount as real
-  // audio cards — the rest are cheap placeholders. The window is derived from
-  // the *live* scrollTop, so dragging the scrollbar far down instantly mounts
-  // the cards at that position instead of leaving blank placeholders.
-  const BLIND_WINDOW_OVERSCAN = 3;
-  const BLIND_SLOT_GAP_PX = 12; // matches the gap-3 between cards
+  // True virtualization: only the ~dozen cards around the viewport are
+  // rendered, sandwiched between two spacer divs whose heights stand in for the
+  // off-screen cards. Every rendered card is a fixed-height `snap-start` slot,
+  // so native CSS scroll-snap stays smooth and the scrollbar maps linearly
+  // across the whole list. The window is derived from the *live* scrollTop, so
+  // dragging the scrollbar anywhere instantly mounts the cards there.
+  //
+  // Rendering the full N-row list (30k+ slots) every time the window shifts was
+  // the perf regression — at 60fps during a fling that meant ~30k element
+  // allocations per frame. Spacers keep every render at ~15 elements.
+  const BLIND_WINDOW_OVERSCAN = 4;
+  const BLIND_SLOT_GAP_PX = 12; // matches the inter-card gap
   const [blindWindow, setBlindWindow] = useState<{ start: number; end: number }>({
     start: 0,
     end: 8,
@@ -328,15 +332,36 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     recomputeBlindWindow();
   }, [isBlind, filteredAndSorted, blindSnapCardHeight, scrollRoot, recomputeBlindWindow]);
 
-  // Predictions currently mounted as real cards — drives contributor /
-  // recording-name hydration below. Blind feed follows the scroll window,
-  // other feeds page through `predictions`.
+  // The actual card rows to render for the blind feed (small slice, with each
+  // row's absolute index preserved for spacer math + audio priority).
+  const blindVisibleRows = useMemo(() => {
+    if (!isBlind) return [];
+    return filteredAndSorted
+      .slice(blindWindow.start, blindWindow.end)
+      .map((prediction, offset) => ({ prediction, index: blindWindow.start + offset }));
+  }, [isBlind, filteredAndSorted, blindWindow]);
+  const blindTopSpacer = blindWindow.start * blindSlotSize;
+  const blindBottomSpacer = Math.max(0, filteredLen - blindWindow.end) * blindSlotSize;
+
+  // Metadata hydration (annotations + recording names) is expensive — a network
+  // batch fetch plus redux dispatches. Debounce it behind a settled copy of the
+  // window so a fast scroll doesn't fire a fetch per card crossed; it runs once
+  // the scroll pauses. Card audio already lazy-loads on its own settle timer.
+  const [hydrationWindow, setHydrationWindow] = useState(blindWindow);
+  useEffect(() => {
+    if (!isBlind) return;
+    const t = window.setTimeout(() => setHydrationWindow(blindWindow), 200);
+    return () => window.clearTimeout(t);
+  }, [isBlind, blindWindow]);
+
+  // Predictions whose metadata we hydrate — the settled window for the blind
+  // feed, or the current page for the other feeds.
   const visiblePredictionWindow = useMemo(
     () =>
       isBlind
-        ? filteredAndSorted.slice(blindWindow.start, blindWindow.end)
+        ? filteredAndSorted.slice(hydrationWindow.start, hydrationWindow.end)
         : predictions.slice(0, visibleCount),
-    [isBlind, filteredAndSorted, blindWindow, predictions, visibleCount],
+    [isBlind, filteredAndSorted, hydrationWindow, predictions, visibleCount],
   );
   const visiblePredictionWindowKey = useMemo(
     () => visiblePredictionWindow.map((p) => p.snippet_id).join(","),
@@ -850,37 +875,32 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           style={{ scrollSnapType: "y mandatory" }}
           onScroll={handleBlindScroll}
         >
-          <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
-            {filteredAndSorted.map((p, index) => {
-              const key = p.id ?? p.snippet_id;
-              const height = blindSnapCardHeight;
-              // Every snippet keeps a fixed-height snap slot so the scrollbar
-              // stays full-length and native CSS scroll-snap works. Only cards
-              // inside the scroll-driven window mount as real audio cards; the
-              // rest are cheap placeholders that still snap.
-              const inWindow = index >= blindWindow.start && index < blindWindow.end;
-              return (
-                <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
-                  {inWindow ? (
-                    <PredictionCard
-                      prediction={p}
-                      recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
-                      cardRef={registerCard}
-                      cardHeightPx={height}
-                      serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
-                      quickLabels={quickLabels}
-                      quickLabelsLoading={quickLabelsLoading}
-                      scrollRoot={scrollRoot}
-                      loadAudioImmediately={index === 0}
-                      onFindSimilar={onFindSimilar}
-                      hideHeader={hideCardHeader}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-lg bg-gray-50 border border-gray-100" />
-                  )}
-                </div>
-              );
-            })}
+          <div className="w-full max-w-[1200px] mx-auto">
+            {/* Spacer for the off-screen cards above the window. */}
+            <div style={{ height: blindTopSpacer }} />
+            {blindVisibleRows.map(({ prediction: p, index }) => (
+              <div
+                key={p.id ?? p.snippet_id}
+                className="snap-start shrink-0 w-full"
+                style={{ height: blindSnapCardHeight, marginBottom: BLIND_SLOT_GAP_PX }}
+              >
+                <PredictionCard
+                  prediction={p}
+                  recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                  cardRef={registerCard}
+                  cardHeightPx={blindSnapCardHeight}
+                  serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
+                  quickLabels={quickLabels}
+                  quickLabelsLoading={quickLabelsLoading}
+                  scrollRoot={scrollRoot}
+                  loadAudioImmediately={index === 0}
+                  onFindSimilar={onFindSimilar}
+                  hideHeader={hideCardHeader}
+                />
+              </div>
+            ))}
+            {/* Spacer for the off-screen cards below the window. */}
+            <div style={{ height: blindBottomSpacer }} />
 
             {inferenceLoading && (
               <div className="flex justify-center py-4">

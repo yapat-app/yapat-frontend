@@ -15,6 +15,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { DEFAULT_PHASE_ID, STUDY_PHASES, getPhaseConfig } from "./phases";
 import { PhaseContext, type PhaseContextValue } from "./context";
+import { readEnv, parseBoolEnv } from "../utils/runtimeEnv";
 
 const STORAGE_KEY = "yapat_study_phase";
 
@@ -47,14 +48,13 @@ function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
 }
 
 export function isPhaseLocked(): boolean {
-  const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env
-    ?.VITE_STUDY_PHASE_LOCK;
-  return v === "1" || v === "true" || v === "yes";
+  // Runtime override (window.__ENV__) wins over build-time env so the lock can
+  // be flipped on the deployed image without a rebuild. See utils/runtimeEnv.
+  return parseBoolEnv(readEnv("VITE_STUDY_PHASE_LOCK"));
 }
 
 function getAllowedPhaseIds(): string[] {
-  const raw = (import.meta as ImportMeta & { env?: Record<string, string> }).env
-    ?.VITE_STUDY_PHASE_ALLOWED;
+  const raw = readEnv("VITE_STUDY_PHASE_ALLOWED");
   if (!raw) return [];
   return raw
     .split(",")
@@ -63,8 +63,7 @@ function getAllowedPhaseIds(): string[] {
 }
 
 function resolveInitialPhaseId(urlValue: string | null): string {
-  const envValue = (import.meta as ImportMeta & { env?: Record<string, string> })
-    .env?.VITE_STUDY_PHASE;
+  const envValue = readEnv("VITE_STUDY_PHASE");
   const allowed = getAllowedPhaseIds();
 
   // When locked, the deployment decides the phase. Ignore URL/localStorage.

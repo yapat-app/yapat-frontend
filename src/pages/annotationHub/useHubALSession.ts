@@ -186,8 +186,15 @@ export function useHubALSession(
         selectedDatasetId !== null &&
         (predictions.length > 0 || lastInferenceAt)
       ) {
+        // Clone existing params so `phase` (and anything else) is preserved —
+        // rebuilding a fresh {mode, dataset_id} object dropped the phase param.
         setSearchParams(
-          { mode, dataset_id: String(selectedDatasetId) },
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("mode", mode);
+            next.set("dataset_id", String(selectedDatasetId));
+            return next;
+          },
           { replace: true },
         );
       }

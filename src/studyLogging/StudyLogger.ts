@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import { postBatch, sendBeaconBatch } from "./loggingApi";
 import { persistBuffer, takeBuffer } from "./queueStorage";
+import { readEnv } from "../utils/runtimeEnv";
 
 const SESSION_KEY = "yapat_study_session_id";
 
@@ -122,7 +123,7 @@ class StudyLogger {
       userAgent: navigator.userAgent,
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
-      lock: parseBool(import.meta.env.VITE_STUDY_PHASE_LOCK as string | undefined),
+      lock: parseBool(readEnv("VITE_STUDY_PHASE_LOCK")),
     });
 
     // React fires child effects before parent effects, so panel_enter events

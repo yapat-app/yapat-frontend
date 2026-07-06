@@ -53,9 +53,10 @@ export const AnnotationHub: React.FC = () => {
 
   const setMode = useCallback(
     (next: AnnotateMode) => {
-      const params: Record<string, string> = { mode: next };
-      const dsId = searchParams.get("dataset_id");
-      if (dsId) params.dataset_id = dsId;
+      // Clone existing params so `phase` (and anything else) is preserved —
+      // rebuilding a fresh {mode, dataset_id} object dropped the phase param.
+      const params = new URLSearchParams(searchParams);
+      params.set("mode", next);
       setSearchParams(params, { replace: true });
     },
     [searchParams, setSearchParams],
