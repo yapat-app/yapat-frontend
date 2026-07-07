@@ -198,36 +198,39 @@ export const AnnotationHub: React.FC = () => {
       {/* ── Main content ── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar — Filters + Model scores */}
-        <AnnotationHubSidebar
-          mode={mode}
-          setMode={setMode}
-          filterAnnotationStatus={filterAnnotationStatus}
-          onFilterAnnotationStatusChange={setFilterAnnotationStatus}
-          filterLocations={filterLocations}
-          onFilterLocationsChange={setFilterLocations}
-          recordingLocations={visibleRecordingLocations}
-          locationsLoading={false}
-          filterDateRange={filterDateRange}
-          onFilterDateRangeChange={setFilterDateRange}
-          filterTimeRange={filterTimeRange}
-          onFilterTimeRangeChange={setFilterTimeRange}
-          localLabelScope={al.localLabelScope}
-          setLocalLabelScope={al.setLocalLabelScope}
-          localMinConfidence={al.localMinConfidence}
-          setLocalMinConfidence={al.setLocalMinConfidence}
-          labelScopeOptions={al.labelScopeOptions}
-          labelScopeLoading={al.labelScopeLoading}
-          showSampleProperties={phase.sidebar.sampleProperties}
-          showModelScores={phase.sidebar.modelScores}
-          onResetFilters={() => {
-            setFilterAnnotationStatus("any");
-            setFilterLocations([]);
-            setFilterDateRange(null);
-            setFilterTimeRange(null);
-            al.setLocalLabelScope([]);
-            al.setLocalMinConfidence(null);
-          }}
-        />
+        {phase.sidebar.showPane && (
+          <AnnotationHubSidebar
+            mode={mode}
+            setMode={setMode}
+            filterAnnotationStatus={filterAnnotationStatus}
+            onFilterAnnotationStatusChange={setFilterAnnotationStatus}
+            filterLocations={filterLocations}
+            onFilterLocationsChange={setFilterLocations}
+            recordingLocations={visibleRecordingLocations}
+            locationsLoading={false}
+            filterDateRange={filterDateRange}
+            onFilterDateRangeChange={setFilterDateRange}
+            filterTimeRange={filterTimeRange}
+            onFilterTimeRangeChange={setFilterTimeRange}
+            localLabelScope={al.localLabelScope}
+            setLocalLabelScope={al.setLocalLabelScope}
+            localMinConfidence={al.localMinConfidence}
+            setLocalMinConfidence={al.setLocalMinConfidence}
+            labelScopeOptions={al.labelScopeOptions}
+            labelScopeLoading={al.labelScopeLoading}
+            showSampleProperties={phase.sidebar.sampleProperties}
+            showModelScores={phase.sidebar.modelScores}
+            showFindSimilar={phase.sidebar.findSimilar}
+            onResetFilters={() => {
+              setFilterAnnotationStatus("any");
+              setFilterLocations([]);
+              setFilterDateRange(null);
+              setFilterTimeRange(null);
+              al.setLocalLabelScope([]);
+              al.setLocalMinConfidence(null);
+            }}
+          />
+        )}
 
         {/* Center + Right: workspace area */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -261,7 +264,7 @@ export const AnnotationHub: React.FC = () => {
 
           {(al.selectedDatasetId || al.isRestoredFeed) && (
             <Workspace
-              onFindSimilar={handleFindSimilar}
+              onFindSimilar={phase.ui.showFindSimilarButton ? handleFindSimilar : undefined}
               filterAnnotationStatus={filterAnnotationStatus}
               filterLocations={filterLocations}
               filterDateRange={filterDateRange}

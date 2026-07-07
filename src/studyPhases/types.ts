@@ -108,14 +108,20 @@ export interface UIPhaseConfig {
    * Defaults to "embedded" when omitted.
    */
   histogramStyle?: "embedded" | "standalone" | "none";
+  /** "Find similar snippets" mic button on snippet cards / sticky header. Currently disabled for all phases. */
+  showFindSimilarButton: boolean;
 }
 
 /** Which sidebar filter sections are shown (Annotation Hub only). */
 export interface SidebarPhaseConfig {
+  /** Whether the whole left sidebar pane is rendered at all. */
+  showPane: boolean;
   /** Date range / Time of day / Location / Species section. */
   sampleProperties: boolean;
   /** Uncertainty / Diversity / Density / Confidence / Composite section. */
   modelScores: boolean;
+  /** "Find similar" / "Search by recording" section. Currently disabled for all phases. */
+  findSimilar: boolean;
 }
 
 /** Which sort-field categories are offered (Annotation Hub only). */

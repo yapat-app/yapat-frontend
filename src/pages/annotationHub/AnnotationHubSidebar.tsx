@@ -56,6 +56,7 @@ export type AnnotationHubSidebarProps = {
   onResetFilters: () => void;
   showSampleProperties: boolean;
   showModelScores: boolean;
+  showFindSimilar: boolean;
 };
 
 export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
@@ -78,6 +79,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   onResetFilters,
   showSampleProperties,
   showModelScores,
+  showFindSimilar,
 }) => {
   const dispatch = useAppDispatch();
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
@@ -391,23 +393,25 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
         </div>
       )}
 
-      <CollapsibleSection title="Find similar">
-        <button
-          type="button"
-          onClick={() => setMode("similarity")}
-          className={[
-            "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left font-ibm-sans transition-all",
-            mode === "similarity"
-              ? "border-blue-200 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
-              : "border-gray-200 bg-gray-50 text-gray-500 hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-600",
-          ].join(" ")}
-        >
-          <AudioOutlined
-            className={mode === "similarity" ? "text-blue-500" : "text-gray-400"}
-          />
-          <span className="text-[11px] font-medium">Search by recording</span>
-        </button>
-      </CollapsibleSection>
+      {showFindSimilar && (
+        <CollapsibleSection title="Find similar">
+          <button
+            type="button"
+            onClick={() => setMode("similarity")}
+            className={[
+              "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left font-ibm-sans transition-all",
+              mode === "similarity"
+                ? "border-blue-200 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                : "border-gray-200 bg-gray-50 text-gray-500 hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-600",
+            ].join(" ")}
+          >
+            <AudioOutlined
+              className={mode === "similarity" ? "text-blue-500" : "text-gray-400"}
+            />
+            <span className="text-[11px] font-medium">Search by recording</span>
+          </button>
+        </CollapsibleSection>
+      )}
     </aside>
   );
 };
