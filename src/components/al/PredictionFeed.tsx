@@ -29,6 +29,8 @@ import {
   SCORE_SLIDER_STYLE,
 } from "../../pages/annotationHub/scoreFilterConfig";
 import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
+import { useRecordingDateTimes } from "../../pages/annotationHub/useRecordingDateTimes";
+import { dateStringToEpochDay } from "../../pages/annotationHub/dateTimeFilterHelpers";
 
 const FEED_PAGE_SIZE = 50;
 // Stable reference for "no server labels yet" — `labelsBySnippet[id] ?? []`
@@ -84,6 +86,8 @@ interface PredictionFeedProps {
   enableClientFilters?: boolean;
   filterAnnotationStatus?: "any" | "annotated" | "unannotated";
   filterLocations?: string[];
+  filterDateRange?: [number, number] | null;
+  filterTimeRange?: [number, number] | null;
   localLabelScope?: string[];
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
@@ -96,6 +100,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   enableClientFilters = false,
   filterAnnotationStatus = "any",
   filterLocations = [],
+  filterDateRange = null,
+  filterTimeRange = null,
   localLabelScope = [],
   quickLabels = [],
   quickLabelsLoading = false,
@@ -158,6 +164,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const recordingLocationById = useRecordingLocations(
     enableClientFilters ? selectedDatasetId : null,
   );
+  const recordingDateTimeById = useRecordingDateTimes(
+    enableClientFilters ? selectedDatasetId : null,
+  );
   const sortFieldsKey = useMemo(
     () =>
       (sortFields ?? [])
@@ -179,6 +188,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         enableClientFilters ? "filters:on" : "filters:off",
         filterAnnotationStatus,
         filterLocations.join("\u0000"),
+        filterDateRange ? filterDateRange.join(",") : "none",
+        filterTimeRange ? filterTimeRange.join(",") : "none",
         localLabelScope.join("\u0000"),
         sortFieldsKey,
         scoreVisibilityKey,
@@ -187,6 +198,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       enableClientFilters,
       filterAnnotationStatus,
       filterLocations,
+      filterDateRange,
+      filterTimeRange,
       localLabelScope,
       sortFieldsKey,
       scoreVisibilityKey,
@@ -221,6 +234,27 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
+    if (filterDateRange) {
+      const [startDay, endDay] = filterDateRange;
+      result = result.filter((p) => {
+        if (typeof p.recording_id !== "number") return false;
+        const dt = recordingDateTimeById.get(p.recording_id);
+        if (!dt) return false;
+        const epochDay = dateStringToEpochDay(dt.date);
+        return epochDay >= startDay && epochDay <= endDay;
+      });
+    }
+
+    if (filterTimeRange) {
+      const [startSeconds, endSeconds] = filterTimeRange;
+      result = result.filter((p) => {
+        if (typeof p.recording_id !== "number") return false;
+        const dt = recordingDateTimeById.get(p.recording_id);
+        if (!dt) return false;
+        return dt.timeSeconds >= startSeconds && dt.timeSeconds <= endSeconds;
+      });
+    }
+
     if (hasActiveScoreVisibilityFilters(alFilters)) {
       result = result.filter((p) =>
         isPointVisible(p.scores, alFilters, SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE),
@@ -237,6 +271,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     localLabelScope,
     filterLocations,
     recordingLocationById,
+    filterDateRange,
+    filterTimeRange,
+    recordingDateTimeById,
     alFilters,
     sortFields,
   ]);
@@ -534,7 +571,15 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         return;
       }
       try {
-        const ids = visiblePredictionWindow.map((p) => p.snippet_id);
+        // Derived from the stable string key, not `visiblePredictionWindow`
+        // itself — that array gets a new reference on every recompute of
+        // `filteredAndSorted` (e.g. every mousemove while dragging a filter
+        // slider) even when its contents are unchanged, which would refire
+        // this fetch on every tick of a drag instead of once per settled window.
+        const ids = visiblePredictionWindowKey
+          .split(",")
+          .map(Number)
+          .filter((n) => Number.isFinite(n));
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const bySnippet: Record<number, Annotation[]> = {};
@@ -551,7 +596,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [dispatch, predictions.length, visiblePredictionWindowKey, visiblePredictionWindow]);
+  }, [dispatch, predictions.length, visiblePredictionWindowKey]);
 
   const neededRecordingIdsKey = useMemo(() => {
     // Only fetch names for currently visible predictions — computing over all

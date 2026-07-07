@@ -36,6 +36,8 @@ type WorkspaceProps = {
   onFindSimilar?: (snippetId: number) => void;
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
   filterLocations: string[];
+  filterDateRange: [number, number] | null;
+  filterTimeRange: [number, number] | null;
   localLabelScope: string[];
   /** Feed action button ("Generate Feed" / "Edit Feed") — lives on the feed side. */
   feedActionLabel: string;
@@ -50,6 +52,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
   filterAnnotationStatus,
   filterLocations,
+  filterDateRange,
+  filterTimeRange,
   localLabelScope,
   feedActionLabel,
   feedActionLoading,
@@ -89,9 +93,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     () => ({
       annotationStatus: filterAnnotationStatus,
       locations: filterLocations,
+      dateRange: filterDateRange,
+      timeRange: filterTimeRange,
       labelScope: localLabelScope,
     }),
-    [filterAnnotationStatus, filterLocations, localLabelScope],
+    [filterAnnotationStatus, filterLocations, filterDateRange, filterTimeRange, localLabelScope],
   );
 
   const rightPanel = (
@@ -125,6 +131,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           enableClientFilters
           filterAnnotationStatus={filterAnnotationStatus}
           filterLocations={filterLocations}
+          filterDateRange={filterDateRange}
+          filterTimeRange={filterTimeRange}
           localLabelScope={localLabelScope}
           quickLabels={quickLabels}
           quickLabelsLoading={quickLabelsLoading}

@@ -42,7 +42,15 @@ interface HistogramSliderProps {
   onChange?: (range: [number, number]) => void;
   accentColor?: string;
   barHeight?: number;
+  /**
+   * Custom axis-tick label formatter. `val` is the domain value already
+   * scaled by `min`/`max` (not the raw [0,1] slider fraction). Defaults to
+   * `val.toFixed(2)` when omitted.
+   */
+  formatValue?: (val: number) => string;
 }
+
+const DEFAULT_FORMAT_VALUE = (val: number) => val.toFixed(2);
 
 function computeBins(values: number[], binCount: number, min: number, max: number): number[] {
   const bins = new Array<number>(binCount).fill(0);
@@ -70,6 +78,7 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
   onChange,
   accentColor = "#3b82f6",
   barHeight = 72,
+  formatValue = DEFAULT_FORMAT_VALUE,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [lo, hi] = range;
@@ -240,7 +249,7 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
                     className="absolute text-[10px] text-gray-400 font-ibm-sans -translate-x-1/2"
                     style={{ left: `${t * 100}%` }}
                   >
-                    {val.toFixed(2)}
+                    {formatValue(val)}
                   </span>
                 );
               })}

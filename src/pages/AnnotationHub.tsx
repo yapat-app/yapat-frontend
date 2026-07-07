@@ -71,6 +71,8 @@ export const AnnotationHub: React.FC = () => {
     useState<"any" | "annotated" | "unannotated">("any");
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
+  const [filterDateRange, setFilterDateRange] = useState<[number, number] | null>(null);
+  const [filterTimeRange, setFilterTimeRange] = useState<[number, number] | null>(null);
   const quickLabelList = useQuickLabelList();
 
   useEffect(() => {
@@ -205,6 +207,10 @@ export const AnnotationHub: React.FC = () => {
           onFilterLocationsChange={setFilterLocations}
           recordingLocations={visibleRecordingLocations}
           locationsLoading={false}
+          filterDateRange={filterDateRange}
+          onFilterDateRangeChange={setFilterDateRange}
+          filterTimeRange={filterTimeRange}
+          onFilterTimeRangeChange={setFilterTimeRange}
           localLabelScope={al.localLabelScope}
           setLocalLabelScope={al.setLocalLabelScope}
           localMinConfidence={al.localMinConfidence}
@@ -216,6 +222,8 @@ export const AnnotationHub: React.FC = () => {
           onResetFilters={() => {
             setFilterAnnotationStatus("any");
             setFilterLocations([]);
+            setFilterDateRange(null);
+            setFilterTimeRange(null);
             al.setLocalLabelScope([]);
             al.setLocalMinConfidence(null);
           }}
@@ -256,6 +264,8 @@ export const AnnotationHub: React.FC = () => {
               onFindSimilar={handleFindSimilar}
               filterAnnotationStatus={filterAnnotationStatus}
               filterLocations={filterLocations}
+              filterDateRange={filterDateRange}
+              filterTimeRange={filterTimeRange}
               localLabelScope={al.localLabelScope}
               feedActionLabel={feedActionLabel}
               feedActionLoading={al.inferenceLoading}

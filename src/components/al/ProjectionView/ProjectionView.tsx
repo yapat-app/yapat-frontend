@@ -26,6 +26,8 @@ import { useProjectionTraces } from "./useProjectionTraces";
 import { ProjectionToolbar } from "./ProjectionToolbar";
 import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
 import { useRecordingLocations } from "../../../pages/annotationHub/useRecordingLocations";
+import { useRecordingDateTimes } from "../../../pages/annotationHub/useRecordingDateTimes";
+import { dateStringToEpochDay } from "../../../pages/annotationHub/dateTimeFilterHelpers";
 
 /** Minimal structural type for the Plotly click/hover events we consume. */
 type PlotlyPointEvent = {
@@ -49,6 +51,8 @@ export interface ProjectionThumbnailData {
 export interface ProjectionClientFilters {
   annotationStatus: "any" | "annotated" | "unannotated";
   locations: string[];
+  dateRange: [number, number] | null;
+  timeRange: [number, number] | null;
   labelScope: string[];
 }
 
@@ -199,18 +203,22 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   // species scope, location) so the projection and the feed stay in sync.
 
   const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
+  const wantsDateTimeFilter = Boolean(clientFilters?.dateRange || clientFilters?.timeRange);
   const recordingLocationById = useRecordingLocations(
     wantsLocationFilter ? selectedDatasetId : null,
   );
+  const recordingDateTimeById = useRecordingDateTimes(
+    wantsDateTimeFilter ? selectedDatasetId : null,
+  );
 
   const recordingIdBySnippet = useMemo(() => {
-    if (!wantsLocationFilter) return null;
+    if (!wantsLocationFilter && !wantsDateTimeFilter) return null;
     const map = new Map<number, number>();
     for (const p of rawOverlayPredictions) {
       if (typeof p.recording_id === "number") map.set(p.snippet_id, p.recording_id);
     }
     return map;
-  }, [wantsLocationFilter, rawOverlayPredictions]);
+  }, [wantsLocationFilter, wantsDateTimeFilter, rawOverlayPredictions]);
 
   const wantsScopeFilter = (clientFilters?.labelScope.length ?? 0) > 0;
   const predictedLabelsBySnippet = useMemo(() => {
@@ -227,10 +235,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const extraVisible = useMemo(() => {
     if (!clientFilters) return undefined;
-    const { annotationStatus, locations, labelScope } = clientFilters;
+    const { annotationStatus, locations, dateRange, timeRange, labelScope } = clientFilters;
     const locationSet = locations.length > 0 ? new Set(locations) : null;
     const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
-    if (annotationStatus === "any" && !locationSet && !scopeSet) return undefined;
+    if (annotationStatus === "any" && !locationSet && !dateRange && !timeRange && !scopeSet) {
+      return undefined;
+    }
 
     return (snippetId: number): boolean => {
       if (annotationStatus !== "any") {
@@ -249,6 +259,19 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         const location = recordingLocationById.get(recId);
         if (location === undefined || !locationSet.has(location)) return false;
       }
+      if (dateRange || timeRange) {
+        const recId = recordingIdBySnippet?.get(snippetId);
+        if (recId === undefined) return false;
+        const dt = recordingDateTimeById.get(recId);
+        if (!dt) return false;
+        if (dateRange) {
+          const epochDay = dateStringToEpochDay(dt.date);
+          if (epochDay < dateRange[0] || epochDay > dateRange[1]) return false;
+        }
+        if (timeRange) {
+          if (dt.timeSeconds < timeRange[0] || dt.timeSeconds > timeRange[1]) return false;
+        }
+      }
       return true;
     };
   }, [
@@ -258,6 +281,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     predictedLabelsBySnippet,
     recordingIdBySnippet,
     recordingLocationById,
+    recordingDateTimeById,
   ]);
 
   // ── Visibility range override (async API fetch) ────────────────────────────

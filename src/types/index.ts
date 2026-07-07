@@ -362,8 +362,17 @@ export interface Recording {
   channels?: number;
   created_at: string;
   updated_at?: string;
-  /** Backend-derived metadata (parsed from the filename) — location is the only key the frontend currently reads. */
-  extra_metadata?: { location?: string; [key: string]: unknown } | null;
+  /** Backend-derived metadata (parsed from the filename). */
+  extra_metadata?:
+    | {
+        location?: string;
+        /** "YYYY-MM-DD", PAM-convention filenames only. */
+        recorded_date?: string;
+        /** Seconds since midnight (0-86399), PAM-convention filenames only. */
+        recorded_time?: number;
+        [key: string]: unknown;
+      }
+    | null;
 }
 
 export interface RecordingCreate {

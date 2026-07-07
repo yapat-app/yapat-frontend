@@ -10,6 +10,8 @@ import {
   SearchOutlined,
   TagsOutlined,
   AudioOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import type { AnnotateMode } from "./types";
 import type { LabelScopeOption } from "./useHubALSession";
@@ -22,6 +24,9 @@ import {
   resetVisibilityFilter,
 } from "../../redux/features/alSlice";
 import { useScoreHistogramData } from "./useScoreHistogramData";
+import { useDateTimeFilterData, TIME_OF_DAY_DOMAIN } from "./useDateTimeFilterData";
+import { formatDateAxisLabel, formatTimeAxisLabel } from "./dateTimeFilterHelpers";
+import { DateTimeRangeFilter } from "./DateTimeRangeFilter";
 import { CollapsibleSection } from "./CollapsibleSection";
 import {
   SCORE_VISIBILITY_MODE,
@@ -38,6 +43,10 @@ export type AnnotationHubSidebarProps = {
   onFilterLocationsChange: (v: string[]) => void;
   recordingLocations: string[];
   locationsLoading: boolean;
+  filterDateRange: [number, number] | null;
+  onFilterDateRangeChange: (v: [number, number] | null) => void;
+  filterTimeRange: [number, number] | null;
+  onFilterTimeRangeChange: (v: [number, number] | null) => void;
   localLabelScope: string[];
   setLocalLabelScope: (v: string[]) => void;
   localMinConfidence: number | null;
@@ -58,6 +67,10 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   onFilterLocationsChange,
   recordingLocations,
   locationsLoading,
+  filterDateRange,
+  onFilterDateRangeChange,
+  filterTimeRange,
+  onFilterTimeRangeChange,
   localLabelScope,
   setLocalLabelScope,
   labelScopeOptions,
@@ -74,10 +87,13 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     SCORE_VISIBILITY_MODE,
     SCORE_SLIDER_STYLE,
   );
+  const dateTimeData = useDateTimeFilterData();
 
   const activeFilterCount = [
     filterAnnotationStatus !== "any" ? 1 : 0,
     filterLocations.length > 0 ? 1 : 0,
+    filterDateRange !== null ? 1 : 0,
+    filterTimeRange !== null ? 1 : 0,
     localLabelScope.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
   const hasActiveFilters = activeFilterCount > 0;
@@ -254,6 +270,29 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   ].join(" ")}
                 />
               </div>
+              {dateTimeData.hasAnyDateTime && (
+                <DateTimeRangeFilter
+                  icon={<CalendarOutlined className="text-gray-400" />}
+                  title="Date range"
+                  values={dateTimeData.dateValues}
+                  domain={dateTimeData.dateDomain}
+                  range={filterDateRange}
+                  onChange={onFilterDateRangeChange}
+                  formatValue={formatDateAxisLabel}
+                />
+              )}
+              {dateTimeData.hasAnyDateTime && (
+                <DateTimeRangeFilter
+                  icon={<ClockCircleOutlined className="text-gray-400" />}
+                  title="Time of day"
+                  values={dateTimeData.timeValues}
+                  domain={TIME_OF_DAY_DOMAIN}
+                  binCount={24}
+                  range={filterTimeRange}
+                  onChange={onFilterTimeRangeChange}
+                  formatValue={formatTimeAxisLabel}
+                />
+              )}
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
                   <TagsOutlined className="text-gray-400" /> Labels
