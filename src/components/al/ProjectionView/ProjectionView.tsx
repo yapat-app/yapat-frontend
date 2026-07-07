@@ -28,6 +28,7 @@ import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
 import { useRecordingLocations } from "../../../pages/annotationHub/useRecordingLocations";
 import { useRecordingDateTimes } from "../../../pages/annotationHub/useRecordingDateTimes";
 import { dateStringToEpochDay } from "../../../pages/annotationHub/dateTimeFilterHelpers";
+import { useSnippetRecordingIds } from "../../../pages/annotationHub/useSnippetRecordingIds";
 
 /** Minimal structural type for the Plotly click/hover events we consume. */
 type PlotlyPointEvent = {
@@ -177,6 +178,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     fpvGenerateLoading,
     loadingMethods,
     effectiveEmbeddingModelId,
+    effectiveSnippetSetId,
     handleGenerateNow,
   } = useFpvData({
     selectedDatasetId,
@@ -204,21 +206,36 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
   const wantsDateTimeFilter = Boolean(clientFilters?.dateRange || clientFilters?.timeRange);
-  const recordingLocationById = useRecordingLocations(
-    wantsLocationFilter ? selectedDatasetId : null,
-  );
+  const { locationByRecordingId: recordingLocationById, loading: recordingLocationsLoading } =
+    useRecordingLocations(wantsLocationFilter ? selectedDatasetId : null);
   const recordingDateTimeById = useRecordingDateTimes(
     wantsDateTimeFilter ? selectedDatasetId : null,
   );
+  // Covers every snippet in the ready snippet set (i.e. the whole-dataset FPV
+  // background), not just the small overlay/feed predictions — the FPV API
+  // response has no recording_id per point, so without this most background
+  // points would have no known recording (hence no known location/date/time)
+  // and get hidden as soon as a location or date/time filter is active.
+  const wantsRecordingScopedFilter = wantsLocationFilter || wantsDateTimeFilter;
+  const { recordingIdBySnippetId: snippetSetRecordingIdBySnippet, loading: snippetSetIdsLoading } =
+    useSnippetRecordingIds(
+      wantsRecordingScopedFilter ? selectedDatasetId : null,
+      wantsRecordingScopedFilter ? effectiveSnippetSetId : null,
+    );
+  // Both maps are fetched lazily (only once a location filter is picked), so
+  // there's a brief window right after the first selection where they're
+  // still loading. Treat that window as "don't hide anything yet" — otherwise
+  // every point looks like it vanished until the fetches resolve.
+  const locationDataLoading = recordingLocationsLoading || snippetSetIdsLoading;
 
   const recordingIdBySnippet = useMemo(() => {
     if (!wantsLocationFilter && !wantsDateTimeFilter) return null;
-    const map = new Map<number, number>();
+    const map = new Map<number, number>(snippetSetRecordingIdBySnippet);
     for (const p of rawOverlayPredictions) {
       if (typeof p.recording_id === "number") map.set(p.snippet_id, p.recording_id);
     }
     return map;
-  }, [wantsLocationFilter, wantsDateTimeFilter, rawOverlayPredictions]);
+  }, [wantsLocationFilter, wantsDateTimeFilter, rawOverlayPredictions, snippetSetRecordingIdBySnippet]);
 
   const wantsScopeFilter = (clientFilters?.labelScope.length ?? 0) > 0;
   const predictedLabelsBySnippet = useMemo(() => {
@@ -253,7 +270,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         const labels = predictedLabelsBySnippet?.get(snippetId);
         if (!labels || !labels.some((l) => scopeSet.has(l))) return false;
       }
-      if (locationSet) {
+      if (locationSet && !locationDataLoading) {
         const recId = recordingIdBySnippet?.get(snippetId);
         if (recId === undefined) return false;
         const location = recordingLocationById.get(recId);
@@ -282,6 +299,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     recordingIdBySnippet,
     recordingLocationById,
     recordingDateTimeById,
+    locationDataLoading,
   ]);
 
   // ── Visibility range override (async API fetch) ────────────────────────────
@@ -618,6 +636,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                 Filter scores are missing — backend scores not yet available
               </div>
             )}
+
+          {wantsLocationFilter && locationDataLoading && (
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
+              <Spin size="small" />
+              Applying location filter…
+            </div>
+          )}
 
           {!isFpvPlotLoading && !hasAnyTraces ? (
             <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">

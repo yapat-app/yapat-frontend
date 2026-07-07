@@ -161,9 +161,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
   }, []);
 
-  const recordingLocationById = useRecordingLocations(
-    enableClientFilters ? selectedDatasetId : null,
-  );
+  const { locationByRecordingId: recordingLocationById, loading: recordingLocationsLoading } =
+    useRecordingLocations(enableClientFilters ? selectedDatasetId : null);
   const recordingDateTimeById = useRecordingDateTimes(
     enableClientFilters ? selectedDatasetId : null,
   );
@@ -225,7 +224,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       result = result.filter((p) => (p.predicted_labels ?? []).some((label) => scopeSet.has(label)));
     }
 
-    if (filterLocations.length > 0) {
+    // While the recording->location map is still loading, don't hide items —
+    // otherwise everything briefly disappears the moment a location filter is
+    // picked, until the fetch resolves (it then snaps to the correct set).
+    if (filterLocations.length > 0 && !recordingLocationsLoading) {
       const locationSet = new Set(filterLocations);
       result = result.filter((p) => {
         if (typeof p.recording_id !== "number") return false;
@@ -271,6 +273,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     localLabelScope,
     filterLocations,
     recordingLocationById,
+    recordingLocationsLoading,
     filterDateRange,
     filterTimeRange,
     recordingDateTimeById,
@@ -914,6 +917,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     }
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        {filterLocations.length > 0 && recordingLocationsLoading && (
+          <div className="flex-shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
+            <Spin size="small" />
+            Applying location filter…
+          </div>
+        )}
         <div
           ref={bindScrollContainer}
           className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"

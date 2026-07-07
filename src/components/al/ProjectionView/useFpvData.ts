@@ -27,6 +27,7 @@ export interface UseFpvDataResult {
   fpvGenerateLoading: boolean;
   loadingMethods: Set<ProjectionMethod>;
   effectiveEmbeddingModelId: number | null;
+  effectiveSnippetSetId: number | null;
   handleGenerateNow: () => Promise<void>;
   resetProjectionComponentState: () => void;
 }
@@ -38,7 +39,7 @@ export function useFpvData(opts: {
   visMode: VisMode;
   method: ProjectionMethod;
 }): UseFpvDataResult {
-  const { selectedDatasetId, embeddingModelId, visMode, method } = opts;
+  const { selectedDatasetId, embeddingModelId, snippetSetId, visMode, method } = opts;
 
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
   const [projectionsByMethod, setProjectionsByMethod] = useState<
@@ -49,27 +50,40 @@ export function useFpvData(opts: {
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
   const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
   const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
+  const [derivedSnippetSetId, setDerivedSnippetSetId] = useState<number | null>(null);
 
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
 
   const effectiveEmbeddingModelId = embeddingModelId ?? derivedEmbeddingModelId;
+  const effectiveSnippetSetId = snippetSetId ?? derivedSnippetSetId;
 
   // ── Embedding-model derivation ─────────────────────────────────────────────
+  // Also derives the READY snippet set's own id alongside its embedding model
+  // id — needed so callers can fetch snippet_id -> recording_id for the exact
+  // snippet set the FPV projection was computed over (e.g. for location
+  // filtering across the whole background scatter, not just the feed).
 
   useEffect(() => {
     let cancelled = false;
     async function deriveEmbeddingModel() {
       if (!selectedDatasetId) {
         setDerivedEmbeddingModelId(null);
+        setDerivedSnippetSetId(null);
         return;
       }
       try {
         const sets: SnippetSet[] = await embeddingApi.allSnippetSets(selectedDatasetId);
         const ready = sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
-        if (!cancelled) setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
+        if (!cancelled) {
+          setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
+          setDerivedSnippetSetId(ready?.id ?? null);
+        }
       } catch {
-        if (!cancelled) setDerivedEmbeddingModelId(null);
+        if (!cancelled) {
+          setDerivedEmbeddingModelId(null);
+          setDerivedSnippetSetId(null);
+        }
       }
     }
     if (!embeddingModelId) deriveEmbeddingModel();
@@ -301,6 +315,7 @@ export function useFpvData(opts: {
     fpvGenerateLoading,
     loadingMethods,
     effectiveEmbeddingModelId,
+    effectiveSnippetSetId,
     handleGenerateNow,
     resetProjectionComponentState,
   };

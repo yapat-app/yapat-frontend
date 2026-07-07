@@ -77,9 +77,13 @@ export const snippetApi = {
   },
 
   /**
-   * Get all snippets with optional filtering
+   * Get all snippets with optional filtering.
+   * Note: the backend requires dataset_id + snippet_set_id together
+   * (it validates the snippet set belongs to the dataset and is READY).
    */
   getAll: async (params: {
+    dataset_id?: number;
+    snippet_set_id?: number;
     recording_id?: number;
     skip?: number;
     limit?: number;

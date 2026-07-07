@@ -7,6 +7,16 @@ const PAGE_SIZE = 1000;
 // them; a dataset with 30k+ snippets typically has a few hundred recordings).
 const MAX_PAGES = 50;
 
+export interface RecordingLocations {
+  locationByRecordingId: Map<number, string>;
+  /**
+   * True while the map is being (re)built for the current dataset. Callers
+   * that hide items with an unresolved location should treat "loading" as
+   * "don't hide yet" — see the equivalent flag on useSnippetRecordingIds.
+   */
+  loading: boolean;
+}
+
 /**
  * Maps recording_id -> location for every recording in a dataset, fetched
  * once per dataset (not per prediction — recordings are far fewer than
@@ -14,18 +24,15 @@ const MAX_PAGES = 50;
  * Recording.extra_metadata.location, populated server-side from the
  * recording's filename.
  */
-export function useRecordingLocations(datasetId: number | null): Map<number, string> {
+export function useRecordingLocations(datasetId: number | null): RecordingLocations {
   const [locationByRecordingId, setLocationByRecordingId] = useState<Map<number, string>>(
     () => new Map(),
   );
-  // Reset immediately when the dataset changes, following React's "adjust
-  // state during render" pattern rather than a synchronous setState call at
-  // the top of the effect below.
-  const [locationsDatasetId, setLocationsDatasetId] = useState(datasetId);
-  if (datasetId !== locationsDatasetId) {
-    setLocationsDatasetId(datasetId);
-    setLocationByRecordingId(new Map());
-  }
+  // The dataset the map above was last resolved for. Deriving `loading` from
+  // this comparison (instead of a dedicated state flag) avoids any
+  // synchronous setState call in the effect body below.
+  const [resolvedDatasetId, setResolvedDatasetId] = useState(datasetId);
+  const loading = datasetId !== null && datasetId !== resolvedDatasetId;
 
   useEffect(() => {
     if (datasetId === null) return;
@@ -51,11 +58,17 @@ export function useRecordingLocations(datasetId: number | null): Map<number, str
         if (batch.length < PAGE_SIZE) break;
         skip += PAGE_SIZE;
       }
-      if (!cancelled) setLocationByRecordingId(map);
+      if (!cancelled) {
+        setLocationByRecordingId(map);
+        setResolvedDatasetId(datasetId);
+      }
     }
 
     void fetchAll().catch(() => {
-      if (!cancelled) setLocationByRecordingId(new Map());
+      if (!cancelled) {
+        setLocationByRecordingId(new Map());
+        setResolvedDatasetId(datasetId);
+      }
     });
 
     return () => {
@@ -63,5 +76,5 @@ export function useRecordingLocations(datasetId: number | null): Map<number, str
     };
   }, [datasetId]);
 
-  return locationByRecordingId;
+  return { locationByRecordingId, loading };
 }
