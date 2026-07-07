@@ -279,11 +279,16 @@ export const feedApi = {
     formData.append("dataset_id", String(data.dataset_id));
     formData.append("end_time", String(data.end_time));
     formData.append("start_time", String(data.start_time));
-    formData.append("embedding_model_id", String(data.embedding_model_id));
-    formData.append("limit", String(data.limit));
-    const response = await api.post(`api/feed/similarity-search`, data, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    if (data.embedding_model_id != null) {
+      formData.append("embedding_model_id", String(data.embedding_model_id));
+    }
+    if (data.snippet_set_id != null) {
+      formData.append("snippet_set_id", String(data.snippet_set_id));
+    }
+    if (data.limit != null) {
+      formData.append("limit", String(data.limit));
+    }
+    const response = await api.post(`api/feed/similarity-search`, formData);
     return response.data;
   },
 };
