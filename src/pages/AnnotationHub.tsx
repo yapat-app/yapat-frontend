@@ -141,7 +141,7 @@ export const AnnotationHub: React.FC = () => {
       <NavigationBar />
 
       {/* ── Simplified toolbar ── */}
-      <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-white flex-shrink-0 flex-wrap">
+      <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-white shrink-0 flex-wrap">
         {/* Dataset selector */}
         <div className="flex items-center gap-2">
           <DatabaseOutlined className="text-gray-400 text-sm" />
@@ -224,7 +224,7 @@ export const AnnotationHub: React.FC = () => {
         const workspaceArea = (
           <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden h-full">
             {al.isRestoredFeed && !al.selectedDatasetId && (
-              <div className="mx-4 mt-3 flex-shrink-0 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm font-ibm-sans text-blue-800">
+              <div className="mx-4 mt-3 shrink-0 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm font-ibm-sans text-blue-800">
                 <HistoryOutlined />
                 <span>
                   Showing saved feed from <strong>{al.savedFeedLabel}</strong> —

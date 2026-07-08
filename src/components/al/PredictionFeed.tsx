@@ -19,9 +19,17 @@ import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger, usePanelDwell } from "../../studyLogging";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
-import { hydrateClassicAnnotations, setSelectedSnippet, setActiveSnippet } from "../../redux/features/alSlice";
+import {
+  hydrateClassicAnnotations,
+  setSelectedSnippet,
+  setActiveSnippet,
+} from "../../redux/features/alSlice";
 import type { Annotation } from "../../types";
-import type { ALFilterState, PAMPrediction, SampleScores } from "../../types/al";
+import type {
+  ALFilterState,
+  PAMPrediction,
+  SampleScores,
+} from "../../types/al";
 import type { SortField } from "../../types/sort";
 import { isPointVisible } from "../../pages/annotationHub/useScoreHistogramData";
 import {
@@ -29,7 +37,10 @@ import {
   SCORE_SLIDER_STYLE,
 } from "../../pages/annotationHub/scoreFilterConfig";
 import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
-import { useRecordingDateTimes, type RecordingDateTime } from "../../pages/annotationHub/useRecordingDateTimes";
+import {
+  useRecordingDateTimes,
+  type RecordingDateTime,
+} from "../../pages/annotationHub/useRecordingDateTimes";
 import { dateStringToEpochDay } from "../../pages/annotationHub/dateTimeFilterHelpers";
 
 const FEED_PAGE_SIZE = 50;
@@ -51,8 +62,12 @@ function getSortValue(
     if (!dt) return -Infinity; // no recorded date/time for this snippet — sorts first
     return property === "time" ? dt.timeSeconds : dateStringToEpochDay(dt.date);
   }
-  if (property === "confidence") return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
-  if (property === "composite") return prediction.composite_score ?? prediction.scores?.composite ?? -Infinity;
+  if (property === "confidence")
+    return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
+  if (property === "composite")
+    return (
+      prediction.composite_score ?? prediction.scores?.composite ?? -Infinity
+    );
   const key = property as keyof SampleScores;
   const v = prediction.scores?.[key];
   return typeof v === "number" ? v : -Infinity;
@@ -142,8 +157,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
-  const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
-  const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
+  const [recordingNameById, setRecordingNameById] = useState<
+    Record<number, string>
+  >({});
+  const [labelsBySnippet, setLabelsBySnippet] = useState<
+    Record<number, string[]>
+  >({});
 
   const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -176,11 +195,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
   }, []);
 
-  const { locationByRecordingId: recordingLocationById, loading: recordingLocationsLoading } =
-    useRecordingLocations(enableClientFilters ? selectedDatasetId : null);
-  const recordingDateTimeById = useRecordingDateTimes(
-    enableClientFilters ? selectedDatasetId : null,
-  );
+  const {
+    locationByRecordingId: recordingLocationById,
+    loading: recordingLocationsLoading,
+  } = useRecordingLocations(enableClientFilters ? selectedDatasetId : null);
+  const {
+    dateTimeByRecordingId: recordingDateTimeById,
+    loading: recordingDateTimeLoading,
+  } = useRecordingDateTimes(enableClientFilters ? selectedDatasetId : null);
   const sortFieldsKey = useMemo(
     () =>
       (sortFields ?? [])
@@ -221,7 +243,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   );
 
   const filteredAndSorted = useMemo(() => {
-    if (!enableClientFilters) return applySortFields(predictions, sortFields, recordingDateTimeById);
+    if (!enableClientFilters)
+      return applySortFields(predictions, sortFields, recordingDateTimeById);
 
     let result = predictions;
 
@@ -229,14 +252,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       const wantAnnotated = filterAnnotationStatus === "annotated";
       result = result.filter((p) => {
         const hasLabel =
-          Boolean(feedbacks[p.snippet_id]) || (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0;
+          Boolean(feedbacks[p.snippet_id]) ||
+          (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0;
         return hasLabel === wantAnnotated;
       });
     }
 
     if (localLabelScope.length > 0) {
       const scopeSet = new Set(localLabelScope);
-      result = result.filter((p) => (p.predicted_labels ?? []).some((label) => scopeSet.has(label)));
+      result = result.filter((p) =>
+        (p.predicted_labels ?? []).some((label) => scopeSet.has(label)),
+      );
     }
 
     // While the recording->location map is still loading, don't hide items —
@@ -251,7 +277,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
-    if (filterDateRange) {
+    // Same reasoning as the location guard above — don't hide anything
+    // while the recording->date/time map is still loading.
+    if (filterDateRange && !recordingDateTimeLoading) {
       const [startDay, endDay] = filterDateRange;
       result = result.filter((p) => {
         if (typeof p.recording_id !== "number") return false;
@@ -262,7 +290,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
-    if (filterTimeRange) {
+    if (filterTimeRange && !recordingDateTimeLoading) {
       const [startSeconds, endSeconds] = filterTimeRange;
       result = result.filter((p) => {
         if (typeof p.recording_id !== "number") return false;
@@ -274,7 +302,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
     if (hasActiveScoreVisibilityFilters(alFilters)) {
       result = result.filter((p) =>
-        isPointVisible(p.scores, alFilters, SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE),
+        isPointVisible(
+          p.scores,
+          alFilters,
+          SCORE_VISIBILITY_MODE,
+          SCORE_SLIDER_STYLE,
+        ),
       );
     }
 
@@ -292,13 +325,15 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     filterDateRange,
     filterTimeRange,
     recordingDateTimeById,
+    recordingDateTimeLoading,
     alFilters,
     sortFields,
   ]);
 
   // Reset pagination whenever the filtered list changes, following React's
   // "adjust state during render" pattern (avoids a cascading effect render).
-  const [prevFilteredForPaging, setPrevFilteredForPaging] = useState(filteredAndSorted);
+  const [prevFilteredForPaging, setPrevFilteredForPaging] =
+    useState(filteredAndSorted);
   if (filteredAndSorted !== prevFilteredForPaging) {
     setPrevFilteredForPaging(filteredAndSorted);
     setVisibleCount(FEED_PAGE_SIZE);
@@ -322,7 +357,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + FEED_PAGE_SIZE, filteredAndSorted.length));
+          setVisibleCount((prev) =>
+            Math.min(prev + FEED_PAGE_SIZE, filteredAndSorted.length),
+          );
         }
       },
       { root: scrollContainerRef.current, rootMargin: "200px" },
@@ -346,7 +383,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   // allocations per frame. Spacers keep every render at ~15 elements.
   const BLIND_WINDOW_OVERSCAN = 4;
   const BLIND_SLOT_GAP_PX = 12; // matches the inter-card gap
-  const [blindWindow, setBlindWindow] = useState<{ start: number; end: number }>({
+  const [blindWindow, setBlindWindow] = useState<{
+    start: number;
+    end: number;
+  }>({
     start: 0,
     end: 8,
   });
@@ -361,7 +401,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     const end = Math.min(filteredLen, last + BLIND_WINDOW_OVERSCAN);
     // Only re-render when the window boundaries actually change — cards are
     // hundreds of px tall, so this fires roughly once per card of scroll.
-    setBlindWindow((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
+    setBlindWindow((prev) =>
+      prev.start === start && prev.end === end ? prev : { start, end },
+    );
   }, [blindSlotSize, filteredLen]);
 
   const blindScrollRafRef = useRef<number | null>(null);
@@ -376,7 +418,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   useEffect(() => {
     return () => {
-      if (blindScrollRafRef.current !== null) cancelAnimationFrame(blindScrollRafRef.current);
+      if (blindScrollRafRef.current !== null)
+        cancelAnimationFrame(blindScrollRafRef.current);
     };
   }, []);
 
@@ -385,7 +428,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useLayoutEffect(() => {
     if (!isBlind) return;
     recomputeBlindWindow();
-  }, [isBlind, filteredAndSorted, blindSnapCardHeight, scrollRoot, recomputeBlindWindow]);
+  }, [
+    isBlind,
+    filteredAndSorted,
+    blindSnapCardHeight,
+    scrollRoot,
+    recomputeBlindWindow,
+  ]);
 
   // The actual card rows to render for the blind feed (small slice, with each
   // row's absolute index preserved for spacer math + audio priority).
@@ -393,10 +442,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     if (!isBlind) return [];
     return filteredAndSorted
       .slice(blindWindow.start, blindWindow.end)
-      .map((prediction, offset) => ({ prediction, index: blindWindow.start + offset }));
+      .map((prediction, offset) => ({
+        prediction,
+        index: blindWindow.start + offset,
+      }));
   }, [isBlind, filteredAndSorted, blindWindow]);
   const blindTopSpacer = blindWindow.start * blindSlotSize;
-  const blindBottomSpacer = Math.max(0, filteredLen - blindWindow.end) * blindSlotSize;
+  const blindBottomSpacer =
+    Math.max(0, filteredLen - blindWindow.end) * blindSlotSize;
 
   // Metadata hydration (annotations + recording names) is expensive — a network
   // batch fetch plus redux dispatches. Debounce it behind a settled copy of the
@@ -469,7 +522,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     if (firstSnippetId === undefined) return;
     skipScrollIntoViewRef.current = true;
     dispatch(setSelectedSnippet(firstSnippetId));
-  }, [dispatch, enableClientFilters, feedViewKey, filteredAndSorted, selectedSnippetId]);
+  }, [
+    dispatch,
+    enableClientFilters,
+    feedViewKey,
+    filteredAndSorted,
+    selectedSnippetId,
+  ]);
 
   useALSync(cardRefs, { skipScrollIntoViewRef, isUserScrollingRef });
 
@@ -485,6 +544,38 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
+  // useALSync's scrollIntoView only works once the target card is actually
+  // mounted — but the blind feed only renders a small window of cards around
+  // the current scroll position (see blindWindow above), so a projection
+  // click on a snippet outside that window silently does nothing: Redux's
+  // selection updates, but the on-screen card (and its audio/spectrogram)
+  // never changes because nothing scrolled there. Every slot has a fixed
+  // height, so we can jump straight to the target's exact pixel position
+  // without needing it to be mounted first — the resulting native scroll
+  // event then drives recomputeBlindWindow to mount it there.
+  useEffect(() => {
+    if (!isBlind) return;
+    if (skipScrollIntoViewRef.current) return;
+    if (selectedSnippetId === null) return;
+    if (cardRefs.current.has(selectedSnippetId)) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const idx = filteredAndSorted.findIndex(
+      (p) => p.snippet_id === selectedSnippetId,
+    );
+    if (idx === -1) return;
+    el.scrollTop = Math.max(
+      0,
+      idx * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
+    );
+  }, [
+    isBlind,
+    selectedSnippetId,
+    filteredAndSorted,
+    blindSlotSize,
+    blindSnapCardHeight,
+  ]);
+
   const selectCenteredCard = useCallback(
     (opts?: { force?: boolean }) => {
       const container = scrollContainerRef.current;
@@ -498,7 +589,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       cardRefs.current.forEach((el, sid) => {
         if (!el) return;
         const r = el.getBoundingClientRect();
-        if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
+        if (r.bottom < containerRect.top || r.top > containerRect.bottom)
+          return;
         const cardCenter = r.top + r.height / 2;
         const d = Math.abs(cardCenter - centerY);
         if (d < bestDist) {
@@ -511,11 +603,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         lastActiveLoggedRef.current = bestId;
         studyLogger.log(
           "feed_active_snippet_change",
-          { snippetId: bestId, source: opts?.force ? "programmatic" : "scroll" },
+          {
+            snippetId: bestId,
+            source: opts?.force ? "programmatic" : "scroll",
+          },
           { snippetId: bestId },
         );
       }
-      if (phase.feed.mode === "single_card_on_select" && selectedSnippetIds.length > 1) {
+      if (
+        phase.feed.mode === "single_card_on_select" &&
+        selectedSnippetIds.length > 1
+      ) {
         // Multi-select: only update which card is "active" — don't reset the selection.
         dispatch(setActiveSnippet(bestId));
       } else if (bestId !== selectedSnippetIdRef.current) {
@@ -577,7 +675,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     const curInFeed =
       cur !== null && predictions.some((p) => p.snippet_id === cur);
     if (curInFeed) return;
-    const raf = requestAnimationFrame(() => selectCenteredCard({ force: true }));
+    const raf = requestAnimationFrame(() =>
+      selectCenteredCard({ force: true }),
+    );
     return () => cancelAnimationFrame(raf);
   }, [selectCenteredCard, predictions, visibleCount, scrollRoot]);
 
@@ -623,7 +723,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       new Set(
         visiblePredictionWindow
           .map((p) => p.recording_id)
-          .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
+          .filter(
+            (id): id is number => typeof id === "number" && Number.isFinite(id),
+          ),
       ),
     );
     return ids.join(",");
@@ -632,7 +734,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   // Clear cached recording names when the dataset changes or there is nothing
   // to name, following the "adjust state during render" pattern.
   const namesSourceKey =
-    selectedDatasetId && neededRecordingIdsKey ? String(selectedDatasetId) : null;
+    selectedDatasetId && neededRecordingIdsKey
+      ? String(selectedDatasetId)
+      : null;
   const [prevNamesSourceKey, setPrevNamesSourceKey] = useState(namesSourceKey);
   if (namesSourceKey !== prevNamesSourceKey) {
     setPrevNamesSourceKey(namesSourceKey);
@@ -685,19 +789,22 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   // it with its own snippet id. Currying a fresh/cached closure per id here
   // would either break memoization (new function every render) or require
   // reading a ref cache during render (not allowed) — this sidesteps both.
-  const registerCard = useCallback((snippetId: number, el: HTMLDivElement | null) => {
-    const observer = cardVisibilityObserverRef.current;
-    if (el) {
-      const prev = cardRefs.current.get(snippetId);
-      if (prev && prev !== el && observer) observer.unobserve(prev);
-      cardRefs.current.set(snippetId, el);
-      if (observer) observer.observe(el);
-    } else {
-      const prev = cardRefs.current.get(snippetId);
-      if (prev && observer) observer.unobserve(prev);
-      cardRefs.current.delete(snippetId);
-    }
-  }, []);
+  const registerCard = useCallback(
+    (snippetId: number, el: HTMLDivElement | null) => {
+      const observer = cardVisibilityObserverRef.current;
+      if (el) {
+        const prev = cardRefs.current.get(snippetId);
+        if (prev && prev !== el && observer) observer.unobserve(prev);
+        cardRefs.current.set(snippetId, el);
+        if (observer) observer.observe(el);
+      } else {
+        const prev = cardRefs.current.get(snippetId);
+        if (prev && observer) observer.unobserve(prev);
+        cardRefs.current.delete(snippetId);
+      }
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     if (!isBlind) return;
@@ -724,14 +831,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  // Re-run whenever the selection count crosses the single↔multi boundary
-  // so we capture the newly-mounted scroll container element.
+    // Re-run whenever the selection count crosses the single↔multi boundary
+    // so we capture the newly-mounted scroll container element.
   }, [isBlind, predictions.length, selectedSnippetIds.length]);
 
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
-        .map(([snippetId, fb]) => `${snippetId}:${fb.action}:${(fb.final_labels ?? []).join(",")}`)
+        .map(
+          ([snippetId, fb]) =>
+            `${snippetId}:${fb.action}:${(fb.final_labels ?? []).join(",")}`,
+        )
         .sort()
         .join("|"),
     [feedbacks],
@@ -762,7 +872,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         return;
       }
       try {
-        const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
+        const r = await alApi.getSnippetLabels(
+          selectedDatasetId,
+          snippetSetId ?? undefined,
+        );
         if (cancelled) return;
         const map: Record<number, string[]> = {};
         for (const it of r.items) map[it.snippet_id] = it.labels;
@@ -772,8 +885,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       }
     }
     loadLabels();
-    return () => { cancelled = true; };
-  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isBlind,
+    isClassicFeed,
+    selectedDatasetId,
+    snippetSetId,
+    feedbackLabelSignature,
+  ]);
 
   const labeledCount = useMemo(
     () => predictions.filter((p) => !!feedbacks[p.snippet_id]).length,
@@ -802,7 +923,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return (
       <div className="flex items-center justify-center h-full">
         <Spin size="large" />
-        <p className="text-sm text-gray-400 font-ibm-sans mt-3">Running inference…</p>
+        <p className="text-sm text-gray-400 font-ibm-sans mt-3">
+          Running inference…
+        </p>
       </div>
     );
   }
@@ -880,7 +1003,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     }
 
     // ── Single selection (existing behaviour) ───────────────────────────────
-    const selected = predictions.find((p) => p.snippet_id === selectedSnippetIds[0]);
+    const selected = predictions.find(
+      (p) => p.snippet_id === selectedSnippetIds[0],
+    );
 
     if (!selected) {
       return (
@@ -932,11 +1057,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       );
     }
     return (
-      <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="flex flex-col h-full min-h-0 overflow-hidden relative">
         {filterLocations.length > 0 && recordingLocationsLoading && (
-          <div className="flex-shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
+          <div className="shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
             <Spin size="small" />
             Applying location filter…
+          </div>
+        )}
+        {(filterDateRange || filterTimeRange) && recordingDateTimeLoading && (
+          <div className="shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
+            <Spin size="small" />
+            Applying date/time filter…
           </div>
         )}
         <div
@@ -945,18 +1076,25 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           style={{ scrollSnapType: "y mandatory" }}
           onScroll={handleBlindScroll}
         >
-          <div className="w-full max-w-[1200px] mx-auto">
+          <div className="w-full max-w-300 mx-auto">
             {/* Spacer for the off-screen cards above the window. */}
             <div style={{ height: blindTopSpacer }} />
             {blindVisibleRows.map(({ prediction: p, index }) => (
               <div
                 key={p.id ?? p.snippet_id}
                 className="snap-start shrink-0 w-full"
-                style={{ height: blindSnapCardHeight, marginBottom: BLIND_SLOT_GAP_PX }}
+                style={{
+                  height: blindSnapCardHeight,
+                  marginBottom: BLIND_SLOT_GAP_PX,
+                }}
               >
                 <PredictionCard
                   prediction={p}
-                  recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                  recordingName={
+                    typeof p.recording_id === "number"
+                      ? recordingNameById[p.recording_id]
+                      : undefined
+                  }
                   cardRef={registerCard}
                   cardHeightPx={blindSnapCardHeight}
                   serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
@@ -985,8 +1123,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 pt-4 pb-3 flex-shrink-0">
-        <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
+      <div className="px-4 pt-4 pb-3 shrink-0">
+        <div className="w-full md:w-[85%] max-w-350 mx-auto flex flex-col gap-3">
           <Row gutter={12}>
             <Col span={8}>
               <Card size="small" styles={{ body: { padding: 12 } }}>
@@ -1012,7 +1150,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                 <Statistic
                   title="Remaining"
                   value={remainingCount}
-                  valueStyle={{ color: remainingCount > 0 ? "#cf1322" : "#3f8600" }}
+                  valueStyle={{
+                    color: remainingCount > 0 ? "#cf1322" : "#3f8600",
+                  }}
                 />
               </Card>
             </Col>
@@ -1029,10 +1169,15 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         </div>
       </div>
 
-      <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
-        <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
+      <div
+        ref={bindScrollContainer}
+        className="flex-1 overflow-y-auto px-4 pb-4"
+      >
+        <div className="w-full md:w-[85%] max-w-350 mx-auto flex flex-col gap-3">
           {predictions.slice(0, visibleCount).map((p, index) => {
-            const key = p._isDivider ? `divider-${p.snippet_id}` : (p.id ?? p.snippet_id);
+            const key = p._isDivider
+              ? `divider-${p.snippet_id}`
+              : (p.id ?? p.snippet_id);
 
             if (p._isDivider) {
               return (
@@ -1056,7 +1201,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                   <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
                   <PredictionCard
                     prediction={p}
-                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                    recordingName={
+                      typeof p.recording_id === "number"
+                        ? recordingNameById[p.recording_id]
+                        : undefined
+                    }
                     cardRef={registerCard}
                     quickLabels={quickLabels}
                     quickLabelsLoading={quickLabelsLoading}
@@ -1071,7 +1220,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
               <PredictionCard
                 key={key}
                 prediction={p}
-                recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                recordingName={
+                  typeof p.recording_id === "number"
+                    ? recordingNameById[p.recording_id]
+                    : undefined
+                }
                 cardRef={registerCard}
                 quickLabels={quickLabels}
                 quickLabelsLoading={quickLabelsLoading}
@@ -1082,7 +1235,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             );
           })}
           {predictions.length > visibleCount && (
-            <div style={{ height: (predictions.length - visibleCount) * (220 + 12) }} />
+            <div
+              style={{
+                height: (predictions.length - visibleCount) * (220 + 12),
+              }}
+            />
           )}
 
           {inferenceLoading && (

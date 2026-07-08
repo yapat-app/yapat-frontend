@@ -36,7 +36,7 @@ export type StudyLogEvent =
   // ── Panel / layout ──────────────────────────────────────────────────
   | { eventType: "panel_enter"; payload: { panel: PanelName } }
   | { eventType: "panel_exit"; payload: { panel: PanelName } }
-  | { eventType: "split_resize"; payload: { mode: "ratio" | "right_px"; value: number; viewportW: number; viewportH: number } }
+  | { eventType: "split_resize"; payload: { mode: "ratio" | "right_px" | "left_px"; value: number; viewportW: number; viewportH: number } }
 
   // ── Feed ────────────────────────────────────────────────────────────
   | { eventType: "feed_active_snippet_change"; payload: { snippetId: number; source: ScrollSource } }

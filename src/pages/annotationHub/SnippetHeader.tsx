@@ -8,19 +8,26 @@ interface SnippetHeaderProps {
   onFindSimilar?: (snippetId: number) => void;
 }
 
-export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) => {
+export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
+  onFindSimilar,
+}) => {
   const selectedSnippetIds = useAppSelector((s) => s.al.selectedSnippetIds);
   const predictions = useAppSelector((s) => s.al.predictions);
   const feedbacks = useAppSelector((s) => s.al.feedbacks);
 
   const snippetId = selectedSnippetIds[0] ?? null;
   const prediction = predictions.find((p) => p.snippet_id === snippetId);
-  const recordingId = typeof prediction?.recording_id === "number" ? prediction.recording_id : null;
+  const recordingId =
+    typeof prediction?.recording_id === "number"
+      ? prediction.recording_id
+      : null;
 
   // Fetched independently per selection rather than reusing PredictionFeed's
   // windowed recordingNameById cache — one lightweight GET-by-id is cheap and
   // keeps this component self-contained.
-  const [recordingName, setRecordingName] = useState<string | undefined>(undefined);
+  const [recordingName, setRecordingName] = useState<string | undefined>(
+    undefined,
+  );
   // Reset immediately when the recording changes, following the same
   // "adjust state during render" pattern used by useRecordingLocations etc.,
   // rather than a synchronous setState call at the top of the effect below.
@@ -54,11 +61,11 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) =
   const hasFeedback = !!feedbacks[snippetId];
 
   return (
-    <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white sticky top-0 z-10">
+    <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white sticky top-0 z-10">
       <div className="flex items-center gap-2 min-w-0">
         <SoundOutlined className="text-gray-400" />
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 truncate">
-          Labelling Snippet #{snippetId}
+          Snippet #{snippetId}
         </h2>
         {recordingName && (
           <span className="text-xs text-gray-400 font-ibm-sans truncate">
@@ -66,12 +73,12 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) =
           </span>
         )}
         {selectedSnippetIds.length > 1 && (
-          <span className="text-xs text-gray-400 font-ibm-sans flex-shrink-0">
+          <span className="text-xs text-gray-400 font-ibm-sans shrink-0">
             (+{selectedSnippetIds.length - 1} more)
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {prediction?.confidence != null && (
           <span
             className={[
@@ -79,8 +86,8 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) =
               prediction.confidence >= 0.8
                 ? "bg-green-50 text-green-700 border border-green-200"
                 : prediction.confidence >= 0.5
-                ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                : "bg-red-50 text-red-600 border border-red-200",
+                  ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                  : "bg-red-50 text-red-600 border border-red-200",
             ].join(" ")}
           >
             {Math.round(prediction.confidence * 100)}%

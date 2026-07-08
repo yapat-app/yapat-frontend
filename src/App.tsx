@@ -31,64 +31,70 @@ function App() {
   return (
     <StudyPhaseProvider>
       <StudyFlowProvider>
-      <LoggerContextBridge />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/signUp" element={<SignUp />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/datasets" element={<Datasets />} />
-        <Route
-          path="/teams"
-          element={
-            <TeamOwnerRedirect>
-              <Teams />
-            </TeamOwnerRedirect>
-          }
-        />
-        <Route path="/teams/:teamId" element={<ManageTeam />} />
-        <Route path="/" element={<HomePage />} />
-        <Route path="/pre-annotation" element={<Taxonomies />} />
-        <Route path="/history" element={<FeedHistory />} />
-        <Route path="/annotate" element={<AnnotationHub />} />
-        {/* Legacy routes — redirect to the unified hub */}
-        <Route path="/v2AnnotationHub" element={<RedirectWithSearch to="/annotate" />} />
-        <Route path="/active-learning" element={<Navigate to="/annotate?mode=al" replace />} />
-        <Route
-          path="/wssed"
-          element={
-            <WssedAccessGuard>
-              <Wssed />
-            </WssedAccessGuard>
-          }
-        />
-        <Route path="/docs" element={<YapatUserManual />} />
-        {/* Admin-only study log viewer */}
-        <Route
-          path="/study-logs"
-          element={
-            <AdminOnlyGuard>
-              <StudyLogsIndex />
-            </AdminOnlyGuard>
-          }
-        />
-        <Route
-          path="/study-logs/:userId"
-          element={
-            <AdminOnlyGuard>
-              <StudyLogsUser />
-            </AdminOnlyGuard>
-          }
-        />
-        <Route
-          path="/study-logs/:userId/:sessionId"
-          element={
-            <AdminOnlyGuard>
-              <StudyLogsSession />
-            </AdminOnlyGuard>
-          }
-        />
-      </Routes>
+        <LoggerContextBridge />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/signUp" element={<SignUp />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/datasets" element={<Datasets />} />
+          <Route
+            path="/teams"
+            element={
+              <TeamOwnerRedirect>
+                <Teams />
+              </TeamOwnerRedirect>
+            }
+          />
+          <Route path="/teams/:teamId" element={<ManageTeam />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/pre-annotation" element={<Taxonomies />} />
+          <Route path="/history" element={<FeedHistory />} />
+          <Route path="/annotate" element={<AnnotationHub />} />
+          {/* Legacy routes — redirect to the unified hub */}
+          <Route
+            path="/v2AnnotationHub"
+            element={<RedirectWithSearch to="/annotate" />}
+          />
+          <Route
+            path="/active-learning"
+            element={<Navigate to="/annotate" replace />}
+          />
+          <Route
+            path="/wssed"
+            element={
+              <WssedAccessGuard>
+                <Wssed />
+              </WssedAccessGuard>
+            }
+          />
+          <Route path="/docs" element={<YapatUserManual />} />
+          {/* Admin-only study log viewer */}
+          <Route
+            path="/study-logs"
+            element={
+              <AdminOnlyGuard>
+                <StudyLogsIndex />
+              </AdminOnlyGuard>
+            }
+          />
+          <Route
+            path="/study-logs/:userId"
+            element={
+              <AdminOnlyGuard>
+                <StudyLogsUser />
+              </AdminOnlyGuard>
+            }
+          />
+          <Route
+            path="/study-logs/:userId/:sessionId"
+            element={
+              <AdminOnlyGuard>
+                <StudyLogsSession />
+              </AdminOnlyGuard>
+            }
+          />
+        </Routes>
       </StudyFlowProvider>
     </StudyPhaseProvider>
   );

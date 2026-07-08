@@ -15,7 +15,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "How torn the model is between competing labels for this sample — higher means the model is less sure which label is correct.",
+    description: "How uncertain the model is between competing labels.",
   },
   {
     key: "diversity",
@@ -25,7 +25,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "How different this sample is from ones already labeled — higher means it covers new ground rather than repeating what the model has already seen.",
+    description: "How different are the samples from ones already labeled.",
   },
   {
     key: "density",
@@ -35,7 +35,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "How representative this sample is of a larger, similar group — higher means many other samples in the dataset look like it.",
+    description:
+      "How representative this sample is of a larger, similar group — higher means many other samples in the dataset look like it.",
   },
   {
     key: "composite",
@@ -45,7 +46,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "A single blended score combining uncertainty, diversity, and density into one overall ranking value.",
+    description:
+      "A single blended score combining uncertainty, diversity, and density into one overall ranking value.",
   },
   {
     key: "confidence",
@@ -55,7 +57,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "The model's own confidence in its top predicted label for this sample — higher means the model is more certain.",
+    description:
+      "The model's confidence in its top predicted label — higher means the model is more certain.",
   },
 
   // ── Metadata ───────────────────────────────────────────────────────────────
@@ -66,7 +69,20 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     filterMode: "stepped",
     range: [1, 12],
     steps: 12,
-    stepLabels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    stepLabels: [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ],
     supportsVisibility: true,
     supportsColor: true,
   },
@@ -77,7 +93,10 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     filterMode: "stepped",
     range: [0, 23],
     steps: 24,
-    stepLabels: Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, "0")}:00`),
+    stepLabels: Array.from(
+      { length: 24 },
+      (_, i) => `${i.toString().padStart(2, "0")}:00`,
+    ),
     supportsVisibility: true,
     supportsColor: true,
   },
@@ -129,11 +148,11 @@ export const getPropertyByKey = (key: string): PropertyDefinition | undefined =>
  * as the same colour.
  */
 const PROPERTY_COLORS: Record<string, string> = {
-  confidence:  "#06171C", // rgb(6, 23, 28)
-  diversity:   "#1D3A8F", // rgb(29, 58, 143)
-  density:     "#EC619F", // rgb(236, 97, 159)
+  confidence: "#06171C", // rgb(6, 23, 28)
+  diversity: "#1D3A8F", // rgb(29, 58, 143)
+  density: "#EC619F", // rgb(236, 97, 159)
   uncertainty: "#6ABFA3", // rgb(106, 191, 163)
-  composite:   "#F7A712", // rgb(247, 167, 18)
+  composite: "#F7A712", // rgb(247, 167, 18)
 };
 
 export function propertyColor(key: string): string {

@@ -380,7 +380,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     ].join(" ")}
                   >
                     <span
-                      className="h-[7px] w-[7px] flex-shrink-0 rounded-full"
+                      className="h-1.75 w-1.75 shrink-0 rounded-full"
                       style={{ backgroundColor: isActive ? color : "#d1d5db" }}
                     />
                     {label}

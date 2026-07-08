@@ -236,9 +236,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     locationByRecordingId: recordingLocationById,
     loading: recordingLocationsLoading,
   } = useRecordingLocations(wantsLocationFilter ? selectedDatasetId : null);
-  const recordingDateTimeById = useRecordingDateTimes(
-    wantsDateTimeFilter ? selectedDatasetId : null,
-  );
+  const {
+    dateTimeByRecordingId: recordingDateTimeById,
+    loading: recordingDateTimeLoading,
+  } = useRecordingDateTimes(wantsDateTimeFilter ? selectedDatasetId : null);
   // Covers every snippet in the ready snippet set (i.e. the whole-dataset FPV
   // background), not just the small overlay/feed predictions — the FPV API
   // response has no recording_id per point, so without this most background
@@ -252,11 +253,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     wantsRecordingScopedFilter ? selectedDatasetId : null,
     wantsRecordingScopedFilter ? effectiveSnippetSetId : null,
   );
-  // Both maps are fetched lazily (only once a location filter is picked), so
-  // there's a brief window right after the first selection where they're
-  // still loading. Treat that window as "don't hide anything yet" — otherwise
-  // every point looks like it vanished until the fetches resolve.
+  // Both maps are fetched lazily (only once a location/date/time filter is
+  // picked), so there's a brief window right after the first selection
+  // where they're still loading. Treat that window as "don't hide anything
+  // yet" — otherwise every point looks like it vanished until the fetches
+  // resolve.
   const locationDataLoading = recordingLocationsLoading || snippetSetIdsLoading;
+  const dateTimeDataLoading = recordingDateTimeLoading || snippetSetIdsLoading;
 
   const recordingIdBySnippet = useMemo(() => {
     if (!wantsLocationFilter && !wantsDateTimeFilter) return null;
@@ -320,7 +323,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         const location = recordingLocationById.get(recId);
         if (location === undefined || !locationSet.has(location)) return false;
       }
-      if (dateRange || timeRange) {
+      if ((dateRange || timeRange) && !dateTimeDataLoading) {
         const recId = recordingIdBySnippet?.get(snippetId);
         if (recId === undefined) return false;
         const dt = recordingDateTimeById.get(recId);
@@ -345,6 +348,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     recordingLocationById,
     recordingDateTimeById,
     locationDataLoading,
+    dateTimeDataLoading,
   ]);
 
   // ── Visibility range override (async API fetch) ────────────────────────────
@@ -762,7 +766,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           />
         )}
 
-        <div className="flex-1 relative overflow-hidden min-h-[200px]">
+        <div className="flex-1 relative overflow-hidden min-h-50">
           {isFpvPlotLoading && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[#f7fafc]/95">
               <Spin size="large" />
@@ -781,12 +785,20 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
               </div>
             )}
 
-          {wantsLocationFilter && locationDataLoading && (
-            <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
-              <Spin size="small" />
-              Applying location filter…
-            </div>
-          )}
+          <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5 pointer-events-none">
+            {wantsLocationFilter && locationDataLoading && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm">
+                <Spin size="small" />
+                Applying location filter…
+              </div>
+            )}
+            {wantsDateTimeFilter && dateTimeDataLoading && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm">
+                <Spin size="small" />
+                Applying date/time filter…
+              </div>
+            )}
+          </div>
 
           {!isFpvPlotLoading && !hasAnyTraces ? (
             <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">

@@ -34,7 +34,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   }, [dataset.id]);
 
   const handleStartAL = () => {
-    navigate(`/annotate?mode=al&dataset_id=${dataset.id}&phase=${phase.id}`);
+    navigate(`/annotate?dataset_id=${dataset.id}&phase=${phase.id}`);
   };
 
   const datasetTypeLabel = (dataset.dataset_type ?? "PAM").replaceAll("_", " ");
@@ -61,8 +61,24 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 </div>
 
                 {/* Quick Labels strip */}
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                  <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", marginRight: 4 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    marginTop: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#888",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      marginRight: 4,
+                    }}
+                  >
                     ⚡ Quick Labels
                   </span>
                   {quickLabels.slice(0, 5).map((l) => (
@@ -71,7 +87,12 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     </Tag>
                   ))}
                   {quickLabels.length > 5 && (
-                    <Tooltip title={quickLabels.slice(5).map((l) => l.display_name).join(", ")}>
+                    <Tooltip
+                      title={quickLabels
+                        .slice(5)
+                        .map((l) => l.display_name)
+                        .join(", ")}
+                    >
                       <Tag style={{ fontSize: 11, margin: 0, color: "#888" }}>
                         +{quickLabels.length - 5} more
                       </Tag>

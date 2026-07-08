@@ -15,12 +15,15 @@ export interface DateTimeFilterData {
   timeValues: number[];
   /** True when this dataset has at least one recording with a parseable date/time — gates whether the sidebar shows these sections at all. */
   hasAnyDateTime: boolean;
+  /** True while recordingDateTimeById is still being (re)built for the current dataset. */
+  dateTimeLoading: boolean;
 }
 
 export function useDateTimeFilterData(): DateTimeFilterData {
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const predictions = useAppSelector((s) => s.al.predictions);
-  const recordingDateTimeById = useRecordingDateTimes(selectedDatasetId);
+  const { dateTimeByRecordingId: recordingDateTimeById, loading: dateTimeLoading } =
+    useRecordingDateTimes(selectedDatasetId);
 
   return useMemo(() => {
     const dateValues: number[] = [];
@@ -42,6 +45,7 @@ export function useDateTimeFilterData(): DateTimeFilterData {
       dateDomain,
       timeValues,
       hasAnyDateTime: recordingDateTimeById.size > 0,
+      dateTimeLoading,
     };
-  }, [predictions, recordingDateTimeById]);
+  }, [predictions, recordingDateTimeById, dateTimeLoading]);
 }

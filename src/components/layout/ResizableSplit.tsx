@@ -289,9 +289,9 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
             data-rs-handle="1"
             onPointerDown={startDrag}
             className={[
-              "cursor-col-resize flex-shrink-0 relative group",
+              "cursor-col-resize shrink-0 relative group",
               collapsed && showChevron ? "w-6" : "w-2",
-              "bg-gradient-to-r from-gray-50 to-gray-100",
+              "bg-linear-to-r from-gray-50 to-gray-100",
               "hover:from-gray-100 hover:to-gray-200",
             ].join(" ")}
             role="separator"
@@ -305,7 +305,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
             }
             tabIndex={0}
           >
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-gray-300/70 group-hover:bg-gray-400" />
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-300/70 group-hover:bg-gray-400" />
             {showChevron && (
               <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
                 <div
