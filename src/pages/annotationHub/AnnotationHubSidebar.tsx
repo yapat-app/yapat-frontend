@@ -12,6 +12,8 @@ import {
   AudioOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
+  DoubleLeftOutlined,
+  DoubleRightOutlined,
 } from "@ant-design/icons";
 import type { AnnotateMode } from "./types";
 import type { LabelScopeOption } from "./useHubALSession";
@@ -27,6 +29,7 @@ import { useScoreHistogramData } from "./useScoreHistogramData";
 import { useDateTimeFilterData, TIME_OF_DAY_DOMAIN } from "./useDateTimeFilterData";
 import { formatDateAxisLabel, formatTimeAxisLabel } from "./dateTimeFilterHelpers";
 import { DateTimeRangeFilter } from "./DateTimeRangeFilter";
+import { DateRangeCalendarPicker } from "./DateRangeCalendarPicker";
 import { CollapsibleSection } from "./CollapsibleSection";
 import {
   SCORE_VISIBILITY_MODE,
@@ -45,6 +48,10 @@ export type AnnotationHubSidebarProps = {
   locationsLoading: boolean;
   filterDateRange: [number, number] | null;
   onFilterDateRangeChange: (v: [number, number] | null) => void;
+  /** Fixed calendar-set display window for the date histogram (null = show the full domain). */
+  dateZoomDomain: [number, number] | null;
+  /** Used by the calendar picker only — also updates dateZoomDomain, unlike the slider's onFilterDateRangeChange. */
+  onCalendarDateRangeChange: (v: [number, number] | null) => void;
   filterTimeRange: [number, number] | null;
   onFilterTimeRangeChange: (v: [number, number] | null) => void;
   localLabelScope: string[];
@@ -57,6 +64,7 @@ export type AnnotationHubSidebarProps = {
   showSampleProperties: boolean;
   showModelScores: boolean;
   showFindSimilar: boolean;
+  showLabelScope: boolean;
 };
 
 export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
@@ -70,6 +78,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   locationsLoading,
   filterDateRange,
   onFilterDateRangeChange,
+  dateZoomDomain,
+  onCalendarDateRangeChange,
   filterTimeRange,
   onFilterTimeRangeChange,
   localLabelScope,
@@ -80,10 +90,12 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showSampleProperties,
   showModelScores,
   showFindSimilar,
+  showLabelScope,
 }) => {
   const dispatch = useAppDispatch();
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
 
   const { enrichedPlotPoints, filtered, alFilters } = useScoreHistogramData(
     SCORE_VISIBILITY_MODE,
@@ -196,9 +208,33 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   );
 
   return (
-    <aside className="flex h-full w-[272px] flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
-      <CollapsibleSection
-        title="Filters"
+    <aside
+      className={[
+        "flex h-full flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-200",
+        collapsed ? "w-9" : "w-[272px]",
+      ].join(" ")}
+    >
+      <div className="flex flex-shrink-0 items-center justify-end px-1.5 py-1.5">
+        <Tooltip title={collapsed ? "Expand filters" : "Collapse filters"}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? "Expand filters panel" : "Collapse filters panel"}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          >
+            {collapsed ? (
+              <DoubleRightOutlined className="text-xs" />
+            ) : (
+              <DoubleLeftOutlined className="text-xs" />
+            )}
+          </button>
+        </Tooltip>
+      </div>
+
+      {!collapsed && (
+        <>
+          <CollapsibleSection
+            title="Filters"
         headerExtra={
           <div className="flex items-center gap-1.5">
             {hasActiveFilters && (
@@ -273,15 +309,24 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                 />
               </div>
               {dateTimeData.hasAnyDateTime && (
-                <DateTimeRangeFilter
-                  icon={<CalendarOutlined className="text-gray-400" />}
-                  title="Date range"
-                  values={dateTimeData.dateValues}
-                  domain={dateTimeData.dateDomain}
-                  range={filterDateRange}
-                  onChange={onFilterDateRangeChange}
-                  formatValue={formatDateAxisLabel}
-                />
+                <div className="flex flex-col gap-1.5">
+                  <DateRangeCalendarPicker
+                    domain={dateTimeData.dateDomain}
+                    range={filterDateRange}
+                    onChange={onCalendarDateRangeChange}
+                  />
+                  <DateTimeRangeFilter
+                    icon={<CalendarOutlined className="text-gray-400" />}
+                    title="Date range"
+                    values={dateTimeData.dateValues}
+                    domain={dateTimeData.dateDomain}
+                    zoomDomain={dateZoomDomain}
+                    range={filterDateRange}
+                    onChange={onFilterDateRangeChange}
+                    onReset={() => onCalendarDateRangeChange(null)}
+                    formatValue={formatDateAxisLabel}
+                  />
+                </div>
               )}
               {dateTimeData.hasAnyDateTime && (
                 <DateTimeRangeFilter
@@ -295,6 +340,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   formatValue={formatTimeAxisLabel}
                 />
               )}
+              {showLabelScope && (
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
                   <TagsOutlined className="text-gray-400" /> Labels
@@ -359,6 +405,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   </button>
                 </Popover>
               </div>
+              )}
             </>
           )}
         </div>
@@ -410,7 +457,9 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
             />
             <span className="text-[11px] font-medium">Search by recording</span>
           </button>
-        </CollapsibleSection>
+            </CollapsibleSection>
+          )}
+        </>
       )}
     </aside>
   );

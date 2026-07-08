@@ -10,9 +10,9 @@ import type { AllowedProperty } from "../../studyPhases";
 export const SCORE_VISIBILITY_MODE = "multi" as const;
 export const SCORE_SLIDER_STYLE = "range" as const;
 export const SCORE_ALLOWED_PROPERTIES: AllowedProperty[] = [
-  "uncertainty",
+  "confidence",
   "diversity",
   "density",
-  "confidence",
+  "uncertainty",
   "composite",
 ];

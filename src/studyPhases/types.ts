@@ -122,6 +122,8 @@ export interface SidebarPhaseConfig {
   modelScores: boolean;
   /** "Find similar" / "Search by recording" section. Currently disabled for all phases. */
   findSimilar: boolean;
+  /** "Labels" picker inside the Filters section. Currently disabled for all phases. */
+  labelScope: boolean;
 }
 
 /** Which sort-field categories are offered (Annotation Hub only). */

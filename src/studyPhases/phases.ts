@@ -38,7 +38,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false },
+    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false, labelScope: false },
     sort: { nonModel: false, model: false },
   },
 
@@ -61,7 +61,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false },
+    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false, labelScope: false },
     sort: { nonModel: false, model: false },
   },
 
@@ -84,7 +84,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: false, findSimilar: false },
+    sidebar: { showPane: true, sampleProperties: true, modelScores: false, findSimilar: false, labelScope: false },
     sort: { nonModel: true, model: false },
   },
 
@@ -111,7 +111,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: false, modelScores: true, findSimilar: false },
+    sidebar: { showPane: true, sampleProperties: false, modelScores: true, findSimilar: false, labelScope: false },
     sort: { nonModel: false, model: true },
   },
 
@@ -138,7 +138,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: true, findSimilar: false },
+    sidebar: { showPane: true, sampleProperties: true, modelScores: true, findSimilar: false, labelScope: false },
     sort: { nonModel: true, model: true },
   },
 };

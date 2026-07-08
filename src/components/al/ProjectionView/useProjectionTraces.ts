@@ -310,58 +310,81 @@ export function useProjectionTraces(opts: {
           }
         : null;
 
-    const xs: number[] = [];
-    const ys: number[] = [];
-    const ids: number[] = [];
-    const colors: string[] = [];
-    const sizes: number[] = [];
-    const lineWidths: number[] = [];
-    const lineColors: string[] = [];
-    const hoverNames: string[] = [];
+    // Unlabeled (grey) and labeled (colored) points are split into two
+    // separate traces — rather than one combined trace — so draw order is
+    // guaranteed by trace order instead of incidental array order. Plotly
+    // draws traces in `data` array order, later traces on top, so listing
+    // the unlabeled trace first and the labeled trace last keeps colored
+    // points visually on top of grey ones wherever they overlap.
+    const unlabeledXs: number[] = [];
+    const unlabeledYs: number[] = [];
+    const unlabeledIds: number[] = [];
+
+    const labeledXs: number[] = [];
+    const labeledYs: number[] = [];
+    const labeledIds: number[] = [];
+    const labeledColors: string[] = [];
+    const labeledHoverNames: string[] = [];
 
     visible.forEach(({ p, coord }) => {
-      xs.push(coord[0]);
-      ys.push(coord[1]);
-      ids.push(p.snippet_id);
-
       const actual = p.scores?.actual_label;
-      const isLabeled = Boolean(actual);
-
-      sizes.push(isLabeled ? 7 : 6);
-      colors.push(
-        isLabeled
-          ? resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? [])
-          : UNLABELED_COLOR,
-      );
-      if (isLabeled) {
-        lineWidths.push(1.5);
-        lineColors.push("rgba(17,24,39,0.35)");
+      if (actual) {
+        labeledXs.push(coord[0]);
+        labeledYs.push(coord[1]);
+        labeledIds.push(p.snippet_id);
+        labeledColors.push(resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? []));
+        labeledHoverNames.push(actual);
       } else {
-        lineWidths.push(0);
-        lineColors.push("rgba(0,0,0,0)");
+        unlabeledXs.push(coord[0]);
+        unlabeledYs.push(coord[1]);
+        unlabeledIds.push(p.snippet_id);
       }
-      hoverNames.push(actual ?? "Unlabeled");
     });
 
-    const visibleTrace = {
-      type: "scattergl" as const,
-      mode: "markers" as const,
-      name: "",
-      showlegend: false,
-      x: xs,
-      y: ys,
-      customdata: ids,
-      text: hoverNames,
-      marker: {
-        color: colors,
-        size: sizes,
-        opacity: 0.9,
-        line: { width: lineWidths, color: lineColors },
-      },
-      hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
-    };
+    const unlabeledTrace =
+      unlabeledXs.length > 0
+        ? {
+            type: "scattergl" as const,
+            mode: "markers" as const,
+            name: "",
+            showlegend: false,
+            x: unlabeledXs,
+            y: unlabeledYs,
+            customdata: unlabeledIds,
+            marker: {
+              color: UNLABELED_COLOR,
+              size: 6,
+              opacity: 0.9,
+              line: { width: 0, color: "rgba(0,0,0,0)" },
+            },
+            hovertemplate: "Unlabeled<br>Snippet #%{customdata}<extra></extra>",
+          }
+        : null;
 
-    return hiddenTrace ? [hiddenTrace, visibleTrace] : [visibleTrace];
+    const labeledTrace =
+      labeledXs.length > 0
+        ? {
+            type: "scattergl" as const,
+            mode: "markers" as const,
+            name: "",
+            showlegend: false,
+            x: labeledXs,
+            y: labeledYs,
+            customdata: labeledIds,
+            text: labeledHoverNames,
+            marker: {
+              color: labeledColors,
+              size: 7,
+              opacity: 0.9,
+              line: { width: 1.5, color: "rgba(17,24,39,0.35)" },
+            },
+            hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
+          }
+        : null;
+
+    return [hiddenTrace, unlabeledTrace, labeledTrace].filter(
+      (t): t is NonNullable<typeof t> => t !== null,
+    );
   }, [filtered, allCategoricalValues, colorKey]);
 
   const selectionTraces = useMemo(() => {

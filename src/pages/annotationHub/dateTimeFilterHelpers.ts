@@ -5,6 +5,10 @@
  * Unix epoch, UTC) — recorded_time is already a plain number (seconds since
  * midnight) and needs no conversion.
  */
+import dayjs, { type Dayjs } from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
 
 const MS_PER_DAY = 86_400_000;
 
@@ -21,6 +25,16 @@ export function formatDateAxisLabel(epochDay: number): string {
     day: "numeric",
     timeZone: "UTC",
   });
+}
+
+/** Epoch day -> a UTC-anchored Dayjs (midnight UTC of that day), for the calendar range picker. */
+export function epochDayToDayjs(epochDay: number): Dayjs {
+  return dayjs.utc(epochDay * MS_PER_DAY);
+}
+
+/** Dayjs -> epoch day (UTC), inverse of epochDayToDayjs. */
+export function dayjsToEpochDay(d: Dayjs): number {
+  return Math.floor(d.utc().valueOf() / MS_PER_DAY);
 }
 
 /** Seconds since midnight -> "HH:MM", e.g. 32400 -> "09:00". */

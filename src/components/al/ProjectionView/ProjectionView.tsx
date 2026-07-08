@@ -2,8 +2,12 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Plot from "react-plotly.js";
-import { Spin } from "antd";
-import { ExperimentOutlined } from "@ant-design/icons";
+import { Spin, Tooltip } from "antd";
+import {
+  ExperimentOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+} from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../../hooks";
 import {
   setSelectedSnippet,
@@ -19,7 +23,11 @@ import { ScoreHistogramPanel } from "../ScoreHistogramPanel";
 import { visualisationsApi } from "../../../services/visualisationsApi";
 import { usePhaseConfig } from "../../../studyPhases";
 import { studyLogger, usePanelDwell } from "../../../studyLogging";
-import { isProjectionNotReadyMessage, type PlotPoint, type ProjectionMethod } from "./fpvHelpers";
+import {
+  isProjectionNotReadyMessage,
+  type PlotPoint,
+  type ProjectionMethod,
+} from "./fpvHelpers";
 import { useFpvData } from "./useFpvData";
 import { useLabeledPool } from "./useLabeledPool";
 import { useProjectionTraces } from "./useProjectionTraces";
@@ -36,10 +44,18 @@ type PlotlyPointEvent = {
 };
 
 export interface ProjectionThumbnailData {
-  thumbnailPoints: Array<{ p: PlotPoint; coord: [number, number]; visible: boolean }>;
-  fpvCoordsBySnippetForMethod: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> | null;
+  thumbnailPoints: Array<{
+    p: PlotPoint;
+    coord: [number, number];
+    visible: boolean;
+  }>;
+  fpvCoordsBySnippetForMethod: Partial<
+    Record<ProjectionMethod, Record<number, [number, number]>>
+  > | null;
   selectedSnippetId: number | null;
-  selectedCoordByMethod: Partial<Record<ProjectionMethod, [number, number]>> | null;
+  selectedCoordByMethod: Partial<
+    Record<ProjectionMethod, [number, number]>
+  > | null;
   allActualLabels: string[];
   loadingMethods: Set<ProjectionMethod>;
   fpvLoading: boolean;
@@ -125,9 +141,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const visMode = phase.visualization.mode;
   const visibilityMode = phase.visualization.visibilityFilter.mode;
-  const allowedVisProps = phase.visualization.visibilityFilter.allowedProperties;
-  const defaultVisKey = phase.visualization.visibilityFilter.defaultPropertyKey ?? null;
-  const visSliderStyle = phase.visualization.visibilityFilter.sliderStyle ?? "range";
+  const allowedVisProps =
+    phase.visualization.visibilityFilter.allowedProperties;
+  const defaultVisKey =
+    phase.visualization.visibilityFilter.defaultPropertyKey ?? null;
+  const visSliderStyle =
+    phase.visualization.visibilityFilter.sliderStyle ?? "range";
   const fixedVisValue = phase.visualization.visibilityFilter.fixedValue ?? 0;
   const showLabeledPool = phase.visualization.showLabeledPool;
   const allowPointClick = phase.visualization.allowPointClick;
@@ -153,7 +172,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       dispatch(setVisibilityKeys([]));
     } else if (visibilityMode === "fixed") {
       dispatch(setVisibilityKeys([]));
-      dispatch(setVisibilityFilter({ propertyKey: defaultVisKey, range: [fixedVisValue, 1] }));
+      dispatch(
+        setVisibilityFilter({
+          propertyKey: defaultVisKey,
+          range: [fixedVisValue, 1],
+        }),
+      );
     } else if (visibilityMode === "single") {
       dispatch(setVisibilityKeys([]));
       if (
@@ -205,9 +229,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   // species scope, location) so the projection and the feed stay in sync.
 
   const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
-  const wantsDateTimeFilter = Boolean(clientFilters?.dateRange || clientFilters?.timeRange);
-  const { locationByRecordingId: recordingLocationById, loading: recordingLocationsLoading } =
-    useRecordingLocations(wantsLocationFilter ? selectedDatasetId : null);
+  const wantsDateTimeFilter = Boolean(
+    clientFilters?.dateRange || clientFilters?.timeRange,
+  );
+  const {
+    locationByRecordingId: recordingLocationById,
+    loading: recordingLocationsLoading,
+  } = useRecordingLocations(wantsLocationFilter ? selectedDatasetId : null);
   const recordingDateTimeById = useRecordingDateTimes(
     wantsDateTimeFilter ? selectedDatasetId : null,
   );
@@ -217,11 +245,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   // points would have no known recording (hence no known location/date/time)
   // and get hidden as soon as a location or date/time filter is active.
   const wantsRecordingScopedFilter = wantsLocationFilter || wantsDateTimeFilter;
-  const { recordingIdBySnippetId: snippetSetRecordingIdBySnippet, loading: snippetSetIdsLoading } =
-    useSnippetRecordingIds(
-      wantsRecordingScopedFilter ? selectedDatasetId : null,
-      wantsRecordingScopedFilter ? effectiveSnippetSetId : null,
-    );
+  const {
+    recordingIdBySnippetId: snippetSetRecordingIdBySnippet,
+    loading: snippetSetIdsLoading,
+  } = useSnippetRecordingIds(
+    wantsRecordingScopedFilter ? selectedDatasetId : null,
+    wantsRecordingScopedFilter ? effectiveSnippetSetId : null,
+  );
   // Both maps are fetched lazily (only once a location filter is picked), so
   // there's a brief window right after the first selection where they're
   // still loading. Treat that window as "don't hide anything yet" — otherwise
@@ -232,17 +262,24 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (!wantsLocationFilter && !wantsDateTimeFilter) return null;
     const map = new Map<number, number>(snippetSetRecordingIdBySnippet);
     for (const p of rawOverlayPredictions) {
-      if (typeof p.recording_id === "number") map.set(p.snippet_id, p.recording_id);
+      if (typeof p.recording_id === "number")
+        map.set(p.snippet_id, p.recording_id);
     }
     return map;
-  }, [wantsLocationFilter, wantsDateTimeFilter, rawOverlayPredictions, snippetSetRecordingIdBySnippet]);
+  }, [
+    wantsLocationFilter,
+    wantsDateTimeFilter,
+    rawOverlayPredictions,
+    snippetSetRecordingIdBySnippet,
+  ]);
 
   const wantsScopeFilter = (clientFilters?.labelScope.length ?? 0) > 0;
   const predictedLabelsBySnippet = useMemo(() => {
     if (!wantsScopeFilter) return null;
     const map = new Map<number, string[]>();
     for (const pt of fpvPoints) {
-      if (pt.predicted_labels?.length) map.set(pt.snippet_id, pt.predicted_labels);
+      if (pt.predicted_labels?.length)
+        map.set(pt.snippet_id, pt.predicted_labels);
     }
     for (const p of rawOverlayPredictions) {
       if (p.predicted_labels?.length) map.set(p.snippet_id, p.predicted_labels);
@@ -252,10 +289,17 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const extraVisible = useMemo(() => {
     if (!clientFilters) return undefined;
-    const { annotationStatus, locations, dateRange, timeRange, labelScope } = clientFilters;
+    const { annotationStatus, locations, dateRange, timeRange, labelScope } =
+      clientFilters;
     const locationSet = locations.length > 0 ? new Set(locations) : null;
     const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
-    if (annotationStatus === "any" && !locationSet && !dateRange && !timeRange && !scopeSet) {
+    if (
+      annotationStatus === "any" &&
+      !locationSet &&
+      !dateRange &&
+      !timeRange &&
+      !scopeSet
+    ) {
       return undefined;
     }
 
@@ -286,7 +330,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           if (epochDay < dateRange[0] || epochDay > dateRange[1]) return false;
         }
         if (timeRange) {
-          if (dt.timeSeconds < timeRange[0] || dt.timeSeconds > timeRange[1]) return false;
+          if (dt.timeSeconds < timeRange[0] || dt.timeSeconds > timeRange[1])
+            return false;
         }
       }
       return true;
@@ -320,7 +365,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     visualisationsApi
       .getVisRange(visKey)
       .then((r) => {
-        if (!cancelled) setVisRangeOverride({ min: r.min_value, max: r.max_value, step: r.step });
+        if (!cancelled)
+          setVisRangeOverride({
+            min: r.min_value,
+            max: r.max_value,
+            step: r.step,
+          });
       })
       .catch(() => {
         if (!cancelled) setVisRangeOverride(null);
@@ -431,8 +481,11 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   // ── Derived booleans ───────────────────────────────────────────────────────
 
   const isMissingProjection = isProjectionNotReadyMessage(fpvError ?? "");
-  const canGenerateNow = Boolean(selectedDatasetId && effectiveEmbeddingModelId);
-  const isWaitingForRetrain = predictions.length > 0 && projectionPredictions.length === 0;
+  const canGenerateNow = Boolean(
+    selectedDatasetId && effectiveEmbeddingModelId,
+  );
+  const isWaitingForRetrain =
+    predictions.length > 0 && projectionPredictions.length === 0;
   const hasAnyTraces = traces.length > 0;
   const activeProjectionReady =
     visMode !== "whole_dataset" ||
@@ -442,16 +495,60 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     Boolean(selectedDatasetId && effectiveEmbeddingModelId) &&
     !fpvError &&
     !isMissingProjection &&
-    (fpvGenerateLoading || fpvLoading || loadingMethods.has(method) || !activeProjectionReady);
+    (fpvGenerateLoading ||
+      fpvLoading ||
+      loadingMethods.has(method) ||
+      !activeProjectionReady);
   // "embedded"   → ALFilterPanel with histogram inside
   // "standalone" → ScoreHistogramPanel above projection
   // "none"       → filter UI lives outside (e.g. Annotation Hub sidebar); show nothing here
-  const showEmbeddedFilter = visibilityMode !== "disabled" && histogramStyle === "embedded";
-  const showStandaloneHistogram = visibilityMode !== "disabled" && histogramStyle === "standalone";
+  const showEmbeddedFilter =
+    visibilityMode !== "disabled" && histogramStyle === "embedded";
+  const showStandaloneHistogram =
+    visibilityMode !== "disabled" && histogramStyle === "standalone";
 
   // Log a hover only after the cursor dwells on a point for ≥ 2s.
   // Declared before the early return below — hooks must run unconditionally.
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Explicit axis range for the zoom in/out buttons below. `null` means "let
+  // Plotly autorange," matching the plot's original (unzoomed) behavior.
+  const [axisRange, setAxisRange] = useState<{
+    x: [number, number];
+    y: [number, number];
+  } | null>(null);
+  // Tracks the range the plot is actually showing right now (from the user's
+  // own drag-zoom/pan via onRelayout, or from our own zoom buttons) so the
+  // next zoom in/out starts from the current view rather than stale data.
+  const lastRangeRef = useRef<{
+    x: [number, number];
+    y: [number, number];
+  } | null>(null);
+
+  // Fallback bounding box computed directly from the plotted points, used
+  // only before the plot has reported any range of its own (e.g. the very
+  // first zoom click on a freshly-loaded projection).
+  const dataBounds = useMemo(() => {
+    if (filtered.length === 0) return null;
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    for (const f of filtered) {
+      const [x, y] = f.coord;
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+    }
+    if (![xMin, xMax, yMin, yMax].every(Number.isFinite)) return null;
+    const xPad = (xMax - xMin) * 0.05 || 1;
+    const yPad = (yMax - yMin) * 0.05 || 1;
+    return {
+      x: [xMin - xPad, xMax + xPad] as [number, number],
+      y: [yMin - yPad, yMax + yPad] as [number, number],
+    };
+  }, [filtered]);
 
   if (visMode === "hidden") return null;
 
@@ -498,6 +595,51 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     }
   };
 
+  // Zoom in/out around the current view's center. Starts from whichever
+  // range we know about: the plot's own last-reported range (drag-zoom/pan,
+  // or a previous click of these buttons), falling back to the data's
+  // bounding box on the very first click.
+  const zoomBy = (factor: number) => {
+    const current = lastRangeRef.current ?? dataBounds;
+    if (!current) return;
+    const [x0, x1] = current.x;
+    const [y0, y1] = current.y;
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const next = {
+      x: [cx - (cx - x0) * factor, cx + (x1 - cx) * factor] as [number, number],
+      y: [cy - (cy - y0) * factor, cy + (y1 - cy) * factor] as [number, number],
+    };
+    lastRangeRef.current = next;
+    setAxisRange(next);
+  };
+  const handleZoomIn = () => zoomBy(0.7);
+  const handleZoomOut = () => zoomBy(1 / 0.7);
+
+  // Keep lastRangeRef in sync with the plot's actual displayed range,
+  // whatever caused the change (drag-zoom, pan, or our own buttons).
+  const handlePlotRelayout = (event: Record<string, unknown>) => {
+    const x0 = event["xaxis.range[0]"];
+    const x1 = event["xaxis.range[1]"];
+    const y0 = event["yaxis.range[0]"];
+    const y1 = event["yaxis.range[1]"];
+    if (
+      typeof x0 === "number" &&
+      typeof x1 === "number" &&
+      typeof y0 === "number" &&
+      typeof y1 === "number"
+    ) {
+      lastRangeRef.current = { x: [x0, x1], y: [y0, y1] };
+    }
+  };
+  // Double-click resets Plotly's own view to autorange (default behavior,
+  // unchanged) — clear our tracked/explicit range too so the next zoom
+  // click starts fresh from the reset view instead of the stale pre-reset one.
+  const handlePlotDoubleClick = () => {
+    lastRangeRef.current = null;
+    setAxisRange(null);
+  };
+
   return (
     <div data-tour="projection" className="flex flex-col h-full">
       {showStandaloneHistogram && (
@@ -508,7 +650,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           visibilityMode={visibilityMode}
           alFilters={alFilters}
           onVisibilityKeyChange={(key) => {
-            if (key) studyLogger.log("histogram_property_select", { property: key });
+            if (key)
+              studyLogger.log("histogram_property_select", { property: key });
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }));
           }}
           onVisibilityRangeChange={(range) => {
@@ -554,7 +697,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           visibilitySliderStyle={visSliderStyle}
           visibilityScoreValues={visibilityScoreValues}
           onVisibilityKeyChange={(key) => {
-            if (key) studyLogger.log("histogram_property_select", { property: key });
+            if (key)
+              studyLogger.log("histogram_property_select", { property: key });
             dispatch(setVisibilityFilter({ propertyKey: key, range: [0, 1] }));
           }}
           onVisibilityRangeChange={(range) => {
@@ -656,39 +800,80 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
             </div>
           ) : !isFpvPlotLoading && visMode === "whole_dataset" && fpvError ? (
             <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
-              Projection not available yet — it will appear once the embedding job finishes (FPV is
-              cached).
+              Projection not available yet — it will appear once the embedding
+              job finishes (FPV is cached).
             </div>
           ) : !isFpvPlotLoading && activeProjectionReady ? (
-            <Plot
-              data={traces}
-              layout={{
-                autosize: true,
-                // Stable uirevision tells Plotly to keep the user's current zoom/pan
-                // when traces update (e.g. after a point click or filter change).
-                uirevision: "stable",
-                margin: { l: 30, r: 10, t: 10, b: 30 },
-                showlegend: false,
-                legend: {
-                  font: { size: 10 },
-                  itemsizing: "constant",
-                  bgcolor: "rgba(255,255,255,0.85)",
-                  bordercolor: "#e5e7eb",
-                  borderwidth: 1,
-                },
-                xaxis: { showgrid: false, zeroline: false, showticklabels: false },
-                yaxis: { showgrid: false, zeroline: false, showticklabels: false },
-                paper_bgcolor: "#f7fafc",
-                plot_bgcolor: "#f7fafc",
-                hovermode: "closest",
-              }}
-              style={{ width: "100%", height: "100%" }}
-              useResizeHandler
-              onClick={handlePlotClick}
-              onHover={handlePlotHover}
-              onUnhover={handlePlotUnhover}
-              config={{ displayModeBar: false, responsive: true }}
-            />
+            <>
+              <div className="absolute top-2 right-2 z-10 flex flex-col items-end  gap-1 pointer-events-none">
+                <div className="flex  items-center gap-1 pointer-events-auto">
+                  <Tooltip title="Zoom out">
+                    <button
+                      type="button"
+                      onClick={handleZoomOut}
+                      aria-label="Zoom out"
+                      className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-blue-300 hover:text-blue-600"
+                    >
+                      <ZoomOutOutlined className="text-xs" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="Zoom in">
+                    <button
+                      type="button"
+                      onClick={handleZoomIn}
+                      aria-label="Zoom in"
+                      className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-blue-300 hover:text-blue-600"
+                    >
+                      <ZoomInOutlined className="text-xs" />
+                    </button>
+                  </Tooltip>
+                </div>
+                <span className="text-[10px] text-gray-400 font-ibm-sans pointer-events-none">
+                  Double-click plot to reset zoom
+                </span>
+              </div>
+              <Plot
+                data={traces}
+                layout={{
+                  autosize: true,
+                  // Stable uirevision tells Plotly to keep the user's current zoom/pan
+                  // when traces update (e.g. after a point click or filter change).
+                  uirevision: "stable",
+                  margin: { l: 30, r: 10, t: 10, b: 30 },
+                  showlegend: false,
+                  legend: {
+                    font: { size: 10 },
+                    itemsizing: "constant",
+                    bgcolor: "rgba(255,255,255,0.85)",
+                    bordercolor: "#e5e7eb",
+                    borderwidth: 1,
+                  },
+                  xaxis: {
+                    showgrid: false,
+                    zeroline: false,
+                    showticklabels: false,
+                    range: axisRange?.x,
+                  },
+                  yaxis: {
+                    showgrid: false,
+                    zeroline: false,
+                    showticklabels: false,
+                    range: axisRange?.y,
+                  },
+                  paper_bgcolor: "#f7fafc",
+                  plot_bgcolor: "#f7fafc",
+                  hovermode: "closest",
+                }}
+                style={{ width: "100%", height: "100%" }}
+                useResizeHandler
+                onClick={handlePlotClick}
+                onHover={handlePlotHover}
+                onUnhover={handlePlotUnhover}
+                onRelayout={handlePlotRelayout}
+                onDoubleClick={handlePlotDoubleClick}
+                config={{ displayModeBar: false, responsive: true }}
+              />
+            </>
           ) : null}
         </div>
       </div>

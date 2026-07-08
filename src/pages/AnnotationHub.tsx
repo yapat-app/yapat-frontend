@@ -73,6 +73,15 @@ export const AnnotationHub: React.FC = () => {
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
   const [filterDateRange, setFilterDateRange] = useState<[number, number] | null>(null);
   const [filterTimeRange, setFilterTimeRange] = useState<[number, number] | null>(null);
+  // Fixed "zoom window" the date-range histogram bins/displays against, set
+  // only by the calendar picker (or a reset) — NOT by the histogram's own
+  // slider drags, so the backdrop stays put while the user narrows their
+  // selection within it. Null means "not zoomed, show the full domain."
+  const [dateZoomDomain, setDateZoomDomain] = useState<[number, number] | null>(null);
+  const handleCalendarDateRangeChange = (r: [number, number] | null) => {
+    setFilterDateRange(r);
+    setDateZoomDomain(r);
+  };
   const quickLabelList = useQuickLabelList();
 
   useEffect(() => {
@@ -210,6 +219,8 @@ export const AnnotationHub: React.FC = () => {
             locationsLoading={false}
             filterDateRange={filterDateRange}
             onFilterDateRangeChange={setFilterDateRange}
+            dateZoomDomain={dateZoomDomain}
+            onCalendarDateRangeChange={handleCalendarDateRangeChange}
             filterTimeRange={filterTimeRange}
             onFilterTimeRangeChange={setFilterTimeRange}
             localLabelScope={al.localLabelScope}
@@ -221,10 +232,12 @@ export const AnnotationHub: React.FC = () => {
             showSampleProperties={phase.sidebar.sampleProperties}
             showModelScores={phase.sidebar.modelScores}
             showFindSimilar={phase.sidebar.findSimilar}
+            showLabelScope={phase.sidebar.labelScope}
             onResetFilters={() => {
               setFilterAnnotationStatus("any");
               setFilterLocations([]);
               setFilterDateRange(null);
+              setDateZoomDomain(null);
               setFilterTimeRange(null);
               al.setLocalLabelScope([]);
               al.setLocalMinConfidence(null);
