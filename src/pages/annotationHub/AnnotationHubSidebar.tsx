@@ -12,8 +12,6 @@ import {
   AudioOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
-  DoubleLeftOutlined,
-  DoubleRightOutlined,
 } from "@ant-design/icons";
 import type { AnnotateMode } from "./types";
 import type { LabelScopeOption } from "./useHubALSession";
@@ -95,7 +93,6 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   const dispatch = useAppDispatch();
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
 
   const { enrichedPlotPoints, filtered, alFilters } = useScoreHistogramData(
     SCORE_VISIBILITY_MODE,
@@ -208,31 +205,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   );
 
   return (
-    <aside
-      className={[
-        "flex h-full flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white transition-[width] duration-200",
-        collapsed ? "w-9" : "w-[272px]",
-      ].join(" ")}
-    >
-      <div className="flex flex-shrink-0 items-center justify-end px-1.5 py-1.5">
-        <Tooltip title={collapsed ? "Expand filters" : "Collapse filters"}>
-          <button
-            type="button"
-            onClick={() => setCollapsed((c) => !c)}
-            aria-label={collapsed ? "Expand filters panel" : "Collapse filters panel"}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-          >
-            {collapsed ? (
-              <DoubleRightOutlined className="text-xs" />
-            ) : (
-              <DoubleLeftOutlined className="text-xs" />
-            )}
-          </button>
-        </Tooltip>
-      </div>
-
-      {!collapsed && (
-        <>
+    <aside className="flex h-full w-full min-w-0 flex-shrink-0 flex-col overflow-hidden bg-white">
+      <div className="min-h-0 flex-1 overflow-y-auto">
           <CollapsibleSection
             title="Filters"
         headerExtra={
@@ -411,8 +385,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
         </div>
       </CollapsibleSection>
 
-      {showModelScores && (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {showModelScores && (
           <CollapsibleSection title="Model scores">
             <ScoreHistogramPanel
               enrichedPlotPoints={enrichedPlotPoints}
@@ -437,30 +410,28 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
               onReset={() => dispatch(resetVisibilityFilter())}
             />
           </CollapsibleSection>
-        </div>
-      )}
+        )}
 
-      {showFindSimilar && (
-        <CollapsibleSection title="Find similar">
-          <button
-            type="button"
-            onClick={() => setMode("similarity")}
-            className={[
-              "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left font-ibm-sans transition-all",
-              mode === "similarity"
-                ? "border-blue-200 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
-                : "border-gray-200 bg-gray-50 text-gray-500 hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-600",
-            ].join(" ")}
-          >
-            <AudioOutlined
-              className={mode === "similarity" ? "text-blue-500" : "text-gray-400"}
-            />
-            <span className="text-[11px] font-medium">Search by recording</span>
-          </button>
-            </CollapsibleSection>
-          )}
-        </>
-      )}
+        {showFindSimilar && (
+          <CollapsibleSection title="Find similar">
+            <button
+              type="button"
+              onClick={() => setMode("similarity")}
+              className={[
+                "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left font-ibm-sans transition-all",
+                mode === "similarity"
+                  ? "border-blue-200 bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                  : "border-gray-200 bg-gray-50 text-gray-500 hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-600",
+              ].join(" ")}
+            >
+              <AudioOutlined
+                className={mode === "similarity" ? "text-blue-500" : "text-gray-400"}
+              />
+              <span className="text-[11px] font-medium">Search by recording</span>
+            </button>
+          </CollapsibleSection>
+        )}
+      </div>
     </aside>
   );
 };

@@ -243,10 +243,16 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
             <div className="relative mt-0.5 h-3">
               {[0, 0.25, 0.5, 0.75, 1].map((t) => {
                 const val = min + t * (max - min);
+                // The first/last ticks sit exactly at the container's edge —
+                // centering them there (like the middle ticks) pushes half
+                // the label outside the container, where an ancestor's
+                // overflow-hidden clips it. Anchor those two inward instead.
+                const translateClass =
+                  t === 0 ? "translate-x-0" : t === 1 ? "-translate-x-full" : "-translate-x-1/2";
                 return (
                   <span
                     key={t}
-                    className="absolute text-[10px] text-gray-400 font-ibm-sans -translate-x-1/2"
+                    className={`absolute text-[10px] text-gray-400 font-ibm-sans ${translateClass}`}
                     style={{ left: `${t * 100}%` }}
                   >
                     {formatValue(val)}

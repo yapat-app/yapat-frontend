@@ -16,7 +16,8 @@ export const SORT_PROPERTY_OPTIONS: SortOption[] = [
   { value: "uncertainty", label: SORTABLE_PROPERTY_LABELS.uncertainty, category: "model" },
   { value: "diversity", label: SORTABLE_PROPERTY_LABELS.diversity, category: "model" },
   { value: "density", label: SORTABLE_PROPERTY_LABELS.density, category: "model" },
-  { value: "time", label: SORTABLE_PROPERTY_LABELS.time, disabled: true, category: "nonModel" },
+  { value: "date", label: SORTABLE_PROPERTY_LABELS.date, category: "nonModel" },
+  { value: "time", label: SORTABLE_PROPERTY_LABELS.time, category: "nonModel" },
 ];
 
 let nextId = 0;

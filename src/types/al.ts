@@ -62,6 +62,8 @@ export interface PropertyDefinition {
   stepLabels?: string[];
   supportsVisibility: boolean;
   supportsColor: boolean;
+  /** Short human-readable explanation shown in an info tooltip next to the property's label. */
+  description?: string;
 }
 
 export interface VisibilityFilterState {

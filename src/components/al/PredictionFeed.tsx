@@ -29,7 +29,7 @@ import {
   SCORE_SLIDER_STYLE,
 } from "../../pages/annotationHub/scoreFilterConfig";
 import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
-import { useRecordingDateTimes } from "../../pages/annotationHub/useRecordingDateTimes";
+import { useRecordingDateTimes, type RecordingDateTime } from "../../pages/annotationHub/useRecordingDateTimes";
 import { dateStringToEpochDay } from "../../pages/annotationHub/dateTimeFilterHelpers";
 
 const FEED_PAGE_SIZE = 50;
@@ -38,8 +38,19 @@ const FEED_PAGE_SIZE = 50;
 // on the PredictionCard consuming it as `serverLabels`.
 const EMPTY_LABELS: string[] = [];
 
-function getSortValue(prediction: PAMPrediction, property: SortField["property"]): number {
-  if (property === "time") return 0; // no backing data yet — no-op
+function getSortValue(
+  prediction: PAMPrediction,
+  property: SortField["property"],
+  recordingDateTimeById: Map<number, RecordingDateTime>,
+): number {
+  if (property === "time" || property === "date") {
+    const dt =
+      typeof prediction.recording_id === "number"
+        ? recordingDateTimeById.get(prediction.recording_id)
+        : undefined;
+    if (!dt) return -Infinity; // no recorded date/time for this snippet — sorts first
+    return property === "time" ? dt.timeSeconds : dateStringToEpochDay(dt.date);
+  }
   if (property === "confidence") return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
   if (property === "composite") return prediction.composite_score ?? prediction.scores?.composite ?? -Infinity;
   const key = property as keyof SampleScores;
@@ -47,13 +58,17 @@ function getSortValue(prediction: PAMPrediction, property: SortField["property"]
   return typeof v === "number" ? v : -Infinity;
 }
 
-function applySortFields(predictions: PAMPrediction[], sortFields?: SortField[]): PAMPrediction[] {
+function applySortFields(
+  predictions: PAMPrediction[],
+  sortFields: SortField[] | undefined,
+  recordingDateTimeById: Map<number, RecordingDateTime>,
+): PAMPrediction[] {
   const active = (sortFields ?? []).filter((f) => !f.disabled);
   if (active.length === 0) return predictions;
   return [...predictions].sort((a, b) => {
     for (const field of active) {
-      const av = getSortValue(a, field.property);
-      const bv = getSortValue(b, field.property);
+      const av = getSortValue(a, field.property, recordingDateTimeById);
+      const bv = getSortValue(b, field.property, recordingDateTimeById);
       if (av === bv) continue;
       const cmp = av < bv ? -1 : 1;
       return field.direction === "asc" ? cmp : -cmp;
@@ -206,7 +221,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   );
 
   const filteredAndSorted = useMemo(() => {
-    if (!enableClientFilters) return applySortFields(predictions, sortFields);
+    if (!enableClientFilters) return applySortFields(predictions, sortFields, recordingDateTimeById);
 
     let result = predictions;
 
@@ -263,7 +278,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       );
     }
 
-    return applySortFields(result, sortFields);
+    return applySortFields(result, sortFields, recordingDateTimeById);
   }, [
     enableClientFilters,
     predictions,
@@ -823,6 +838,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           .map((id) => predictions.find((p) => p.snippet_id === id))
           .filter((p): p is PAMPrediction => p !== undefined),
         sortFields,
+        recordingDateTimeById,
       );
 
       return (

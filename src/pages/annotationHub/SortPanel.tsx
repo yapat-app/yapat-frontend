@@ -49,10 +49,25 @@ export const SortPanel: React.FC<SortPanelProps> = ({
 
   return (
     <div className="border-b border-gray-100 bg-white">
-      <button
-        type="button"
+      {/*
+        A plain div (not a <button>) — native <button> elements have
+        inconsistent flexbox layout behavior in some browsers (the trailing
+        icon can wrap onto its own line instead of sitting beside the
+        label), which is exactly what a real <button> here showed. Matches
+        the same div+role="button" pattern already used by
+        CollapsibleSection for its header toggle.
+      */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left group"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left group"
         aria-expanded={open}
       >
         <span className="flex items-center gap-1.5 text-sm font-semibold font-ibm-mono text-gray-700">
@@ -70,7 +85,7 @@ export const SortPanel: React.FC<SortPanelProps> = ({
             open ? "" : "-rotate-90",
           ].join(" ")}
         />
-      </button>
+      </div>
       <div
         className={[
           "grid transition-[grid-template-rows] duration-200 ease-in-out",
@@ -110,11 +125,18 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                           : "Remove from sort"
                     }
                   >
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => cycleChip(opt.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          cycleChip(opt.value);
+                        }
+                      }}
                       className={[
-                        "inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium font-ibm-sans transition-colors",
+                        "inline-flex flex-shrink-0 flex-nowrap cursor-pointer items-center whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium font-ibm-sans leading-none transition-colors",
                         isActive
                           ? "border-transparent"
                           : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700",
@@ -125,21 +147,21 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                           : undefined
                       }
                     >
-                      <span
-                        className="h-[6px] w-[6px] flex-shrink-0 rounded-full"
-                        style={{ backgroundColor: isActive ? color : "#d1d5db" }}
-                      />
-                      {opt.label}
-                      {isActive &&
-                        (field?.direction === "asc" ? (
-                          <ArrowUpOutlined className="text-[9px]" />
-                        ) : (
-                          <ArrowDownOutlined className="text-[9px]" />
-                        ))}
-                      {isActive && activeCount > 1 && (
-                        <span className="text-[9px] font-semibold opacity-70">{priority}</span>
-                      )}
-                    </button>
+                      <span className="inline-flex flex-nowrap items-center gap-1 leading-none">
+                        <span className="leading-none">{opt.label}</span>
+                        {isActive &&
+                          (field?.direction === "asc" ? (
+                            <ArrowUpOutlined className="flex-shrink-0 text-[9px] leading-none" />
+                          ) : (
+                            <ArrowDownOutlined className="flex-shrink-0 text-[9px] leading-none" />
+                          ))}
+                        {isActive && activeCount > 1 && (
+                          <span className="flex-shrink-0 text-[9px] font-semibold leading-none opacity-70">
+                            {priority}
+                          </span>
+                        )}
+                      </span>
+                    </div>
                   </Tooltip>
                 );
               })}

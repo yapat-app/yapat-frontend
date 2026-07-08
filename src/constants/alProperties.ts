@@ -15,6 +15,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
+    description: "How torn the model is between competing labels for this sample — higher means the model is less sure which label is correct.",
   },
   {
     key: "diversity",
@@ -24,6 +25,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
+    description: "How different this sample is from ones already labeled — higher means it covers new ground rather than repeating what the model has already seen.",
   },
   {
     key: "density",
@@ -33,6 +35,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
+    description: "How representative this sample is of a larger, similar group — higher means many other samples in the dataset look like it.",
   },
   {
     key: "composite",
@@ -42,6 +45,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
+    description: "A single blended score combining uncertainty, diversity, and density into one overall ranking value.",
   },
   {
     key: "confidence",
@@ -51,6 +55,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
+    description: "The model's own confidence in its top predicted label for this sample — higher means the model is more certain.",
   },
 
   // ── Metadata ───────────────────────────────────────────────────────────────
@@ -124,11 +129,11 @@ export const getPropertyByKey = (key: string): PropertyDefinition | undefined =>
  * as the same colour.
  */
 const PROPERTY_COLORS: Record<string, string> = {
-  uncertainty: "#3b82f6", // blue
-  diversity:   "#10b981", // emerald
-  density:     "#f59e0b", // amber
-  confidence:  "#8b5cf6", // violet
-  composite:   "#ec4899", // pink
+  confidence:  "#06171C", // rgb(6, 23, 28)
+  diversity:   "#1D3A8F", // rgb(29, 58, 143)
+  density:     "#EC619F", // rgb(236, 97, 159)
+  uncertainty: "#6ABFA3", // rgb(106, 191, 163)
+  composite:   "#F7A712", // rgb(247, 167, 18)
 };
 
 export function propertyColor(key: string): string {

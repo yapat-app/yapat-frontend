@@ -149,9 +149,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   return (
     <ResizableSplit
       mode="right_px"
-      initialRightPx={520}
+      initialRightRatio={0.35}
       minRightPanelPx={400}
-      maxRightPanelPx={860}
+      maxRightPanelPx={4000}
+      maxRightRatio={0.35}
       left={
         <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
           <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">

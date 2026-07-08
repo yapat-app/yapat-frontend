@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Tooltip, Button } from "antd";
 import { SoundOutlined, AudioOutlined } from "@ant-design/icons";
 import { useAppSelector } from "../../hooks";
+import { recordingApi } from "../../services/api";
 
 interface SnippetHeaderProps {
   onFindSimilar?: (snippetId: number) => void;
@@ -13,9 +14,40 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) =
   const feedbacks = useAppSelector((s) => s.al.feedbacks);
 
   const snippetId = selectedSnippetIds[0] ?? null;
-  if (snippetId === null) return null;
-
   const prediction = predictions.find((p) => p.snippet_id === snippetId);
+  const recordingId = typeof prediction?.recording_id === "number" ? prediction.recording_id : null;
+
+  // Fetched independently per selection rather than reusing PredictionFeed's
+  // windowed recordingNameById cache — one lightweight GET-by-id is cheap and
+  // keeps this component self-contained.
+  const [recordingName, setRecordingName] = useState<string | undefined>(undefined);
+  // Reset immediately when the recording changes, following the same
+  // "adjust state during render" pattern used by useRecordingLocations etc.,
+  // rather than a synchronous setState call at the top of the effect below.
+  const [namedRecordingId, setNamedRecordingId] = useState(recordingId);
+  if (recordingId !== namedRecordingId) {
+    setNamedRecordingId(recordingId);
+    setRecordingName(undefined);
+  }
+
+  useEffect(() => {
+    if (recordingId === null) return;
+    let cancelled = false;
+    void recordingApi
+      .getById(recordingId)
+      .then((rec) => {
+        if (cancelled) return;
+        setRecordingName(rec.file_name || rec.name || undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setRecordingName(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [recordingId]);
+
+  if (snippetId === null) return null;
   // No matching prediction (e.g. no feed generated yet) — the feed body
   // below will show its own empty state, so stay in sync and render nothing.
   if (!prediction) return null;
@@ -28,6 +60,11 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({ onFindSimilar }) =
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 truncate">
           Labelling Snippet #{snippetId}
         </h2>
+        {recordingName && (
+          <span className="text-xs text-gray-400 font-ibm-sans truncate">
+            · {recordingName}
+          </span>
+        )}
         {selectedSnippetIds.length > 1 && (
           <span className="text-xs text-gray-400 font-ibm-sans flex-shrink-0">
             (+{selectedSnippetIds.length - 1} more)

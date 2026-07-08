@@ -16,6 +16,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo } from "react";
+import { Tooltip } from "antd";
+import { InfoCircleOutlined } from "@ant-design/icons";
 import { HistogramSlider } from "./HistogramSlider";
 import type { ALFilterState, SampleScores } from "../../types/al";
 import type { FilterMode, AllowedProperty } from "../../studyPhases";
@@ -382,6 +384,14 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       style={{ backgroundColor: isActive ? color : "#d1d5db" }}
                     />
                     {label}
+                    {def?.description && (
+                      <Tooltip title={def.description}>
+                        <InfoCircleOutlined
+                          className="text-gray-300 hover:text-gray-500"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </Tooltip>
+                    )}
                   </span>
                   {isActive && row ? (
                     <span className="text-[11px] font-ibm-sans text-gray-400">

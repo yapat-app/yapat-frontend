@@ -26,6 +26,7 @@ import { useHubALSession } from "./annotationHub/useHubALSession";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
+import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig } from "../studyPhases";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
@@ -67,17 +68,25 @@ export const AnnotationHub: React.FC = () => {
   const al = useHubALSession(mode, searchParams, setSearchParams, {
     treatAllModesAsAl: true,
   });
-  const [filterAnnotationStatus, setFilterAnnotationStatus] =
-    useState<"any" | "annotated" | "unannotated">("any");
+  const [filterAnnotationStatus, setFilterAnnotationStatus] = useState<
+    "any" | "annotated" | "unannotated"
+  >("any");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
-  const [filterDateRange, setFilterDateRange] = useState<[number, number] | null>(null);
-  const [filterTimeRange, setFilterTimeRange] = useState<[number, number] | null>(null);
+  const [filterDateRange, setFilterDateRange] = useState<
+    [number, number] | null
+  >(null);
+  const [filterTimeRange, setFilterTimeRange] = useState<
+    [number, number] | null
+  >(null);
   // Fixed "zoom window" the date-range histogram bins/displays against, set
   // only by the calendar picker (or a reset) — NOT by the histogram's own
   // slider drags, so the backdrop stays put while the user narrows their
   // selection within it. Null means "not zoomed, show the full domain."
-  const [dateZoomDomain, setDateZoomDomain] = useState<[number, number] | null>(null);
+  const [dateZoomDomain, setDateZoomDomain] = useState<[number, number] | null>(
+    null,
+  );
   const handleCalendarDateRangeChange = (r: [number, number] | null) => {
     setFilterDateRange(r);
     setDateZoomDomain(r);
@@ -106,12 +115,9 @@ export const AnnotationHub: React.FC = () => {
     al.selectedDatasetId === null ? [] : recordingLocations;
 
   // ── Find Similar handler ─────────────────────────────────────────────────
-  const handleFindSimilar = useCallback(
-    () => {
-      setMode("similarity");
-    },
-    [setMode],
-  );
+  const handleFindSimilar = useCallback(() => {
+    setMode("similarity");
+  }, [setMode]);
 
   if (awaitingHubDatasetBootstrap) {
     return (
@@ -119,13 +125,16 @@ export const AnnotationHub: React.FC = () => {
         <NavigationBar />
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <Spin size="large" />
-          <p className="text-sm text-gray-500 font-ibm-sans">Loading workspace…</p>
+          <p className="text-sm text-gray-500 font-ibm-sans">
+            Loading workspace…
+          </p>
         </div>
       </div>
     );
   }
 
-  const feedActionLabel = al.predictions.length > 0 ? "Edit Feed" : "Generate Feed";
+  const feedActionLabel =
+    al.predictions.length > 0 ? "Edit Feed" : "Generate Feed";
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
@@ -146,7 +155,9 @@ export const AnnotationHub: React.FC = () => {
             optionFilterProp="children"
           >
             {allDatasets.map((d) => (
-              <Option key={d.id} value={d.id}>{d.name}</Option>
+              <Option key={d.id} value={d.id}>
+                {d.name}
+              </Option>
             ))}
           </Select>
         </div>
@@ -166,19 +177,23 @@ export const AnnotationHub: React.FC = () => {
                   <CheckCircleOutlined className="text-green-500" />
                   {al.feedbackCountDisplay.shown}/{al.retrainThreshold}
                   {al.feedbackCountDisplay.pending && (
-                    <Tag color="gold" className="ml-1 text-[10px]">Training…</Tag>
+                    <Tag color="gold" className="ml-1 text-[10px]">
+                      Training…
+                    </Tag>
                   )}
                 </span>
               </Tooltip>
               {al.lastRetrainJob && (
                 <Tag
                   color={
-                    ({
-                      PENDING: "default",
-                      RUNNING: "processing",
-                      COMPLETED: "success",
-                      FAILED: "error",
-                    } as Record<string, string>)[al.lastRetrainJob.status] ?? "default"
+                    (
+                      {
+                        PENDING: "default",
+                        RUNNING: "processing",
+                        COMPLETED: "success",
+                        FAILED: "error",
+                      } as Record<string, string>
+                    )[al.lastRetrainJob.status] ?? "default"
                   }
                   className="text-xs"
                 >
@@ -205,94 +220,121 @@ export const AnnotationHub: React.FC = () => {
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left sidebar — Filters + Model scores */}
-        {phase.sidebar.showPane && (
-          <AnnotationHubSidebar
-            mode={mode}
-            setMode={setMode}
-            filterAnnotationStatus={filterAnnotationStatus}
-            onFilterAnnotationStatusChange={setFilterAnnotationStatus}
-            filterLocations={filterLocations}
-            onFilterLocationsChange={setFilterLocations}
-            recordingLocations={visibleRecordingLocations}
-            locationsLoading={false}
-            filterDateRange={filterDateRange}
-            onFilterDateRangeChange={setFilterDateRange}
-            dateZoomDomain={dateZoomDomain}
-            onCalendarDateRangeChange={handleCalendarDateRangeChange}
-            filterTimeRange={filterTimeRange}
-            onFilterTimeRangeChange={setFilterTimeRange}
-            localLabelScope={al.localLabelScope}
-            setLocalLabelScope={al.setLocalLabelScope}
-            localMinConfidence={al.localMinConfidence}
-            setLocalMinConfidence={al.setLocalMinConfidence}
-            labelScopeOptions={al.labelScopeOptions}
-            labelScopeLoading={al.labelScopeLoading}
-            showSampleProperties={phase.sidebar.sampleProperties}
-            showModelScores={phase.sidebar.modelScores}
-            showFindSimilar={phase.sidebar.findSimilar}
-            showLabelScope={phase.sidebar.labelScope}
-            onResetFilters={() => {
-              setFilterAnnotationStatus("any");
-              setFilterLocations([]);
-              setFilterDateRange(null);
-              setDateZoomDomain(null);
-              setFilterTimeRange(null);
-              al.setLocalLabelScope([]);
-              al.setLocalMinConfidence(null);
-            }}
-          />
-        )}
+      {(() => {
+        const workspaceArea = (
+          <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden h-full">
+            {al.isRestoredFeed && !al.selectedDatasetId && (
+              <div className="mx-4 mt-3 flex-shrink-0 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm font-ibm-sans text-blue-800">
+                <HistoryOutlined />
+                <span>
+                  Showing saved feed from <strong>{al.savedFeedLabel}</strong> —
+                  select the original dataset to run new inference.
+                </span>
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => dispatch(clearSavedFeed())}
+                  className="ml-auto"
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
 
-        {/* Center + Right: workspace area */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-          {al.isRestoredFeed && !al.selectedDatasetId && (
-            <div className="mx-4 mt-3 flex-shrink-0 px-4 py-2 rounded-lg bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm font-ibm-sans text-blue-800">
-              <HistoryOutlined />
-              <span>
-                Showing saved feed from <strong>{al.savedFeedLabel}</strong> — select the original dataset to run new inference.
-              </span>
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => dispatch(clearSavedFeed())}
-                className="ml-auto"
-              >
-                Clear
-              </Button>
+            {!al.selectedDatasetId && !al.isRestoredFeed && (
+              <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
+                <DatabaseOutlined style={{ fontSize: 48 }} />
+                <p className="text-lg font-ibm-sans">
+                  Select a dataset to start{" "}
+                  {mode === "validate" ? "Validate" : "Active Learning"}
+                </p>
+                <p className="text-sm font-ibm-sans">
+                  Then click "Generate Feed" to load predictions.
+                </p>
+              </div>
+            )}
+
+            {(al.selectedDatasetId || al.isRestoredFeed) && (
+              <Workspace
+                onFindSimilar={
+                  phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
+                }
+                filterAnnotationStatus={filterAnnotationStatus}
+                filterLocations={filterLocations}
+                filterDateRange={filterDateRange}
+                filterTimeRange={filterTimeRange}
+                localLabelScope={al.localLabelScope}
+                feedActionLabel={feedActionLabel}
+                feedActionLoading={al.inferenceLoading}
+                feedActionDisabled={!al.selectedDatasetId}
+                onFeedAction={al.openInferenceModal}
+                quickLabels={quickLabelList.labels}
+                quickLabelsLoading={quickLabelList.loading}
+              />
+            )}
+          </div>
+        );
+
+        if (!phase.sidebar.showPane) {
+          return (
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {workspaceArea}
             </div>
-          )}
+          );
+        }
 
-          {!al.selectedDatasetId && !al.isRestoredFeed && (
-            <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
-              <DatabaseOutlined style={{ fontSize: 48 }} />
-              <p className="text-lg font-ibm-sans">
-                Select a dataset to start {mode === "validate" ? "Validate" : "Active Learning"}
-              </p>
-              <p className="text-sm font-ibm-sans">Then click "Generate Feed" to load predictions.</p>
-            </div>
-          )}
-
-          {(al.selectedDatasetId || al.isRestoredFeed) && (
-            <Workspace
-              onFindSimilar={phase.ui.showFindSimilarButton ? handleFindSimilar : undefined}
-              filterAnnotationStatus={filterAnnotationStatus}
-              filterLocations={filterLocations}
-              filterDateRange={filterDateRange}
-              filterTimeRange={filterTimeRange}
-              localLabelScope={al.localLabelScope}
-              feedActionLabel={feedActionLabel}
-              feedActionLoading={al.inferenceLoading}
-              feedActionDisabled={!al.selectedDatasetId}
-              onFeedAction={al.openInferenceModal}
-              quickLabels={quickLabelList.labels}
-              quickLabelsLoading={quickLabelList.loading}
+        return (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <ResizableSplit
+              mode="left_px"
+              initialLeftRatio={0.35}
+              minLeftPanelPx={220}
+              maxLeftRatio={0.2}
+              collapsed={sidebarCollapsed}
+              onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+              left={
+                <AnnotationHubSidebar
+                  mode={mode}
+                  setMode={setMode}
+                  filterAnnotationStatus={filterAnnotationStatus}
+                  onFilterAnnotationStatusChange={setFilterAnnotationStatus}
+                  filterLocations={filterLocations}
+                  onFilterLocationsChange={setFilterLocations}
+                  recordingLocations={visibleRecordingLocations}
+                  locationsLoading={false}
+                  filterDateRange={filterDateRange}
+                  onFilterDateRangeChange={setFilterDateRange}
+                  dateZoomDomain={dateZoomDomain}
+                  onCalendarDateRangeChange={handleCalendarDateRangeChange}
+                  filterTimeRange={filterTimeRange}
+                  onFilterTimeRangeChange={setFilterTimeRange}
+                  localLabelScope={al.localLabelScope}
+                  setLocalLabelScope={al.setLocalLabelScope}
+                  localMinConfidence={al.localMinConfidence}
+                  setLocalMinConfidence={al.setLocalMinConfidence}
+                  labelScopeOptions={al.labelScopeOptions}
+                  labelScopeLoading={al.labelScopeLoading}
+                  showSampleProperties={phase.sidebar.sampleProperties}
+                  showModelScores={phase.sidebar.modelScores}
+                  showFindSimilar={phase.sidebar.findSimilar}
+                  showLabelScope={phase.sidebar.labelScope}
+                  onResetFilters={() => {
+                    setFilterAnnotationStatus("any");
+                    setFilterLocations([]);
+                    setFilterDateRange(null);
+                    setDateZoomDomain(null);
+                    setFilterTimeRange(null);
+                    al.setLocalLabelScope([]);
+                    al.setLocalMinConfidence(null);
+                  }}
+                />
+              }
+              right={workspaceArea}
             />
-          )}
-        </div>
-      </div>
+          </div>
+        );
+      })()}
 
       {/* ── Modals ── */}
       <ALInferenceConfigModal

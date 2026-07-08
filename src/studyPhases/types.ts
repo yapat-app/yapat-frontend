@@ -128,7 +128,7 @@ export interface SidebarPhaseConfig {
 
 /** Which sort-field categories are offered (Annotation Hub only). */
 export interface SortPhaseConfig {
-  /** Non-model sort fields (currently: Time — disabled, no backend data yet). */
+  /** Non-model sort fields (Date, Time — backed by Recording.extra_metadata). */
   nonModel: boolean;
   /** Model-derived sort fields (confidence/composite/uncertainty/diversity/density). */
   model: boolean;
