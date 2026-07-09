@@ -8,6 +8,7 @@ import { Button, Tag, Tooltip } from "antd";
 import { ThunderboltOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
+import { DatasetRetrainThresholdSettings } from "./DatasetRetrainThresholdSettings";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
 import { datasetApi } from "../services/api";
 
@@ -54,8 +55,11 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 <p className="sub_base_text">
                   {dataset.description?.trim() ? dataset.description : "—"}
                 </p>
-                <div className="mt-2">
+                <div className="mt-2 flex flex-col gap-2">
                   <DatasetSpectrogramSettings dataset={dataset} />
+                  {(dataset.dataset_type ?? "PAM") === "PAM" && (
+                    <DatasetRetrainThresholdSettings dataset={dataset} />
+                  )}
                 </div>
 
                 {/* Quick Labels strip */}

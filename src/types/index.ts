@@ -410,6 +410,7 @@ export interface Dataset {
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
   quick_labels?: QuickLabel[] | null;
+  retrain_after_threshold?: number | null;
   created_at?: string;
   updated_at?: string;
   is_ready_for_feed?: boolean;
@@ -423,6 +424,7 @@ export interface DatasetUpdate {
   dataset_type?: DatasetType;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  retrain_after_threshold?: number | null;
 }
 
 export interface DatasetCreate {
