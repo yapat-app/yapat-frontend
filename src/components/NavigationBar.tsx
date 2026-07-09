@@ -36,7 +36,10 @@ export const NavigationBar = () => {
     navigate("/login");
   };
 
-  const allLinks = NAV_LINKS;
+  const allLinks =
+    user?.role === "admin"
+      ? [...NAV_LINKS, { label: "Users", route: "/admin/users" }]
+      : NAV_LINKS;
 
   return (
     <div className="flex w-full items-center justify-between py-2 px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
