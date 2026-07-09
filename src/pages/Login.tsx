@@ -1,9 +1,10 @@
-import { Input, Button, message } from "antd";
+import { Input, Button, Select, message } from "antd";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 // import { useDispatch, useSelector } from "react-redux";
 import {
+  checkAdminExistsAsync,
   clearError,
   loginAsync,
   registerAsync,
@@ -19,13 +20,17 @@ export const Login = () => {
   const invitationToken = searchParams.get("token");
   const targetRole = searchParams.get("target_role");
 
-  const { loginSuccess, registerSuccess, loginLoading, error } = useAppSelector(
-    (state: any) => state.auth,
-  );
+  const { loginSuccess, registerSuccess, loginLoading, error, adminExists } =
+    useAppSelector((state: any) => state.auth);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
+  // Registration reachable two ways: via an invitation link (role locked to
+  // the invitation's target_role, existing behavior) or manually toggled
+  // here with no invitation token at all -- e.g. to create the first admin
+  // account on a fresh instance, where there's nobody to send an invite yet.
+  const [mode, setMode] = useState<"login" | "register">("login");
 
   const normalizeRole = (r: string | null | undefined) => {
     if (!r) return "";
@@ -37,8 +42,33 @@ export const Login = () => {
     if (invitationToken) {
       console.log("invitationToken", invitationToken, targetRole);
       setRole(normalizeRole(targetRole) || "user");
+      setMode("register");
     }
   }, [invitationToken]);
+
+  useEffect(() => {
+    if (mode === "register" && !invitationToken && !role) {
+      setRole("user");
+    }
+  }, [mode, invitationToken]);
+
+  // Only relevant for the manual (no-invitation) registration path, to
+  // decide whether "Admin" should be offered at all -- the backend enforces
+  // this regardless (see app/api/auth.py::register), this is purely so the
+  // form doesn't dangle a dead-end option in front of someone.
+  useEffect(() => {
+    if (!invitationToken && adminExists === null) {
+      dispatch(checkAdminExistsAsync());
+    }
+  }, [invitationToken, adminExists]);
+
+  // If "admin" was selected before the check resolved (or resolved to true
+  // after selection), don't leave a now-invalid option selected.
+  useEffect(() => {
+    if (adminExists === true && role === "admin") {
+      setRole("user");
+    }
+  }, [adminExists, role]);
 
   useEffect(() => {
     if (loginSuccess) {
@@ -47,6 +77,7 @@ export const Login = () => {
     if (registerSuccess) {
       navigator("/login");
       setRole("");
+      setMode("login");
       message.success("Registration successful! Try logging in.");
       dispatch(resetAuth());
     }
@@ -97,7 +128,7 @@ export const Login = () => {
         <Logo />
       </div>
       <div className=" w-full  h-full flex items-center justify-center">
-        <form className=" w-1/4" onSubmit={role ? register : login}>
+        <form className=" w-1/4" onSubmit={mode === "register" ? register : login}>
           <h1 className="text-center font-ibm-sans main_heading_text">YAPAT</h1>
           <div>
             <p className=" font-ibm-sans input_heading_text">Username</p>
@@ -161,6 +192,26 @@ export const Login = () => {
               />
             </div>
           )}
+          {mode === "register" && !invitationToken && (
+            <div>
+              <p className=" font-ibm-sans input_heading_text">Role</p>
+              <Select
+                style={{ width: "100%", marginBottom: 10 }}
+                value={role || "user"}
+                onChange={(value) => setRole(value)}
+                options={[
+                  { value: "user", label: "User" },
+                  { value: "team_owner", label: "Team Owner" },
+                  // Admin is only offered before the first admin account
+                  // exists -- once one does, this is a dead-end option, the
+                  // backend rejects it (app/api/auth.py::register).
+                  ...(adminExists === false
+                    ? [{ value: "admin", label: "Admin" }]
+                    : []),
+                ]}
+              />
+            </div>
+          )}
           <Button
             loading={loginLoading}
             htmlType="submit"
@@ -172,8 +223,23 @@ export const Login = () => {
               padding: "20px",
             }}
           >
-            {role ? "Register " : "Sign In"}
+            {mode === "register" ? "Register" : "Sign In"}
           </Button>
+          {!invitationToken && (
+            <p className="text-center font-ibm-sans" style={{ marginTop: 12 }}>
+              <a
+                onClick={() => {
+                  setMode(mode === "register" ? "login" : "register");
+                  if (mode === "login") setRole("user");
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                {mode === "register"
+                  ? "Already have an account? Sign in"
+                  : "Don't have an account? Register"}
+              </a>
+            </p>
+          )}
         </form>
       </div>
     </div>

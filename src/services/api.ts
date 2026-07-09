@@ -634,6 +634,27 @@ export const teamApi = {
 };
 
 // ============================================================================
+// Admin API (admin-only user management)
+// ============================================================================
+
+export const adminApi = {
+  listUsers: async (): Promise<import("../types").User[]> => {
+    const response = await api.get(`/api/auth/admin/users`);
+    return response.data;
+  },
+
+  createUser: async (body: {
+    username: string;
+    password: string;
+    role: "user" | "team_owner" | "admin";
+    full_name?: string;
+  }): Promise<import("../types").User> => {
+    const response = await api.post(`/api/auth/admin/create-user`, body);
+    return response.data;
+  },
+};
+
+// ============================================================================
 // Task API (Celery tasks)
 // ============================================================================
 

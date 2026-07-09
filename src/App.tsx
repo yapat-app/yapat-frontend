@@ -12,9 +12,11 @@ import { Taxonomies } from "./pages/Taxonomies";
 import { Wssed } from "./pages/Wssed";
 import HomePage from "./pages/HomePage";
 import { Dashboard } from "./pages/Dashboard";
+import { AdminUsers } from "./pages/AdminUsers";
 import { StudyPhaseProvider } from "./studyPhases";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 import WssedAccessGuard from "./routes/WssedAccessGuard";
+import AdminRoute from "./routes/AdminRoute";
 
 function App() {
   return (
@@ -34,6 +36,14 @@ function App() {
           }
         />
         <Route path="/teams/:teamId" element={<ManageTeam />} />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <AdminUsers />
+            </AdminRoute>
+          }
+        />
         <Route path="/" element={<HomePage />} />
         <Route path="/pre-annotation" element={<Taxonomies />} />
         <Route path="/history" element={<FeedHistory />} />
