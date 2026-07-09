@@ -251,8 +251,9 @@ export function useHubALSession(
   }, [selectedDatasetId]);
 
   const resolvedSnippetSetId = useMemo(() => {
-    if (localSS !== null) return localSS;
-    if (snippetSetId !== null) return snippetSetId;
+    const validIds = new Set(snippetSets.map((s) => s.id));
+    if (localSS !== null && validIds.has(localSS)) return localSS;
+    if (snippetSetId !== null && validIds.has(snippetSetId)) return snippetSetId;
     const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
     return ready?.id ?? null;
   }, [localSS, snippetSetId, snippetSets]);
