@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks";
 import { alApi } from "../../services/alApi";
 import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
+import { FeedbackButtons } from "./FeedbackButtons";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
@@ -477,6 +478,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   );
 
   const skipScrollIntoViewRef = useRef(false);
+  // Briefly held after a selection change that came from OUTSIDE the feed (a
+  // projection click). While set, selectCenteredCard stands down so a stray
+  // scroll/layout event right after the click can't overwrite the clicked
+  // snippet with whatever card happens to be centered in the feed. It's only
+  // set for such external changes (not for selectCenteredCard's own updates),
+  // so ordinary manual scrolling keeps driving the selection normally.
   const scrollSyncSuspendedRef = useRef(false);
   const cardVisibilityObserverRef = useRef<IntersectionObserver | null>(null);
   const selectedSnippetIdRef = useRef<number | null>(selectedSnippetId);
@@ -487,6 +494,21 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   usePanelDwell("feed");
   useEffect(() => {
     selectedSnippetIdRef.current = selectedSnippetId;
+  }, [selectedSnippetId]);
+
+  useEffect(() => {
+    // selectCenteredCard sets skipScrollIntoViewRef before dispatching, so
+    // its own scroll-driven updates don't trip the suspension — only genuine
+    // external selection changes (projection clicks) do.
+    if (skipScrollIntoViewRef.current) {
+      skipScrollIntoViewRef.current = false;
+      return;
+    }
+    scrollSyncSuspendedRef.current = true;
+    const t = window.setTimeout(() => {
+      scrollSyncSuspendedRef.current = false;
+    }, 650);
+    return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
   const selectionFeedViewKeyRef = useRef(feedViewKey);
@@ -530,56 +552,60 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedSnippetId,
   ]);
 
-  useALSync(cardRefs, { skipScrollIntoViewRef, isUserScrollingRef });
+  // Auto-scroll-to-selection is disabled in blind mode: the list can exceed the
+  // browser's max element height (~2^24px) for large datasets, so index→scrollTop
+  // positioning is unreliable past ~33k items (see memory: feed scroll height
+  // cap). Instead, a projection click shows the chosen snippet via the on-demand
+  // overlay below, and manual scrolling still drives the selection normally.
+  useALSync(cardRefs, {
+    skipScrollIntoViewRef,
+    isUserScrollingRef,
+    disabled: isBlind,
+  });
 
-  useEffect(() => {
-    if (skipScrollIntoViewRef.current) {
-      skipScrollIntoViewRef.current = false;
-      return;
-    }
-    scrollSyncSuspendedRef.current = true;
-    const t = window.setTimeout(() => {
-      scrollSyncSuspendedRef.current = false;
-    }, 650);
-    return () => window.clearTimeout(t);
-  }, [selectedSnippetId]);
-
-  // useALSync's scrollIntoView only works once the target card is actually
-  // mounted — but the blind feed only renders a small window of cards around
-  // the current scroll position (see blindWindow above), so a projection
-  // click on a snippet outside that window silently does nothing: Redux's
-  // selection updates, but the on-screen card (and its audio/spectrogram)
-  // never changes because nothing scrolled there. Every slot has a fixed
-  // height, so we can jump straight to the target's exact pixel position
-  // without needing it to be mounted first — the resulting native scroll
-  // event then drives recomputeBlindWindow to mount it there.
-  useEffect(() => {
-    if (!isBlind) return;
-    if (skipScrollIntoViewRef.current) return;
-    if (selectedSnippetId === null) return;
-    if (cardRefs.current.has(selectedSnippetId)) return;
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const idx = filteredAndSorted.findIndex(
-      (p) => p.snippet_id === selectedSnippetId,
-    );
-    if (idx === -1) return;
-    el.scrollTop = Math.max(
-      0,
-      idx * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
-    );
-  }, [
-    isBlind,
-    selectedSnippetId,
-    filteredAndSorted,
-    blindSlotSize,
-    blindSnapCardHeight,
-  ]);
+  // ── On-demand overlay for the selected snippet ───────────────────────────
+  // In blind mode we can't reliably scroll a 90k-item virtual list to an
+  // arbitrary clicked snippet (height-cap limit), so when the selection isn't
+  // in the currently-rendered window we render just that snippet in an overlay.
+  // The feed already holds every prediction, so no fetch is needed — we read it
+  // straight out of filteredAndSorted. The overlay dismisses as soon as the
+  // user scrolls the feed (so manual browsing + FPV-sync keep working) and
+  // reappears on the next projection click.
+  const selectedIdx = useMemo(
+    () =>
+      selectedSnippetId === null
+        ? -1
+        : filteredAndSorted.findIndex(
+            (p) => p.snippet_id === selectedSnippetId,
+          ),
+    [filteredAndSorted, selectedSnippetId],
+  );
+  const selectionInWindow =
+    selectedIdx >= blindWindow.start && selectedIdx < blindWindow.end;
+  const [overlayDismissedFor, setOverlayDismissedFor] = useState<number | null>(
+    null,
+  );
+  const showAdHoc =
+    isBlind &&
+    selectedSnippetId !== null &&
+    selectedIdx !== -1 &&
+    !selectionInWindow &&
+    overlayDismissedFor !== selectedSnippetId;
+  const resolvedAdHocPrediction = showAdHoc
+    ? filteredAndSorted[selectedIdx]
+    : null;
+  // The snippet the shared sticky label bar acts on: the current selection
+  // (centered card while scrolling, or the clicked/overlay snippet).
+  const stickyLabelPrediction =
+    selectedIdx !== -1 ? filteredAndSorted[selectedIdx] : null;
 
   const selectCenteredCard = useCallback(
     (opts?: { force?: boolean }) => {
       const container = scrollContainerRef.current;
       if (!container) return;
+      // A projection click just set the selection from outside the feed —
+      // don't let a stray scroll/layout event overwrite it with the centered
+      // card. (Cleared ~650ms later, so manual scrolling is unaffected.)
       if (!opts?.force && scrollSyncSuspendedRef.current) return;
 
       const containerRect = container.getBoundingClientRect();
@@ -599,6 +625,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         }
       });
       if (bestId === null) return;
+
       if (bestId !== lastActiveLoggedRef.current) {
         lastActiveLoggedRef.current = bestId;
         studyLogger.log(
@@ -969,7 +996,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           <div
             ref={bindScrollContainer}
             className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"
-            style={{ scrollSnapType: "y mandatory" }}
+            style={{ scrollSnapType: "y mandatory", overflowAnchor: "none" }}
           >
             <div className="flex flex-col gap-3 w-full">
               {multiSelected.map((p) => (
@@ -1070,53 +1097,116 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             Applying date/time filter…
           </div>
         )}
-        <div
-          ref={bindScrollContainer}
-          className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-2"
-          style={{ scrollSnapType: "y mandatory" }}
-          onScroll={handleBlindScroll}
-        >
-          <div className="w-full max-w-300 mx-auto">
-            {/* Spacer for the off-screen cards above the window. */}
-            <div style={{ height: blindTopSpacer }} />
-            {blindVisibleRows.map(({ prediction: p, index }) => (
-              <div
-                key={p.id ?? p.snippet_id}
-                className="snap-start shrink-0 w-full"
-                style={{
-                  height: blindSnapCardHeight,
-                  marginBottom: BLIND_SLOT_GAP_PX,
-                }}
-              >
-                <PredictionCard
-                  prediction={p}
-                  recordingName={
-                    typeof p.recording_id === "number"
-                      ? recordingNameById[p.recording_id]
-                      : undefined
-                  }
-                  cardRef={registerCard}
-                  cardHeightPx={blindSnapCardHeight}
-                  serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
-                  quickLabels={quickLabels}
-                  quickLabelsLoading={quickLabelsLoading}
-                  scrollRoot={scrollRoot}
-                  loadAudioImmediately={index === 0}
-                  onFindSimilar={onFindSimilar}
-                  hideHeader={hideCardHeader}
-                />
-              </div>
-            ))}
-            {/* Spacer for the off-screen cards below the window. */}
-            <div style={{ height: blindBottomSpacer }} />
+        {/* Middle region: the scrollable spectrogram feed, plus the on-demand
+            overlay. The overlay covers only this region — never the sticky
+            label bar below it. */}
+        <div className="flex-1 min-h-0 relative">
+          <div
+            ref={bindScrollContainer}
+            className="absolute inset-0 overflow-y-auto px-3 pt-2 pb-2"
+            // overflowAnchor:none is essential for this virtualized list: as the
+            // window shifts, the top spacer's height changes, and the browser's
+            // default scroll-anchoring would add that delta to scrollTop to keep
+            // an element visually put — which, during a programmatic scroll,
+            // compounds and drags the position all the way to the bottom.
+            style={{ scrollSnapType: "y mandatory", overflowAnchor: "none" }}
+            onScroll={handleBlindScroll}
+          >
+            <div className="w-full max-w-300 mx-auto">
+              {/* Spacer for the off-screen cards above the window. */}
+              <div style={{ height: blindTopSpacer }} />
+              {blindVisibleRows.map(({ prediction: p, index }) => (
+                <div
+                  key={p.id ?? p.snippet_id}
+                  className="snap-start shrink-0 w-full"
+                  style={{
+                    height: blindSnapCardHeight,
+                    marginBottom: BLIND_SLOT_GAP_PX,
+                  }}
+                >
+                  <PredictionCard
+                    prediction={p}
+                    recordingName={
+                      typeof p.recording_id === "number"
+                        ? recordingNameById[p.recording_id]
+                        : undefined
+                    }
+                    cardRef={registerCard}
+                    cardHeightPx={blindSnapCardHeight}
+                    serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
+                    quickLabels={quickLabels}
+                    quickLabelsLoading={quickLabelsLoading}
+                    scrollRoot={scrollRoot}
+                    loadAudioImmediately={index === 0}
+                    onFindSimilar={onFindSimilar}
+                    hideHeader={hideCardHeader}
+                    hideLabels
+                  />
+                </div>
+              ))}
+              {/* Spacer for the off-screen cards below the window. */}
+              <div style={{ height: blindBottomSpacer }} />
 
-            {inferenceLoading && (
-              <div className="flex justify-center py-4">
-                <Spin size="small" />
-              </div>
-            )}
+              {inferenceLoading && (
+                <div className="flex justify-center py-4">
+                  <Spin size="small" />
+                </div>
+              )}
+            </div>
           </div>
+
+          {showAdHoc && (
+            <div
+              className="absolute inset-0 z-20 bg-white flex flex-col overflow-hidden"
+              // Any scroll/drag gesture over the overlay means "let me browse the
+              // feed" — dismiss it (it reappears on the next projection click).
+              onWheel={() => setOverlayDismissedFor(selectedSnippetId)}
+              onTouchStart={() => setOverlayDismissedFor(selectedSnippetId)}
+            >
+              <div className="flex-1 overflow-y-auto px-3 py-3">
+                {resolvedAdHocPrediction && (
+                  <PredictionCard
+                    key={resolvedAdHocPrediction.snippet_id}
+                    prediction={resolvedAdHocPrediction}
+                    recordingName={
+                      typeof resolvedAdHocPrediction.recording_id === "number"
+                        ? recordingNameById[resolvedAdHocPrediction.recording_id]
+                        : undefined
+                    }
+                    cardHeightPx={blindSnapCardHeight}
+                    serverLabels={
+                      labelsBySnippet[resolvedAdHocPrediction.snippet_id] ??
+                      EMPTY_LABELS
+                    }
+                    quickLabels={quickLabels}
+                    quickLabelsLoading={quickLabelsLoading}
+                    scrollRoot={scrollRoot}
+                    loadAudioImmediately
+                    onFindSimilar={onFindSimilar}
+                    hideHeader={hideCardHeader}
+                    hideLabels
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Sticky label bar — one shared instance for the whole feed, targeting
+            the current snippet, so labels don't repeat under every spectrogram
+            and only the spectrograms above actually scroll. */}
+        {stickyLabelPrediction && (
+          <div className="shrink-0 border-t border-gray-100 bg-white px-4 pt-2 pb-3">
+            <FeedbackButtons
+              prediction={stickyLabelPrediction}
+              serverLabels={
+                labelsBySnippet[stickyLabelPrediction.snippet_id] ?? EMPTY_LABELS
+              }
+              quickLabels={quickLabels}
+              quickLabelsLoading={quickLabelsLoading}
+            />
+          </div>
+        )}
       </div>
     );
   }

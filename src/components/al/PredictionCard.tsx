@@ -51,6 +51,8 @@ interface Props {
   onFindSimilar?: (snippetId: number) => void;
   /** Suppress the inline blind-mode header (a sticky header is rendered above the feed instead). */
   hideHeader?: boolean;
+  /** Suppress the inline blind-mode label area (a sticky label bar is rendered below the feed instead). */
+  hideLabels?: boolean;
 }
 
 const PredictionCardImpl: React.FC<Props> = ({
@@ -65,6 +67,7 @@ const PredictionCardImpl: React.FC<Props> = ({
   loadAudioImmediately = false,
   onFindSimilar,
   hideHeader = false,
+  hideLabels = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -152,9 +155,14 @@ const PredictionCardImpl: React.FC<Props> = ({
       typeof cardHeightPx === "number"
         ? cardHeightPx
         : Math.max(560, window.innerHeight - 180);
-    const available = cardH - (hideHeader ? 0 : HEADER_H) - BODY_PAD_Y - LABEL_AREA_H - 8;
+    // When the label area is hoisted to a sticky bar (hideLabels), the
+    // spectrogram gets that space back and fills the card instead of leaving
+    // a blank gap below it.
+    const available =
+      cardH - (hideHeader ? 0 : HEADER_H) - BODY_PAD_Y - (hideLabels ? 0 : LABEL_AREA_H) - 8;
     const melBudget = available - spectrogramChromeHeight();
-    setBlindSpecHeight(Math.max(120, Math.min(600, melBudget)));
+    const cap = hideLabels ? 900 : 600;
+    setBlindSpecHeight(Math.max(120, Math.min(cap, melBudget)));
   };
 
   useLayoutEffect(() => {
@@ -357,19 +365,21 @@ const PredictionCardImpl: React.FC<Props> = ({
         )}
       </div>
 
-      {/* ── Inline label area ── */}
-      <div
-        className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
-        style={{ height: LABEL_AREA_H }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <FeedbackButtons
-          prediction={prediction}
-          serverLabels={serverLabels}
-          quickLabels={quickLabels}
-          quickLabelsLoading={quickLabelsLoading}
-        />
-      </div>
+      {/* ── Inline label area (omitted when a sticky label bar is used) ── */}
+      {!hideLabels && (
+        <div
+          className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
+          style={{ height: LABEL_AREA_H }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FeedbackButtons
+            prediction={prediction}
+            serverLabels={serverLabels}
+            quickLabels={quickLabels}
+            quickLabelsLoading={quickLabelsLoading}
+          />
+        </div>
+      )}
     </div>
   );
 };

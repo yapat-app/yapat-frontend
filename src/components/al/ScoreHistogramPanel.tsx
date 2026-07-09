@@ -82,7 +82,9 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   compact = false,
 }) => (
   <div className="flex flex-col gap-0.5">
-    <div className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}>
+    <div
+      className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}
+    >
       {!hideLabel && (
         <span
           className="font-semibold uppercase tracking-wide"
@@ -99,7 +101,9 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
             <strong style={{ color }}>{normRange[1].toFixed(2)}</strong>
           </>
         ) : (
-          <>≥ <strong style={{ color }}>{normRange[0].toFixed(2)}</strong></>
+          <>
+            ≥ <strong style={{ color }}>{normRange[0].toFixed(2)}</strong>
+          </>
         )}
       </span>
     </div>
@@ -226,8 +230,15 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   // True when any active filter has a threshold above 0.
   const isFiltered = useMemo(() => {
     if (!isMulti) return (alFilters.visibility.range?.[0] ?? 0) > 0;
-    return multiActiveKeys.some((k) => (alFilters.visibility.ranges?.[k]?.[0] ?? 0) > 0);
-  }, [isMulti, alFilters.visibility.range, alFilters.visibility.ranges, multiActiveKeys]);
+    return multiActiveKeys.some(
+      (k) => (alFilters.visibility.ranges?.[k]?.[0] ?? 0) > 0,
+    );
+  }, [
+    isMulti,
+    alFilters.visibility.range,
+    alFilters.visibility.ranges,
+    multiActiveKeys,
+  ]);
 
   // One entry per active property (preserve allowedProperties ordering).
   const multiData = useMemo(() => {
@@ -239,9 +250,18 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         color: propertyColor(key),
         allValues: extractValues(enrichedPlotPoints, key),
         visibleValues: extractValues(visiblePoints, key),
-        normRange: (alFilters.visibility.ranges?.[key] ?? [0, 1]) as [number, number],
+        normRange: (alFilters.visibility.ranges?.[key] ?? [0, 1]) as [
+          number,
+          number,
+        ],
       }));
-  }, [allowedProperties, multiActiveKeys, enrichedPlotPoints, visiblePoints, alFilters.visibility.ranges]);
+  }, [
+    allowedProperties,
+    multiActiveKeys,
+    enrichedPlotPoints,
+    visiblePoints,
+    alFilters.visibility.ranges,
+  ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -268,9 +288,13 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               </button>
             )}
             <span className="text-[11px] text-gray-500 font-ibm-sans">
-              <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
+              <strong className="text-gray-700">
+                {visibleCount.toLocaleString()}
+              </strong>
               {" / "}
-              <strong className="text-gray-700">{enrichedPlotPoints.length.toLocaleString()}</strong>
+              <strong className="text-gray-700">
+                {enrichedPlotPoints.length.toLocaleString()}
+              </strong>
               {" visible"}
             </span>
           </div>
@@ -279,7 +303,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         isFiltered && (
           <div className="flex items-center justify-between text-[11px] font-ibm-sans">
             <span className="text-gray-500">
-              <strong className="text-gray-700">{visibleCount.toLocaleString()}</strong>
+              <strong className="text-gray-700">
+                {visibleCount.toLocaleString()}
+              </strong>
               {" / "}
               {enrichedPlotPoints.length.toLocaleString()}
               {" visible"}
@@ -317,7 +343,11 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                         ? "text-white font-semibold shadow-sm"
                         : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700",
                     ].join(" ")}
-                    style={isActive ? { backgroundColor: color, borderColor: color } : undefined}
+                    style={
+                      isActive
+                        ? { backgroundColor: color, borderColor: color }
+                        : undefined
+                    }
                   >
                     {def?.label ?? prop}
                   </button>
@@ -328,7 +358,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 
           {singleAllValues.length > 0 ? (
             <PropertyRow
-              label={getPropertyByKey(singleActiveKey)?.label ?? singleActiveKey}
+              label={
+                getPropertyByKey(singleActiveKey)?.label ?? singleActiveKey
+              }
               color={propertyColor(singleActiveKey)}
               allValues={singleAllValues}
               visibleValues={singleVisibleValues}
@@ -360,14 +392,20 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 key={prop}
                 className={[
                   "rounded-lg border transition-colors",
-                  isActive ? "border-gray-200 px-2.5 py-2" : "border-dashed border-gray-200 px-2.5 py-1.5",
+                  isActive
+                    ? "border-gray-200 px-2.5 py-2"
+                    : "border-dashed border-gray-200 px-2.5 py-1.5",
                 ].join(" ")}
               >
                 <button
                   type="button"
                   onClick={() => handleMultiToggle(prop)}
                   disabled={isLastActive}
-                  title={isLastActive ? "At least one filter must stay active" : undefined}
+                  title={
+                    isLastActive
+                      ? "At least one filter must stay active"
+                      : undefined
+                  }
                   className={[
                     "flex w-full items-center justify-between gap-2 text-left",
                     isLastActive ? "cursor-not-allowed" : "cursor-pointer",
@@ -397,21 +435,33 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     <span className="text-[11px] font-ibm-sans text-gray-400">
                       {sliderMode === "range" ? (
                         <>
-                          <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong>
+                          <strong style={{ color }}>
+                            {row.normRange[0].toFixed(2)}
+                          </strong>
                           {" – "}
-                          <strong style={{ color }}>{row.normRange[1].toFixed(2)}</strong>
+                          <strong style={{ color }}>
+                            {row.normRange[1].toFixed(2)}
+                          </strong>
                         </>
                       ) : (
-                        <>≥ <strong style={{ color }}>{row.normRange[0].toFixed(2)}</strong></>
+                        <>
+                          ≥{" "}
+                          <strong style={{ color }}>
+                            {row.normRange[0].toFixed(2)}
+                          </strong>
+                        </>
                       )}
                     </span>
                   ) : (
-                    <span className="text-[11px] font-ibm-sans text-gray-300">+</span>
+                    <span className="text-[11px] font-ibm-sans text-gray-300">
+                      +
+                    </span>
                   )}
                 </button>
 
-                {isActive && row && (
-                  row.allValues.length === 0 ? (
+                {isActive &&
+                  row &&
+                  (row.allValues.length === 0 ? (
                     <p className="mt-1.5 text-[11px] text-gray-300 font-ibm-sans">
                       No score data for this property
                     </p>
@@ -435,8 +485,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                         accentColor={color}
                       />
                     </div>
-                  )
-                )}
+                  ))}
               </div>
             );
           })}
@@ -470,7 +519,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       : undefined
                   }
                   title={
-                    isLastActive ? "At least one filter must stay active" : undefined
+                    isLastActive
+                      ? "At least one filter must stay active"
+                      : undefined
                   }
                 >
                   {def?.label ?? prop}

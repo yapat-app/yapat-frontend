@@ -15,6 +15,12 @@ export type ALSyncOptions = {
   skipScrollIntoViewRef?: MutableRefObject<boolean>;
   /** True while the feed is being manually scrolled; avoids fighting native momentum. */
   isUserScrollingRef?: MutableRefObject<boolean>;
+  /**
+   * Fully disables the scroll sync — for feeds that run their own scroll
+   * animation on selection change (e.g. the virtualized blind feed, where the
+   * target card usually isn't mounted and scrollIntoView can't reach it anyway).
+   */
+  disabled?: boolean;
 };
 
 export const useALSync = (
@@ -24,8 +30,10 @@ export const useALSync = (
   const selectedSnippetId = useAppSelector((state) => state.al.selectedSnippetIds[0] ?? null);
   const skipRef = options?.skipScrollIntoViewRef;
   const isUserScrollingRef = options?.isUserScrollingRef;
+  const disabled = options?.disabled ?? false;
 
   useEffect(() => {
+    if (disabled) return;
     if (skipRef?.current) return;
     if (isUserScrollingRef?.current) return;
     if (selectedSnippetId !== null) {
@@ -34,5 +42,5 @@ export const useALSync = (
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
-  }, [selectedSnippetId, cardRefs, skipRef]);
+  }, [selectedSnippetId, cardRefs, skipRef, isUserScrollingRef, disabled]);
 };
