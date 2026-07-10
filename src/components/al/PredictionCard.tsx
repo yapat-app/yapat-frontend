@@ -19,7 +19,7 @@ import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { snippetApi } from "../../services/api";
 import { useInViewport } from "../../hooks/useInViewport";
-import type { PAMPrediction } from "../../types/al";
+import type { ALSnippetLabelDetail, PAMPrediction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { useDatasetSpectrogramConfig } from "../../hooks/useDatasetSpectrogramConfig";
 import {
@@ -35,6 +35,8 @@ interface Props {
   cardHeightPx?: number;
   /** Labels hydrated from /api/pam-al/snippet-labels (survive refresh). */
   serverLabels?: string[];
+  /** Label source/permission metadata hydrated from /api/pam-al/snippet-labels. */
+  serverLabelDetails?: ALSnippetLabelDetail[];
   /** Scroll container for lazy-load visibility (must match feed overflow root). */
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
@@ -47,6 +49,7 @@ export const PredictionCard: React.FC<Props> = ({
   cardRef,
   cardHeightPx,
   serverLabels,
+  serverLabelDetails,
   scrollRoot,
   loadAudioImmediately = false,
 }) => {
@@ -321,7 +324,11 @@ export const PredictionCard: React.FC<Props> = ({
           style={{ height: LABEL_AREA_H }}
           onClick={(e) => e.stopPropagation()}
         >
-          <FeedbackButtons prediction={prediction} {...({ serverLabels } as any)} />
+          <FeedbackButtons
+            prediction={prediction}
+            serverLabels={serverLabels}
+            serverLabelDetails={serverLabelDetails}
+          />
         </div>
       </div>
     );
@@ -463,7 +470,11 @@ export const PredictionCard: React.FC<Props> = ({
               <p className="text-xs text-gray-400 italic font-ibm-sans">No label predicted</p>
             )}
             <div className="border-t border-gray-100" />
-            <FeedbackButtons prediction={prediction} />
+            <FeedbackButtons
+              prediction={prediction}
+              serverLabels={serverLabels}
+              serverLabelDetails={serverLabelDetails}
+            />
           </div>
         </div>
       </div>
@@ -562,7 +573,11 @@ export const PredictionCard: React.FC<Props> = ({
         onClick={(e) => e.stopPropagation()}
         className="px-4 py-3 border-t border-gray-100"
       >
-        <FeedbackButtons prediction={prediction} />
+        <FeedbackButtons
+          prediction={prediction}
+          serverLabels={serverLabels}
+          serverLabelDetails={serverLabelDetails}
+        />
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ import {
   setClassicSnippetAnnotations,
   submitFeedback,
 } from "../../redux/features/alSlice";
-import type { PAMPrediction, FeedbackAction } from "../../types/al";
+import type { ALSnippetLabelDetail, PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { LabelSelector } from "./LabelSelector";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
@@ -25,9 +25,32 @@ interface Props {
   prediction: PAMPrediction;
   /** Labels hydrated from /api/pam-al/snippet-labels to survive refresh. */
   serverLabels?: string[];
+  /** Source/permission metadata for hydrated labels. */
+  serverLabelDetails?: ALSnippetLabelDetail[];
 }
 
-export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) => {
+function getLabelAttributionTooltip(
+  label: string,
+  labelDetailsByLabel: Map<string, ALSnippetLabelDetail[]>,
+  labelContributors: Record<string, string[]>,
+): string {
+  const details = labelDetailsByLabel.get(label) ?? [];
+  if (details.length > 0) {
+    const names = Array.from(
+      new Set(details.map((detail) => detail.labeled_by || detail.username).filter(Boolean)),
+    );
+    if (names.length > 0) return `Annotated by: ${names.join(", ")}`;
+  }
+  return labelContributors[label]?.length
+    ? `Annotated by: ${labelContributors[label].join(", ")}`
+    : "Annotator unknown";
+}
+
+export const FeedbackButtons: React.FC<Props> = ({
+  prediction,
+  serverLabels,
+  serverLabelDetails = [],
+}) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
   const isBlind = phase.ui.labelingMode === "blind";
@@ -67,10 +90,34 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
   const hasCheckpoint = usedCheckpointId !== null;
   const feedbackDisabled = submitting || (!isClassicFeed && !hasCheckpoint);
 
+  const labelDetailsByLabel = useMemo(() => {
+    const map = new Map<string, ALSnippetLabelDetail[]>();
+    for (const detail of serverLabelDetails) {
+      const label = detail.label.trim();
+      if (!label) continue;
+      map.set(label, [...(map.get(label) ?? []), detail]);
+    }
+    return map;
+  }, [serverLabelDetails]);
+
+  const protectedGroundTruthDetails = useMemo(
+    () =>
+      serverLabelDetails.filter(
+        (detail) => detail.source === "ground_truth" && !detail.can_edit,
+      ),
+    [serverLabelDetails],
+  );
+
+  const protectedGroundTruthLabels = useMemo(
+    () => new Set(protectedGroundTruthDetails.map((detail) => detail.label)),
+    [protectedGroundTruthDetails],
+  );
+
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
-  const submittedLabels = existingFeedback
+  const submittedLabels = (existingFeedback
     ? (existingFeedback.final_labels ?? [])
-    : (serverLabels ?? []);
+    : (serverLabels ?? [])
+  ).filter((label) => !protectedGroundTruthLabels.has(label));
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
   const skipNextAutoSubmitRef = useRef<boolean>(true);
   const lastSubmittedKeyRef = useRef<string>("");
@@ -262,14 +309,10 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
         <LabelSelector
           value={selectedLabels}
           onChange={(labels) => {
-            setSelectedLabels(labels);
+            setSelectedLabels(labels.filter((label) => !protectedGroundTruthLabels.has(label)));
             setSaveState("idle");
           }}
-          getLabelTooltip={(lbl) =>
-            labelContributors[lbl]?.length
-              ? `Annotated by: ${labelContributors[lbl].join(", ")}`
-              : "Annotator unknown"
-          }
+          getLabelTooltip={(lbl) => getLabelAttributionTooltip(lbl, labelDetailsByLabel, labelContributors)}
           disabled={feedbackDisabled}
           compact
           showList
@@ -277,6 +320,20 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
           showSelectedRow={false}
           hideSelectedInInput
         />
+        {protectedGroundTruthDetails.length > 0 && (
+          <div className="flex-shrink-0 flex flex-wrap gap-1 pt-1">
+            {protectedGroundTruthDetails.map((detail) => (
+              <Tooltip
+                key={`${detail.source}:${detail.label}`}
+                title={`${detail.labeled_by || "Ground truth"} label. Only admins and team owners can edit it.`}
+              >
+                <Tag color="gold" className="cursor-help">
+                  {detail.label}
+                </Tag>
+              </Tooltip>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -347,9 +404,7 @@ export const FeedbackButtons: React.FC<Props> = ({ prediction, serverLabels }) =
                 <Tooltip
                   key={lbl}
                   title={
-                    labelContributors[lbl]?.length
-                      ? `Annotated by: ${labelContributors[lbl].join(", ")}`
-                      : "Annotator unknown"
+                    getLabelAttributionTooltip(lbl, labelDetailsByLabel, labelContributors)
                   }
                 >
                   <Tag className="cursor-help">{lbl}</Tag>

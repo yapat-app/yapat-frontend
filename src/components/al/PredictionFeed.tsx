@@ -21,6 +21,7 @@ import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsB
 import { hydrateClassicAnnotations, setSelectedSnippet } from "../../redux/features/alSlice";
 import { fetchTeamMembers } from "../../redux/features/teamSlice";
 import type { Annotation } from "../../types";
+import type { ALSnippetLabelDetail } from "../../types/al";
 
 export const PredictionFeed: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -311,6 +312,7 @@ export const PredictionFeed: React.FC = () => {
   }, [isBlind, predictions.length]);
 
   const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
+  const [labelDetailsBySnippet, setLabelDetailsBySnippet] = useState<Record<number, ALSnippetLabelDetail[]>>({});
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
@@ -326,11 +328,15 @@ export const PredictionFeed: React.FC = () => {
     let cancelled = false;
     async function loadLabels() {
       if (!isBlind) {
-        if (!cancelled) setLabelsBySnippet({});
+        if (!cancelled) {
+          setLabelsBySnippet({});
+          setLabelDetailsBySnippet({});
+        }
         return;
       }
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
+        const detailMap: Record<number, ALSnippetLabelDetail[]> = {};
         for (const [snippetId, fb] of Object.entries(feedbacksRef.current)) {
           const labels = fb.final_labels ?? [];
           if (labels.length > 0) map[Number(snippetId)] = labels;
@@ -345,21 +351,50 @@ export const PredictionFeed: React.FC = () => {
             map[snippetId] = labels;
           }
         }
-        if (!cancelled) setLabelsBySnippet(map);
+        if (!selectedDatasetId) {
+          if (!cancelled) {
+            setLabelsBySnippet(map);
+            setLabelDetailsBySnippet(detailMap);
+          }
+          return;
+        }
+        try {
+          const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
+          for (const it of r.items) {
+            if (it.label_details?.length) detailMap[it.snippet_id] = it.label_details;
+          }
+        } catch {
+          // Existing label hydration still works without attribution metadata.
+        }
+        if (!cancelled) {
+          setLabelsBySnippet(map);
+          setLabelDetailsBySnippet(detailMap);
+        }
         return;
       }
       if (!selectedDatasetId) {
-        if (!cancelled) setLabelsBySnippet({});
+        if (!cancelled) {
+          setLabelsBySnippet({});
+          setLabelDetailsBySnippet({});
+        }
         return;
       }
       try {
         const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
         if (cancelled) return;
         const map: Record<number, string[]> = {};
-        for (const it of r.items) map[it.snippet_id] = it.labels;
+        const detailMap: Record<number, ALSnippetLabelDetail[]> = {};
+        for (const it of r.items) {
+          map[it.snippet_id] = it.labels;
+          if (it.label_details?.length) detailMap[it.snippet_id] = it.label_details;
+        }
         setLabelsBySnippet(map);
+        setLabelDetailsBySnippet(detailMap);
       } catch {
-        if (!cancelled) setLabelsBySnippet({});
+        if (!cancelled) {
+          setLabelsBySnippet({});
+          setLabelDetailsBySnippet({});
+        }
       }
     }
     loadLabels();
@@ -439,6 +474,8 @@ export const PredictionFeed: React.FC = () => {
                 : undefined
             }
             cardRef={setCardRef(selected.snippet_id)}
+            serverLabels={labelsBySnippet[selected.snippet_id] ?? []}
+            serverLabelDetails={labelDetailsBySnippet[selected.snippet_id] ?? []}
             scrollRoot={scrollRoot}
             loadAudioImmediately
           />
@@ -483,6 +520,7 @@ export const PredictionFeed: React.FC = () => {
                       cardRef={setCardRef(p.snippet_id)}
                       cardHeightPx={height}
                       serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                      serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
                     />
@@ -497,6 +535,7 @@ export const PredictionFeed: React.FC = () => {
                     cardRef={setCardRef(p.snippet_id)}
                     cardHeightPx={height}
                     serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                    serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                   />
@@ -582,6 +621,8 @@ export const PredictionFeed: React.FC = () => {
                     prediction={p}
                     recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
                     cardRef={setCardRef(p.snippet_id)}
+                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                    serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                   />
@@ -594,6 +635,8 @@ export const PredictionFeed: React.FC = () => {
                 prediction={p}
                 recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
                 cardRef={setCardRef(p.snippet_id)}
+                serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                 scrollRoot={scrollRoot}
                 loadAudioImmediately={index === 0}
               />
