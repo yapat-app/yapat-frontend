@@ -141,6 +141,10 @@ export const FeedbackButtons: React.FC<Props> = ({
         prediction.snippet_id,
         normalized,
         existing,
+        {
+          datasetId: selectedDatasetId,
+          serverLabels,
+        },
       );
       dispatch(
         setClassicSnippetAnnotations({

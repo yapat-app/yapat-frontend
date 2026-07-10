@@ -337,20 +337,6 @@ export const PredictionFeed: React.FC = () => {
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
         const detailMap: Record<number, ALSnippetLabelDetail[]> = {};
-        for (const [snippetId, fb] of Object.entries(feedbacksRef.current)) {
-          const labels = fb.final_labels ?? [];
-          if (labels.length > 0) map[Number(snippetId)] = labels;
-        }
-        // Ground-truth / AL-sourced labels (from ALSnippetAnnotation) count as
-        // "already labeled" too — they fill in for snippets that haven't
-        // received any classic feedback yet. An explicit classic action
-        // (including an explicit clear/reject) always wins over them.
-        for (const [snippetIdStr, labels] of Object.entries(alSnippetLabelsBySnippet)) {
-          const snippetId = Number(snippetIdStr);
-          if (labels.length > 0 && !(snippetId in feedbacksRef.current)) {
-            map[snippetId] = labels;
-          }
-        }
         if (!selectedDatasetId) {
           if (!cancelled) {
             setLabelsBySnippet(map);
@@ -361,10 +347,25 @@ export const PredictionFeed: React.FC = () => {
         try {
           const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
           for (const it of r.items) {
+            map[it.snippet_id] = it.labels;
             if (it.label_details?.length) detailMap[it.snippet_id] = it.label_details;
           }
         } catch {
-          // Existing label hydration still works without attribution metadata.
+          // Existing label hydration still works without server metadata.
+          for (const [snippetIdStr, labels] of Object.entries(alSnippetLabelsBySnippet)) {
+            const snippetId = Number(snippetIdStr);
+            if (labels.length > 0 && !(snippetId in feedbacksRef.current)) {
+              map[snippetId] = labels;
+            }
+          }
+        }
+        for (const [snippetId, fb] of Object.entries(feedbacksRef.current)) {
+          const labels = fb.final_labels ?? [];
+          if (labels.length > 0) {
+            map[Number(snippetId)] = labels;
+          } else {
+            delete map[Number(snippetId)];
+          }
         }
         if (!cancelled) {
           setLabelsBySnippet(map);
