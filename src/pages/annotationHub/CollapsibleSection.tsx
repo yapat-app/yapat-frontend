@@ -20,7 +20,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className="border-b border-gray-100 px-3.5 py-3.5">
+    <section className="border-b border-gray-100 px-3.5 py-2.5">
       {/*
         A plain div (not a <button>) — headerExtra may itself contain an
         interactive control (e.g. a reset icon button), and buttons can't
@@ -56,7 +56,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       <div
         className={[
           "grid transition-[grid-template-rows] duration-200 ease-in-out",
-          open ? "grid-rows-[1fr] mt-2.5" : "grid-rows-[0fr]",
+          open ? "grid-rows-[1fr] mt-2" : "grid-rows-[0fr]",
         ].join(" ")}
       >
         <div className="overflow-hidden">{children}</div>

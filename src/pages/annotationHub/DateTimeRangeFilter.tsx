@@ -109,7 +109,7 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
         mode="range"
         range={normalized}
         onChange={handleSliderChange}
-        barHeight={26}
+        barHeight={18}
         formatValue={formatValue}
         label={range ? `${formatValue(range[0])} – ${formatValue(range[1])}` : undefined}
       />

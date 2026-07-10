@@ -378,7 +378,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 
       {/* ── P3.2 (compact): unified rows — header doubles as toggle ────── */}
       {isMulti && compact && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
           {(allowedProperties as string[]).map((prop) => {
             const def = getPropertyByKey(prop);
             const label = def?.label ?? prop;
@@ -393,8 +393,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 className={[
                   "rounded-lg border transition-colors",
                   isActive
-                    ? "border-gray-200 px-2.5 py-2"
-                    : "border-dashed border-gray-200 px-2.5 py-1.5",
+                    ? "border-gray-200 px-2.5 py-1.5"
+                    : "border-dashed border-gray-200 px-2.5 py-1",
                 ].join(" ")}
               >
                 <button
@@ -462,11 +462,11 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 {isActive &&
                   row &&
                   (row.allValues.length === 0 ? (
-                    <p className="mt-1.5 text-[11px] text-gray-300 font-ibm-sans">
+                    <p className="mt-1 text-[11px] text-gray-300 font-ibm-sans">
                       No score data for this property
                     </p>
                   ) : (
-                    <div className="mt-1.5">
+                    <div className="mt-1">
                       <HistogramSlider
                         values={row.visibleValues}
                         totalValues={row.allValues}
@@ -480,7 +480,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                             sliderMode === "range" ? newNorm : [newNorm[0], 1],
                           )
                         }
-                        barHeight={26}
+                        barHeight={18}
                         hideAxis
                         accentColor={color}
                       />
