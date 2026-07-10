@@ -126,7 +126,6 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     snippetSetId,
     feedSource,
     feedbacks,
-    classicAnnotationsBySnippet,
   } = useAppSelector((state) => state.al);
   const isClassicFeed = feedSource === "classic";
 
@@ -221,7 +220,6 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     showLabeledPool,
     isClassicFeed,
     feedbacks,
-    classicAnnotationsBySnippet,
     lastRetrainJob,
     feedbackCount,
   });

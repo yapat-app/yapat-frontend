@@ -684,25 +684,6 @@ const alSlice = createSlice({
       action: PayloadAction<Record<number, Annotation[]>>,
     ) => {
       state.classicAnnotationsBySnippet = action.payload;
-      if (state.feedSource !== "classic") return;
-      for (const [snippetIdRaw, annotations] of Object.entries(action.payload)) {
-        const snippetId = Number(snippetIdRaw);
-        if (!Number.isFinite(snippetId)) continue;
-        if (annotations.length === 0) {
-          delete state.feedbacks[snippetId];
-          continue;
-        }
-        const labels = annotations
-          .map(annotationDisplayLabel)
-          .filter((name): name is string => Boolean(name));
-        if (labels.length === 0) {
-          delete state.feedbacks[snippetId];
-          continue;
-        }
-        state.feedbacks[snippetId] = buildClassicFeedback(snippetId, "MODIFY", labels);
-      }
-      state.predictions = applyClassicLabelScores(state.predictions, state.feedbacks);
-      state.projectionPredictions = state.predictions;
     },
     setClassicSnippetAnnotations: (
       state,

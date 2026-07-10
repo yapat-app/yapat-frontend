@@ -268,6 +268,16 @@ export interface ALLabeledSnippetsResponse {
 export interface ALSnippetLabel {
   snippet_id: number;
   labels: string[];
+  label_details?: ALSnippetLabelDetail[];
+}
+
+export interface ALSnippetLabelDetail {
+  label: string;
+  source: "ground_truth" | "user" | string;
+  user_id?: number | null;
+  username?: string | null;
+  labeled_by: string;
+  can_edit: boolean;
 }
 
 export interface ALSnippetLabelsResponse {
