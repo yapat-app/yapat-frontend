@@ -86,10 +86,6 @@ export const FeedbackButtons: React.FC<Props> = ({
     () => [...selectedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
     [selectedLabels],
   );
-  const submittedLabelsKey = useMemo(
-    () => [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
-    [submittedLabels],
-  );
 
   const submitClassic = async (_action: FeedbackAction, labels?: string[]) => {
     const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
@@ -104,10 +100,6 @@ export const FeedbackButtons: React.FC<Props> = ({
         prediction.snippet_id,
         normalized,
         existing,
-        {
-          datasetId: selectedDatasetId,
-          serverLabels,
-        },
       );
       dispatch(
         setClassicSnippetAnnotations({
@@ -123,8 +115,6 @@ export const FeedbackButtons: React.FC<Props> = ({
           ? err
           : (err as { message?: string })?.message ?? "Failed to save annotation";
       message.error(detail);
-      lastSubmittedKeyRef.current = submittedLabelsKey;
-      setSelectedLabels(submittedLabels);
       setSaveState("error");
     } finally {
       setSubmitting(false);
@@ -217,9 +207,10 @@ export const FeedbackButtons: React.FC<Props> = ({
       lastSyncedSnippetIdRef.current = prediction.snippet_id;
       setSaveState("idle");
     }
-    lastSubmittedKeyRef.current = submittedLabelsKey;
+    const syncedKey = [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|");
+    lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
-  }, [isBlind, prediction.snippet_id, submittedLabels.join("|"), submittedLabelsKey]);
+  }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
 
   // Auto-submit when the user changes labels (blind mode; debounced).
   useEffect(() => {

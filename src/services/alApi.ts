@@ -130,21 +130,6 @@ export const alApi = {
     return response.data;
   },
 
-  /** DELETE /api/pam-al/snippet-labels — remove a USER/ground-truth snippet label */
-  deleteSnippetLabel: async (params: {
-    dataset_id: number;
-    snippet_id: number;
-    label: string;
-    source?: "user" | "ground_truth";
-  }): Promise<void> => {
-    await api.delete(`${BASE}/snippet-labels`, {
-      params: {
-        source: "user",
-        ...params,
-      },
-    });
-  },
-
   /** GET /api/pam-al/checkpoints/{checkpoint_id}/species — species list for a checkpoint */
   getCheckpointSpecies: async (checkpointId: number): Promise<string[]> => {
     const cached = checkpointSpeciesCache.get(checkpointId);
@@ -203,3 +188,4 @@ export const alApi = {
     return promise;
   },
 };
+
