@@ -14,6 +14,26 @@ import type {
 /** Classic feeds have no PAM sampler scores; use an empty scores object so UI checks pass. */
 const CLASSIC_BASE_SCORES: SampleScores = {};
 
+export function annotationDisplayLabel(annotation: Annotation): string {
+  const fromSnapshot = annotation.resolved_name_snapshot?.trim();
+  if (fromSnapshot) return fromSnapshot;
+
+  const fromDisplayName =
+    typeof annotation.extra_metadata?.display_name === "string"
+      ? annotation.extra_metadata.display_name.trim()
+      : "";
+  if (fromDisplayName) return fromDisplayName;
+
+  const taxonId = annotation.taxon_id?.trim() ?? "";
+  if (taxonId.startsWith("local:")) {
+    return taxonId
+      .slice("local:".length)
+      .replace(/[_-]+/g, " ")
+      .trim();
+  }
+  return taxonId;
+}
+
 export function snippetsToPredictions(snippets: Snippet[]): PAMPrediction[] {
   return snippets.map((s) => ({
     id: null,
@@ -63,7 +83,7 @@ export function annotationsToClassicFeedbacks(
     const anns = annotationRows[index] ?? [];
     if (anns.length === 0) return;
     const labels = anns
-      .map((a) => a.resolved_name_snapshot?.trim())
+      .map(annotationDisplayLabel)
       .filter((name): name is string => Boolean(name));
     if (labels.length === 0) return;
     feedbacks[snippet.id] = buildClassicFeedback(snippet.id, "MODIFY", labels);

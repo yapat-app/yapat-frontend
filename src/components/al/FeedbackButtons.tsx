@@ -19,6 +19,7 @@ import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import { useStudyFlow } from "../../studyFlow";
 import { LabelSelector } from "./LabelSelector";
+import { annotationDisplayLabel } from "../../utils/classicFeedSync";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
 interface Props {
@@ -67,9 +68,15 @@ export const FeedbackButtons: React.FC<Props> = ({
   const feedbackDisabled = isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
-  const submittedLabels = existingFeedback
-    ? (existingFeedback.final_labels ?? [])
-    : (serverLabels ?? []);
+  const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+  const annotationLabels = snippetAnnotations
+    .map(annotationDisplayLabel)
+    .filter((name): name is string => Boolean(name));
+  const submittedLabels = isClassicFeed
+    ? annotationLabels
+    : existingFeedback
+      ? (existingFeedback.final_labels ?? [])
+      : (serverLabels ?? []);
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
   const skipNextAutoSubmitRef = useRef<boolean>(true);
   const lastSubmittedKeyRef = useRef<string>("");
@@ -180,10 +187,9 @@ export const FeedbackButtons: React.FC<Props> = ({
     }
   };
 
-  const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
   const labelContributors: Record<string, string[]> = {};
   for (const ann of snippetAnnotations) {
-    const label = (ann.resolved_name_snapshot ?? "").trim();
+    const label = annotationDisplayLabel(ann);
     if (!label) continue;
     const who = (ann.username ?? `user:${ann.user_id}`).trim();
     if (!labelContributors[label]) labelContributors[label] = [];

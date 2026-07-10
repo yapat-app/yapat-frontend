@@ -26,6 +26,7 @@ import type {
 import { isInferenceJobDispatch } from "../../types/al";
 import type { Annotation, Snippet } from "../../types";
 import {
+  annotationDisplayLabel,
   applyClassicLabelScores,
   buildClassicFeedback,
   snippetsToPredictions,
@@ -696,7 +697,7 @@ const alSlice = createSlice({
       } else {
         state.classicAnnotationsBySnippet[snippetId] = annotations;
         const labels = annotations
-          .map((a) => a.resolved_name_snapshot?.trim())
+          .map(annotationDisplayLabel)
           .filter((name): name is string => Boolean(name));
         state.feedbacks[snippetId] = buildClassicFeedback(
           snippetId,

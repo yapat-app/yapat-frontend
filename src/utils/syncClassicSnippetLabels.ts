@@ -3,6 +3,7 @@ import type { Annotation } from "../types";
 import { annotationApi } from "../services/api";
 import { createAnnotation, deleteAnnotation } from "../redux/features/annotationSlice";
 import { buildAnnotationCreatePayload } from "./annotationCreatePayload";
+import { annotationDisplayLabel } from "./classicFeedSync";
 
 /**
  * Persist label selection for a classic-feed snippet: DELETE removed annotations,
@@ -18,7 +19,7 @@ export async function syncClassicSnippetLabels(
   const nextLower = new Set(nextNorm.map((l) => l.toLowerCase()));
 
   for (const ann of existing) {
-    const display = ann.resolved_name_snapshot?.trim() ?? "";
+    const display = annotationDisplayLabel(ann);
     if (display && !nextLower.has(display.toLowerCase())) {
       await dispatch(deleteAnnotation(ann.id)).unwrap();
     }
@@ -26,7 +27,7 @@ export async function syncClassicSnippetLabels(
 
   const existingLower = new Set(
     existing
-      .map((a) => (a.resolved_name_snapshot?.trim() ?? "").toLowerCase())
+      .map((a) => annotationDisplayLabel(a).toLowerCase())
       .filter(Boolean),
   );
 
