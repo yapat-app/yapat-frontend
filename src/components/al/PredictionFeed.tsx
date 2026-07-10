@@ -20,6 +20,7 @@ import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger, usePanelDwell } from "../../studyLogging";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
+import { annotationDisplayLabel } from "../../utils/classicFeedSync";
 import {
   hydrateClassicAnnotations,
   setSelectedSnippet,
@@ -148,6 +149,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     snippetSetId,
     feedSource,
     alFilters,
+    classicAnnotationsBySnippet,
   } = useAppSelector((state) => state.al);
   // Backward-compat scalar used by scroll-sync and single-card paths.
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
@@ -261,9 +263,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
     if (localLabelScope.length > 0) {
       const scopeSet = new Set(localLabelScope);
-      result = result.filter((p) =>
-        (p.predicted_labels ?? []).some((label) => scopeSet.has(label)),
-      );
+      result = result.filter((p) => {
+        const labels = isClassicFeed
+          ? (labelsBySnippet[p.snippet_id] ?? [])
+          : (p.predicted_labels ?? []);
+        return labels.some((label) => scopeSet.has(label));
+      });
     }
 
     // While the recording->location map is still loading, don't hide items —
@@ -318,6 +323,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     predictions,
     feedbacks,
     labelsBySnippet,
+    isClassicFeed,
     filterAnnotationStatus,
     localLabelScope,
     filterLocations,
@@ -728,6 +734,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const bySnippet: Record<number, Annotation[]> = {};
+        for (const id of ids) bySnippet[id] = [];
         for (const ann of all) {
           if (!bySnippet[ann.snippet_id]) bySnippet[ann.snippet_id] = [];
           bySnippet[ann.snippet_id].push(ann);
@@ -873,11 +880,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .join("|"),
     [feedbacks],
   );
-  const feedbacksRef = useRef(feedbacks);
-  useEffect(() => {
-    feedbacksRef.current = feedbacks;
-  }, [feedbacks]);
-
+  const classicAnnotationLabelSignature = useMemo(
+    () =>
+      Object.entries(classicAnnotationsBySnippet)
+        .map(
+          ([snippetId, annotations]) =>
+            `${snippetId}:${annotations.map(annotationDisplayLabel).join(",")}`,
+        )
+        .sort()
+        .join("|"),
+    [classicAnnotationsBySnippet],
+  );
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
@@ -887,8 +900,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       }
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
-        for (const [snippetId, fb] of Object.entries(feedbacksRef.current)) {
-          const labels = fb.final_labels ?? [];
+        for (const [snippetId, annotations] of Object.entries(classicAnnotationsBySnippet)) {
+          const labels = annotations
+            .map(annotationDisplayLabel)
+            .filter((label): label is string => Boolean(label));
           if (labels.length > 0) map[Number(snippetId)] = labels;
         }
         if (!cancelled) setLabelsBySnippet(map);
@@ -921,6 +936,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedDatasetId,
     snippetSetId,
     feedbackLabelSignature,
+    classicAnnotationLabelSignature,
+    classicAnnotationsBySnippet,
   ]);
 
   const labeledCount = useMemo(

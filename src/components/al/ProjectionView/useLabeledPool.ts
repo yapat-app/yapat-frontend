@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { alApi } from "../../../services/alApi";
+import type { Annotation } from "../../../types";
 import type { FeedbackResponse } from "../../../types/al";
+import { annotationDisplayLabel } from "../../../utils/classicFeedSync";
 
 export function useLabeledPool(opts: {
   selectedDatasetId: number | null;
@@ -8,6 +10,7 @@ export function useLabeledPool(opts: {
   showLabeledPool: boolean;
   isClassicFeed: boolean;
   feedbacks: Record<number, FeedbackResponse>;
+  classicAnnotationsBySnippet: Record<number, Annotation[]>;
   lastRetrainJob: unknown;
   feedbackCount: number;
 }): { labeledSnippetIds: Set<number>; labelsBySnippet: Record<number, string[]> } {
@@ -17,6 +20,7 @@ export function useLabeledPool(opts: {
     showLabeledPool,
     isClassicFeed,
     feedbacks,
+    classicAnnotationsBySnippet,
     lastRetrainJob,
     feedbackCount,
   } = opts;
@@ -32,6 +36,13 @@ export function useLabeledPool(opts: {
         return;
       }
       try {
+        if (isClassicFeed) {
+          const ids = Object.entries(classicAnnotationsBySnippet)
+            .filter(([, annotations]) => annotations.length > 0)
+            .map(([snippetId]) => Number(snippetId));
+          if (!cancelled) setLabeledSnippetIds(new Set(ids));
+          return;
+        }
         const r = await alApi.getLabeledSnippets(
           selectedDatasetId,
           snippetSetId ?? undefined,
@@ -46,16 +57,25 @@ export function useLabeledPool(opts: {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDatasetId, snippetSetId, showLabeledPool, lastRetrainJob, feedbackCount]);
+  }, [
+    selectedDatasetId,
+    snippetSetId,
+    showLabeledPool,
+    isClassicFeed,
+    classicAnnotationsBySnippet,
+    lastRetrainJob,
+    feedbackCount,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
-        for (const [snippetId, fb] of Object.entries(feedbacks)) {
-          const labels = fb.final_labels ?? [];
+        for (const [snippetId, annotations] of Object.entries(classicAnnotationsBySnippet)) {
+          const labels = annotations
+            .map(annotationDisplayLabel)
+            .filter((label): label is string => Boolean(label));
           if (labels.length > 0) map[Number(snippetId)] = labels;
         }
         if (!cancelled) setLabelsBySnippet(map);
@@ -80,7 +100,7 @@ export function useLabeledPool(opts: {
     return () => {
       cancelled = true;
     };
-  }, [isClassicFeed, feedbacks, selectedDatasetId, snippetSetId]);
+  }, [isClassicFeed, feedbacks, classicAnnotationsBySnippet, selectedDatasetId, snippetSetId]);
 
   return { labeledSnippetIds, labelsBySnippet };
 }
