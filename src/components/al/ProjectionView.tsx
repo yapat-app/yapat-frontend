@@ -13,7 +13,7 @@ import {
   setVisibilityRangeFor,
 } from "../../redux/features/alSlice";
 import { getPropertyByKey } from "../../constants/alProperties";
-import { resolveColor } from "../../utils/alColors";
+import { resolveColor, resetDynamicColorCache } from "../../utils/alColors";
 import { ALFilterPanel } from "./ALFilterPanel";
 import { visualisationsApi } from "../../services/visualisationsApi";
 import { alApi } from "../../services/alApi";
@@ -144,6 +144,15 @@ export const ProjectionView: React.FC = () => {
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
   const unmountedRef = useRef(false);
+
+  // Dynamic categorical colors (e.g. actual_label) are assigned incrementally
+  // and cached at module scope so a label's color stays stable as more data
+  // streams in. That cache must not leak across datasets/snippet sets --
+  // otherwise colors from a previously-viewed dataset's label space bleed
+  // into the current one.
+  useEffect(() => {
+    resetDynamicColorCache();
+  }, [selectedDatasetId, snippetSetId]);
   useEffect(() => {
     return () => {
       unmountedRef.current = true;
@@ -423,18 +432,16 @@ export const ProjectionView: React.FC = () => {
     return () => { cancelled = true; };
   }, [selectedDatasetId, snippetSetId, showLabeledPool, lastRetrainJob, feedbackCount]);
 
+  // actual_label reflects ALSnippetAnnotation (ground-truth imports + AL
+  // feedback + mirrored classic annotations) regardless of which feed mode
+  // is currently active -- classic/Filter mode used to source this only
+  // from the session's local `feedbacks` state (canonical Annotation only,
+  // usually near-empty), which is why its FPV never showed colors. Fetching
+  // the same way AL mode does keeps both consistent. `feedbacks` stays a
+  // dependency so a fresh annotation in this session triggers a refetch.
   useEffect(() => {
     let cancelled = false;
     async function loadLabels() {
-      if (isClassicFeed) {
-        const map: Record<number, string[]> = {};
-        for (const [snippetId, fb] of Object.entries(feedbacks)) {
-          const labels = fb.final_labels ?? [];
-          if (labels.length > 0) map[Number(snippetId)] = labels;
-        }
-        if (!cancelled) setLabelsBySnippet(map);
-        return;
-      }
       if (!selectedDatasetId) {
         if (!cancelled) setLabelsBySnippet({});
         return;

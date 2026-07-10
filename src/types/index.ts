@@ -535,6 +535,7 @@ export interface FeedParams {
   method?: string;
   annotation_status?: "any" | "annotated" | "unannotated";
   location?: string;
+  species?: string;
   skip?: number;
   limit?: number;
 }

@@ -46,6 +46,12 @@ export const SOUND_TYPE_COLORS: Record<string, string> = {
 // ── Dynamic categorical palette (golden-angle HSL) ────────────────────────────
 
 const _dynamicCache = new Map<string, Map<string, string>>();
+// Next unclaimed golden-angle slot per propertyKey. Colors are assigned
+// incrementally and never reassigned, so two different call sites passing
+// differently-sized/ordered `allValues` snapshots (e.g. the main scatter's
+// point coloring vs. the legend builder vs. a per-point tooltip) can never
+// collide on the same hue -- each new value simply claims the next slot.
+const _dynamicNextIndex = new Map<string, number>();
 
 export function getDynamicCategoricalColor(
   propertyKey: string,
@@ -54,21 +60,31 @@ export function getDynamicCategoricalColor(
 ): string {
   if (!_dynamicCache.has(propertyKey)) {
     _dynamicCache.set(propertyKey, new Map());
+    _dynamicNextIndex.set(propertyKey, 0);
   }
   const palette = _dynamicCache.get(propertyKey)!;
   if (!palette.has(value)) {
-    const sorted = [...new Set(allValues)].sort();
-    sorted.forEach((v, i) => {
+    // First-ever population for this key: seed the full known value set in
+    // sorted order so colors read predictably (matches the legend's sort),
+    // as long as it's actually known yet. Otherwise fall back to appending
+    // just this value at the next free slot.
+    const known = palette.size === 0 && allValues.length > 0
+      ? [...new Set(allValues)].sort()
+      : [value];
+    for (const v of known) {
       if (!palette.has(v)) {
-        palette.set(v, `hsl(${Math.round((i * 137.508) % 360)},60%,52%)`);
+        const idx = _dynamicNextIndex.get(propertyKey)!;
+        palette.set(v, `hsl(${Math.round((idx * 137.508) % 360)},60%,52%)`);
+        _dynamicNextIndex.set(propertyKey, idx + 1);
       }
-    });
+    }
   }
   return palette.get(value) ?? "#9e9e9e";
 }
 
 export function resetDynamicColorCache(): void {
   _dynamicCache.clear();
+  _dynamicNextIndex.clear();
 }
 
 // ── Main resolver ─────────────────────────────────────────────────────────────

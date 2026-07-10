@@ -10,6 +10,7 @@ import {
   setClassicAnnotationFeed,
   hydrateClassicFeedbacks,
   hydrateClassicAnnotations,
+  hydrateAlSnippetLabels,
   clearClassicAnnotationFeed,
 } from "../../redux/features/alSlice";
 import {
@@ -27,6 +28,7 @@ import type { Annotation, FeedSimilarityCreate, Snippet } from "../../types";
 import type { AnnotateMode } from "./types";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
 import { datasetApi } from "../../services/api";
+import { alApi } from "../../services/alApi";
 
 export function useHubClassic(
   mode: AnnotateMode,
@@ -48,6 +50,9 @@ export function useHubClassic(
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+  const [filterSpecies, setFilterSpecies] = useState<string[]>([]);
+  const [speciesOptions, setSpeciesOptions] = useState<string[]>([]);
+  const [speciesLoading, setSpeciesLoading] = useState(false);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null;
     startSec: number;
@@ -245,6 +250,55 @@ export function useHubClassic(
     };
   }, [mode, classicDatasetId]);
 
+  useEffect(() => {
+    if (mode !== "filter" || !classicDatasetId) {
+      setSpeciesOptions([]);
+      dispatch(hydrateAlSnippetLabels({}));
+      return;
+    }
+    const ds = Number(classicDatasetId);
+    if (Number.isNaN(ds)) return;
+
+    let cancelled = false;
+    setSpeciesLoading(true);
+    void alApi
+      .getSnippetLabels(ds)
+      .then((res) => {
+        if (cancelled) return;
+        const distinct = new Set<string>();
+        const bySnippet: Record<number, string[]> = {};
+        res.items.forEach((item) => {
+          item.labels.forEach((label) => distinct.add(label));
+          bySnippet[item.snippet_id] = item.labels;
+        });
+        setSpeciesOptions(Array.from(distinct).sort());
+        dispatch(hydrateAlSnippetLabels(bySnippet));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSpeciesOptions([]);
+          dispatch(hydrateAlSnippetLabels({}));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSpeciesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, classicDatasetId, dispatch]);
+
+  // The Species picker only renders (in ClassicFeedConfigModal) when
+  // filterAnnotationStatus === "annotated" -- clear any stale selection
+  // when status moves away from "annotated" so a hidden filter never rides
+  // along silently in the feed request.
+  useEffect(() => {
+    if (filterAnnotationStatus !== "annotated" && filterSpecies.length > 0) {
+      setFilterSpecies([]);
+    }
+  }, [filterAnnotationStatus, filterSpecies]);
+
   const { snippetsLoading, snippets: snippetList, error: snippetError } =
     useAppSelector((s) => s.snippet);
   const hasClassicFeed = snippetList.length > 0;
@@ -275,6 +329,7 @@ export function useHubClassic(
             method: "filter",
             annotation_status: filterAnnotationStatus,
             ...(filterLocations.length > 0 ? { location: filterLocations.join(",") } : {}),
+            ...(filterSpecies.length > 0 ? { species: filterSpecies.join(",") } : {}),
           }),
         ).unwrap();
       } else {
@@ -333,6 +388,7 @@ export function useHubClassic(
     feedLimit,
     filterAnnotationStatus,
     filterLocations,
+    filterSpecies,
     similarityState,
     dispatch,
     hasClassicFeed,
@@ -371,6 +427,10 @@ export function useHubClassic(
     setFilterLocations,
     recordingLocations,
     locationsLoading,
+    filterSpecies,
+    setFilterSpecies,
+    speciesOptions,
+    speciesLoading,
     feedGenerateBusy,
     similarityState,
     handleSimilarityChange,

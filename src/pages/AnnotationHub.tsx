@@ -186,6 +186,10 @@ export const AnnotationHub: React.FC = () => {
         onFilterLocationsChange={classic.setFilterLocations}
         recordingLocations={classic.recordingLocations}
         locationsLoading={classic.locationsLoading}
+        filterSpecies={classic.filterSpecies}
+        onFilterSpeciesChange={classic.setFilterSpecies}
+        speciesOptions={classic.speciesOptions}
+        speciesLoading={classic.speciesLoading}
         similarityState={classic.similarityState}
         onSimilarityChange={classic.handleSimilarityChange}
         onCancel={() => classic.setClassicConfigOpen(false)}

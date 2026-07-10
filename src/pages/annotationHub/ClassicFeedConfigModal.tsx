@@ -14,6 +14,10 @@ export type ClassicFeedConfigModalProps = {
   onFilterLocationsChange: (v: string[]) => void;
   recordingLocations: string[];
   locationsLoading: boolean;
+  filterSpecies: string[];
+  onFilterSpeciesChange: (v: string[]) => void;
+  speciesOptions: string[];
+  speciesLoading: boolean;
   similarityState: {
     audioFile: File | null;
     startSec: number;
@@ -48,6 +52,10 @@ export const ClassicFeedConfigModal: React.FC<ClassicFeedConfigModalProps> = ({
   onFilterLocationsChange,
   recordingLocations,
   locationsLoading,
+  filterSpecies,
+  onFilterSpeciesChange,
+  speciesOptions,
+  speciesLoading,
   similarityState,
   onSimilarityChange,
   onCancel,
@@ -100,7 +108,7 @@ export const ClassicFeedConfigModal: React.FC<ClassicFeedConfigModalProps> = ({
           </Form.Item>
           <Form.Item
             label="Annotation status"
-            tooltip="Filter snippets by whether the current user has annotated them"
+            tooltip="Filter snippets by whether they've been labeled (by any user, or by ground truth)"
           >
             <Select
               value={filterAnnotationStatus}
@@ -109,10 +117,35 @@ export const ClassicFeedConfigModal: React.FC<ClassicFeedConfigModalProps> = ({
               options={[
                 { value: "any", label: "Any (annotated + unannotated)" },
                 { value: "unannotated", label: "Unannotated only" },
-                { value: "annotated", label: "Annotated only" },
+                { value: "annotated", label: "Annotated" },
               ]}
             />
           </Form.Item>
+          {filterAnnotationStatus === "annotated" && (
+            <Form.Item
+              label="Species"
+              tooltip="Narrow to snippets annotated with specific species. Leave empty to include all annotated species."
+            >
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="All annotated species (select none/one/many)"
+                loading={speciesLoading}
+                value={filterSpecies}
+                onChange={(v) => onFilterSpeciesChange(v)}
+                onClear={() => onFilterSpeciesChange([])}
+                style={{ width: "100%" }}
+                options={speciesOptions.map((sp) => ({
+                  value: sp,
+                  label: sp,
+                }))}
+                notFoundContent={
+                  speciesLoading ? "Loading species…" : "No annotated species yet"
+                }
+              />
+            </Form.Item>
+          )}
         </>
       )}
 

@@ -243,6 +243,7 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
 function clearSessionState(state: ALState): void {
   state.feedSource = null;
   state.classicAnnotationsBySnippet = {};
+  state.alSnippetLabelsBySnippet = {};
   state.predictions = [];
   state.projectionPredictions = [];
   state.modelInfo = {};
@@ -268,6 +269,7 @@ function buildInitialState(): ALState {
   const base: ALState = {
     feedSource: null,
     classicAnnotationsBySnippet: {},
+    alSnippetLabelsBySnippet: {},
     modelCheckpointId: null,
     modelFamilyName: null,
     usedCheckpointId: null,
@@ -583,6 +585,12 @@ const alSlice = createSlice({
     ) => {
       state.classicAnnotationsBySnippet = action.payload;
     },
+    hydrateAlSnippetLabels: (
+      state,
+      action: PayloadAction<Record<number, string[]>>,
+    ) => {
+      state.alSnippetLabelsBySnippet = action.payload;
+    },
     setClassicSnippetAnnotations: (
       state,
       action: PayloadAction<{ snippetId: number; annotations: Annotation[] }>,
@@ -624,6 +632,7 @@ const alSlice = createSlice({
       if (state.feedSource !== "classic") return;
       state.feedSource = null;
       state.classicAnnotationsBySnippet = {};
+      state.alSnippetLabelsBySnippet = {};
       state.predictions = [];
       state.projectionPredictions = [];
       state.feedbacks = {};
@@ -905,6 +914,7 @@ export const {
   setClassicAnnotationFeed,
   hydrateClassicFeedbacks,
   hydrateClassicAnnotations,
+  hydrateAlSnippetLabels,
   setClassicSnippetAnnotations,
   setClassicSnippetFeedback,
   clearClassicAnnotationFeed,

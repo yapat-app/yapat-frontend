@@ -33,6 +33,7 @@ export const PredictionFeed: React.FC = () => {
     selectedDatasetId,
     snippetSetId,
     feedSource,
+    alSnippetLabelsBySnippet,
   } = useAppSelector((state) => state.al);
   const isClassicFeed = feedSource === "classic";
   const phase = usePhaseConfig();
@@ -334,6 +335,16 @@ export const PredictionFeed: React.FC = () => {
           const labels = fb.final_labels ?? [];
           if (labels.length > 0) map[Number(snippetId)] = labels;
         }
+        // Ground-truth / AL-sourced labels (from ALSnippetAnnotation) count as
+        // "already labeled" too — they fill in for snippets that haven't
+        // received any classic feedback yet. An explicit classic action
+        // (including an explicit clear/reject) always wins over them.
+        for (const [snippetIdStr, labels] of Object.entries(alSnippetLabelsBySnippet)) {
+          const snippetId = Number(snippetIdStr);
+          if (labels.length > 0 && !(snippetId in feedbacksRef.current)) {
+            map[snippetId] = labels;
+          }
+        }
         if (!cancelled) setLabelsBySnippet(map);
         return;
       }
@@ -353,7 +364,7 @@ export const PredictionFeed: React.FC = () => {
     }
     loadLabels();
     return () => { cancelled = true; };
-  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature]);
+  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature, alSnippetLabelsBySnippet]);
 
   const labeledCount = useMemo(
     () => predictions.filter((p) => !!feedbacks[p.snippet_id]).length,

@@ -299,6 +299,13 @@ export interface ALState {
   feedSource: ALFeedSource | null;
   /** Classic mode: annotation rows per snippet (for add/remove sync with API). */
   classicAnnotationsBySnippet: Record<number, Annotation[]>;
+  /**
+   * Classic Filter mode: AL-sourced labels per snippet (ground-truth imports +
+   * AL feedback, from /api/pam-al/snippet-labels — the same source the
+   * species filter matches against). Read-only hint data; distinct from
+   * `classicAnnotationsBySnippet`, which is the canonical, editable set.
+   */
+  alSnippetLabelsBySnippet: Record<number, string[]>;
   /** Model selection */
   modelCheckpointId: number | null; // UI selection only (maps -> model_family_name)
   modelFamilyName: string | null;   // required by backend PAM-AL endpoints
