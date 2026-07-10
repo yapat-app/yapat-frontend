@@ -133,7 +133,10 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
   const fillWidth = mode === "threshold" ? (1 - lo) * 100 : (hi - lo) * 100;
 
   return (
-    <div className="w-full select-none">
+    // px-[9px] (half the 18px handle width) so the lo/hi handles land fully
+    // inside the container at the 0%/100% extremes instead of being clipped
+    // in half by the edge — also gives the bars/axis a bit of breathing room.
+    <div className="w-full select-none px-[9px]">
       {/* Bar area */}
       <div
         className="flex items-end gap-[2px] w-full"

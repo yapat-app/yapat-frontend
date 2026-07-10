@@ -81,6 +81,7 @@ export const FeedbackButtons: React.FC<Props> = ({
   const skipNextAutoSubmitRef = useRef<boolean>(true);
   const lastSubmittedKeyRef = useRef<string>("");
   const debounceTimerRef = useRef<number | null>(null);
+  const pendingSubmitRef = useRef<(() => void) | null>(null);
 
   const selectionKey = useMemo(
     () => [...selectedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
@@ -202,11 +203,24 @@ export const FeedbackButtons: React.FC<Props> = ({
   // Never touch saveState here — the submit() function owns that lifecycle.
   useEffect(() => {
     if (!isBlind) return;
-    skipNextAutoSubmitRef.current = true;
     if (lastSyncedSnippetIdRef.current !== prediction.snippet_id) {
+      // A debounced edit for the outgoing snippet hasn't been persisted yet —
+      // flush it now rather than letting the auto-submit effect's cleanup
+      // (triggered a moment later by resetting selectedLabels below) cancel
+      // it and drop the label on the floor.
+      if (pendingSubmitRef.current) {
+        if (debounceTimerRef.current) {
+          window.clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+        }
+        const flush = pendingSubmitRef.current;
+        pendingSubmitRef.current = null;
+        flush();
+      }
       lastSyncedSnippetIdRef.current = prediction.snippet_id;
       setSaveState("idle");
     }
+    skipNextAutoSubmitRef.current = true;
     const syncedKey = [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|");
     lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
@@ -223,15 +237,20 @@ export const FeedbackButtons: React.FC<Props> = ({
     if (feedbackDisabled) return;
     if (selectionKey === lastSubmittedKeyRef.current) return;
 
-    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = window.setTimeout(() => {
+    const doSubmit = () => {
+      pendingSubmitRef.current = null;
+      debounceTimerRef.current = null;
       lastSubmittedKeyRef.current = selectionKey;
       if (selectionKey.length === 0) {
         submit("REJECT");
         return;
       }
       submit("MODIFY", [...selectedLabels]);
-    }, 250);
+    };
+
+    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
+    pendingSubmitRef.current = doSubmit;
+    debounceTimerRef.current = window.setTimeout(doSubmit, 250);
 
     return () => {
       if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
