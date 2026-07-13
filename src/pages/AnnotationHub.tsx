@@ -9,11 +9,9 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Button, Tag, Tooltip, Spin } from "antd";
+import { Select, Button, Tag, Spin } from "antd";
 import {
   DatabaseOutlined,
-  BulbOutlined,
-  CheckCircleOutlined,
   HistoryOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
@@ -43,25 +41,22 @@ export const AnnotationHub: React.FC = () => {
     user,
   );
 
-  const rawMode = searchParams.get("mode");
-  const mode: AnnotateMode =
-    rawMode === "al" ||
-    rawMode === "validate" ||
-    rawMode === "similarity" ||
-    rawMode === "filter"
-      ? rawMode
+  const [mode, setMode] = useState<AnnotateMode>(() => {
+    const raw = searchParams.get("mode");
+    return raw === "al" ||
+      raw === "validate" ||
+      raw === "similarity" ||
+      raw === "filter"
+      ? raw
       : "random";
+  });
 
-  const setMode = useCallback(
-    (next: AnnotateMode) => {
-      // Clone existing params so `phase` (and anything else) is preserved —
-      // rebuilding a fresh {mode, dataset_id} object dropped the phase param.
-      const params = new URLSearchParams(searchParams);
-      params.set("mode", next);
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
+  useEffect(() => {
+    if (!searchParams.has("mode")) return;
+    const params = new URLSearchParams(searchParams);
+    // params.delete("mode");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const phase = usePhaseConfig();
 
@@ -166,13 +161,13 @@ export const AnnotationHub: React.FC = () => {
         <div className="flex items-center gap-2 ml-auto">
           {al.predictions.length > 0 && (
             <>
-              <Tooltip title="Total predictions">
+              {/* <Tooltip title="Total predictions">
                 <span className="flex items-center gap-1 text-xs font-ibm-sans text-gray-500">
                   <BulbOutlined className="text-blue-400" />
                   {al.predictions.length} predictions
                 </span>
-              </Tooltip>
-              <Tooltip title="Feedbacks since last retrain">
+              </Tooltip> */}
+              {/* <Tooltip title="Feedbacks since last retrain">
                 <span className="flex items-center gap-1 text-xs font-ibm-sans text-gray-500">
                   <CheckCircleOutlined className="text-green-500" />
                   {al.feedbackCountDisplay.shown}/{al.retrainThreshold}
@@ -182,7 +177,7 @@ export const AnnotationHub: React.FC = () => {
                     </Tag>
                   )}
                 </span>
-              </Tooltip>
+              </Tooltip> */}
               {al.lastRetrainJob && (
                 <Tag
                   color={
@@ -202,7 +197,7 @@ export const AnnotationHub: React.FC = () => {
               )}
             </>
           )}
-          {al.isRestoredFeed && (
+          {/* {al.isRestoredFeed && (
             <Tooltip title="Showing saved feed from a previous session. Click to clear.">
               <Tag
                 icon={<HistoryOutlined />}
@@ -214,7 +209,7 @@ export const AnnotationHub: React.FC = () => {
                 Saved · {al.savedFeedLabel}
               </Tag>
             </Tooltip>
-          )}
+          )} */}
           {al.inferenceLoading && <Spin size="small" />}
         </div>
       </div>

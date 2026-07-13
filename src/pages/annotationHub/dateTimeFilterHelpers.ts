@@ -40,6 +40,7 @@ export function dayjsToEpochDay(d: Dayjs): number {
 /** Seconds since midnight -> "HH:MM", e.g. 32400 -> "09:00". */
 export function formatTimeAxisLabel(seconds: number): string {
   const clamped = Math.max(0, Math.min(86400, Math.round(seconds)));
+  if (clamped === 86400) return "23:59";
   const h = Math.floor(clamped / 3600) % 24;
   const m = Math.floor((clamped % 3600) / 60);
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;

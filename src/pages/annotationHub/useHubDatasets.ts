@@ -56,7 +56,6 @@ export function useHubDatasets(
 
     const next = new URLSearchParams(searchParams);
     next.set("dataset_id", String(pickId));
-    if (!next.get("mode")) next.set("mode", "random");
     setSearchParams(next, { replace: true });
   }, [searchParams, allDatasets, user?.id, setSearchParams]);
 

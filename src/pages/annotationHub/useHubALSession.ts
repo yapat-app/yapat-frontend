@@ -191,7 +191,6 @@ export function useHubALSession(
         setSearchParams(
           (prev) => {
             const next = new URLSearchParams(prev);
-            next.set("mode", mode);
             next.set("dataset_id", String(selectedDatasetId));
             return next;
           },
