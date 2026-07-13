@@ -43,25 +43,22 @@ export const AnnotationHub: React.FC = () => {
     user,
   );
 
-  const rawMode = searchParams.get("mode");
-  const mode: AnnotateMode =
-    rawMode === "al" ||
-    rawMode === "validate" ||
-    rawMode === "similarity" ||
-    rawMode === "filter"
-      ? rawMode
+  const [mode, setMode] = useState<AnnotateMode>(() => {
+    const raw = searchParams.get("mode");
+    return raw === "al" ||
+      raw === "validate" ||
+      raw === "similarity" ||
+      raw === "filter"
+      ? raw
       : "random";
+  });
 
-  const setMode = useCallback(
-    (next: AnnotateMode) => {
-      // Clone existing params so `phase` (and anything else) is preserved —
-      // rebuilding a fresh {mode, dataset_id} object dropped the phase param.
-      const params = new URLSearchParams(searchParams);
-      params.set("mode", next);
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
+  useEffect(() => {
+    if (!searchParams.has("mode")) return;
+    const params = new URLSearchParams(searchParams);
+    // params.delete("mode");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const phase = usePhaseConfig();
 
