@@ -900,7 +900,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       }
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
-        for (const [snippetId, annotations] of Object.entries(classicAnnotationsBySnippet)) {
+        for (const [snippetId, annotations] of Object.entries(
+          classicAnnotationsBySnippet,
+        )) {
           const labels = annotations
             .map(annotationDisplayLabel)
             .filter((label): label is string => Boolean(label));
@@ -1187,7 +1189,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                     prediction={resolvedAdHocPrediction}
                     recordingName={
                       typeof resolvedAdHocPrediction.recording_id === "number"
-                        ? recordingNameById[resolvedAdHocPrediction.recording_id]
+                        ? recordingNameById[
+                            resolvedAdHocPrediction.recording_id
+                          ]
                         : undefined
                     }
                     cardHeightPx={blindSnapCardHeight}
@@ -1217,7 +1221,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             <FeedbackButtons
               prediction={stickyLabelPrediction}
               serverLabels={
-                labelsBySnippet[stickyLabelPrediction.snippet_id] ?? EMPTY_LABELS
+                labelsBySnippet[stickyLabelPrediction.snippet_id] ??
+                EMPTY_LABELS
               }
               quickLabels={quickLabels}
               quickLabelsLoading={quickLabelsLoading}
