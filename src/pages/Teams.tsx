@@ -100,7 +100,7 @@ export const Teams = () => {
   const handleChangeDataset = (value: string[]) => {
     setTeamInfo((prev: any) => ({
       ...prev,
-      dataset_ids: [value],
+      dataset_ids: value,
     }));
   };
 
@@ -380,6 +380,7 @@ export const Teams = () => {
                     </p>
 
                     <Select<string[]>
+                      mode="multiple"
                       value={teamInfo.dataset_ids}
                       style={{
                         width: "100%",
