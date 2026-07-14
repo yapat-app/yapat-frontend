@@ -332,6 +332,7 @@ export const AnnotationHub: React.FC = () => {
                   labelScopeOptions={al.labelScopeOptions}
                   labelScopeLoading={al.labelScopeLoading}
                   showSampleProperties={phase.sidebar.sampleProperties}
+                  dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
                   showFindSimilar={phase.sidebar.findSimilar}
                   showLabelScope={phase.sidebar.labelScope}

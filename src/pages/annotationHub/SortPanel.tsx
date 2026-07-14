@@ -15,6 +15,7 @@ interface SortPanelProps {
   onChange: (fields: SortField[]) => void;
   allowNonModel: boolean;
   allowModel: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -28,20 +29,28 @@ export const SortPanel: React.FC<SortPanelProps> = ({
   onChange,
   allowNonModel,
   allowModel,
+  disabled = false,
 }) => {
   const [open, setOpen] = useState(true);
 
   if (!allowNonModel && !allowModel) return null;
 
   const availableOptions = getAvailableSortOptions(allowNonModel, allowModel);
-  const activeCount = fields.filter((f) => !f.disabled).length;
+  const activeCount = disabled ? 0 : fields.filter((f) => !f.disabled).length;
 
   const cycleChip = (property: SortableProperty) => {
     const existing = fields.find((f) => f.property === property);
     if (!existing) {
-      onChange([...fields, { id: makeSortFieldId(), property, direction: "desc" }]);
+      onChange([
+        ...fields,
+        { id: makeSortFieldId(), property, direction: "desc" },
+      ]);
     } else if (existing.direction === "desc") {
-      onChange(fields.map((f) => (f.id === existing.id ? { ...f, direction: "asc" } : f)));
+      onChange(
+        fields.map((f) =>
+          f.id === existing.id ? { ...f, direction: "asc" } : f,
+        ),
+      );
     } else {
       onChange(fields.filter((f) => f.id !== existing.id));
     }
@@ -100,13 +109,22 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                 const isActive = Boolean(field) && !opt.disabled;
                 // Priority = position among active fields (1-based).
                 const priority = field
-                  ? fields.filter((f) => !f.disabled).findIndex((f) => f.id === field.id) + 1
+                  ? fields
+                      .filter((f) => !f.disabled)
+                      .findIndex((f) => f.id === field.id) + 1
                   : 0;
                 const color = propertyColor(opt.value);
 
-                if (opt.disabled) {
+                if (disabled || opt.disabled) {
                   return (
-                    <Tooltip key={opt.value} title="Not available yet">
+                    <Tooltip
+                      key={opt.value}
+                      title={
+                        disabled
+                          ? "Sorting diabled for Phase 3"
+                          : "Not available yet"
+                      }
+                    >
                       <span className="inline-flex flex-shrink-0 cursor-not-allowed items-center whitespace-nowrap rounded-full border border-dashed border-gray-200 px-2 py-[3px] text-[11px] font-medium text-gray-300 font-ibm-sans">
                         {opt.label}
                       </span>

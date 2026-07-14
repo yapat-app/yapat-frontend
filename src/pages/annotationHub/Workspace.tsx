@@ -121,6 +121,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onChange={setSortFields}
         allowNonModel={phase.sort.nonModel}
         allowModel={phase.sort.model}
+        disabled={phase.sort.disabled}
       />
       <SnippetHeader onFindSimilar={onFindSimilar} />
       <div className="flex-1 overflow-hidden">

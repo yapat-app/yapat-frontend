@@ -84,8 +84,8 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: false, findSimilar: false, labelScope: false },
-    sort: { nonModel: true, model: false },
+    sidebar: { showPane: true, sampleProperties: true, dateTimeDisabled: true, modelScores: false, findSimilar: false, labelScope: false },
+    sort: { nonModel: true, model: false, disabled: true },
   },
 
   "P4": {

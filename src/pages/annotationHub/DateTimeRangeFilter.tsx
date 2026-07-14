@@ -24,6 +24,8 @@ interface DateTimeRangeFilterProps {
   /** Called by the header's reset button instead of onChange(null), when provided — e.g. to also clear zoomDomain. */
   onReset?: () => void;
   formatValue: (v: number) => string;
+  /** Render the histogram/slider read-only (handles not draggable, no reset). */
+  disabled?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
   onChange,
   onReset,
   formatValue,
+  disabled = false,
 }) => {
   const [domainMin, domainMax] = domain;
   const [dispMin, dispMax] = zoomDomain ?? domain;
@@ -85,10 +88,10 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
   };
 
   return (
-    <div>
+    <div className={disabled ? "opacity-50" : undefined}>
       <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
         {icon} {title}
-        {range && (
+        {range && !disabled && (
           <Tooltip title={`Reset ${title.toLowerCase()}`}>
             <button
               type="button"
@@ -109,6 +112,7 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
         mode="range"
         range={normalized}
         onChange={handleSliderChange}
+        disabled={disabled}
         barHeight={18}
         formatValue={formatValue}
         label={range ? `${formatValue(range[0])} – ${formatValue(range[1])}` : undefined}

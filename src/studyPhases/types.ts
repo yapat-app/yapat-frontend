@@ -118,6 +118,8 @@ export interface SidebarPhaseConfig {
   showPane: boolean;
   /** Date range / Time of day / Location / Species section. */
   sampleProperties: boolean;
+  /** Show the Date range / Time of day filters but make them read-only. (used for phase 3) */
+  dateTimeDisabled?: boolean;
   /** Uncertainty / Diversity / Density / Confidence / Composite section. */
   modelScores: boolean;
   /** "Find similar" / "Search by recording" section. Currently disabled for all phases. */
@@ -132,6 +134,8 @@ export interface SortPhaseConfig {
   nonModel: boolean;
   /** Model-derived sort fields (confidence/composite/uncertainty/diversity/density). */
   model: boolean;
+  /** Show the sort chips but make them read-only. */
+  disabled?: boolean;
 }
 
 export interface PhaseConfig {
