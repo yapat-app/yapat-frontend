@@ -5,7 +5,7 @@
 
 export { StudyFlowProvider } from "./StudyFlowProvider";
 export { useStudyFlow } from "./useStudyFlow";
-export { isFlowEnabled } from "./flowConfig";
+export { isFlowEnabled, phaseSequence } from "./flowConfig";
 export { PhaseTimer } from "./components/PhaseTimer";
 export { StudyFlowOverlays } from "./components/StudyFlowOverlays";
 export type { FlowStage } from "./types";

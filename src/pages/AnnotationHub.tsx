@@ -12,6 +12,7 @@ import { useSearchParams } from "react-router-dom";
 import { Select, Button, Tag, Spin } from "antd";
 import {
   DatabaseOutlined,
+  ExperimentOutlined,
   HistoryOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
@@ -25,7 +26,8 @@ import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
-import { usePhaseConfig } from "../studyPhases";
+import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
+import { useStudyFlow, phaseSequence } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
 
@@ -59,6 +61,8 @@ export const AnnotationHub: React.FC = () => {
   }, [searchParams, setSearchParams]);
 
   const phase = usePhaseConfig();
+  const { phaseId, jumpToPhase } = useStudyFlow();
+  const [phaseOptions] = useState<string[]>(() => phaseSequence());
 
   const al = useHubALSession(mode, searchParams, setSearchParams, {
     treatAllModesAsAl: true,
@@ -152,6 +156,23 @@ export const AnnotationHub: React.FC = () => {
             {allDatasets.map((d) => (
               <Option key={d.id} value={d.id}>
                 {d.name}
+              </Option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <ExperimentOutlined className="text-gray-400 text-sm" />
+          <Select
+            placeholder="Select phase"
+            value={phaseId || undefined}
+            onChange={jumpToPhase}
+            style={{ width: 260 }}
+            size="middle"
+          >
+            {phaseOptions.map((id) => (
+              <Option key={id} value={id}>
+                {STUDY_PHASES[id]?.label ?? id}
               </Option>
             ))}
           </Select>

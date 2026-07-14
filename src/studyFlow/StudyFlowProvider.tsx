@@ -7,9 +7,9 @@
  * the "running" stage begins and closed (studyLogger.stop) exactly when the timer
  * expires. Nothing that happens during instructions or the tour is logged.
  *
- * On every load it checks localStorage for completed phases and resumes from the
- * first uncompleted one, so participants who finish a session and return later
- * continue exactly where they left off.
+ * The flow does NOT pin the active phase: the phase is freely switchable via the
+ * URL (?phase=) or the toolbar phase dropdown (jumpToPhase), which restarts the
+ * selected phase at its instructions stage.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -56,7 +56,18 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
   const sequence = useMemo(() => phaseSequence(), []);
   const durationMs = useMemo(() => phaseDurationMs(), []);
 
-  const [flow, setFlow] = useState<StudyFlowState>(() => loadFlowState());
+  const [flow, setFlow] = useState<StudyFlowState>(() => {
+    const stored = loadFlowState();
+    // Without the auto-resume pin, a phase reloaded mid-"transition" would
+    // silently auto-advance seconds after load — normalize it to "complete".
+    const phases = Object.fromEntries(
+      Object.entries(stored.phases).map(([id, p]) => [
+        id,
+        p.stage === "transition" ? { ...p, stage: "complete" as const } : p,
+      ]),
+    );
+    return { ...stored, phases };
+  });
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
   const setPhaseRef = useRef(setPhase);
@@ -80,37 +91,6 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     // mode, sampling strategy, etc.) from the previous session bleed through.
     const first = sequence.length > 0 ? sequence[0] : "";
     navigate(`/annotate?phase=${first}`, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  // ── Phase resume: advance to the first uncompleted phase on mount ────────
-  useEffect(() => {
-    if (!enabled || sequence.length === 0) return;
-    const stored = loadFlowState();
-    const firstUncompleted = sequence.find(
-      (id) => !isPhaseCompleted(stored.phases[id], durationMs),
-    );
-    if (firstUncompleted === undefined) {
-      // Every phase in the sequence is done. Navigate to the last phase so its
-      // "complete" stage is the active one. Without this, phaseId stays at
-      // whatever PhaseProvider resolved on init (e.g. P1 from the env var),
-      // and P1's stored "transition" stage would trigger the transition effect
-      // which would incorrectly advance to P2 on the next render cycle.
-      const last = sequence[sequence.length - 1];
-      if (last) {
-        update((prev) => ({
-          ...prev,
-          phases: { ...prev.phases, [last]: { stage: "complete", startedAt: null } },
-        }));
-        // Calling setPhase changes phaseId → the transition effect re-runs with
-        // stage="complete" and bails out, cancelling any pending timeout.
-        if (last !== phaseId) setPhaseRef.current(last);
-      }
-      return;
-    }
-    if (firstUncompleted !== phaseId) {
-      setPhaseRef.current(firstUncompleted);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
@@ -216,6 +196,20 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     message.success(`${content.title} — annotation session has started!`, 3);
   }, [phaseId, pendingTourSteps, update]);
 
+  // ── Manual phase switch (toolbar dropdown) ────────────────────────────────
+  const jumpToPhase = useCallback(
+    (id: string) => {
+      if (id === phaseId) return;
+      if (enabled) {
+        // Restart the target phase at its instructions stage; a stale
+        // "running"/"complete" snapshot would otherwise resume mid-state.
+        setStage(id, { stage: "instructions", startedAt: null });
+      }
+      setPhaseRef.current(id);
+    },
+    [enabled, phaseId, setStage],
+  );
+
   // ── Countdown tick ────────────────────────────────────────────────────────
   const remainingMs =
     stage === "running" && progress.startedAt != null
@@ -275,6 +269,7 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       nextPhaseId,
       beginPhase,
       finishTour,
+      jumpToPhase,
     }),
     [
       enabled,
@@ -289,6 +284,7 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       nextPhaseId,
       beginPhase,
       finishTour,
+      jumpToPhase,
     ],
   );
 
