@@ -7,7 +7,7 @@
  * - "Find similar" icon button on every snippet card
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Select, Button, Tag, Spin } from "antd";
 import {
@@ -30,8 +30,130 @@ import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
 import { useStudyFlow, phaseSequence } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
+import { studyLogger } from "../studyLogging";
+import {
+  formatDateAxisLabel,
+  formatTimeAxisLabel,
+} from "./annotationHub/dateTimeFilterHelpers";
 
 const { Option } = Select;
+
+const DATE_TIME_FILTER_LOG_DELAY_MS = 1200;
+
+/**
+ * Debounce-logs changes to a date/time range filter. Range sliders fire a
+ * new value on every drag tick, so — unlike a discrete control — we wait for
+ * the value to settle before emitting a study-log event.
+ */
+function useDateTimeFilterLogging(
+  filter: "date" | "time",
+  range: [number, number] | null,
+): void {
+  const initializedRef = useRef(false);
+  const lastKeyRef = useRef<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const key = range ? `${range[0]}:${range[1]}` : "null";
+
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      lastKeyRef.current = key;
+      return;
+    }
+
+    if (lastKeyRef.current === key) return;
+
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      if (lastKeyRef.current === key) return;
+      lastKeyRef.current = key;
+      const formatLabel =
+        filter === "date" ? formatDateAxisLabel : formatTimeAxisLabel;
+      studyLogger.log("date_time_filter_change", {
+        filter,
+        active: range !== null,
+        min: range ? range[0] : null,
+        max: range ? range[1] : null,
+        minLabel: range ? formatLabel(range[0]) : null,
+        maxLabel: range ? formatLabel(range[1]) : null,
+      });
+    }, DATE_TIME_FILTER_LOG_DELAY_MS);
+
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [filter, key, range]);
+}
+
+const MODEL_SCORE_FILTER_LOG_DELAY_MS = 1200;
+const FULL_RANGE_EPSILON = 1e-9;
+
+/**
+ * Debounce-logs changes to the model-derived-score range sliders (confidence,
+ * diversity, density, uncertainty, composite) — same range-slider settle
+ * strategy as useDateTimeFilterLogging, but there are several independent
+ * sliders sharing one Redux object, so this diffs the whole `ranges` map
+ * against its last-logged snapshot and emits one event per property that
+ * actually changed once things settle.
+ */
+function useModelScoreFilterLogging(
+  ranges: Record<string, [number, number]> | undefined,
+): void {
+  const initializedRef = useRef(false);
+  const lastRangesRef = useRef<Record<string, [number, number]>>({});
+  const timerRef = useRef<number | null>(null);
+  const rangesKey = JSON.stringify(
+    Object.entries(ranges ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  );
+
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      lastRangesRef.current = ranges ?? {};
+      return;
+    }
+
+    const snapshot = ranges ?? {};
+
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      const prev = lastRangesRef.current;
+      lastRangesRef.current = snapshot;
+
+      for (const [property, [min, max]] of Object.entries(snapshot)) {
+        const prevRange = prev[property];
+        if (prevRange && prevRange[0] === min && prevRange[1] === max) continue;
+        const active = min > FULL_RANGE_EPSILON || max < 1 - FULL_RANGE_EPSILON;
+        studyLogger.log("model_score_filter_multi_change", {
+          property,
+          active,
+          min,
+          max,
+        });
+      }
+    }, MODEL_SCORE_FILTER_LOG_DELAY_MS);
+
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [rangesKey, ranges]);
+}
 
 export const AnnotationHub: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -64,6 +186,15 @@ export const AnnotationHub: React.FC = () => {
   const { phaseId, jumpToPhase } = useStudyFlow();
   const [phaseOptions] = useState<string[]>(() => phaseSequence());
 
+  // ── Study logging session: spans exactly the time spent on this page ─────
+  // StudyFlowProvider lives at the app root (not scoped to this route), so
+  // the session boundary is owned here instead — start on mount, stop on
+  // unmount (navigating away from the Annotation Hub).
+  useEffect(() => {
+    studyLogger.start();
+    return () => studyLogger.stop();
+  }, []);
+
   const al = useHubALSession(mode, searchParams, setSearchParams, {
     treatAllModesAsAl: true,
   });
@@ -91,6 +222,19 @@ export const AnnotationHub: React.FC = () => {
     setDateZoomDomain(r);
   };
   const quickLabelList = useQuickLabelList();
+
+  // ── Study logging: date/time range filters ────────────────────────────
+  // Unlike the sort chips (a click), these are drag-driven range sliders —
+  // give the user more time to settle on a value before logging, otherwise
+  // every intermediate drag position would (attempt to) log.
+  useDateTimeFilterLogging("date", filterDateRange);
+  useDateTimeFilterLogging("time", filterTimeRange);
+
+  // ── Study logging: model-derived-score range sliders (left panel) ──────
+  const modelScoreRanges = useAppSelector(
+    (s) => s.al.alFilters.visibility.ranges,
+  );
+  useModelScoreFilterLogging(modelScoreRanges);
 
   useEffect(() => {
     if (al.selectedDatasetId === null) return;
