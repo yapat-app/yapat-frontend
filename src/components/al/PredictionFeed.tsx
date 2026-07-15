@@ -517,6 +517,37 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
+  // `useALSync` can only scroll to a mounted card. In blind mode the feed
+  // renders a small virtualized window, so a FPV click can update Redux while
+  // the target card is still outside the mounted slice. Jump the scroll
+  // container directly to the selected snippet's slot so the window remounts
+  // around it and the card/audio re-render for that snippet.
+  useEffect(() => {
+    if (!isBlind) return;
+    if (skipScrollIntoViewRef.current) return;
+    if (selectedSnippetId === null) return;
+    if (cardRefs.current.has(selectedSnippetId)) return;
+
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const idx = filteredAndSorted.findIndex(
+      (p) => p.snippet_id === selectedSnippetId,
+    );
+    if (idx === -1) return;
+
+    el.scrollTop = Math.max(
+      0,
+      idx * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
+    );
+  }, [
+    isBlind,
+    selectedSnippetId,
+    filteredAndSorted,
+    blindSlotSize,
+    blindSnapCardHeight,
+  ]);
+
   const selectionFeedViewKeyRef = useRef(feedViewKey);
   useEffect(() => {
     if (!enableClientFilters) return;
@@ -847,7 +878,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       const el = scrollContainerRef.current;
       if (!el) return;
       const h = el.clientHeight;
-      if (h > 0) setBlindSnapCardHeight(Math.max(480, h));
+      // Card fills exactly one scroll viewport so snap-scroll lands one card at
+      // a time and the centered (selected) card is always the visible one. A
+      // fixed floor larger than the viewport would make cards overflow, so the
+      // highlighted card could scroll off-screen while a neighbour stays in view.
+      if (h > 0) setBlindSnapCardHeight(h);
     };
 
     // Defer slightly so the new scroll container is fully laid out after
@@ -1020,7 +1055,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             <div className="flex flex-col gap-3 w-full">
               {multiSelected.map((p) => (
                 <div
-                  key={p.id ?? p.snippet_id}
+                  // key={p.id ?? p.snippet_id}
+                  key={p.snippet_id}
                   className="snap-start shrink-0 w-full"
                   style={{ height: blindSnapCardHeight }}
                 >
@@ -1068,7 +1104,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3"
         >
           <PredictionCard
-            key={selected.id ?? selected.snippet_id}
+            // key={selected.id ?? selected.snippet_id}
+            key={selected.snippet_id}
             prediction={selected}
             recordingName={
               typeof selected.recording_id === "number"
@@ -1136,7 +1173,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
               <div style={{ height: blindTopSpacer }} />
               {blindVisibleRows.map(({ prediction: p, index }) => (
                 <div
-                  key={p.id ?? p.snippet_id}
+                  // key={p.id ?? p.snippet_id}
+                  key={p.snippet_id}
                   className="snap-start shrink-0 w-full"
                   style={{
                     height: blindSnapCardHeight,
@@ -1287,10 +1325,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       >
         <div className="w-full md:w-[85%] max-w-350 mx-auto flex flex-col gap-3">
           {predictions.slice(0, visibleCount).map((p, index) => {
+            // const key = p._isDivider
+            //   ? `divider-${p.snippet_id}`
+            //   : (p.id ?? p.snippet_id);
             const key = p._isDivider
               ? `divider-${p.snippet_id}`
-              : (p.id ?? p.snippet_id);
-
+              : `snippet-${p.snippet_id}`;
             if (p._isDivider) {
               return (
                 <div

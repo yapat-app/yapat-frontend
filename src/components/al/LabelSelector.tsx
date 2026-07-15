@@ -120,7 +120,7 @@ export const LabelSelector: React.FC<Props> = ({
 
         {/* ── Current labels — shown as dismissible AntD Tags ── */}
         {value.length > 0 && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
                 Labels
@@ -155,7 +155,7 @@ export const LabelSelector: React.FC<Props> = ({
         )}
 
         {/* ── Quick label chips ── */}
-        <div className="flex-shrink-0 flex items-center">
+        <div className="shrink-0 flex items-center">
           <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
             Quick labels
           </span>
@@ -164,7 +164,7 @@ export const LabelSelector: React.FC<Props> = ({
 
         <div
           className={[
-            fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[160px] overflow-y-auto",
+            fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "max-h-40 overflow-y-auto",
             "pr-0.5",
           ].join(" ")}
         >
@@ -193,7 +193,7 @@ export const LabelSelector: React.FC<Props> = ({
                         : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
                     ].join(" ")}
                   >
-                    <span className="truncate max-w-[180px]">{opt.value}</span>
+                    <span className="truncate max-w-45">{opt.value}</span>
                   </button>
                 );
               })}
@@ -211,8 +211,8 @@ export const LabelSelector: React.FC<Props> = ({
       {showSelectedRow && hideSelectedInInput && value.length > 0 && (
         <div
           className={[
-            "flex flex-wrap gap-2 flex-shrink-0",
-            fillHeight ? "max-h-[72px] overflow-auto pr-1" : "",
+            "flex flex-wrap gap-2 shrink-0",
+            fillHeight ? "max-h-18 overflow-auto pr-1" : "",
           ].join(" ")}
         >
           {value.map((lbl) => (
@@ -264,7 +264,7 @@ export const LabelSelector: React.FC<Props> = ({
           className={[
             embedded
               ? "bg-transparent overflow-hidden"
-              : "rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50/60 overflow-hidden",
+              : "rounded-xl border border-gray-200 bg-linear-to-b from-white to-gray-50/60 overflow-hidden",
             fillHeight ? "flex-1 min-h-0 flex flex-col" : "",
           ].join(" ")}
         >
@@ -272,7 +272,7 @@ export const LabelSelector: React.FC<Props> = ({
           <div
             className={[
               "px-4 py-3 border-b border-gray-100 bg-white",
-              fillHeight ? "flex-shrink-0" : "",
+              fillHeight ? "shrink-0" : "",
               embedded ? "rounded-t-lg" : "",
             ].join(" ")}
           >
@@ -283,7 +283,7 @@ export const LabelSelector: React.FC<Props> = ({
                   Click to add/remove. Search filters the label list.
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[11px] text-gray-500">
                   {searchQuery.trim()
                     ? `${combinedList.length} match${combinedList.length === 1 ? "" : "es"}`
@@ -309,7 +309,7 @@ export const LabelSelector: React.FC<Props> = ({
           <div
             className={[
               "px-3 py-3",
-              fillHeight ? "flex-1 min-h-0 overflow-auto" : "max-h-[380px] overflow-auto",
+              fillHeight ? "flex-1 min-h-0 overflow-auto" : "max-h-95 overflow-auto",
             ].join(" ")}
           >
             {combinedList.length === 0 ? (
@@ -342,7 +342,7 @@ export const LabelSelector: React.FC<Props> = ({
                               ? "bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300 hover:bg-blue-50"
                               : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
                             disabled || labelsLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                            !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-blue-200" : "",
+                            !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-blue-200" : "",
                           ].join(" ")}
                           title="labels.json"
                         >

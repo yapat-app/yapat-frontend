@@ -708,13 +708,22 @@ const alSlice = createSlice({
       state,
       action: PayloadAction<{ snippetId: number; annotations: Annotation[] }>,
     ) => {
-      if (state.feedSource !== "classic") return;
       const { snippetId, annotations } = action.payload;
+      // Always keep the canonical per-snippet annotation rows in the store so
+      // they survive transient feed toggles or navigation. Only update the
+      // derived `feedbacks` and scored `predictions` when we're actively
+      // viewing a classic feed; otherwise leave those derived views alone.
       if (annotations.length === 0) {
         delete state.classicAnnotationsBySnippet[snippetId];
-        delete state.feedbacks[snippetId];
       } else {
         state.classicAnnotationsBySnippet[snippetId] = annotations;
+      }
+
+      if (state.feedSource !== "classic") return;
+
+      if (annotations.length === 0) {
+        delete state.feedbacks[snippetId];
+      } else {
         const labels = annotations
           .map(annotationDisplayLabel)
           .filter((name): name is string => Boolean(name));

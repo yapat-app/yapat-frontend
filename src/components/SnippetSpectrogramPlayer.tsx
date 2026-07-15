@@ -132,16 +132,16 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
 
   return (
     <div
-      className="w-full flex-shrink-0"
+      className="w-full shrink-0"
       style={{ minHeight: blockHeight }}
     >
       <div
-        className="flex w-full min-w-0 flex-shrink-0"
+        className="flex w-full min-w-0 shrink-0"
         style={{ minHeight: plotHeight }}
       >
         {/* Frequency (Hz) axis */}
         <div
-          className="flex-shrink-0 flex flex-col justify-between text-[10px] text-gray-500 font-ibm-mono pr-1 select-none"
+          className="shrink-0 flex flex-col justify-between text-[10px] text-gray-500 font-ibm-mono pr-1 select-none"
           style={{ width: Y_AXIS_WIDTH, minHeight: plotHeight }}
           aria-hidden
         >
@@ -177,7 +177,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
 
           {/* Time axis */}
           <div
-            className="flex justify-between text-[10px] text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100 flex-shrink-0"
+            className="flex justify-between text-[10px] text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100 shrink-0"
             style={{ height: SPECTROGRAM_TIME_AXIS_HEIGHT, marginTop: 2 }}
             aria-hidden
           >
@@ -195,7 +195,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
       </div>
 
       {showAxisInfo && (
-        <p className="mt-1 text-[10px] text-gray-400 font-ibm-sans text-center flex-shrink-0">
+        <p className="mt-1 text-[10px] text-gray-400 font-ibm-sans text-center shrink-0">
           Mel spectrogram · {formatSpectrogramHz(fMin)}–
           {formatSpectrogramHz(fMax)} · {Math.round(sampleRate / 1000)} kHz
           sample rate

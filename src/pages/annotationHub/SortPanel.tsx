@@ -125,7 +125,7 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                           : "Not available yet"
                       }
                     >
-                      <span className="inline-flex flex-shrink-0 cursor-not-allowed items-center whitespace-nowrap rounded-full border border-dashed border-gray-200 px-2 py-[3px] text-[11px] font-medium text-gray-300 font-ibm-sans">
+                      <span className="inline-flex shrink-0 cursor-not-allowed items-center whitespace-nowrap rounded-full border border-dashed border-gray-200 px-2 py-0.75 text-[11px] font-medium text-gray-300 font-ibm-sans">
                         {opt.label}
                       </span>
                     </Tooltip>
@@ -154,7 +154,7 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                         }
                       }}
                       className={[
-                        "inline-flex flex-shrink-0 flex-nowrap cursor-pointer items-center whitespace-nowrap rounded-full border px-2 py-[3px] text-[11px] font-medium font-ibm-sans leading-none transition-colors",
+                        "inline-flex shrink-0 flex-nowrap cursor-pointer items-center whitespace-nowrap rounded-full border px-2 py-0.75 text-[11px] font-medium font-ibm-sans leading-none transition-colors",
                         isActive
                           ? "border-transparent"
                           : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700",
@@ -169,12 +169,12 @@ export const SortPanel: React.FC<SortPanelProps> = ({
                         <span className="leading-none">{opt.label}</span>
                         {isActive &&
                           (field?.direction === "asc" ? (
-                            <ArrowUpOutlined className="flex-shrink-0 text-[9px] leading-none" />
+                            <ArrowUpOutlined className="shrink-0 text-[9px] leading-none" />
                           ) : (
-                            <ArrowDownOutlined className="flex-shrink-0 text-[9px] leading-none" />
+                            <ArrowDownOutlined className="shrink-0 text-[9px] leading-none" />
                           ))}
                         {isActive && activeCount > 1 && (
-                          <span className="flex-shrink-0 text-[9px] font-semibold leading-none opacity-70">
+                          <span className="shrink-0 text-[9px] font-semibold leading-none opacity-70">
                             {priority}
                           </span>
                         )}

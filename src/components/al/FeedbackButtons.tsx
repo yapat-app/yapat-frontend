@@ -262,7 +262,7 @@ export const FeedbackButtons: React.FC<Props> = ({
     <div className="flex flex-col gap-1.5 h-full min-h-0">
       {/* Transient status — only shown while something is happening */}
       {(saveState === "saving" || saveState === "error") && (
-        <div className="flex-shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2">
           {saveState === "saving" && (
             <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
               <Spin size="small" /> Saving…
@@ -275,7 +275,7 @@ export const FeedbackButtons: React.FC<Props> = ({
       )}
       {!isClassicFeed && !hasCheckpoint && (
         <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
-          <span className="flex-shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
+          <span className="shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
             No model checkpoint — feedback disabled
           </span>
         </Tooltip>

@@ -415,6 +415,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     extraVisible,
   });
 
+  // Bump datarevision whenever the trace data changes so Plotly re-reads the
+  // arrays and repaints the selection overlay — scattergl doesn't reliably
+  // repaint on a new `data` array alone (e.g. the highlight ring not following
+  // the scroll-synced selection).
+  const plotRevision = useMemo(() => Date.now() + traces.length, [traces]);
+
   // ── Expose thumbnail data to parent when an external method is provided ──────
 
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
@@ -853,6 +859,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   // Stable uirevision tells Plotly to keep the user's current zoom/pan
                   // when traces update (e.g. after a point click or filter change).
                   uirevision: "stable",
+                  datarevision: plotRevision,
                   margin: { l: 30, r: 10, t: 10, b: 30 },
                   showlegend: false,
                   legend: {

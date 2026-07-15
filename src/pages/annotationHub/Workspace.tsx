@@ -102,7 +102,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
   const rightPanel = (
     <div className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
+      <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
           Feed
         </h2>
@@ -156,7 +156,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       maxRightRatio={0.55}
       left={
         <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
             <Tooltip
               title={
                 phase.visualization.allowPointClick
@@ -170,7 +170,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             </Tooltip>
           </div>
 
-          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto">
+          <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto">
             {PROJECTION_METHODS.map((m) => {
               const isActive = m.key === projMethod;
               const hasProj = Boolean(thumbData?.fpvCoordsBySnippetForMethod?.[m.key]);
@@ -182,14 +182,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                   onClick={() => handleMethodChange(m.key)}
                   disabled={thumbData?.fpvLoading && isActive}
                   className={[
-                    "flex-shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
+                    "shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
                     isActive
                       ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
                       : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
                     !hasProj && !isLoadingThumb ? "opacity-50 cursor-not-allowed" : "",
                   ].join(" ")}
                 >
-                  <div className="w-[90px] h-[52px] rounded-md bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
+                  <div className="w-22.5 h-13 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
                     <MiniProjection
                       points={thumbData?.thumbnailPoints ?? []}
                       coordsBySnippet={thumbData?.fpvCoordsBySnippetForMethod?.[m.key] ?? null}

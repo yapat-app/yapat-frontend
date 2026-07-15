@@ -24,9 +24,10 @@ export const AudioPlayerPlaceholder: React.FC = () => {
   return (
     <div className="w-full text-center">
       {currentSnippetAudio ? (
-        <div className="flex-shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
+        <div className="shrink-0 rounded-md border border-gray-100 bg-white overflow-x-hidden">
           <SnippetSpectrogramPlayer
-            key={`${currentSnippet?.id ?? "snippet"}|${datasetIdParam ?? ""}`}
+            // key={`${currentSnippet?.id ?? "snippet"}|${datasetIdParam ?? ""}`}
+            key={`${currentSnippet?.id ?? "snippet"}|${currentSnippetAudio.url}|${datasetIdParam ?? ""}`}
             src={currentSnippetAudio.url}
             sampleRate={currentSnippetAudio.sampleRate}
             datasetSpectrogram={datasetSpectrogram}

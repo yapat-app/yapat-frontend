@@ -78,15 +78,15 @@ const PredictionCardImpl: React.FC<Props> = ({
       `${datasetSpectrogram?.spectrogram_f_min_hz ?? ""}:${datasetSpectrogram?.spectrogram_f_max_hz ?? ""}`,
     [datasetSpectrogram],
   );
-  const activeSnippetId = useAppSelector(
-    (state) => state.al.activeSnippetId,
-  );
+  const activeSnippetId = useAppSelector((state) => state.al.activeSnippetId);
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
   const isSelected = activeSnippetId === prediction.snippet_id;
   // feedbacks are keyed by snippet_id
   const hasFeedback = !!feedbacks[prediction.snippet_id];
   const recordingId = prediction.recording_id;
-  const recordingLabel = recordingName ?? (typeof recordingId === "number" ? `Recording #${recordingId}` : null);
+  const recordingLabel =
+    recordingName ??
+    (typeof recordingId === "number" ? `Recording #${recordingId}` : null);
 
   const localRef = useRef<HTMLDivElement | null>(null);
   // Keep the actual element in state so viewport logic re-runs when ref is set.
@@ -132,7 +132,9 @@ const PredictionCardImpl: React.FC<Props> = ({
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [audioSampleRate, setAudioSampleRate] = useState<number>(16000);
   const [audioAttempt, setAudioAttempt] = useState(0);
-
+  const [loadedAudioSnippetId, setLoadedAudioSnippetId] = useState<
+    number | null
+  >(null);
   const isBlind = phase.ui.labelingMode === "blind";
 
   // ── Blind-mode height computation ──────────────────────────────────────
@@ -159,7 +161,11 @@ const PredictionCardImpl: React.FC<Props> = ({
     // spectrogram gets that space back and fills the card instead of leaving
     // a blank gap below it.
     const available =
-      cardH - (hideHeader ? 0 : HEADER_H) - BODY_PAD_Y - (hideLabels ? 0 : LABEL_AREA_H) - 8;
+      cardH -
+      (hideHeader ? 0 : HEADER_H) -
+      BODY_PAD_Y -
+      (hideLabels ? 0 : LABEL_AREA_H) -
+      8;
     const melBudget = available - spectrogramChromeHeight();
     const cap = hideLabels ? 900 : 600;
     setBlindSpecHeight(Math.max(120, Math.min(cap, melBudget)));
@@ -174,21 +180,29 @@ const PredictionCardImpl: React.FC<Props> = ({
   }, [isBlind, cardHeightPx]);
 
   // Simple in-memory cache so scrolling back doesn't re-download audio.
-  // We keep object URLs for the session; 
+  // We keep object URLs for the session;
   const cachedAudio = useMemo(
     () => audioUrlCache.get(prediction.snippet_id) ?? null,
     [prediction.snippet_id],
   );
+
+  useLayoutEffect(() => {
+    setAudioBlobUrl(null);
+    setLoadedAudioSnippetId(null);
+    setAudioError(false);
+  }, [prediction.snippet_id]);
 
   useEffect(() => {
     if (cachedAudio) {
       setAudioError(false);
       setAudioBlobUrl(cachedAudio.url);
       setAudioSampleRate(cachedAudio.sampleRate);
+      setLoadedAudioSnippetId(prediction.snippet_id);
     } else {
       setAudioBlobUrl(null);
+      setLoadedAudioSnippetId(null);
     }
-  }, [cachedAudio]);
+  }, [cachedAudio, prediction.snippet_id]);
 
   useEffect(() => {
     setAudioAttempt(0);
@@ -206,6 +220,7 @@ const PredictionCardImpl: React.FC<Props> = ({
       setAudioError(false);
       setAudioBlobUrl(cached.url);
       setAudioSampleRate(cached.sampleRate);
+      setLoadedAudioSnippetId(snippetId);
       return;
     }
 
@@ -217,6 +232,7 @@ const PredictionCardImpl: React.FC<Props> = ({
           setAudioError(false);
           setAudioBlobUrl(audio.url);
           setAudioSampleRate(audio.sampleRate);
+          setLoadedAudioSnippetId(snippetId);
         }
       });
       return () => {
@@ -228,9 +244,11 @@ const PredictionCardImpl: React.FC<Props> = ({
     const priority = loadAudioImmediately || isSelected;
     setAudioError(false);
 
-    const p = loadSnippetAudio(snippetId, controller.signal, priority).finally(() => {
-      inFlight.delete(snippetId);
-    });
+    const p = loadSnippetAudio(snippetId, controller.signal, priority).finally(
+      () => {
+        inFlight.delete(snippetId);
+      },
+    );
 
     inFlight.set(snippetId, p);
     let cancelled = false;
@@ -240,6 +258,7 @@ const PredictionCardImpl: React.FC<Props> = ({
         setAudioError(false);
         setAudioBlobUrl(audio.url);
         setAudioSampleRate(audio.sampleRate);
+        setLoadedAudioSnippetId(snippetId);
       } else {
         // First card occasionally races on initial mount; retry eager loads briefly.
         if (loadAudioImmediately && audioAttempt < 2) {
@@ -259,7 +278,13 @@ const PredictionCardImpl: React.FC<Props> = ({
       controller.abort();
       inFlight.delete(snippetId);
     };
-  }, [prediction.snippet_id, shouldLoadAudio, loadAudioImmediately, isSelected, audioAttempt]);
+  }, [
+    prediction.snippet_id,
+    shouldLoadAudio,
+    loadAudioImmediately,
+    isSelected,
+    audioAttempt,
+  ]);
 
   // ── Blind-mode card: spectrogram + inline label area ──────────────────────
   return (
@@ -275,7 +300,7 @@ const PredictionCardImpl: React.FC<Props> = ({
     >
       {/* ── Header ── */}
       {!hideHeader && (
-        <div className="flex-shrink-0 flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
+        <div className="shrink-0 flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
           <div className="text-xs text-gray-500 font-ibm-sans flex items-center gap-2">
             <span className="flex items-center gap-1">
               <SoundOutlined /> Snippet #{prediction.snippet_id}
@@ -292,7 +317,10 @@ const PredictionCardImpl: React.FC<Props> = ({
                   size="small"
                   icon={<AudioOutlined />}
                   className="text-gray-400 hover:text-blue-500 px-1"
-                  onClick={(e) => { e.stopPropagation(); onFindSimilar(prediction.snippet_id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFindSimilar(prediction.snippet_id);
+                  }}
                 />
               </Tooltip>
             )}
@@ -307,14 +335,18 @@ const PredictionCardImpl: React.FC<Props> = ({
 
       {/* ── Spectrogram ── */}
       <div
-        className="flex-shrink-0 px-5 pt-3 pb-2"
+        className="shrink-0 px-5 pt-3 pb-2"
         onClick={(e) => e.stopPropagation()}
       >
         {!audioBlobUrl && !audioError && shouldLoadAudio && (
           <Skeleton.Input
             active
             block
-            style={{ height: blindSpecBlockHeight, borderRadius: 12, width: "100%" }}
+            style={{
+              height: blindSpecBlockHeight,
+              borderRadius: 12,
+              width: "100%",
+            }}
           />
         )}
         {!audioBlobUrl && !audioError && !shouldLoadAudio && (
@@ -333,10 +365,14 @@ const PredictionCardImpl: React.FC<Props> = ({
             Audio unavailable
           </div>
         )}
-        {audioBlobUrl && (
-          <div className="w-full flex-shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
+        {audioBlobUrl && loadedAudioSnippetId === prediction.snippet_id && (
+          <div className="w-full shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
             <SnippetSpectrogramPlayer
-              key={`${prediction.snippet_id}|${spectrogramBandKey}|${blindSpecHeight}`}
+              // Include the source URL in the key: when the audio source changes
+              // (new snippet), React fully remounts the player so it re-decodes
+              // and re-renders the new spectrogram instead of keeping the
+              // previously decoded one.
+              key={`${prediction.snippet_id}|${audioBlobUrl}|${spectrogramBandKey}|${blindSpecHeight}`}
               src={audioBlobUrl}
               sampleRate={audioSampleRate}
               datasetSpectrogram={datasetSpectrogram}
@@ -354,7 +390,7 @@ const PredictionCardImpl: React.FC<Props> = ({
       {/* ── Inline label area (omitted when a sticky label bar is used) ── */}
       {!hideLabels && (
         <div
-          className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
+          className="shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
           style={{ height: LABEL_AREA_H }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -425,7 +461,8 @@ async function loadSnippetAudio(
     return audio;
   } catch (e: unknown) {
     const err = e as { name?: string; code?: string };
-    if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return null;
+    if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED")
+      return null;
     return null;
   } finally {
     release();

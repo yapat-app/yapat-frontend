@@ -148,7 +148,7 @@ export const DatasetSpectrogramSettings: React.FC<Props> = ({ dataset }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Tag color={custom ? "blue" : "default"} className="m-0">
               {custom ? "Custom range" : "Auto"}
             </Tag>
