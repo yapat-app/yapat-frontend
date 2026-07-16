@@ -18,7 +18,7 @@ import { ALFilterPanel } from "./ALFilterPanel";
 import { visualisationsApi } from "../../services/visualisationsApi";
 import { alApi } from "../../services/alApi";
 import type { SamplingMethod, SampleScores } from "../../types/al";
-import type { FPVPointMetadata, FPVProjection2D } from "../../types/visualisation";
+import type { FPVMethodAvailability, FPVPointMetadata, FPVProjection2D } from "../../types/visualisation";
 import { embeddingApi } from "../../services/api";
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
@@ -141,6 +141,11 @@ export const ProjectionView: React.FC = () => {
     Partial<Record<ProjectionMethod, FPVProjection2D>>
   >({});
   const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
+  // size (too many points for that method), as opposed to "not computed yet".
+  // Keyed by method name; absence means "available or not yet known".
+  const [methodAvailability, setMethodAvailability] = useState<
+    Record<string, FPVMethodAvailability>
+  >({});
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
   const unmountedRef = useRef(false);
@@ -237,6 +242,7 @@ export const ProjectionView: React.FC = () => {
     setFpvPoints([]);
     setProjectionsByMethod({});
     setLoadingMethods(new Set());
+    setMethodAvailability({});
     inFlightMethodsRef.current = new Set();
   }, []);
 
@@ -302,6 +308,9 @@ export const ProjectionView: React.FC = () => {
             run_3d: false,
             method: fetchMethod,
           });
+          if (fpv.method_availability) {
+            setMethodAvailability((prev) => ({ ...prev, ...fpv.method_availability }));
+          }
           const proj = fpv.projections_2d[fetchMethod];
           if (!projectionHasValidCoords(proj) || fpv.points.length === 0) {
             continue;
@@ -323,8 +332,11 @@ export const ProjectionView: React.FC = () => {
           break;
         }
         if (!loaded && !options?.background) {
+          const unavailable = methodAvailability[targetMethod];
           setFpvError(
-            `No valid ${targetMethod} projection coordinates; try PCA or regenerate FPV.`,
+            unavailable && !unavailable.available
+              ? (unavailable.reason ?? `${targetMethod} is not available for this dataset.`)
+              : `No valid ${targetMethod} projection coordinates; try PCA or regenerate FPV.`,
           );
         }
       } catch (e: unknown) {
@@ -350,7 +362,7 @@ export const ProjectionView: React.FC = () => {
         }
       }
     },
-    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState],
+    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState, methodAvailability],
   );
 
   useEffect(() => {
@@ -488,6 +500,7 @@ export const ProjectionView: React.FC = () => {
 
       const deadline = Date.now() + FPV_POLL_TIMEOUT_MS;
       let ready = false;
+      let permanentlyUnavailableReason: string | null = null;
       while (Date.now() < deadline) {
         if (unmountedRef.current) return;
         try {
@@ -497,8 +510,21 @@ export const ProjectionView: React.FC = () => {
             run_3d: false,
             method,
           });
+          if (fpv.method_availability) {
+            setMethodAvailability((prev) => ({ ...prev, ...fpv.method_availability }));
+          }
           if (projectionHasValidCoords(fpv.projections_2d[method]) && fpv.points.length > 0) {
             ready = true;
+            break;
+          }
+          // The currently-selected method is permanently skipped at this
+          // dataset's size (see backend FPV_*_MAX_POINTS) -- stop polling
+          // immediately rather than waiting the full timeout for coordinates
+          // that will never arrive.
+          const unavailable = fpv.method_availability?.[method];
+          if (unavailable && !unavailable.available) {
+            permanentlyUnavailableReason =
+              unavailable.reason ?? `${method} is not available for this dataset.`;
             break;
           }
         } catch (e: unknown) {
@@ -509,6 +535,11 @@ export const ProjectionView: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, FPV_POLL_INTERVAL_MS));
       }
       if (unmountedRef.current) return;
+
+      if (permanentlyUnavailableReason) {
+        setFpvError(permanentlyUnavailableReason);
+        return;
+      }
 
       if (!ready) {
         setFpvError(
@@ -1100,7 +1131,9 @@ export const ProjectionView: React.FC = () => {
                 const active = method === m.key;
                 const hasProj = Boolean(fpvCoordsBySnippetForMethod?.[m.key]);
                 const isLoadingThumb = loadingMethods.has(m.key) && !hasProj;
-                return (
+                const unavailable = methodAvailability[m.key];
+                const isPermanentlyUnavailable = Boolean(unavailable && !unavailable.available);
+                const button = (
                   <button
                     key={m.key}
                     type="button"
@@ -1122,10 +1155,18 @@ export const ProjectionView: React.FC = () => {
                         selectedCoord={selectedCoordByMethod?.[m.key] ?? null}
                         allActualLabels={allCategoricalValues.actual_label ?? []}
                         loading={isLoadingThumb}
+                        unavailable={isPermanentlyUnavailable}
                       />
                     </div>
                     <div className="mt-1 text-[11px] text-gray-600 font-ibm-sans">{m.label}</div>
                   </button>
+                );
+                return isPermanentlyUnavailable ? (
+                  <Tooltip key={m.key} title={unavailable!.reason}>
+                    {button}
+                  </Tooltip>
+                ) : (
+                  button
                 );
               })}
             </div>
@@ -1208,8 +1249,20 @@ const MiniProjection: React.FC<{
   selectedCoord?: [number, number] | null;
   allActualLabels: string[];
   loading?: boolean;
+  /** True when the backend reports this method is permanently skipped for
+   * this dataset's size, not just "not computed yet" -- shown distinctly
+   * from the generic N/A so users don't keep waiting/retrying for it. */
+  unavailable?: boolean;
 }> = React.memo(
-  ({ points, coordsBySnippet, selectedSnippetId, selectedCoord = null, allActualLabels, loading = false }) => {
+  ({
+    points,
+    coordsBySnippet,
+    selectedSnippetId,
+    selectedCoord = null,
+    allActualLabels,
+    loading = false,
+    unavailable = false,
+  }) => {
     const base = useMemo(() => {
       if (!coordsBySnippet) return null;
 
@@ -1273,7 +1326,7 @@ const MiniProjection: React.FC<{
     if (!coordsBySnippet) {
       return (
         <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
-          N/A
+          {unavailable ? "Too large" : "N/A"}
         </div>
       );
     }

@@ -48,6 +48,15 @@ export type FPVProjection3D = {
   z: Array<number | null>;
 };
 
+/** Present only for methods permanently skipped at this dataset's size
+ * (see backend FPV_UMAP_MAX_POINTS/FPV_TSNE_MAX_POINTS/FPV_ISOMAP_MAX_POINTS).
+ * Absence of a key means "available or not yet known", not "definitely
+ * available" -- callers should still handle a missing/empty projection. */
+export type FPVMethodAvailability = {
+  available: boolean;
+  reason?: string | null;
+};
+
 export type FPVResponse = {
   dataset_id: number;
   model_family_name?: string | null;
@@ -56,5 +65,6 @@ export type FPVResponse = {
   points: FPVPointMetadata[];
   projections_2d: Record<string, FPVProjection2D>;
   projections_3d?: Record<string, FPVProjection3D> | null;
+  method_availability?: Record<string, FPVMethodAvailability> | null;
 };
 
