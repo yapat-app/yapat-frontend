@@ -47,7 +47,9 @@ export const FeedbackButtons: React.FC<Props> = ({
     (state) => state.al.classicAnnotationsBySnippet,
   );
   const [submitting, setSubmitting] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   // Blind mode: multi-select via LabelSelector
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
 
@@ -65,10 +67,12 @@ export const FeedbackButtons: React.FC<Props> = ({
   const existingFeedback = feedbacks[prediction.snippet_id];
   const hasCheckpoint = usedCheckpointId !== null;
   // During the guided tour, disable all labeling so actions are preview-only.
-  const feedbackDisabled = isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
+  const feedbackDisabled =
+    isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
-  const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+  const snippetAnnotations =
+    classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
   const annotationLabels = snippetAnnotations
     .map(annotationDisplayLabel)
     .filter((name): name is string => Boolean(name));
@@ -82,16 +86,27 @@ export const FeedbackButtons: React.FC<Props> = ({
   const lastSubmittedKeyRef = useRef<string>("");
   const debounceTimerRef = useRef<number | null>(null);
   const pendingSubmitRef = useRef<(() => void) | null>(null);
+  // Number of submit() calls for the current snippet that have been fired but
+  // not yet resolved. While > 0 the user's local selection is authoritative
+  // and must not be overwritten by an incoming (still-stale) server sync.
+  const inFlightSubmitRef = useRef<number>(0);
 
   const selectionKey = useMemo(
-    () => [...selectedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
+    () =>
+      [...selectedLabels]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .sort()
+        .join("|"),
     [selectedLabels],
   );
 
-  const submitClassic = async (_action: FeedbackAction, labels?: string[]) => {
+  const submitClassic = async (
+    _action: FeedbackAction,
+    labels?: string[],
+  ): Promise<boolean> => {
     const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
-    const existing =
-      classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+    const existing = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
 
     setSubmitting(true);
     setSaveState("saving");
@@ -109,31 +124,41 @@ export const FeedbackButtons: React.FC<Props> = ({
         }),
       );
       setSaveState("saved");
-      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
+      window.setTimeout(
+        () => setSaveState((s) => (s === "saved" ? "idle" : s)),
+        1800,
+      );
+      return true;
     } catch (err: unknown) {
       const detail =
         typeof err === "string"
           ? err
-          : (err as { message?: string })?.message ?? "Failed to save annotation";
+          : ((err as { message?: string })?.message ??
+            "Failed to save annotation");
       message.error(detail);
       setSaveState("error");
+      return false;
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submit = async (action: FeedbackAction, labels?: string[]) => {
+  const submit = async (
+    action: FeedbackAction,
+    labels?: string[],
+  ): Promise<boolean> => {
     if (isClassicFeed) {
-      await submitClassic(action, labels);
-      return;
+      return submitClassic(action, labels);
     }
     if (selectedDatasetId === null || modelFamilyName === null) {
       message.error("Select a dataset and run inference first");
-      return;
+      return false;
     }
     if (!hasCheckpoint) {
-      message.info("No model checkpoint yet. Train/register a checkpoint before submitting feedback.");
-      return;
+      message.info(
+        "No model checkpoint yet. Train/register a checkpoint before submitting feedback.",
+      );
+      return false;
     }
     setSubmitting(true);
     setSaveState("saving");
@@ -148,7 +173,6 @@ export const FeedbackButtons: React.FC<Props> = ({
         }),
       ).unwrap();
 
-
       studyLogger.log(
         "feedback_submit",
         { action, labels: labels ?? [] },
@@ -157,7 +181,11 @@ export const FeedbackButtons: React.FC<Props> = ({
 
       setSaveState("saved");
       // Auto-dismiss the "Saved" indicator so it doesn't linger.
-      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
+      window.setTimeout(
+        () => setSaveState((s) => (s === "saved" ? "idle" : s)),
+        1800,
+      );
+      return true;
     } catch (e: any) {
       const detail = String(e?.message ?? e ?? "");
       if (
@@ -166,7 +194,9 @@ export const FeedbackButtons: React.FC<Props> = ({
         modelFamilyName !== null &&
         snippetSetId !== null
       ) {
-        message.warning("Model updated — refreshing predictions. Please retry your feedback.");
+        message.warning(
+          "Model updated — refreshing predictions. Please retry your feedback.",
+        );
         dispatch(
           runInference({
             model_family_name: modelFamilyName,
@@ -183,6 +213,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         message.error("Failed to submit feedback");
         setSaveState("error");
       }
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -203,7 +234,9 @@ export const FeedbackButtons: React.FC<Props> = ({
   // Never touch saveState here — the submit() function owns that lifecycle.
   useEffect(() => {
     if (!isBlind) return;
-    if (lastSyncedSnippetIdRef.current !== prediction.snippet_id) {
+    const snippetChanged =
+      lastSyncedSnippetIdRef.current !== prediction.snippet_id;
+    if (snippetChanged) {
       // A debounced edit for the outgoing snippet hasn't been persisted yet —
       // flush it now rather than letting the auto-submit effect's cleanup
       // (triggered a moment later by resetting selectedLabels below) cancel
@@ -217,11 +250,21 @@ export const FeedbackButtons: React.FC<Props> = ({
         pendingSubmitRef.current = null;
         flush();
       }
+      // The new snippet starts with a clean submit slate.
+      inFlightSubmitRef.current = 0;
       lastSyncedSnippetIdRef.current = prediction.snippet_id;
       setSaveState("idle");
+    } else {
+      const hasUnconfirmedEdit =
+        pendingSubmitRef.current !== null || inFlightSubmitRef.current > 0;
+      if (hasUnconfirmedEdit) return;
     }
     skipNextAutoSubmitRef.current = true;
-    const syncedKey = [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|");
+    const syncedKey = [...submittedLabels]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort()
+      .join("|");
     lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
   }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
@@ -240,12 +283,25 @@ export const FeedbackButtons: React.FC<Props> = ({
     const doSubmit = () => {
       pendingSubmitRef.current = null;
       debounceTimerRef.current = null;
-      lastSubmittedKeyRef.current = selectionKey;
-      if (selectionKey.length === 0) {
-        submit("REJECT");
-        return;
-      }
-      submit("MODIFY", [...selectedLabels]);
+      const keyBeingSubmitted = selectionKey;
+      const labelsBeingSubmitted = [...selectedLabels];
+      const snippetIdAtSubmitTime = prediction.snippet_id;
+      inFlightSubmitRef.current += 1;
+      void (async () => {
+        const ok =
+          keyBeingSubmitted.length === 0
+            ? await submit("REJECT")
+            : await submit("MODIFY", labelsBeingSubmitted);
+        if (lastSyncedSnippetIdRef.current === snippetIdAtSubmitTime) {
+          inFlightSubmitRef.current = Math.max(
+            0,
+            inFlightSubmitRef.current - 1,
+          );
+        }
+        if (ok && lastSyncedSnippetIdRef.current === snippetIdAtSubmitTime) {
+          lastSubmittedKeyRef.current = keyBeingSubmitted;
+        }
+      })();
     };
 
     if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
@@ -253,7 +309,8 @@ export const FeedbackButtons: React.FC<Props> = ({
     debounceTimerRef.current = window.setTimeout(doSubmit, 250);
 
     return () => {
-      if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
     };
   }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
 
@@ -269,7 +326,9 @@ export const FeedbackButtons: React.FC<Props> = ({
             </span>
           )}
           {saveState === "error" && (
-            <span className="text-[11px] font-semibold text-red-500">Save failed — try again</span>
+            <span className="text-[11px] font-semibold text-red-500">
+              Save failed — try again
+            </span>
           )}
         </div>
       )}

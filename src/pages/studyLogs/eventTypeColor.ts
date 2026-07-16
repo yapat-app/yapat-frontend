@@ -41,9 +41,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   retrain_complete: "red",
 
   // Audio
-  audio_play_segment: "gold",
-  audio_volume_change: "gold",
-  audio_seek: "gold",
+  audio_interaction: "gold",
 };
 
 export function eventTypeColor(eventType: string): string {

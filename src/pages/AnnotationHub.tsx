@@ -93,68 +93,6 @@ function useDateTimeFilterLogging(
   }, [filter, key, range]);
 }
 
-const MODEL_SCORE_FILTER_LOG_DELAY_MS = 1200;
-const FULL_RANGE_EPSILON = 1e-9;
-
-/**
- * Debounce-logs changes to the model-derived-score range sliders (confidence,
- * diversity, density, uncertainty, composite) — same range-slider settle
- * strategy as useDateTimeFilterLogging, but there are several independent
- * sliders sharing one Redux object, so this diffs the whole `ranges` map
- * against its last-logged snapshot and emits one event per property that
- * actually changed once things settle.
- */
-function useModelScoreFilterLogging(
-  ranges: Record<string, [number, number]> | undefined,
-): void {
-  const initializedRef = useRef(false);
-  const lastRangesRef = useRef<Record<string, [number, number]>>({});
-  const timerRef = useRef<number | null>(null);
-  const rangesKey = JSON.stringify(
-    Object.entries(ranges ?? {}).sort(([a], [b]) => a.localeCompare(b)),
-  );
-
-  useEffect(() => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      lastRangesRef.current = ranges ?? {};
-      return;
-    }
-
-    const snapshot = ranges ?? {};
-
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      const prev = lastRangesRef.current;
-      lastRangesRef.current = snapshot;
-
-      for (const [property, [min, max]] of Object.entries(snapshot)) {
-        const prevRange = prev[property];
-        if (prevRange && prevRange[0] === min && prevRange[1] === max) continue;
-        const active = min > FULL_RANGE_EPSILON || max < 1 - FULL_RANGE_EPSILON;
-        studyLogger.log("model_score_filter_multi_change", {
-          property,
-          active,
-          min,
-          max,
-        });
-      }
-    }, MODEL_SCORE_FILTER_LOG_DELAY_MS);
-
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [rangesKey, ranges]);
-}
-
 export const AnnotationHub: React.FC = () => {
   const dispatch = useAppDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -229,12 +167,8 @@ export const AnnotationHub: React.FC = () => {
   // every intermediate drag position would (attempt to) log.
   useDateTimeFilterLogging("date", filterDateRange);
   useDateTimeFilterLogging("time", filterTimeRange);
-
-  // ── Study logging: model-derived-score range sliders (left panel) ──────
-  const modelScoreRanges = useAppSelector(
-    (s) => s.al.alFilters.visibility.ranges,
-  );
-  useModelScoreFilterLogging(modelScoreRanges);
+  // NOTE: model-derived-score filter logging lives in ProjectionView, which is
+  // where the post-filter visible-point count is computed.
 
   useEffect(() => {
     if (al.selectedDatasetId === null) return;

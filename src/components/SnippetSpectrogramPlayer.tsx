@@ -1,4 +1,10 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAudioInstrumentation } from "../studyLogging";
 import {
@@ -37,7 +43,9 @@ function buildTicks(min: number, max: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => min + step * i);
 }
 
-export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> = ({
+export const SnippetSpectrogramPlayer: React.FC<
+  SnippetSpectrogramPlayerProps
+> = ({
   src,
   sampleRate = SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   datasetSpectrogram,
@@ -113,10 +121,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
   // in the spectrogram image (which is rendered on a mel scale internally).
   // Linear ticks cause a systematic offset — e.g. a 3 kHz signal appears
   // labelled as ~8 kHz when the file is at 22 kHz sample rate.
-  const freqTicks = useMemo(
-    () => buildMelTicks(fMin, fMax, 5),
-    [fMin, fMax],
-  );
+  const freqTicks = useMemo(() => buildMelTicks(fMin, fMax, 5), [fMin, fMax]);
   const timeTicks = useMemo(() => {
     const dur = resolvedDuration ?? 0;
     if (dur <= 0) return [];
@@ -131,10 +136,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
   const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${fftParams.hop_length}`;
 
   return (
-    <div
-      className="w-full shrink-0"
-      style={{ minHeight: blockHeight }}
-    >
+    <div className="w-full shrink-0" style={{ minHeight: blockHeight }}>
       <div
         className="flex w-full min-w-0 shrink-0"
         style={{ minHeight: plotHeight }}
@@ -153,8 +155,7 @@ export const SnippetSpectrogramPlayer: React.FC<SnippetSpectrogramPlayerProps> =
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          {/* Do not clamp height here — library adds audio controls below the mel SVG. */}
-          <div ref={measureRef} className="w-full min-w-0">
+          <div ref={measureRef} className="w-full min-w-0 overflow-x-hidden">
             {hasWidth && (
               <SpectrogramPlayer
                 key={playerKey}

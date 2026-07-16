@@ -120,10 +120,20 @@ export type StudyLogEvent =
   | {
       eventType: "model_score_filter_multi_change";
       payload: {
-        property: string;
-        active: boolean;
-        min: number | null;
-        max: number | null;
+        /** Properties whose range changed in this settle (what triggered the log). */
+        changed: string[];
+        /**
+         * Snapshot of every currently-active model-score filter and its range,
+         * so a single log line captures the full filter state at that moment
+         * (e.g. changing uncertainty while diversity is active shows both).
+         */
+        filters: Record<string, { min: number; max: number }>;
+        /** Number of active filters in `filters`. */
+        activeCount: number;
+        /** Points still visible after all active filters are applied. */
+        visiblePoints: number;
+        /** Total points before filtering. */
+        totalPoints: number;
       };
     }
   | {
@@ -157,12 +167,18 @@ export type StudyLogEvent =
     }
 
   // ── Audio ───────────────────────────────────────────────────────────
+  // One unified event for every audio-player interaction, discriminated by
+  // `action`. The snippet the player belongs to is carried on the envelope's
+  // snippetId (resolved from the active card). Only genuine user interactions
+  // are logged — programmatic playhead resets on snippet load are ignored.
   | {
-      eventType: "audio_play_segment";
-      payload: { fromMs: number; toMs: number };
-    }
-  | { eventType: "audio_volume_change"; payload: { volume: number } }
-  | { eventType: "audio_seek"; payload: { fromMs: number; toMs: number } };
+      eventType: "audio_interaction";
+      payload:
+        | { action: "play"; positionMs: number }
+        | { action: "pause"; fromMs: number; toMs: number; listenedMs: number }
+        | { action: "seek"; fromMs: number; toMs: number }
+        | { action: "volume"; volume: number };
+    };
 
 export type StudyEventType = StudyLogEvent["eventType"];
 

@@ -72,9 +72,7 @@ const ALL_EVENT_TYPES = [
   "model_score_filter_multi_change",
   "retrain_manual_click",
   "retrain_complete",
-  "audio_play_segment",
-  "audio_volume_change",
-  "audio_seek",
+  "audio_interaction",
 ];
 
 export const StudyLogsSession: React.FC = () => {
