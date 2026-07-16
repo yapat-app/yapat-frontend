@@ -26,6 +26,7 @@ export interface StudyFlowContextValue {
   beginPhase: () => void;
   /** Tour finished or skipped → start the countdown. */
   finishTour: () => void;
+  jumpToPhase: (id: string) => void;
 }
 
 export const StudyFlowContext = createContext<StudyFlowContextValue>({
@@ -41,4 +42,5 @@ export const StudyFlowContext = createContext<StudyFlowContextValue>({
   nextPhaseId: null,
   beginPhase: () => {},
   finishTour: () => {},
+  jumpToPhase: () => {},
 });

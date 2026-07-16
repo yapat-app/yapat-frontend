@@ -11,6 +11,7 @@ interface DateRangeCalendarPickerProps {
   /** Current filter selection in epoch days, or null when unfiltered (full domain). */
   range: [number, number] | null;
   onChange: (range: [number, number] | null) => void;
+  disabled?: boolean;
 }
 
 /**
@@ -24,6 +25,7 @@ export const DateRangeCalendarPicker: React.FC<DateRangeCalendarPickerProps> = (
   domain,
   range,
   onChange,
+  disabled = false,
 }) => {
   const [domainMin, domainMax] = domain;
   // Default to the full available date span ("whole year based on the
@@ -48,6 +50,7 @@ export const DateRangeCalendarPicker: React.FC<DateRangeCalendarPickerProps> = (
       size="small"
       value={value}
       onChange={handleChange}
+      disabled={disabled}
       minDate={epochDayToDayjs(domainMin)}
       maxDate={epochDayToDayjs(domainMax)}
       format="MMM D, YYYY"

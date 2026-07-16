@@ -17,24 +17,69 @@ import { NavigationBar } from "../../components/NavigationBar";
 import { studyLogsApi } from "../../services/api";
 import type { StudyLogEventRow } from "../../types/studyLogs";
 import { eventTypeColor } from "./eventTypeColor";
+import {
+  formatDateAxisLabel,
+  formatTimeAxisLabel,
+} from "../annotationHub/dateTimeFilterHelpers";
+
+/**
+ * Older `date_time_filter_change` rows were logged before minLabel/maxLabel
+ * existed — backfill them for display (from the stored min/max) so past
+ * sessions read the same as new ones, without touching the stored data.
+ */
+function displayPayload(
+  row: StudyLogEventRow,
+): Record<string, unknown> | null {
+  const payload = row.payload;
+  if (!payload || row.event_type !== "date_time_filter_change") return payload;
+  if (payload.minLabel != null || payload.maxLabel != null) return payload;
+
+  const formatLabel =
+    payload.filter === "time" ? formatTimeAxisLabel : formatDateAxisLabel;
+  return {
+    ...payload,
+    minLabel: typeof payload.min === "number" ? formatLabel(payload.min) : null,
+    maxLabel: typeof payload.max === "number" ? formatLabel(payload.max) : null,
+  };
+}
 
 const { Title, Text } = Typography;
 
 // All known event types for the filter dropdown
 const ALL_EVENT_TYPES = [
-  "session_start", "session_end", "phase_change", "log_dropped",
-  "panel_enter", "panel_exit", "split_resize",
+  "session_start",
+  "session_end",
+  "phase_change",
+  "log_dropped",
+  "panel_enter",
+  "panel_exit",
+  "split_resize",
   "feed_active_snippet_change",
-  "feedback_submit", "label_toggle", "label_clear",
-  "vis_point_click", "vis_point_hover", "projection_method_change",
-  "sampling_method_change", "visibility_threshold_change", "visibility_range_change",
-  "color_property_change", "histogram_property_select", "histogram_multi_toggle",
-  "retrain_manual_click", "retrain_complete",
-  "audio_play_segment", "audio_volume_change", "audio_seek",
+  "feed_sort_change",
+  "feedback_submit",
+  "label_toggle",
+  "label_clear",
+  "vis_point_click",
+  "vis_point_hover",
+  "projection_method_change",
+  "sampling_method_change",
+  "visibility_threshold_change",
+  "visibility_range_change",
+  "date_time_filter_change",
+  "color_property_change",
+  "histogram_property_select",
+  "histogram_multi_toggle",
+  "model_score_filter_multi_change",
+  "retrain_manual_click",
+  "retrain_complete",
+  "audio_interaction",
 ];
 
 export const StudyLogsSession: React.FC = () => {
-  const { userId, sessionId } = useParams<{ userId: string; sessionId: string }>();
+  const { userId, sessionId } = useParams<{
+    userId: string;
+    sessionId: string;
+  }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -62,14 +107,11 @@ export const StudyLogsSession: React.FC = () => {
       .then((page) => {
         setEvents(page.events);
         setTotal(page.total);
-        // Collect distinct phases on first unfiltered load
-        if (!filterType && !filterPhase) {
-          const phases = [...new Set(page.events.map((e) => e.phase_id).filter(Boolean))] as string[];
-          setPhaseOptions(phases);
-        }
       })
       .catch((err) =>
-        setError(err?.response?.data?.detail ?? err.message ?? "Failed to load events")
+        setError(
+          err?.response?.data?.detail ?? err.message ?? "Failed to load events",
+        ),
       )
       .finally(() => setLoading(false));
   }, [sessionId, filterType, filterPhase]);
@@ -77,6 +119,24 @@ export const StudyLogsSession: React.FC = () => {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Distinct phases for the filter dropdown — fetched unfiltered so it stays
+  // populated even when landing directly on a URL that already has type/phase
+  // query params (a filtered fetchEvents call alone would never see them).
+  useEffect(() => {
+    if (!sessionId) return;
+    studyLogsApi
+      .getSessionEvents(sessionId, { limit: 1000 })
+      .then((page) => {
+        const phases = [
+          ...new Set(page.events.map((e) => e.phase_id).filter(Boolean)),
+        ] as string[];
+        setPhaseOptions(phases);
+      })
+      .catch(() => {
+        /* non-critical — filter dropdown just stays empty */
+      });
+  }, [sessionId]);
 
   const handleExport = () => {
     if (!sessionId) return;
@@ -128,28 +188,35 @@ export const StudyLogsSession: React.FC = () => {
       dataIndex: "phase_id",
       key: "phase_id",
       render: (phase: string | null) =>
-        phase ? <span className="font-mono text-xs">{phase}</span> : <Text type="secondary">—</Text>,
+        phase ? (
+          <span className="font-mono text-xs">{phase}</span>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
     },
     {
       title: "Snippet",
       dataIndex: "snippet_id",
       key: "snippet_id",
       align: "right",
-      render: (id: number | null) => (id != null ? id : <Text type="secondary">—</Text>),
+      render: (id: number | null) =>
+        id != null ? id : <Text type="secondary">—</Text>,
     },
     {
       title: "Duration (ms)",
       dataIndex: "duration_ms",
       key: "duration_ms",
       align: "right",
-      render: (ms: number | null) => (ms != null ? ms : <Text type="secondary">—</Text>),
+      render: (ms: number | null) =>
+        ms != null ? ms : <Text type="secondary">—</Text>,
     },
     {
       title: "Payload",
       dataIndex: "payload",
       key: "payload",
       ellipsis: true,
-      render: (payload: Record<string, unknown> | null) => {
+      render: (_: Record<string, unknown> | null, row) => {
+        const payload = displayPayload(row);
         if (!payload) return <Text type="secondary">—</Text>;
         const str = JSON.stringify(payload);
         return (
@@ -168,9 +235,23 @@ export const StudyLogsSession: React.FC = () => {
         <Breadcrumb
           className="mb-4 font-ibm-sans"
           items={[
-            { title: <a onClick={() => navigate("/study-logs")}>Study Logs</a> },
-            { title: <a onClick={() => navigate(`/study-logs/${userId}`)}>User {userId}</a> },
-            { title: <span className="font-mono text-xs">{sessionId?.slice(0, 8)}…</span> },
+            {
+              title: <a onClick={() => navigate("/study-logs")}>Study Logs</a>,
+            },
+            {
+              title: (
+                <a onClick={() => navigate(`/study-logs/${userId}`)}>
+                  User {userId}
+                </a>
+              ),
+            },
+            {
+              title: (
+                <span className="font-mono text-xs">
+                  {sessionId?.slice(0, 8)}…
+                </span>
+              ),
+            },
           ]}
         />
 
@@ -183,7 +264,9 @@ export const StudyLogsSession: React.FC = () => {
               {sessionId}
             </Text>
             <div className="mt-1">
-              <Text type="secondary">{total} event{total !== 1 ? "s" : ""}</Text>
+              <Text type="secondary">
+                {total} event{total !== 1 ? "s" : ""}
+              </Text>
             </div>
           </div>
           <Button
@@ -227,12 +310,20 @@ export const StudyLogsSession: React.FC = () => {
           rowKey="id"
           loading={loading}
           size="small"
-          locale={{ emptyText: <Empty description="No events match the current filters" /> }}
-          pagination={{ pageSize: 50, showSizeChanger: true, showTotal: (t) => `${t} events` }}
+          locale={{
+            emptyText: (
+              <Empty description="No events match the current filters" />
+            ),
+          }}
+          pagination={{
+            pageSize: 50,
+            showSizeChanger: true,
+            showTotal: (t) => `${t} events`,
+          }}
           expandable={{
             expandedRowRender: (row) => (
               <pre className="text-xs bg-blue-50 p-3 rounded border border-blue-100 overflow-auto max-h-48">
-                {JSON.stringify(row.payload, null, 2)}
+                {JSON.stringify(displayPayload(row), null, 2)}
               </pre>
             ),
             rowExpandable: (row) => row.payload != null,

@@ -17,6 +17,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 
   // Feed
   feed_active_snippet_change: "green",
+  feed_sort_change: "green",
 
   // Annotation
   feedback_submit: "orange",
@@ -30,6 +31,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   sampling_method_change: "cyan",
   visibility_threshold_change: "cyan",
   visibility_range_change: "cyan",
+  date_time_filter_change: "cyan",
   color_property_change: "cyan",
   histogram_property_select: "cyan",
   histogram_multi_toggle: "cyan",
@@ -39,9 +41,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   retrain_complete: "red",
 
   // Audio
-  audio_play_segment: "gold",
-  audio_volume_change: "gold",
-  audio_seek: "gold",
+  audio_interaction: "gold",
 };
 
 export function eventTypeColor(eventType: string): string {

@@ -26,10 +26,10 @@ export const NavigationBar = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (accessToken) {
+    if (accessToken && !user) {
       dispatch(getLoggedInUser());
     }
-  }, [accessToken]);
+  }, [accessToken, user, dispatch]);
 
   const userlogout = () => {
     dispatch(logout());
@@ -83,7 +83,7 @@ export const NavigationBar = () => {
             <div className="flex flex-col items-start leading-tight">
               {user.username.length > 10 ? (
                 <Tooltip title={user.username} placement="top">
-                  <span className="text-sm font-semibold text-gray-800 capitalize max-w-[7rem] truncate cursor-pointer">
+                  <span className="text-sm font-semibold text-gray-800 capitalize max-w-28 truncate cursor-pointer">
                     {user.username.substring(0, 10) + "…"}
                   </span>
                 </Tooltip>
@@ -103,8 +103,8 @@ export const NavigationBar = () => {
             className="bg-[#E8EDF5]!"
             icon={<TbLogout className="h-5 w-5" />}
           />
-          </div>
         </div>
+      </div>
     </div>
   );
 };

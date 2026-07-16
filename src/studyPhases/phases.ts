@@ -84,8 +84,10 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: false, findSimilar: false, labelScope: false },
-    sort: { nonModel: true, model: false },
+    // Date/time filters are enabled (dateTimeDisabled: false), but the Date/Time
+    // sort chips stay read-only (sort.disabled: true) — filter, don't sort.
+    sidebar: { showPane: true, sampleProperties: true, dateTimeDisabled: false, modelScores: false, findSimilar: false, labelScope: false },
+    sort: { nonModel: true, model: false, disabled: true },
   },
 
   "P4": {

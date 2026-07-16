@@ -43,6 +43,86 @@ type PlotlyPointEvent = {
   points?: Array<{ customdata?: unknown; curveNumber?: number }>;
 };
 
+const MODEL_SCORE_FILTER_LOG_DELAY_MS = 1200;
+const MODEL_SCORE_FULL_RANGE_EPSILON = 1e-9;
+
+function useModelScoreFilterLogging(
+  ranges: Record<string, [number, number]> | undefined,
+  visibleCount: number,
+  totalCount: number,
+): void {
+  const initializedRef = useRef(false);
+  const lastLoggedRef = useRef<Record<string, [number, number]>>({});
+  const timerRef = useRef<number | null>(null);
+  const visibleCountRef = useRef(visibleCount);
+  const totalCountRef = useRef(totalCount);
+  useEffect(() => {
+    visibleCountRef.current = visibleCount;
+    totalCountRef.current = totalCount;
+  }, [visibleCount, totalCount]);
+
+  const rangesKey = JSON.stringify(
+    Object.entries(ranges ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  );
+
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // First render just seeds the baseline — never log the initial state.
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      lastLoggedRef.current = ranges ?? {};
+      return;
+    }
+
+    const snapshot = ranges ?? {};
+
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      const prev = lastLoggedRef.current;
+
+      // Which properties changed since the last logged state.
+      const changed: string[] = [];
+      const allKeys = new Set([...Object.keys(prev), ...Object.keys(snapshot)]);
+      for (const key of allKeys) {
+        const a = prev[key];
+        const b = snapshot[key];
+        if (!a || !b || a[0] !== b[0] || a[1] !== b[1]) changed.push(key);
+      }
+      if (changed.length === 0) return;
+
+      lastLoggedRef.current = snapshot;
+
+      // Snapshot of every currently-active filter (range narrowed from [0,1]).
+      const filters: Record<string, { min: number; max: number }> = {};
+      for (const [property, [min, max]] of Object.entries(snapshot)) {
+        const active =
+          min > MODEL_SCORE_FULL_RANGE_EPSILON ||
+          max < 1 - MODEL_SCORE_FULL_RANGE_EPSILON;
+        if (active) filters[property] = { min, max };
+      }
+
+      studyLogger.log("model_score_filter_multi_change", {
+        changed: changed.sort(),
+        filters,
+        activeCount: Object.keys(filters).length,
+        visiblePoints: visibleCountRef.current,
+        totalPoints: totalCountRef.current,
+      });
+    }, MODEL_SCORE_FILTER_LOG_DELAY_MS);
+
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [rangesKey, ranges]);
+}
+
 export interface ProjectionThumbnailData {
   thumbnailPoints: Array<{
     p: PlotPoint;
@@ -414,6 +494,20 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     visRangeOverride,
     extraVisible,
   });
+
+  // Study logging for the model-score filters — co-located here so it can
+  // report the post-filter visible-point count alongside the filter snapshot.
+  useModelScoreFilterLogging(
+    alFilters.visibility.ranges,
+    visibleCount,
+    plotPoints.length,
+  );
+
+  // Bump datarevision whenever the trace data changes so Plotly re-reads the
+  // arrays and repaints the selection overlay — scattergl doesn't reliably
+  // repaint on a new `data` array alone (e.g. the highlight ring not following
+  // the scroll-synced selection).
+  const plotRevision = useMemo(() => Date.now() + traces.length, [traces]);
 
   // ── Expose thumbnail data to parent when an external method is provided ──────
 
@@ -787,7 +881,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
               </div>
             )}
 
-          <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5 pointer-events-none">
+          {/* Top-left so these loading banners don't sit under the zoom
+              buttons (which are pinned top-right). */}
+          <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1.5 pointer-events-none">
             {wantsLocationFilter && locationDataLoading && (
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm">
                 <Spin size="small" />
@@ -853,6 +949,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   // Stable uirevision tells Plotly to keep the user's current zoom/pan
                   // when traces update (e.g. after a point click or filter change).
                   uirevision: "stable",
+                  datarevision: plotRevision,
                   margin: { l: 30, r: 10, t: 10, b: 30 },
                   showlegend: false,
                   legend: {

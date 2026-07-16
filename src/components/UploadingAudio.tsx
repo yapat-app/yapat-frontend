@@ -172,7 +172,7 @@ export const UploadSampleAudio: React.FC<UploadedSnippetPlayerProps> = ({
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
                     <span className="text-blue-600 font-bold text-lg">🎵</span>
                   </div>
                   <div className="min-w-0 flex-1">

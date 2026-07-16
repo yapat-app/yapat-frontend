@@ -11,7 +11,7 @@
  * resolved the value.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { DEFAULT_PHASE_ID, STUDY_PHASES, getPhaseConfig } from "./phases";
 import { PhaseContext, type PhaseContextValue } from "./context";
@@ -39,8 +39,11 @@ function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
     const start2 = start >= 0 ? start : idxPhases;
     if (start2 < 0) continue;
     const tail = v.slice(start2);
-    const recovered = new URLSearchParams(tail.startsWith("?") ? tail.slice(1) : tail);
-    const ph = recovered.get("phase") ?? recovered.get("p") ?? recovered.get("phases");
+    const recovered = new URLSearchParams(
+      tail.startsWith("?") ? tail.slice(1) : tail,
+    );
+    const ph =
+      recovered.get("phase") ?? recovered.get("p") ?? recovered.get("phases");
     if (ph) return ph;
   }
 
@@ -110,6 +113,8 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
     resolveInitialPhaseId(urlValue),
   );
 
+  const lastIntentionalPhaseRef = useRef<string | null>(null);
+
   // When locked, keep the URL in sync with the effective phase — but only on
   // the annotate route. Other pages (dashboard, datasets, …) should not have
   // ?phase= injected into their URLs.
@@ -117,8 +122,14 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
   useEffect(() => {
     if (!isPhaseLocked()) return;
     const allowed = getAllowedPhaseIds();
-    // In allowlist-lock mode, allow switching via URL as long as it's allowed.
-    if (allowed.length > 0 && urlValue && allowed.includes(urlValue) && urlValue !== phaseId) {
+
+    if (
+      allowed.length > 0 &&
+      urlValue &&
+      allowed.includes(urlValue) &&
+      urlValue !== phaseId &&
+      phaseId !== lastIntentionalPhaseRef.current
+    ) {
       setPhaseIdState(urlValue);
       return;
     }
@@ -154,6 +165,7 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
       if (!allowed.includes(id)) return;
     }
     if (!STUDY_PHASES[id]) return;
+    lastIntentionalPhaseRef.current = id;
     setPhaseIdState(id);
     try {
       localStorage.setItem(STORAGE_KEY, id);
@@ -163,12 +175,15 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
     // Only write ?phase= into the URL when on the annotate page; other routes
     // (dashboard, datasets, …) should not have the param injected.
     if (isAnnotatePage) {
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.set("phase", id);
-        next.delete("p");
-        return next;
-      }, { replace: true });
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set("phase", id);
+          next.delete("p");
+          return next;
+        },
+        { replace: true },
+      );
     }
   };
 
@@ -183,5 +198,7 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
     [phaseId],
   );
 
-  return <PhaseContext.Provider value={value}>{children}</PhaseContext.Provider>;
+  return (
+    <PhaseContext.Provider value={value}>{children}</PhaseContext.Provider>
+  );
 };

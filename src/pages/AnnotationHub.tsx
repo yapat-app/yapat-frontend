@@ -7,11 +7,12 @@
  * - "Find similar" icon button on every snippet card
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Select, Button, Tag, Spin } from "antd";
 import {
   DatabaseOutlined,
+  ExperimentOutlined,
   HistoryOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
@@ -25,11 +26,72 @@ import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
-import { usePhaseConfig } from "../studyPhases";
+import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
+import { useStudyFlow, phaseSequence } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
+import { studyLogger } from "../studyLogging";
+import {
+  formatDateAxisLabel,
+  formatTimeAxisLabel,
+} from "./annotationHub/dateTimeFilterHelpers";
 
 const { Option } = Select;
+
+const DATE_TIME_FILTER_LOG_DELAY_MS = 1200;
+
+/**
+ * Debounce-logs changes to a date/time range filter. Range sliders fire a
+ * new value on every drag tick, so — unlike a discrete control — we wait for
+ * the value to settle before emitting a study-log event.
+ */
+function useDateTimeFilterLogging(
+  filter: "date" | "time",
+  range: [number, number] | null,
+): void {
+  const initializedRef = useRef(false);
+  const lastKeyRef = useRef<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const key = range ? `${range[0]}:${range[1]}` : "null";
+
+  useEffect(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      lastKeyRef.current = key;
+      return;
+    }
+
+    if (lastKeyRef.current === key) return;
+
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      if (lastKeyRef.current === key) return;
+      lastKeyRef.current = key;
+      const formatLabel =
+        filter === "date" ? formatDateAxisLabel : formatTimeAxisLabel;
+      studyLogger.log("date_time_filter_change", {
+        filter,
+        active: range !== null,
+        min: range ? range[0] : null,
+        max: range ? range[1] : null,
+        minLabel: range ? formatLabel(range[0]) : null,
+        maxLabel: range ? formatLabel(range[1]) : null,
+      });
+    }, DATE_TIME_FILTER_LOG_DELAY_MS);
+
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [filter, key, range]);
+}
 
 export const AnnotationHub: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -59,6 +121,17 @@ export const AnnotationHub: React.FC = () => {
   }, [searchParams, setSearchParams]);
 
   const phase = usePhaseConfig();
+  const { phaseId, jumpToPhase } = useStudyFlow();
+  const [phaseOptions] = useState<string[]>(() => phaseSequence());
+
+  // ── Study logging session: spans exactly the time spent on this page ─────
+  // StudyFlowProvider lives at the app root (not scoped to this route), so
+  // the session boundary is owned here instead — start on mount, stop on
+  // unmount (navigating away from the Annotation Hub).
+  useEffect(() => {
+    studyLogger.start();
+    return () => studyLogger.stop();
+  }, []);
 
   const al = useHubALSession(mode, searchParams, setSearchParams, {
     treatAllModesAsAl: true,
@@ -87,6 +160,15 @@ export const AnnotationHub: React.FC = () => {
     setDateZoomDomain(r);
   };
   const quickLabelList = useQuickLabelList();
+
+  // ── Study logging: date/time range filters ────────────────────────────
+  // Unlike the sort chips (a click), these are drag-driven range sliders —
+  // give the user more time to settle on a value before logging, otherwise
+  // every intermediate drag position would (attempt to) log.
+  useDateTimeFilterLogging("date", filterDateRange);
+  useDateTimeFilterLogging("time", filterTimeRange);
+  // NOTE: model-derived-score filter logging lives in ProjectionView, which is
+  // where the post-filter visible-point count is computed.
 
   useEffect(() => {
     if (al.selectedDatasetId === null) return;
@@ -152,6 +234,23 @@ export const AnnotationHub: React.FC = () => {
             {allDatasets.map((d) => (
               <Option key={d.id} value={d.id}>
                 {d.name}
+              </Option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <ExperimentOutlined className="text-gray-400 text-sm" />
+          <Select
+            placeholder="Select phase"
+            value={phaseId || undefined}
+            onChange={jumpToPhase}
+            style={{ width: 260 }}
+            size="middle"
+          >
+            {phaseOptions.map((id) => (
+              <Option key={id} value={id}>
+                {STUDY_PHASES[id]?.label ?? id}
               </Option>
             ))}
           </Select>
@@ -311,6 +410,7 @@ export const AnnotationHub: React.FC = () => {
                   labelScopeOptions={al.labelScopeOptions}
                   labelScopeLoading={al.labelScopeLoading}
                   showSampleProperties={phase.sidebar.sampleProperties}
+                  dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
                   showFindSimilar={phase.sidebar.findSimilar}
                   showLabelScope={phase.sidebar.labelScope}

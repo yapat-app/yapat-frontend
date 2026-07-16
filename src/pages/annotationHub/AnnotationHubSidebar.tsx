@@ -68,6 +68,7 @@ export type AnnotationHubSidebarProps = {
   labelScopeLoading: boolean;
   onResetFilters: () => void;
   showSampleProperties: boolean;
+  dateTimeDisabled?: boolean;
   showModelScores: boolean;
   showFindSimilar: boolean;
   showLabelScope: boolean;
@@ -183,6 +184,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   labelScopeLoading,
   onResetFilters,
   showSampleProperties,
+  dateTimeDisabled = false,
   showModelScores,
   showFindSimilar,
   showLabelScope,
@@ -412,6 +414,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                         domain={dateTimeData.dateDomain}
                         range={filterDateRange}
                         onChange={onCalendarDateRangeChange}
+                        disabled={dateTimeDisabled}
                       />
                       <DateTimeRangeFilter
                         icon={<CalendarOutlined className="text-gray-400" />}
@@ -423,6 +426,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                         onChange={onFilterDateRangeChange}
                         onReset={() => onCalendarDateRangeChange(null)}
                         formatValue={formatDateAxisLabel}
+                        disabled={dateTimeDisabled}
                       />
                     </div>
                   )}
@@ -436,6 +440,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       range={filterTimeRange}
                       onChange={onFilterTimeRangeChange}
                       formatValue={formatTimeAxisLabel}
+                      disabled={dateTimeDisabled}
                     />
                   )}
                   {showLabelScope && (

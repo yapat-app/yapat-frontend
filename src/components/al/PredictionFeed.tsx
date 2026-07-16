@@ -517,6 +517,37 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
+  // `useALSync` can only scroll to a mounted card. In blind mode the feed
+  // renders a small virtualized window, so a FPV click can update Redux while
+  // the target card is still outside the mounted slice. Jump the scroll
+  // container directly to the selected snippet's slot so the window remounts
+  // around it and the card/audio re-render for that snippet.
+  useEffect(() => {
+    if (!isBlind) return;
+    if (skipScrollIntoViewRef.current) return;
+    if (selectedSnippetId === null) return;
+    if (cardRefs.current.has(selectedSnippetId)) return;
+
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const idx = filteredAndSorted.findIndex(
+      (p) => p.snippet_id === selectedSnippetId,
+    );
+    if (idx === -1) return;
+
+    el.scrollTop = Math.max(
+      0,
+      idx * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
+    );
+  }, [
+    isBlind,
+    selectedSnippetId,
+    filteredAndSorted,
+    blindSlotSize,
+    blindSnapCardHeight,
+  ]);
+
   const selectionFeedViewKeyRef = useRef(feedViewKey);
   useEffect(() => {
     if (!enableClientFilters) return;
@@ -682,10 +713,19 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     };
 
-    const observer = new IntersectionObserver(scheduleSelectNow, {
-      root: container,
-      threshold: [0, 0.25, 0.5, 0.75, 1],
-    });
+    const observer = new IntersectionObserver(
+      () => {
+        if (selectedSnippetIdRef.current === null) {
+          scheduleSelectNow();
+        } else {
+          scheduleSelect();
+        }
+      },
+      {
+        root: container,
+        threshold: [0, 0.25, 0.5, 0.75, 1],
+      },
+    );
     cardVisibilityObserverRef.current = observer;
     cardRefs.current.forEach((el) => {
       if (el) observer.observe(el);
@@ -847,7 +887,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       const el = scrollContainerRef.current;
       if (!el) return;
       const h = el.clientHeight;
-      if (h > 0) setBlindSnapCardHeight(Math.max(480, h));
+      // Card fills exactly one scroll viewport so snap-scroll lands one card at
+      // a time and the centered (selected) card is always the visible one. A
+      // fixed floor larger than the viewport would make cards overflow, so the
+      // highlighted card could scroll off-screen while a neighbour stays in view.
+      if (h > 0) setBlindSnapCardHeight(h);
     };
 
     // Defer slightly so the new scroll container is fully laid out after
@@ -891,30 +935,44 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .join("|"),
     [classicAnnotationsBySnippet],
   );
+  // Classic feed: labels are derived locally from hydrated annotations (no
+  // fetch). Keyed on the label *signature* (a content string) rather than the
+  // raw classicAnnotationsBySnippet object — the latter gets a fresh reference
+  // on every scroll-driven contributor hydration even when the labels are
+  // unchanged, which would rebuild this map needlessly on every scroll tick.
   useEffect(() => {
+    if (!isBlind || !isClassicFeed) return;
+    const map: Record<number, string[]> = {};
+    for (const [snippetId, annotations] of Object.entries(
+      classicAnnotationsBySnippet,
+    )) {
+      const labels = annotations
+        .map(annotationDisplayLabel)
+        .filter((label): label is string => Boolean(label));
+      if (labels.length > 0) map[Number(snippetId)] = labels;
+    }
+    setLabelsBySnippet(map);
+    // classicAnnotationsBySnippet is read via the signature dep on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBlind, isClassicFeed, classicAnnotationLabelSignature]);
+
+  // Non-classic blind feed (the study feed): labels come from the server. This
+  // must refetch ONLY when feedback actually changes — previously it also
+  // depended on the classic annotation signature/object, so every scroll-driven
+  // annotation hydration refetched the entire dataset's snippet-labels and
+  // re-rendered the feed (the visible "refresh glitch" mid-scroll).
+  useEffect(() => {
+    if (!isBlind) {
+      setLabelsBySnippet({});
+      return;
+    }
+    if (isClassicFeed) return; // handled by the classic effect above
+    if (!selectedDatasetId) {
+      setLabelsBySnippet({});
+      return;
+    }
     let cancelled = false;
-    async function loadLabels() {
-      if (!isBlind) {
-        if (!cancelled) setLabelsBySnippet({});
-        return;
-      }
-      if (isClassicFeed) {
-        const map: Record<number, string[]> = {};
-        for (const [snippetId, annotations] of Object.entries(
-          classicAnnotationsBySnippet,
-        )) {
-          const labels = annotations
-            .map(annotationDisplayLabel)
-            .filter((label): label is string => Boolean(label));
-          if (labels.length > 0) map[Number(snippetId)] = labels;
-        }
-        if (!cancelled) setLabelsBySnippet(map);
-        return;
-      }
-      if (!selectedDatasetId) {
-        if (!cancelled) setLabelsBySnippet({});
-        return;
-      }
+    void (async () => {
       try {
         const r = await alApi.getSnippetLabels(
           selectedDatasetId,
@@ -927,8 +985,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       } catch {
         if (!cancelled) setLabelsBySnippet({});
       }
-    }
-    loadLabels();
+    })();
     return () => {
       cancelled = true;
     };
@@ -938,8 +995,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedDatasetId,
     snippetSetId,
     feedbackLabelSignature,
-    classicAnnotationLabelSignature,
-    classicAnnotationsBySnippet,
   ]);
 
   const labeledCount = useMemo(
@@ -1020,7 +1075,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             <div className="flex flex-col gap-3 w-full">
               {multiSelected.map((p) => (
                 <div
-                  key={p.id ?? p.snippet_id}
+                  // key={p.id ?? p.snippet_id}
+                  key={p.snippet_id}
                   className="snap-start shrink-0 w-full"
                   style={{ height: blindSnapCardHeight }}
                 >
@@ -1068,7 +1124,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3"
         >
           <PredictionCard
-            key={selected.id ?? selected.snippet_id}
+            // key={selected.id ?? selected.snippet_id}
+            key={selected.snippet_id}
             prediction={selected}
             recordingName={
               typeof selected.recording_id === "number"
@@ -1136,7 +1193,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
               <div style={{ height: blindTopSpacer }} />
               {blindVisibleRows.map(({ prediction: p, index }) => (
                 <div
-                  key={p.id ?? p.snippet_id}
+                  // key={p.id ?? p.snippet_id}
+                  key={p.snippet_id}
                   className="snap-start shrink-0 w-full"
                   style={{
                     height: blindSnapCardHeight,
@@ -1287,10 +1345,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       >
         <div className="w-full md:w-[85%] max-w-350 mx-auto flex flex-col gap-3">
           {predictions.slice(0, visibleCount).map((p, index) => {
+            // const key = p._isDivider
+            //   ? `divider-${p.snippet_id}`
+            //   : (p.id ?? p.snippet_id);
             const key = p._isDivider
               ? `divider-${p.snippet_id}`
-              : (p.id ?? p.snippet_id);
-
+              : `snippet-${p.snippet_id}`;
             if (p._isDivider) {
               return (
                 <div

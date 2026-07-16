@@ -5,6 +5,30 @@ import type { User } from "../../types";
 import { getErrorMessage } from "../../services/api";
 import { normalizeUser } from "../../utils/normalizeUserRole";
 
+const AUTH_USER_KEY = "yapat_auth_user";
+
+function loadStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    if (!raw) return null;
+    return normalizeUser(JSON.parse(raw) as User);
+  } catch {
+    return null;
+  }
+}
+
+function persistStoredUser(user: User | null): void {
+  try {
+    if (!user) {
+      localStorage.removeItem(AUTH_USER_KEY);
+      return;
+    }
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export interface Auth {
   name: string;
   password: string;
@@ -26,7 +50,7 @@ const initialState: AuthState = {
   //   name: "",
   //   password: "",
   status: "idle",
-  user: null,
+  user: loadStoredUser(),
   accessToken: localStorage.getItem("accessToken") || null,
   loginSuccess: false,
   registerSuccess: false,
@@ -95,9 +119,11 @@ export const authSlice = createSlice({
     // Your original sync login
     logout: (state) => {
       state.accessToken = null;
+      state.user = null;
       state.loginSuccess = false;
       state.isAuthenticated = false;
       localStorage.removeItem("accessToken");
+      persistStoredUser(null);
     },
     clearError: (state) => {
       state.error = null;
@@ -111,6 +137,7 @@ export const authSlice = createSlice({
     builder
       .addCase(getLoggedInUser.fulfilled, (state, action) => {
         state.user = normalizeUser(action.payload);
+        persistStoredUser(state.user);
       })
       .addCase(loginAsync.pending, (state) => {
         state.status = "loading";

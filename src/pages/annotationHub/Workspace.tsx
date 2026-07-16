@@ -8,7 +8,13 @@
  * PredictionFeed's blind/scrollable rendering path.
  */
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
 import { Tooltip, Button } from "antd";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
@@ -64,13 +70,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 }) => {
   const phase = usePhaseConfig();
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
-  const [thumbData, setThumbData] = useState<ProjectionThumbnailData | null>(null);
+  const [thumbData, setThumbData] = useState<ProjectionThumbnailData | null>(
+    null,
+  );
   const handleThumbnailData = useCallback((data: ProjectionThumbnailData) => {
     setThumbData(data);
   }, []);
   const handleMethodChange = useCallback(
     (m: ProjectionMethod) => {
-      if (m !== projMethod) studyLogger.log("projection_method_change", { from: projMethod, to: m });
+      if (m !== projMethod)
+        studyLogger.log("projection_method_change", {
+          from: projMethod,
+          to: m,
+        });
       setProjMethod(m);
     },
     [projMethod],
@@ -79,6 +91,65 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const [sortFields, setSortFields] = useState<SortField[]>(() =>
     defaultSortFields(phase.sort.nonModel, phase.sort.model),
   );
+  const activeSortFields = useMemo(
+    () =>
+      (sortFields ?? [])
+        .filter((f) => !f.disabled)
+        .map((f) => ({ property: f.property, direction: f.direction })),
+    [sortFields],
+  );
+  const activeSortFieldsKey = useMemo(
+    () => activeSortFields.map((f) => `${f.property}:${f.direction}`).join("|"),
+    [activeSortFields],
+  );
+  const sortLogInitializedRef = useRef(false);
+  const sortLogPhaseIdRef = useRef(phase.id);
+  const sortLogLastKeyRef = useRef<string | null>(null);
+  const sortLogTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (sortLogTimerRef.current !== null) {
+      window.clearTimeout(sortLogTimerRef.current);
+      sortLogTimerRef.current = null;
+    }
+
+    if (!sortLogInitializedRef.current) {
+      sortLogInitializedRef.current = true;
+      sortLogPhaseIdRef.current = phase.id;
+      sortLogLastKeyRef.current = activeSortFieldsKey;
+      return;
+    }
+
+    if (sortLogPhaseIdRef.current !== phase.id) {
+      sortLogPhaseIdRef.current = phase.id;
+      sortLogLastKeyRef.current = activeSortFieldsKey;
+      return;
+    }
+
+    if (sortLogLastKeyRef.current === activeSortFieldsKey) return;
+
+    const snapshotFields = activeSortFields;
+    const snapshotKey = activeSortFieldsKey;
+
+    sortLogTimerRef.current = window.setTimeout(() => {
+      sortLogTimerRef.current = null;
+      if (sortLogLastKeyRef.current === snapshotKey) return;
+      sortLogLastKeyRef.current = snapshotKey;
+      studyLogger.log("feed_sort_change", {
+        action: "sort_change",
+        panel: "prediction_feed",
+        activeCount: snapshotFields.length,
+        fields: snapshotFields,
+      });
+    }, 500);
+
+    return () => {
+      if (sortLogTimerRef.current !== null) {
+        window.clearTimeout(sortLogTimerRef.current);
+        sortLogTimerRef.current = null;
+      }
+    };
+  }, [activeSortFields, activeSortFieldsKey, phase.id]);
   // Reset sort fields when the phase's capabilities change, following React's
   // "adjust state during render" pattern (avoids the extra effect-triggered
   // render an equivalent useEffect would cause).
@@ -97,12 +168,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       timeRange: filterTimeRange,
       labelScope: localLabelScope,
     }),
-    [filterAnnotationStatus, filterLocations, filterDateRange, filterTimeRange, localLabelScope],
+    [
+      filterAnnotationStatus,
+      filterLocations,
+      filterDateRange,
+      filterTimeRange,
+      localLabelScope,
+    ],
   );
 
   const rightPanel = (
     <div className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
+      <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
           Feed
         </h2>
@@ -121,6 +198,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onChange={setSortFields}
         allowNonModel={phase.sort.nonModel}
         allowModel={phase.sort.model}
+        disabled={phase.sort.disabled}
       />
       <SnippetHeader onFindSimilar={onFindSimilar} />
       <div className="flex-1 overflow-hidden">
@@ -155,7 +233,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       maxRightRatio={0.55}
       left={
         <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
             <Tooltip
               title={
                 phase.visualization.allowPointClick
@@ -169,11 +247,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             </Tooltip>
           </div>
 
-          <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto">
+          <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto">
             {PROJECTION_METHODS.map((m) => {
               const isActive = m.key === projMethod;
-              const hasProj = Boolean(thumbData?.fpvCoordsBySnippetForMethod?.[m.key]);
-              const isLoadingThumb = Boolean(thumbData?.loadingMethods.has(m.key)) && !hasProj;
+              const hasProj = Boolean(
+                thumbData?.fpvCoordsBySnippetForMethod?.[m.key],
+              );
+              const isLoadingThumb =
+                Boolean(thumbData?.loadingMethods.has(m.key)) && !hasProj;
               return (
                 <button
                   key={m.key}
@@ -181,19 +262,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                   onClick={() => handleMethodChange(m.key)}
                   disabled={thumbData?.fpvLoading && isActive}
                   className={[
-                    "flex-shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
+                    "shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
                     isActive
                       ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
                       : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
-                    !hasProj && !isLoadingThumb ? "opacity-50 cursor-not-allowed" : "",
+                    !hasProj && !isLoadingThumb
+                      ? "opacity-50 cursor-not-allowed"
+                      : "",
                   ].join(" ")}
                 >
-                  <div className="w-[90px] h-[52px] rounded-md bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
+                  <div className="w-22.5 h-13 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
                     <MiniProjection
                       points={thumbData?.thumbnailPoints ?? []}
-                      coordsBySnippet={thumbData?.fpvCoordsBySnippetForMethod?.[m.key] ?? null}
+                      coordsBySnippet={
+                        thumbData?.fpvCoordsBySnippetForMethod?.[m.key] ?? null
+                      }
                       selectedSnippetId={thumbData?.selectedSnippetId ?? null}
-                      selectedCoord={thumbData?.selectedCoordByMethod?.[m.key] ?? null}
+                      selectedCoord={
+                        thumbData?.selectedCoordByMethod?.[m.key] ?? null
+                      }
                       allActualLabels={thumbData?.allActualLabels ?? []}
                       loading={isLoadingThumb}
                     />
@@ -201,7 +288,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                   <div
                     className={[
                       "mt-1 text-center text-[11px] font-ibm-sans",
-                      isActive ? "text-blue-700 font-semibold" : "text-gray-600",
+                      isActive
+                        ? "text-blue-700 font-semibold"
+                        : "text-gray-600",
                     ].join(" ")}
                   >
                     {m.label}

@@ -103,7 +103,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                   <span
                     key={lbl}
                     className={[
-                      "inline-flex items-center gap-1.5 flex-shrink-0",
+                      "inline-flex items-center gap-1.5 shrink-0",
                       "px-2 py-0.5",
                       "rounded-full",
                       "border border-gray-200",
@@ -115,7 +115,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                     title={lbl}
                   >
                     <span
-                      className="inline-block w-2.5 h-2.5 rounded-full border border-black/10 flex-shrink-0"
+                      className="inline-block w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
                       style={{
                         backgroundColor: resolveColor(
                           { actual_label: lbl } as any,
@@ -129,7 +129,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                 ))}
                 {actualLabelLegend.remaining > 0 &&
                   actualLabelLegend.total > actualLabelLegend.shown.length && (
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">
+                    <span className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">
                       +{actualLabelLegend.remaining}
                     </span>
                   )}

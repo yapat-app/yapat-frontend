@@ -73,7 +73,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               setMaxVisible(snippets.length);
               setExpanded(true);
             }}
-            className="flex-shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
+            className="shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
           >
             +{remainingCount} more
           </div>
@@ -84,7 +84,7 @@ export const SnippetQueuePreview: React.FC<SnippetQueuePreviewProps> = ({
               setMaxVisible(12);
               setExpanded(false);
             }}
-            className="flex-shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
+            className="shrink-0 px-2 py-1.5 text-gray-400 flex items-center hover:cursor-pointer"
           >
             show less
           </div>
