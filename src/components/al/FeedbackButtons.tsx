@@ -82,7 +82,11 @@ export const FeedbackButtons: React.FC<Props> = ({
       ? (existingFeedback.final_labels ?? [])
       : (serverLabels ?? []);
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
-  const skipNextAutoSubmitRef = useRef<boolean>(true);
+  // Selection key the sync effect just wrote, so the auto-submit effect can
+  // skip that exact state instead of treating it as a user edit. A bare
+  // boolean flag can be re-armed by a later sync run and swallow the user's
+  // next real edit; matching on the key avoids that.
+  const skipAutoSubmitKeyRef = useRef<string | null>("");
   const lastSubmittedKeyRef = useRef<string>("");
   const debounceTimerRef = useRef<number | null>(null);
   const pendingSubmitRef = useRef<(() => void) | null>(null);
@@ -259,12 +263,12 @@ export const FeedbackButtons: React.FC<Props> = ({
         pendingSubmitRef.current !== null || inFlightSubmitRef.current > 0;
       if (hasUnconfirmedEdit) return;
     }
-    skipNextAutoSubmitRef.current = true;
     const syncedKey = [...submittedLabels]
       .map((s) => s.trim())
       .filter(Boolean)
       .sort()
       .join("|");
+    skipAutoSubmitKeyRef.current = syncedKey;
     lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
   }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
@@ -272,8 +276,10 @@ export const FeedbackButtons: React.FC<Props> = ({
   // Auto-submit when the user changes labels (blind mode; debounced).
   useEffect(() => {
     if (!isBlind) return;
-    if (skipNextAutoSubmitRef.current) {
-      skipNextAutoSubmitRef.current = false;
+    // Skip only the auto-submit for the exact state the sync effect just wrote.
+    // A genuine user edit changes selectionKey, so it never matches here.
+    if (skipAutoSubmitKeyRef.current === selectionKey) {
+      skipAutoSubmitKeyRef.current = null;
       return;
     }
     if (!isClassicFeed && !hasCheckpoint) return;

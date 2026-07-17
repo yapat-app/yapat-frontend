@@ -659,10 +659,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     const pt = event.points?.[0];
     if (pt?.customdata === undefined) return;
 
-    const hasHiddenTrace = Boolean(filtered.some((f) => !f.visible));
-    if (hasHiddenTrace && pt.curveNumber === 0) return;
-
     const snippetId = pt.customdata as number;
+
+    // Resolve visibility by snippet_id, not pt.curveNumber: trace order shifts
+    // with which optional overlays are present, so curveNumber isn't a stable
+    // way to detect a click on a filtered-out point.
+    const clickedEntry = filtered.find((f) => f.p.snippet_id === snippetId);
+    if (clickedEntry && !clickedEntry.visible) return;
     studyLogger.log(
       "vis_point_click",
       { snippetId, shiftHeld: isShiftHeld.current, projectionMethod: method },
