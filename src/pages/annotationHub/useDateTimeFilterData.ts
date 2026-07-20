@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { useAppSelector } from "../../hooks";
-import { useRecordingDateTimes, type RecordingDateTime } from "./useRecordingDateTimes";
+import {
+  useRecordingDateTimes,
+  type RecordingDateTime,
+} from "./useRecordingDateTimes";
 import { dateStringToEpochDay } from "./dateTimeFilterHelpers";
 
 export const TIME_OF_DAY_DOMAIN: [number, number] = [0, 86400];
@@ -22,8 +25,12 @@ export interface DateTimeFilterData {
 export function useDateTimeFilterData(): DateTimeFilterData {
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const predictions = useAppSelector((s) => s.al.predictions);
-  const { dateTimeByRecordingId: recordingDateTimeById, loading: dateTimeLoading } =
-    useRecordingDateTimes(selectedDatasetId);
+  const inferenceLoading = useAppSelector((s) => s.al.inferenceLoading);
+  const {
+    dateTimeByRecordingId: recordingDateTimeById,
+    loading: recordingLoading,
+  } = useRecordingDateTimes(selectedDatasetId);
+  const dateTimeLoading = recordingLoading || inferenceLoading;
 
   return useMemo(() => {
     const dateValues: number[] = [];
@@ -44,7 +51,7 @@ export function useDateTimeFilterData(): DateTimeFilterData {
       dateValues,
       dateDomain,
       timeValues,
-      hasAnyDateTime: recordingDateTimeById.size > 0,
+      hasAnyDateTime: dateValues.length > 0,
       dateTimeLoading,
     };
   }, [predictions, recordingDateTimeById, dateTimeLoading]);

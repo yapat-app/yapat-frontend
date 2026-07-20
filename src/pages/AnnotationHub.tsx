@@ -188,6 +188,13 @@ export const AnnotationHub: React.FC = () => {
     };
   }, [al.selectedDatasetId]);
 
+  // Selected date/time range reset on dataset change.
+  useEffect(() => {
+    setFilterDateRange(null);
+    setDateZoomDomain(null);
+    setFilterTimeRange(null);
+  }, [al.selectedDatasetId]);
+
   const visibleRecordingLocations =
     al.selectedDatasetId === null ? [] : recordingLocations;
 

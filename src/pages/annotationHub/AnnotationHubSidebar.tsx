@@ -406,9 +406,9 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       ].join(" ")}
                     />
                   </div>
-                  {!dateTimeData.hasAnyDateTime &&
-                    dateTimeData.dateTimeLoading && <DateTimeFilterSkeleton />}
-                  {dateTimeData.hasAnyDateTime && (
+                  {dateTimeData.dateTimeLoading && <DateTimeFilterSkeleton />}
+                  {!dateTimeData.dateTimeLoading &&
+                    dateTimeData.hasAnyDateTime && (
                     <div className="flex flex-col gap-1">
                       <DateRangeCalendarPicker
                         domain={dateTimeData.dateDomain}
@@ -430,7 +430,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       />
                     </div>
                   )}
-                  {dateTimeData.hasAnyDateTime && (
+                  {!dateTimeData.dateTimeLoading &&
+                    dateTimeData.hasAnyDateTime && (
                     <DateTimeRangeFilter
                       icon={<ClockCircleOutlined className="text-gray-400" />}
                       title="Time of day"
