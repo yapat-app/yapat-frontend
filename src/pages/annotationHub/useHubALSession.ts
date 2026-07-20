@@ -301,6 +301,11 @@ export function useHubALSession(
     if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
     if (checkpoints.length === 0) return;
     if (hasAutoInferredRef.current) return;
+    // Same cross-dataset guard as handleRunInference — checkpoints and
+    // snippetSets are fetched independently for the current dataset, so one
+    // can resolve before the other; don't fire until resolvedSnippetSetId is
+    // confirmed to belong to the currently-selected dataset.
+    if (!snippetSets.some((s) => s.id === resolvedSnippetSetId)) return;
 
     // Read the family from `checkpoints` directly, not `localFamily` — a
     // later effect corrects `localFamily` from the same `checkpoints` value,
@@ -495,6 +500,17 @@ export function useHubALSession(
       message.info("Still loading this dataset's snippet sets — try Apply again in a moment.");
       return;
     }
+    // Defense in depth against sending a cross-dataset (snippet_set_id,
+    // dataset_id) pair — the backend rejects this, but by then the request
+    // has already round-tripped and failed silently from the user's point of
+    // view. snippetSets is re-fetched fresh on every selectedDatasetId
+    // change, so checking membership here catches a stale
+    // resolvedSnippetSetId (carried over from a previous dataset via
+    // localSS/redux snippetSetId) before it ever leaves the browser.
+    if (!snippetSets.some((s) => s.id === resolvedSnippetSetId)) {
+      message.info("This dataset's snippet sets are still syncing — try Apply again in a moment.");
+      return;
+    }
     const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
     if (!family) {
       message.info("No model family selected for this dataset yet — try Apply again in a moment.");
@@ -635,14 +651,24 @@ export function useHubALSession(
           }
         }
         dispatch(clearRetrainDispatch());
-        if (status === "COMPLETED" && modelFamilyName !== null && snippetSetId !== null && selectedDatasetId !== null) {
+        // Only refresh if the user is still on the dataset this retrain job
+        // was for (selectedDatasetId may have moved on to a different
+        // dataset while the job was polling) and snippetSetId is confirmed
+        // to belong to it — otherwise this would fire the same cross-dataset
+        // (snippet_set_id, dataset_id) mismatch the backend rejects. If the
+        // user has navigated away, skip the refresh; the auto-inference
+        // effect fetches fresh data when they return to this dataset anyway.
+        const stillOnSameDataset = selectedDatasetId === stableDatasetId;
+        const snippetSetValid =
+          snippetSetId !== null && snippetSets.some((s) => s.id === snippetSetId);
+        if (status === "COMPLETED" && modelFamilyName !== null && stillOnSameDataset && snippetSetValid) {
           if (phase.feed.mode === "scrollable_topk") {
             // Scrollable feed: append fresh suggestions without disrupting scroll position.
             dispatch(
               fetchAndAppendSuggestions({
                 model_family_name: modelFamilyName,
-                dataset_id: selectedDatasetId,
-                snippet_set_id: snippetSetId,
+                dataset_id: stableDatasetId,
+                snippet_set_id: snippetSetId as number,
                 sample_suggestion: true,
                 suggestion_strategy: "uncertainty",
                 k: inferenceK,
@@ -659,8 +685,8 @@ export function useHubALSession(
             dispatch(
               runInference({
                 model_family_name: modelFamilyName,
-                dataset_id: selectedDatasetId,
-                snippet_set_id: snippetSetId,
+                dataset_id: stableDatasetId,
+                snippet_set_id: snippetSetId as number,
                 ...suggestionParams,
               }),
             );
