@@ -108,22 +108,43 @@ export function useRecordingMetadata(datasetId: number | null): RecordingMetadat
     if (datasetId === null) return;
 
     let cancelled = false;
-    scanRecordingMetadata(datasetId)
-      .then((map) => {
-        if (!cancelled) {
-          setByRecordingId(map);
-          setResolvedDatasetId(datasetId);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setByRecordingId(new Map());
-          setResolvedDatasetId(datasetId);
-        }
-      });
+    let retryTimer: number | null = null;
+
+    // scanRecordingMetadata evicts its own cache entry on rejection (see that
+    // module), so calling it again after a failure is a genuine retry, not a
+    // repeat of the same rejected promise. One retry covers a transient
+    // network/backend hiccup; a failure that persists past that is left as
+    // `loading` (never marked resolved-with-empty) so a later dataset
+    // switch back to this id, or a manual retry hook-up, can still recover
+    // without needing a full page reload.
+    function attempt(isRetry: boolean) {
+      scanRecordingMetadata(datasetId as number)
+        .then((map) => {
+          if (!cancelled) {
+            setByRecordingId(map);
+            setResolvedDatasetId(datasetId);
+          }
+        })
+        .catch((e) => {
+          console.error(
+            `Failed to load recording metadata for dataset ${datasetId}` +
+              (isRetry ? " (retry failed)" : ", retrying"),
+            e,
+          );
+          if (cancelled) return;
+          if (!isRetry) {
+            retryTimer = window.setTimeout(() => attempt(true), 1500);
+          }
+          // On a second failure, stay in `loading` rather than caching an
+          // empty result as if it were a real answer.
+        });
+    }
+
+    attempt(false);
 
     return () => {
       cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
   }, [datasetId]);
 

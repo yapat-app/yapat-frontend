@@ -266,11 +266,14 @@ export function useHubALSession(
 
   useEffect(() => {
     if (selectedDatasetId === null) return;
-    alApi.getCheckpoints(selectedDatasetId).then(setCheckpoints).catch(() => {});
+    alApi
+      .getCheckpoints(selectedDatasetId)
+      .then(setCheckpoints)
+      .catch((e) => console.error("Failed to load checkpoints for dataset", selectedDatasetId, e));
     embeddingApi
       .allSnippetSets(selectedDatasetId)
       .then(setSnippetSets)
-      .catch(() => {});
+      .catch((e) => console.error("Failed to load snippet sets for dataset", selectedDatasetId, e));
   }, [selectedDatasetId]);
 
   const resolvedSnippetSetId = useMemo(() => {
@@ -487,9 +490,16 @@ export function useHubALSession(
   );
 
   const handleRunInference = useCallback(() => {
-    if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
+    if (selectedDatasetId === null) return;
+    if (resolvedSnippetSetId === null) {
+      message.info("Still loading this dataset's snippet sets — try Apply again in a moment.");
+      return;
+    }
     const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
-    if (!family) return;
+    if (!family) {
+      message.info("No model family selected for this dataset yet — try Apply again in a moment.");
+      return;
+    }
     const embeddingModelId =
       snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
