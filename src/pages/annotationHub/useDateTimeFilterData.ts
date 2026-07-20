@@ -10,11 +10,11 @@ export const TIME_OF_DAY_DOMAIN: [number, number] = [0, 86400];
 
 export interface DateTimeFilterData {
   recordingDateTimeById: Map<number, RecordingDateTime>;
-  /** Each visible prediction's recorded date, as epoch day — one entry per prediction with a parseable date. */
+  /** Each dataset recording's date, as epoch day — spans the whole dataset, not just the current feed subset. */
   dateValues: number[];
-  /** [min, max] epoch day across dateValues, or [0, 1] when there are none. */
+  /** [min, max] epoch day across every recording in the dataset (not just the current feed subset), or [0, 1] when there are none. */
   dateDomain: [number, number];
-  /** Each visible prediction's recorded time, in seconds since midnight. */
+  /** Each dataset recording's time, in seconds since midnight — spans the whole dataset, not just the current feed subset. */
   timeValues: number[];
   /** True when this dataset has at least one recording with a parseable date/time — gates whether the sidebar shows these sections at all. */
   hasAnyDateTime: boolean;
@@ -24,7 +24,6 @@ export interface DateTimeFilterData {
 
 export function useDateTimeFilterData(): DateTimeFilterData {
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
-  const predictions = useAppSelector((s) => s.al.predictions);
   const inferenceLoading = useAppSelector((s) => s.al.inferenceLoading);
   const {
     dateTimeByRecordingId: recordingDateTimeById,
@@ -35,24 +34,24 @@ export function useDateTimeFilterData(): DateTimeFilterData {
   return useMemo(() => {
     const dateValues: number[] = [];
     const timeValues: number[] = [];
-    for (const p of predictions) {
-      if (typeof p.recording_id !== "number") continue;
-      const dt = recordingDateTimeById.get(p.recording_id);
-      if (!dt) continue;
-      dateValues.push(dateStringToEpochDay(dt.date));
+    let domainMin = Infinity;
+    let domainMax = -Infinity;
+    for (const dt of recordingDateTimeById.values()) {
+      const day = dateStringToEpochDay(dt.date);
+      dateValues.push(day);
       timeValues.push(dt.timeSeconds);
+      if (day < domainMin) domainMin = day;
+      if (day > domainMax) domainMax = day;
     }
     const dateDomain: [number, number] =
-      dateValues.length > 0
-        ? [Math.min(...dateValues), Math.max(...dateValues)]
-        : [0, 1];
+      domainMin <= domainMax ? [domainMin, domainMax] : [0, 1];
     return {
       recordingDateTimeById,
       dateValues,
       dateDomain,
       timeValues,
-      hasAnyDateTime: dateValues.length > 0,
+      hasAnyDateTime: recordingDateTimeById.size > 0,
       dateTimeLoading,
     };
-  }, [predictions, recordingDateTimeById, dateTimeLoading]);
+  }, [recordingDateTimeById, dateTimeLoading]);
 }
