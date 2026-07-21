@@ -35,7 +35,7 @@ const PROJECTION_METHODS: { key: ProjectionMethod; label: string }[] = [
   { key: "tsne", label: "t-SNE" },
   { key: "umap", label: "UMAP" },
   { key: "pca", label: "PCA" },
-  { key: "isomap", label: "Isomap" },
+  // { key: "isomap", label: "Isomap" },
 ];
 
 type WorkspaceProps = {

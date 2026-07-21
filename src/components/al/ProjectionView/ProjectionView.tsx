@@ -237,7 +237,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     { key: "tsne", label: "t‑SNE" },
     { key: "umap", label: "UMAP" },
     { key: "pca", label: "PCA" },
-    { key: "isomap", label: "Isomap" },
+    // { key: "isomap", label: "Isomap" },
   ];
 
   const rawOverlayPredictions =

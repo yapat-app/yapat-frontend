@@ -15,7 +15,10 @@ import {
 } from "./fpvHelpers";
 import { visualisationsApi } from "../../../services/visualisationsApi";
 import { embeddingApi } from "../../../services/api";
-import type { FPVPointMetadata, FPVProjection2D } from "../../../types/visualisation";
+import type {
+  FPVPointMetadata,
+  FPVProjection2D,
+} from "../../../types/visualisation";
 import type { SnippetSet } from "../../../types";
 import type { VisMode } from "../../../studyPhases";
 
@@ -39,7 +42,8 @@ export function useFpvData(opts: {
   visMode: VisMode;
   method: ProjectionMethod;
 }): UseFpvDataResult {
-  const { selectedDatasetId, embeddingModelId, snippetSetId, visMode, method } = opts;
+  const { selectedDatasetId, embeddingModelId, snippetSetId, visMode, method } =
+    opts;
 
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
   const [projectionsByMethod, setProjectionsByMethod] = useState<
@@ -48,9 +52,15 @@ export function useFpvData(opts: {
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvGenerateLoading, setFpvGenerateLoading] = useState(false);
-  const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(new Set());
-  const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<number | null>(null);
-  const [derivedSnippetSetId, setDerivedSnippetSetId] = useState<number | null>(null);
+  const [loadingMethods, setLoadingMethods] = useState<Set<ProjectionMethod>>(
+    new Set(),
+  );
+  const [derivedEmbeddingModelId, setDerivedEmbeddingModelId] = useState<
+    number | null
+  >(null);
+  const [derivedSnippetSetId, setDerivedSnippetSetId] = useState<number | null>(
+    null,
+  );
 
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
@@ -73,8 +83,11 @@ export function useFpvData(opts: {
         return;
       }
       try {
-        const sets: SnippetSet[] = await embeddingApi.allSnippetSets(selectedDatasetId);
-        const ready = sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ?? sets[0];
+        const sets: SnippetSet[] =
+          await embeddingApi.allSnippetSets(selectedDatasetId);
+        const ready =
+          sets.find((s) => (s.status ?? "").toLowerCase() === "ready") ??
+          sets[0];
         if (!cancelled) {
           setDerivedEmbeddingModelId(ready?.embedding_model_id ?? null);
           setDerivedSnippetSetId(ready?.id ?? null);
@@ -110,8 +123,10 @@ export function useFpvData(opts: {
     const pts = _fpvPointsCache.get(fpvPointsKey(dsId, emId));
     if (!pts) return false;
     setFpvPoints(pts);
-    const restoredProjections: Partial<Record<ProjectionMethod, FPVProjection2D>> = {};
-    for (const m of ["pca", "umap", "tsne", "isomap"] as ProjectionMethod[]) {
+    const restoredProjections: Partial<
+      Record<ProjectionMethod, FPVProjection2D>
+    > = {};
+    for (const m of ["pca", "umap", "tsne"] as ProjectionMethod[]) {
       const proj = _fpvProjectionCache.get(fpvProjectionKey(dsId, emId, m));
       if (proj) restoredProjections[m] = proj;
     }
@@ -126,15 +141,24 @@ export function useFpvData(opts: {
     ) => {
       if (!selectedDatasetId || !effectiveEmbeddingModelId) return;
 
-      const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
+      const scopeKey = fpvScopeKey(
+        selectedDatasetId,
+        effectiveEmbeddingModelId,
+      );
       if (!options?.force && fpvUnavailableScopeRef.current === scopeKey) {
         return;
       }
 
-      const projKey = fpvProjectionKey(selectedDatasetId, effectiveEmbeddingModelId, targetMethod);
+      const projKey = fpvProjectionKey(
+        selectedDatasetId,
+        effectiveEmbeddingModelId,
+        targetMethod,
+      );
       const cachedProj = _fpvProjectionCache.get(projKey);
       if (cachedProj) {
-        const pts = _fpvPointsCache.get(fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId));
+        const pts = _fpvPointsCache.get(
+          fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId),
+        );
         if (pts) {
           setFpvPoints(pts);
           setProjectionsByMethod((prev) =>
@@ -216,7 +240,11 @@ export function useFpvData(opts: {
         }
       }
     },
-    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState],
+    [
+      selectedDatasetId,
+      effectiveEmbeddingModelId,
+      resetProjectionComponentState,
+    ],
   );
 
   // ── FPV load effects ───────────────────────────────────────────────────────
@@ -232,7 +260,10 @@ export function useFpvData(opts: {
     const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
     if (fpvUnavailableScopeRef.current === scopeKey) return;
 
-    const alreadyCached = restoreFromCache(selectedDatasetId, effectiveEmbeddingModelId);
+    const alreadyCached = restoreFromCache(
+      selectedDatasetId,
+      effectiveEmbeddingModelId,
+    );
     if (alreadyCached) {
       fpvUnavailableScopeRef.current = null;
       return;
@@ -250,7 +281,12 @@ export function useFpvData(opts: {
   ]);
 
   useEffect(() => {
-    if (visMode === "hidden" || !selectedDatasetId || !effectiveEmbeddingModelId) return;
+    if (
+      visMode === "hidden" ||
+      !selectedDatasetId ||
+      !effectiveEmbeddingModelId
+    )
+      return;
     const scopeKey = fpvScopeKey(selectedDatasetId, effectiveEmbeddingModelId);
     if (fpvUnavailableScopeRef.current === scopeKey) return;
     if (projectionsByMethod[method]) return;
@@ -295,12 +331,17 @@ export function useFpvData(opts: {
       resetProjectionComponentState();
       await fetchProjectionMethod(method, { force: true });
       for (const m of ALL_PROJECTION_METHODS) {
-        if (m !== method) void fetchProjectionMethod(m, { background: true, force: true });
+        if (m !== method)
+          void fetchProjectionMethod(m, { background: true, force: true });
       }
     } catch (e: any) {
       resetProjectionComponentState();
       setFpvError(
-        String(e?.response?.data?.detail ?? e?.message ?? "Failed to generate projection."),
+        String(
+          e?.response?.data?.detail ??
+            e?.message ??
+            "Failed to generate projection.",
+        ),
       );
     } finally {
       setFpvGenerateLoading(false);

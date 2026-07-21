@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { useAudioInstrumentation } from "../studyLogging";
 import {
@@ -30,6 +24,12 @@ export interface SnippetSpectrogramPlayerProps {
   durationSec?: number;
   /** Total vertical space for plot + axes + audio controls (px). */
   specHeight?: number;
+  /**
+   * Width of the whole block (Hz axis + spectrogram + time axis). Any CSS
+   * length: "70%", "min(70%, 900px)", 640, etc. Applied to the outermost
+   * element so all three stay aligned. Defaults to filling the parent.
+   */
+  width?: string | number;
   navigator?: boolean;
   settings?: boolean;
   dark?: boolean;
@@ -51,6 +51,7 @@ export const SnippetSpectrogramPlayer: React.FC<
   datasetSpectrogram,
   durationSec,
   specHeight = 200,
+  width = "100%",
   navigator = false,
   settings = false,
   dark = false,
@@ -68,31 +69,6 @@ export const SnippetSpectrogramPlayer: React.FC<
   const [resolvedDuration, setResolvedDuration] = useState<number | null>(
     durationSec ?? null,
   );
-  /**
-   * The library reads its render width from the container at mount time and
-   * renders at width 0 if the flex layout hasn't settled yet. Instead of
-   * remounting the player (which re-decodes the audio and recomputes the FFT
-   * every time — the cause of the multi-second grey flash), we measure the
-   * container once via ResizeObserver and only mount the player after a
-   * non-zero width is known. The player then mounts exactly once per snippet.
-   */
-  const measureRef = useRef<HTMLDivElement | null>(null);
-  const [hasWidth, setHasWidth] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
-    if (el.clientWidth > 0) {
-      setHasWidth(true);
-      return;
-    }
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      if (w > 0) setHasWidth(true);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     if (durationSec != null && durationSec > 0) {
@@ -135,8 +111,23 @@ export const SnippetSpectrogramPlayer: React.FC<
 
   const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${fftParams.hop_length}`;
 
+  /**
+   * Sizing note: react-audio-spectrogram-player renders the spectrogram as an
+   * offscreen canvas -> dataURL -> <image preserveAspectRatio="none"> inside an
+   * <svg width="100%" height={specHeight} viewBox=...>. It is fully
+   * resolution-independent and never measures its container, so it always
+   * paints at exactly 100% of whatever box we give it — no measuring or
+   * width-pinning needed on our side. We just size the wrapper.
+   *
+   * min-w-0 on the flex children is load-bearing: without it, flex items
+   * default to min-width:auto and refuse to shrink below content width, which
+   * is what makes the player appear to blow past the card.
+   */
   return (
-    <div className="w-full shrink-0" style={{ minHeight: blockHeight }}>
+    <div
+      className="shrink-0 mx-auto"
+      style={{ width, maxWidth: "100%", minHeight: blockHeight }}
+    >
       <div
         className="flex w-full min-w-0 shrink-0"
         style={{ minHeight: plotHeight }}
@@ -155,25 +146,23 @@ export const SnippetSpectrogramPlayer: React.FC<
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <div ref={measureRef} className="w-full min-w-0 overflow-x-hidden">
-            {hasWidth && (
-              <SpectrogramPlayer
-                key={playerKey}
-                src={src}
-                sampleRate={sampleRate}
-                n_fft={fftParams.n_fft}
-                win_length={fftParams.win_length}
-                hop_length={fftParams.hop_length}
-                f_min={fMin}
-                f_max={fMax}
-                n_mels={fftParams.n_mels}
-                specHeight={plotHeight}
-                navigator={navigator}
-                settings={settings}
-                dark={dark}
-                colormap={colormap}
-              />
-            )}
+          <div className="w-full min-w-0 overflow-x-hidden">
+            <SpectrogramPlayer
+              key={playerKey}
+              src={src}
+              sampleRate={sampleRate}
+              n_fft={fftParams.n_fft}
+              win_length={fftParams.win_length}
+              hop_length={fftParams.hop_length}
+              f_min={fMin}
+              f_max={fMax}
+              n_mels={fftParams.n_mels}
+              specHeight={plotHeight}
+              navigator={navigator}
+              settings={settings}
+              dark={dark}
+              colormap={colormap}
+            />
           </div>
 
           {/* Time axis */}
