@@ -339,4 +339,8 @@ export interface ALState {
   retrainLoading: boolean;
   error: string | null;
   lastInferenceAt: string | null;      // ISO timestamp of last successful inference
+  /** requestId of the most recently dispatched runInference/restoreFeedFromServer
+   *  call — lets fulfilled handlers discard a response if a newer request for
+   *  predictions has since been dispatched (last-dispatched wins, not last-resolved). */
+  lastPredictionsRequestId: string | null;
 }

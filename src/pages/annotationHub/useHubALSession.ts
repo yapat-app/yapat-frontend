@@ -16,6 +16,7 @@ import {
   trainFromScratch,
   clearRetrainDispatch,
   fetchAndAppendSuggestions,
+  resetStaleInferenceBinding,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -46,7 +47,9 @@ import type { AnnotateMode } from "./types";
 export function useHubALSession(
   mode: AnnotateMode,
   searchParams: URLSearchParams,
-  setSearchParams: ReturnType<typeof import("react-router-dom").useSearchParams>[1],
+  setSearchParams: ReturnType<
+    typeof import("react-router-dom").useSearchParams
+  >[1],
   options?: { treatAllModesAsAl?: boolean },
 ) {
   const dispatch = useAppDispatch();
@@ -87,7 +90,12 @@ export function useHubALSession(
   }, [feedbackCount, retrainThreshold, retrainPending]);
 
   useEffect(() => {
-    if (selectedDatasetId === null || !modelFamilyName || predictions.length === 0) return;
+    if (
+      selectedDatasetId === null ||
+      !modelFamilyName ||
+      predictions.length === 0
+    )
+      return;
     dispatch(
       fetchFeedbackCount({
         dataset_id: selectedDatasetId,
@@ -95,13 +103,27 @@ export function useHubALSession(
       }),
     );
   }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
+  const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
+  const [snippetSetsRaw, setSnippetSets] = useState<SnippetSet[]>([]);
+  const [snippetSetsDatasetId, setSnippetSetsDatasetId] = useState<
+    number | null
+  >(null);
+  const snippetSets = useMemo(
+    () => (snippetSetsDatasetId === selectedDatasetId ? snippetSetsRaw : []),
+    [snippetSetsDatasetId, selectedDatasetId, snippetSetsRaw],
+  );
+  const [localFamily, setLocalFamily] = useState<string | null>(
+    modelFamilyName,
+  );
+  const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
 
   // Upgrade top-K suggestions to the full dataset when the phase needs it.
   // A ref guards against repeated dispatches — Immer creates a new modelInfo
   // object reference on every fulfilled action, which would otherwise re-run
   // this effect even after the upgrade completed.
   const hasUpgradedRef = useRef(false);
-  const isSuggestions = (modelInfo as Record<string, unknown>)?.mode === "suggestions";
+  const isSuggestions =
+    (modelInfo as Record<string, unknown>)?.mode === "suggestions";
   // Reset the guard when suggestions mode clears (upgrade completed) or dataset changes.
   useEffect(() => {
     if (!isSuggestions) hasUpgradedRef.current = false;
@@ -119,7 +141,13 @@ export function useHubALSession(
       snippetSetId !== null &&
       modelFamilyName !== null &&
       !inferenceLoading &&
-      !hasUpgradedRef.current
+      !hasUpgradedRef.current &&
+      // Only upgrade once we've confirmed this snippetSetId actually belongs to
+      // the current dataset — otherwise a stale/cross-dataset snippetSetId
+      // (e.g. from a corrupted persisted feed) is sent as (dataset_id,
+      // snippet_set_id) and the backend rejects it.
+      snippetSets.length > 0 &&
+      snippetSets.some((s) => s.id === snippetSetId)
     ) {
       hasUpgradedRef.current = true;
       dispatch(
@@ -141,42 +169,25 @@ export function useHubALSession(
     snippetSetId,
     modelFamilyName,
     inferenceLoading,
+    snippetSets,
     dispatch,
   ]);
-
 
   useEffect(() => {
     const raw = searchParams.get("dataset_id");
     const urlDatasetId = raw ? Number.parseInt(raw, 10) : null;
     dispatch(
       hydrateSavedFeed({
-        expectedDatasetId: Number.isFinite(urlDatasetId as number) ? urlDatasetId : null,
+        expectedDatasetId: Number.isFinite(urlDatasetId as number)
+          ? urlDatasetId
+          : null,
       }),
     );
   }, [dispatch, searchParams]);
 
-  // Restore a truncated feed from the server once when predictions are missing.
-  useEffect(() => {
-    if (inferenceLoading || predictions.length > 0) return;
-    if (
-      !lastInferenceAt ||
-      selectedDatasetId === null ||
-      snippetSetId === null ||
-      !modelFamilyName
-    )
-      return;
-    if (hasAttemptedRestoreRef.current) return;
-    hasAttemptedRestoreRef.current = true;
-    void dispatch(restoreFeedFromServer());
-  }, [
-    dispatch,
-    inferenceLoading,
-    predictions.length,
-    lastInferenceAt,
-    selectedDatasetId,
-    snippetSetId,
-    modelFamilyName,
-  ]);
+  // NOTE: the "restore a truncated feed from the server" effect lives further
+  // down, after `snippetSets` is defined — it must validate that the persisted
+  // snippetSetId belongs to the current dataset before firing.
 
   useEffect(() => {
     if (!isAlLikeMode) return;
@@ -201,7 +212,9 @@ export function useHubALSession(
     }
     const parsed = Number.parseInt(raw, 10);
     if (Number.isNaN(parsed)) return;
-    if (parsed !== (selectedDatasetId === null ? null : Number(selectedDatasetId))) {
+    if (
+      parsed !== (selectedDatasetId === null ? null : Number(selectedDatasetId))
+    ) {
       dispatch(setSelectedDataset(parsed));
     }
   }, [
@@ -217,15 +230,15 @@ export function useHubALSession(
 
   const hasAttemptedRestoreRef = useRef(false);
   const [alConfigOpen, setAlConfigOpen] = useState(false);
-  const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
-  const [snippetSets, setSnippetSets] = useState<SnippetSet[]>([]);
-  const [localFamily, setLocalFamily] = useState<string | null>(modelFamilyName);
-  const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
   const [localK, setLocalK] = useState<number>(inferenceK);
   const [localTopKOnly, setLocalTopKOnly] = useState<boolean>(true);
-  const [localMinConfidence, setLocalMinConfidence] = useState<number | null>(null);
+  const [localMinConfidence, setLocalMinConfidence] = useState<number | null>(
+    null,
+  );
   const [localLabelScope, setLocalLabelScope] = useState<string[]>([]);
-  const [labelScopeOptions, setLabelScopeOptions] = useState<LabelScopeOption[]>([]);
+  const [labelScopeOptions, setLabelScopeOptions] = useState<
+    LabelScopeOption[]
+  >([]);
   const [labelScopeLoading, setLabelScopeLoading] = useState(false);
   const [hasGroundTruthMetadata, setHasGroundTruthMetadata] =
     useState<boolean>(false);
@@ -266,29 +279,92 @@ export function useHubALSession(
 
   useEffect(() => {
     if (selectedDatasetId === null) return;
+    // Guard against a stale response: if the dataset changes again before
+    // this resolves, applying it would overwrite checkpoints/snippetSets
+    // with the previous dataset's data, silently breaking the auto-infer
+    // effect below (its snippetSets-membership check would then never pass
+    // for the new dataset, leaving the feed blank until a manual refresh).
+    const fetchedForDatasetId = selectedDatasetId;
+    let cancelled = false;
     alApi
-      .getCheckpoints(selectedDatasetId)
-      .then(setCheckpoints)
-      .catch((e) => console.error("Failed to load checkpoints for dataset", selectedDatasetId, e));
+      .getCheckpoints(fetchedForDatasetId)
+      .then((data) => {
+        if (!cancelled) setCheckpoints(data);
+      })
+      .catch((e) =>
+        console.error(
+          "Failed to load checkpoints for dataset",
+          fetchedForDatasetId,
+          e,
+        ),
+      );
     embeddingApi
-      .allSnippetSets(selectedDatasetId)
-      .then(setSnippetSets)
-      .catch((e) => console.error("Failed to load snippet sets for dataset", selectedDatasetId, e));
+      .allSnippetSets(fetchedForDatasetId)
+      .then((data) => {
+        if (!cancelled) {
+          setSnippetSets(data);
+          setSnippetSetsDatasetId(fetchedForDatasetId);
+        }
+      })
+      .catch((e) =>
+        console.error(
+          "Failed to load snippet sets for dataset",
+          fetchedForDatasetId,
+          e,
+        ),
+      );
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDatasetId]);
 
   const resolvedSnippetSetId = useMemo(() => {
     if (localSS !== null) return localSS;
     if (snippetSetId !== null) return snippetSetId;
-    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    const ready = snippetSets.find(
+      (s) => String(s.status).toLowerCase() === "ready",
+    );
     return ready?.id ?? null;
   }, [localSS, snippetSetId, snippetSets]);
   const hasReadySnippetSet = resolvedSnippetSetId !== null;
 
   useEffect(() => {
     if (localSS !== null) return;
-    const ready = snippetSets.find((s) => String(s.status).toLowerCase() === "ready");
+    const ready = snippetSets.find(
+      (s) => String(s.status).toLowerCase() === "ready",
+    );
     if (ready?.id != null) setLocalSS(ready.id);
   }, [snippetSets, localSS]);
+
+  // Restore a truncated feed from the server once when predictions are missing.
+  useEffect(() => {
+    if (inferenceLoading || predictions.length > 0) return;
+    if (
+      !lastInferenceAt ||
+      selectedDatasetId === null ||
+      snippetSetId === null ||
+      !modelFamilyName
+    )
+      return;
+    // Wait until this dataset's snippet sets are loaded before validating.
+    if (snippetSets.length === 0) return;
+    if (!snippetSets.some((s) => s.id === snippetSetId)) {
+      dispatch(resetStaleInferenceBinding());
+      return;
+    }
+    if (hasAttemptedRestoreRef.current) return;
+    hasAttemptedRestoreRef.current = true;
+    void dispatch(restoreFeedFromServer());
+  }, [
+    dispatch,
+    inferenceLoading,
+    predictions.length,
+    lastInferenceAt,
+    selectedDatasetId,
+    snippetSetId,
+    modelFamilyName,
+    snippetSets,
+  ]);
 
   const localCkpt = checkpoints[0]?.id ?? null;
 
@@ -322,7 +398,8 @@ export function useHubALSession(
         modelFamilyName: effectiveFamily,
         snippetSetId: resolvedSnippetSetId,
         embeddingModelId:
-          snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ?? 1,
+          snippetSets.find((s) => s.id === resolvedSnippetSetId)
+            ?.embedding_model_id ?? 1,
         k: localK,
       }),
     );
@@ -335,7 +412,10 @@ export function useHubALSession(
       }),
     );
     dispatch(
-      fetchFeedbackCount({ dataset_id: selectedDatasetId, model_family_name: effectiveFamily }),
+      fetchFeedbackCount({
+        dataset_id: selectedDatasetId,
+        model_family_name: effectiveFamily,
+      }),
     );
   }, [
     isAlLikeMode,
@@ -383,19 +463,35 @@ export function useHubALSession(
           const count = classCounts[name] ?? null;
           let tooltip: string | null = null;
           if (count !== null) {
-            tooltip = count < LOW_SAMPLE_THRESHOLD
-              ? `${count} training samples — low confidence`
-              : `${count} training samples`;
+            tooltip =
+              count < LOW_SAMPLE_THRESHOLD
+                ? `${count} training samples — low confidence`
+                : `${count} training samples`;
           }
-          return { value: name, label: name, disabled: false, tooltip, sampleCount: count };
+          return {
+            value: name,
+            label: name,
+            disabled: false,
+            tooltip,
+            sampleCount: count,
+          };
         });
 
-        const excludedOptions: LabelScopeOption[] = (hyper?.excluded_species ?? []).map((name) => {
+        const excludedOptions: LabelScopeOption[] = (
+          hyper?.excluded_species ?? []
+        ).map((name) => {
           const count = classCounts[name] ?? null;
-          const tooltip = count !== null
-            ? `Excluded — only ${count} training sample${count === 1 ? "" : "s"}`
-            : "Excluded — insufficient training samples";
-          return { value: name, label: name, disabled: true, tooltip, sampleCount: count };
+          const tooltip =
+            count !== null
+              ? `Excluded — only ${count} training sample${count === 1 ? "" : "s"}`
+              : "Excluded — insufficient training samples";
+          return {
+            value: name,
+            label: name,
+            disabled: true,
+            tooltip,
+            sampleCount: count,
+          };
         });
 
         const allOptions = [...activeOptions, ...excludedOptions];
@@ -478,7 +574,8 @@ export function useHubALSession(
     if (
       mode === "validate" &&
       predictionsRef.current.length > 0 &&
-      (modelInfoRef.current as Record<string, unknown>)?.suggestion_strategy === "confidence"
+      (modelInfoRef.current as Record<string, unknown>)?.suggestion_strategy ===
+        "confidence"
     ) {
       return;
     }
@@ -497,7 +594,9 @@ export function useHubALSession(
   const handleRunInference = useCallback(() => {
     if (selectedDatasetId === null) return;
     if (resolvedSnippetSetId === null) {
-      message.info("Still loading this dataset's snippet sets — try Apply again in a moment.");
+      message.info(
+        "Still loading this dataset's snippet sets — try Apply again in a moment.",
+      );
       return;
     }
     // Defense in depth against sending a cross-dataset (snippet_set_id,
@@ -508,16 +607,22 @@ export function useHubALSession(
     // resolvedSnippetSetId (carried over from a previous dataset via
     // localSS/redux snippetSetId) before it ever leaves the browser.
     if (!snippetSets.some((s) => s.id === resolvedSnippetSetId)) {
-      message.info("This dataset's snippet sets are still syncing — try Apply again in a moment.");
+      message.info(
+        "This dataset's snippet sets are still syncing — try Apply again in a moment.",
+      );
       return;
     }
-    const family = (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
+    const family =
+      (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
     if (!family) {
-      message.info("No model family selected for this dataset yet — try Apply again in a moment.");
+      message.info(
+        "No model family selected for this dataset yet — try Apply again in a moment.",
+      );
       return;
     }
     const embeddingModelId =
-      snippetSets.find((s) => s.id === resolvedSnippetSetId)?.embedding_model_id ??
+      snippetSets.find((s) => s.id === resolvedSnippetSetId)
+        ?.embedding_model_id ??
       embeddingMethods?.[0]?.id ??
       1;
     const suggestionParams = buildSuggestionParams(
@@ -577,7 +682,8 @@ export function useHubALSession(
       handleRunInference();
       return;
     }
-    if (!trainEmbeddingModelId || !Number.isFinite(trainEmbeddingModelId)) return;
+    if (!trainEmbeddingModelId || !Number.isFinite(trainEmbeddingModelId))
+      return;
     if (!trainMetadataPath.trim() || !trainLabelConfigPath.trim()) return;
     const result = await dispatch(
       trainFromScratch({
@@ -642,12 +748,22 @@ export function useHubALSession(
             const startedAt = retrainStartedAtRef.current[stableJobId];
             studyLogger.log(
               "retrain_complete",
-              { durationMs: startedAt ? Math.round(performance.now() - startedAt) : 0, modelFamilyName },
-              startedAt ? { durationMs: Math.round(performance.now() - startedAt) } : undefined,
+              {
+                durationMs: startedAt
+                  ? Math.round(performance.now() - startedAt)
+                  : 0,
+                modelFamilyName,
+              },
+              startedAt
+                ? { durationMs: Math.round(performance.now() - startedAt) }
+                : undefined,
             );
           } else {
             const detail = r.payload.error_message;
-            studyLogger.log("retrain_failed", { modelFamilyName, error: detail ?? "unknown" });
+            studyLogger.log("retrain_failed", {
+              modelFamilyName,
+              error: detail ?? "unknown",
+            });
           }
         }
         dispatch(clearRetrainDispatch());
@@ -660,8 +776,14 @@ export function useHubALSession(
         // effect fetches fresh data when they return to this dataset anyway.
         const stillOnSameDataset = selectedDatasetId === stableDatasetId;
         const snippetSetValid =
-          snippetSetId !== null && snippetSets.some((s) => s.id === snippetSetId);
-        if (status === "COMPLETED" && modelFamilyName !== null && stillOnSameDataset && snippetSetValid) {
+          snippetSetId !== null &&
+          snippetSets.some((s) => s.id === snippetSetId);
+        if (
+          status === "COMPLETED" &&
+          modelFamilyName !== null &&
+          stillOnSameDataset &&
+          snippetSetValid
+        ) {
           if (phase.feed.mode === "scrollable_topk") {
             // Scrollable feed: append fresh suggestions without disrupting scroll position.
             dispatch(
@@ -734,7 +856,9 @@ export function useHubALSession(
     setLocalSS(resolvedSnippetSetId);
     setLocalK(inferenceK);
     setLocalTopKOnly(
-      isValidateMode || predictions.length === 0 || isSuggestionsMode(modelInfo),
+      isValidateMode ||
+        predictions.length === 0 ||
+        isSuggestionsMode(modelInfo),
     );
     setHasGroundTruthMetadata(false);
     setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);

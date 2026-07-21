@@ -10,18 +10,13 @@ import type { PhaseConfig } from "./types";
 // Note: Deployments may still override this via VITE_STUDY_PHASE.
 export const DEFAULT_PHASE_ID = "P1";
 
-const SCORE_ALLOWED_PROPERTIES: PhaseConfig["visualization"]["visibilityFilter"]["allowedProperties"] = [
-  "uncertainty",
-  "diversity",
-  "density",
-  "confidence",
-  "composite",
-];
+const SCORE_ALLOWED_PROPERTIES: PhaseConfig["visualization"]["visibilityFilter"]["allowedProperties"] =
+  ["uncertainty", "diversity", "density", "confidence", "composite"];
 
 export const STUDY_PHASES: Record<string, PhaseConfig> = {
-  "P1": {
+  P1: {
     id: "P1",
-    label: "Phase 1 — Feed only",
+    label: "Phase 1",
     feed: { mode: "scrollable_topk" },
     visualization: {
       mode: "hidden",
@@ -38,13 +33,19 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false, labelScope: false },
+    sidebar: {
+      showPane: false,
+      sampleProperties: false,
+      modelScores: false,
+      findSimilar: false,
+      labelScope: false,
+    },
     sort: { nonModel: false, model: false },
   },
 
-  "P2": {
+  P2: {
     id: "P2",
-    label: "Phase 2 — Feed + projection",
+    label: "Phase 2",
     feed: { mode: "scrollable_topk" },
     visualization: {
       mode: "whole_dataset",
@@ -61,13 +62,19 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: false, sampleProperties: false, modelScores: false, findSimilar: false, labelScope: false },
+    sidebar: {
+      showPane: false,
+      sampleProperties: false,
+      modelScores: false,
+      findSimilar: false,
+      labelScope: false,
+    },
     sort: { nonModel: false, model: false },
   },
 
-  "P3": {
+  P3: {
     id: "P3",
-    label: "Phase 3 — Non-model filter & sort",
+    label: "Phase 3",
     feed: { mode: "scrollable_topk" },
     visualization: {
       mode: "whole_dataset",
@@ -86,13 +93,20 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
     },
     // Date/time filters are enabled (dateTimeDisabled: false), but the Date/Time
     // sort chips stay read-only (sort.disabled: true) — filter, don't sort.
-    sidebar: { showPane: true, sampleProperties: true, dateTimeDisabled: false, modelScores: false, findSimilar: false, labelScope: false },
+    sidebar: {
+      showPane: true,
+      sampleProperties: true,
+      dateTimeDisabled: false,
+      modelScores: false,
+      findSimilar: false,
+      labelScope: false,
+    },
     sort: { nonModel: true, model: false, disabled: true },
   },
 
-  "P4": {
+  P4: {
     id: "P4",
-    label: "Phase 4 — Model-based filter & sort",
+    label: "Phase 4",
     feed: { mode: "scrollable_topk" },
     visualization: {
       mode: "whole_dataset",
@@ -113,13 +127,19 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: true, findSimilar: false, labelScope: false },
+    sidebar: {
+      showPane: true,
+      sampleProperties: true,
+      modelScores: true,
+      findSimilar: false,
+      labelScope: false,
+    },
     sort: { nonModel: true, model: true },
   },
 
-  "P5": {
+  P5: {
     id: "P5",
-    label: "Phase 5 — Full interactivity",
+    label: "Phase 5",
     feed: { mode: "scrollable_topk" },
     visualization: {
       mode: "whole_dataset",
@@ -140,7 +160,13 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       histogramStyle: "none",
       showFindSimilarButton: false,
     },
-    sidebar: { showPane: true, sampleProperties: true, modelScores: true, findSimilar: false, labelScope: false },
+    sidebar: {
+      showPane: true,
+      sampleProperties: true,
+      modelScores: true,
+      findSimilar: false,
+      labelScope: false,
+    },
     sort: { nonModel: true, model: true },
   },
 };
