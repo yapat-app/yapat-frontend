@@ -90,6 +90,21 @@ function buildCoordsMap(
 
 const FPV_METHOD_FETCH_FALLBACK: ProjectionMethod = "pca";
 
+/**
+ * Hides the "Generate projection now" control.
+ *
+ * Dataset-level projection generation is not currently viable for large
+ * datasets: it runs over every embedding with no subsampling, so on a
+ * multi-million-snippet dataset it exceeds the Celery task time limit and is
+ * killed part-way, leaving a partial projection behind. Exposing the button
+ * lets any annotator start that job by accident.
+ *
+ * Re-enable once generation subsamples large datasets (a projection of ~50k
+ * representative points renders identically — the plot cannot resolve more
+ * than DISPLAY_MAX_POINTS anyway).
+ */
+const SHOW_GENERATE_PROJECTION_BUTTON = false;
+
 function fpvScopeKey(datasetId: number, embeddingModelId: number): string {
   return `${datasetId}:${embeddingModelId}`;
 }
@@ -1085,7 +1100,10 @@ export const ProjectionView: React.FC = () => {
             </Tag>
           )}
 
-          {visMode === "whole_dataset" && isMissingProjection && canGenerateNow && (
+          {SHOW_GENERATE_PROJECTION_BUTTON &&
+            visMode === "whole_dataset" &&
+            isMissingProjection &&
+            canGenerateNow && (
             <Tooltip title="Normally generated after embeddings finish. Use this to generate immediately (may take time).">
               <Button
                 size="small"
