@@ -8,7 +8,7 @@ import { Logo } from "./Logo";
 
 const NAV_LINKS = [
   { label: "Dashboard", route: "/dashboard" },
-  { label: "Documentation", route: "/docs" },
+  { label: "Documentation", route: "/documentation" },
 ];
 
 export const NavigationBar = () => {

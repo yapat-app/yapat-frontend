@@ -10,7 +10,9 @@ import { Logo } from "./Logo";
 export const HomeNavbar = () => {
   const navigator = useNavigate();
   const dispatch = useAppDispatch();
-  const { accessToken, isAuthenticated } = useAppSelector((state) => state.auth);
+  const { accessToken, isAuthenticated } = useAppSelector(
+    (state) => state.auth,
+  );
 
   const navigateTab = (url: string) => {
     navigator(url);
@@ -36,7 +38,10 @@ export const HomeNavbar = () => {
           id="tabs"
           className="flex items-center text-sm font-medium font-ibm-sans gap-4  "
         >
-          <div className="nav_tabs" onClick={() => navigateTab("/docs")}>
+          <div
+            className="nav_tabs"
+            onClick={() => navigateTab("/documentation")}
+          >
             Documentation
           </div>
         </div>

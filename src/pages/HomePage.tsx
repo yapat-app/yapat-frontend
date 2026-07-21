@@ -64,7 +64,7 @@ export const HomePage = () => {
             {/* Tabs (left side of right cluster) */}
             <nav className="flex items-center text-sm font-medium gap-4">
               <button
-                onClick={() => navigate("/docs")}
+                onClick={() => navigate("/documentation")}
                 className="text-gray-500 hover:text-gray-900 transition-colors"
               >
                 Documentation
@@ -145,7 +145,7 @@ export const HomePage = () => {
             </button>
           )}
           <button
-            onClick={() => navigate("/docs")}
+            onClick={() => navigate("/documentation")}
             className="flex items-center gap-2 px-6 py-3 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:border-gray-400 hover:text-gray-900 transition-colors"
           >
             <ReadOutlined /> Read the docs
@@ -180,7 +180,9 @@ export const HomePage = () => {
                 <h3 className="font-semibold font-ibm-mono text-gray-900 mb-2">
                   {f.title}
                 </h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  {f.desc}
+                </p>
               </div>
             ))}
           </div>
@@ -203,7 +205,7 @@ export const HomePage = () => {
 
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <button
-              onClick={() => navigate("/docs")}
+              onClick={() => navigate("/documentation")}
               className="hover:text-gray-700 transition-colors"
             >
               Docs

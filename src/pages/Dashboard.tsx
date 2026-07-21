@@ -115,12 +115,12 @@ const CARDS: ServiceCard[] = [
     roles: ["admin"] as Array<"admin" | "team_owner" | "user">,
   },
   {
-    key: "docs",
+    key: "documentation",
     icon: <ReadOutlined className="text-2xl" />,
     title: "Documentation",
     description:
       "Step-by-step guides, API references, and best practices for getting the most out of YAPAT.",
-    route: "/docs",
+    route: "/documentation",
     color: "text-gray-600",
     bgColor: "bg-gray-50",
     borderColor: "border-gray-200 hover:border-gray-400",
@@ -170,9 +170,7 @@ export const Dashboard: React.FC = () => {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-[85%] mx-auto py-8 px-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-500 font-ibm-sans mb-1">
-              Hello,
-            </p>
+            <p className="text-sm text-gray-500 font-ibm-sans mb-1">Hello,</p>
             <h1 className="text-3xl font-bold font-ibm-mono text-gray-900 capitalize">
               {user?.username ?? "…"}
             </h1>

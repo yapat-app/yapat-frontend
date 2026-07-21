@@ -68,7 +68,7 @@ function App() {
               </WssedAccessGuard>
             }
           />
-          <Route path="/docs" element={<YapatUserManual />} />
+          <Route path="/documentation" element={<YapatUserManual />} />
           {/* Admin-only study log viewer */}
           <Route
             path="/study-logs"
