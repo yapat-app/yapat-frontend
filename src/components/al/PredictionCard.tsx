@@ -143,6 +143,7 @@ const PredictionCardImpl: React.FC<Props> = ({
   const HEADER_H = 49;
   const BODY_PAD_Y = 24; // py-3 top + py-3 bottom
   const LABEL_AREA_H = 248; // reserved height for search input + chip rows (larger chips need more)
+  const SPEC_WIDTH = "min(100%, 1200px)";
 
   const [blindSpecHeight, setBlindSpecHeight] = useState<number>(300);
   const blindSpecBlockHeight = useMemo(
@@ -339,34 +340,50 @@ const PredictionCardImpl: React.FC<Props> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {!audioBlobUrl && !audioError && shouldLoadAudio && (
-          <Skeleton.Input
-            active
-            block
-            style={{
-              height: blindSpecBlockHeight,
-              borderRadius: 12,
-              width: "100%",
-            }}
-          />
+          <div
+            className="mx-auto"
+            style={{ width: SPEC_WIDTH, maxWidth: "100%" }}
+          >
+            <Skeleton.Input
+              active
+              block
+              style={{
+                height: blindSpecBlockHeight,
+                borderRadius: 12,
+                width: "100%",
+              }}
+            />
+          </div>
         )}
         {!audioBlobUrl && !audioError && !shouldLoadAudio && (
           <div
-            className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-            style={{ height: blindSpecBlockHeight }}
+            className="mx-auto flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
+            style={{
+              width: SPEC_WIDTH,
+              maxWidth: "100%",
+              height: blindSpecBlockHeight,
+            }}
           >
             Scroll to load audio
           </div>
         )}
         {audioError && (
           <div
-            className="w-full flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
-            style={{ height: blindSpecBlockHeight }}
+            className="mx-auto flex items-center justify-center bg-gray-50 text-sm text-gray-400 italic rounded-xl border border-gray-100"
+            style={{
+              width: SPEC_WIDTH,
+              maxWidth: "100%",
+              height: blindSpecBlockHeight,
+            }}
           >
             Audio unavailable
           </div>
         )}
         {audioBlobUrl && loadedAudioSnippetId === prediction.snippet_id && (
-          <div className="w-full shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden">
+          <div
+            className="mx-auto shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden"
+            style={{ width: SPEC_WIDTH, maxWidth: "100%" }}
+          >
             <SnippetSpectrogramPlayer
               // Include the source URL in the key: when the audio source changes
               // (new snippet), React fully remounts the player so it re-decodes

@@ -346,7 +346,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
         >
           <div className="flex flex-col gap-2.5">
             {/* ── Status ── */}
-            <div>
+            <div data-tour="status-filter">
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 font-ibm-sans">
                 Status
               </p>
@@ -374,7 +374,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
             </div>
 
             {showSampleProperties && (
-              <div className="border-t border-gray-100 pt-2.5">
+              <div data-tour="sample-properties" className="border-t border-gray-100 pt-2.5">
                 <SidebarSubsection title="Sample Properties">
                   <div>
                     <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
@@ -519,7 +519,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
             )}
 
             {showModelScores && (
-              <div className="border-t border-gray-100 pt-2.5">
+              <div data-tour="model-scores" className="border-t border-gray-100 pt-2.5">
                 <SidebarSubsection title="Model derived scores">
                   <ScoreHistogramPanel
                     enrichedPlotPoints={enrichedPlotPoints}

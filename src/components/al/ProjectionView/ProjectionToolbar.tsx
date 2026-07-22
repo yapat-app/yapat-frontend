@@ -73,7 +73,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap ml-auto">
+      <div data-tour="projection-count" className="flex items-center gap-2 flex-wrap ml-auto">
         <span className="text-xs text-gray-400 font-ibm-sans">
           <strong>{visibleCount}</strong> / <strong>{totalCount}</strong> visible
         </span>

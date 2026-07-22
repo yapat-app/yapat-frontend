@@ -17,28 +17,35 @@
  * selected phase at its instructions stage.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { message } from "antd";
 import { usePhaseContext } from "../studyPhases";
 import { studyLogger } from "../studyLogging/StudyLogger";
 import { StudyFlowContext, type StudyFlowContextValue } from "./context";
-import {
-  isFlowEnabled,
-  phaseDurationMs,
-  phaseSequence,
-} from "./flowConfig";
+import { isFlowEnabled, phaseDurationMs, phaseSequence } from "./flowConfig";
 import { getPhaseContent } from "./phaseContent";
 import { clearFlowState, loadFlowState, saveFlowState } from "./flowStorage";
 import type { FlowStage, PhaseProgress, StudyFlowState } from "./types";
 
 const TRANSITION_MS = 2500;
 
+const TIMER_ENABLED = false;
+
 function initialProgress(): PhaseProgress {
   return { stage: "instructions", startedAt: null };
 }
 
-function isPhaseCompleted(progress: PhaseProgress | undefined, durationMs: number): boolean {
+function isPhaseCompleted(
+  progress: PhaseProgress | undefined,
+  durationMs: number,
+): boolean {
   if (!progress) return false;
   if (progress.stage === "transition") return true;
   if (progress.stage === "complete") return true;
@@ -78,13 +85,16 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
   const setPhaseRef = useRef(setPhase);
   setPhaseRef.current = setPhase;
 
-  const update = useCallback((updater: (prev: StudyFlowState) => StudyFlowState) => {
-    setFlow((prev) => {
-      const next = updater(prev);
-      saveFlowState(next);
-      return next;
-    });
-  }, []);
+  const update = useCallback(
+    (updater: (prev: StudyFlowState) => StudyFlowState) => {
+      setFlow((prev) => {
+        const next = updater(prev);
+        saveFlowState(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   // ── Operator/dev reset: ?study_reset=1 ──────────────────────────────────
   useEffect(() => {
@@ -222,14 +232,15 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       : 0;
 
   useEffect(() => {
+    if (!TIMER_ENABLED) return;
     if (!enabled || stage !== "running") return;
     const id = window.setInterval(() => setNowTs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [enabled, stage]);
 
-  // Timer hit zero → enter the transition interstitial.
-  // Logging (phase_timer_expire + stop) is handled by the stage-watching effect.
+  // Disabled while TIMER_ENABLED is false: the phase never auto-advances.
   useEffect(() => {
+    if (!TIMER_ENABLED) return;
     if (!enabled || stage !== "running") return;
     if (progress.startedAt == null) return;
     if (remainingMs > 0) return;
@@ -249,7 +260,10 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
         // (e.g. resume logic ran concurrently), don't re-show its instructions.
         const storedNext = loadFlowState().phases[nextPhaseId];
         if (isPhaseCompleted(storedNext, durationMs)) return;
-        studyLogger.log("phase_auto_advance", { from: phaseId, to: nextPhaseId });
+        studyLogger.log("phase_auto_advance", {
+          from: phaseId,
+          to: nextPhaseId,
+        });
         setStage(nextPhaseId, { stage: "instructions", startedAt: null });
         setPhaseRef.current(nextPhaseId);
       } else {
@@ -294,6 +308,8 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
   );
 
   return (
-    <StudyFlowContext.Provider value={value}>{children}</StudyFlowContext.Provider>
+    <StudyFlowContext.Provider value={value}>
+      {children}
+    </StudyFlowContext.Provider>
   );
 };
