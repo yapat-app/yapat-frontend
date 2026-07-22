@@ -356,13 +356,19 @@ export const ProjectionView: React.FC = () => {
         }
       } catch (e: unknown) {
         const detail = extractFpvErrorDetail(e);
-        if (isProjectionNotReadyMessage(detail)) {
-          fpvUnavailableScopeRef.current = scopeKey;
-          if (!options?.background) {
-            setFpvError(detail);
+        // Stop re-fetching this (dataset, embedding model) scope after ANY
+        // failure -- not only the backend's "not generated yet" message.
+        // Network-level failures (a refused/aborted request, a timeout) do not
+        // produce that message, so they previously left this guard unset and
+        // the effects re-fetched without bound; each retry then deepened the
+        // resource exhaustion causing the failure, so the storm sustained
+        // itself until the browser refused all further requests. The guard is
+        // cleared on a successful fetch, a scope change, or a forced refetch.
+        fpvUnavailableScopeRef.current = scopeKey;
+        if (!options?.background) {
+          if (!isProjectionNotReadyMessage(detail)) {
+            resetProjectionComponentState();
           }
-        } else if (!options?.background) {
-          resetProjectionComponentState();
           setFpvError(detail);
         }
       } finally {
