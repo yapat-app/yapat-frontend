@@ -352,6 +352,12 @@ export const ProjectionView: React.FC = () => {
             : [targetMethod, FPV_METHOD_FETCH_FALLBACK];
 
         let loaded = false;
+        // Keep availability from this request local. Reading the same value
+        // from component state would force methodAvailability into this
+        // callback's dependencies; because the callback also updates that
+        // state, its identity would change after every response and retrigger
+        // the fetching effects indefinitely.
+        let fetchedAvailability: Record<string, FPVMethodAvailability> = {};
         for (const fetchMethod of methodsToTry) {
           const fpv = await visualisationsApi.getFPVDataset({
             dataset_id: selectedDatasetId,
@@ -360,6 +366,10 @@ export const ProjectionView: React.FC = () => {
             method: fetchMethod,
           });
           if (fpv.method_availability) {
+            fetchedAvailability = {
+              ...fetchedAvailability,
+              ...fpv.method_availability,
+            };
             setMethodAvailability((prev) => ({ ...prev, ...fpv.method_availability }));
           }
           const proj = fpv.projections_2d[fetchMethod];
@@ -386,7 +396,7 @@ export const ProjectionView: React.FC = () => {
           break;
         }
         if (!loaded && !options?.background) {
-          const unavailable = methodAvailability[targetMethod];
+          const unavailable = fetchedAvailability[targetMethod];
           setFpvError(
             unavailable && !unavailable.available
               ? (unavailable.reason ?? `${targetMethod} is not available for this dataset.`)
@@ -426,7 +436,7 @@ export const ProjectionView: React.FC = () => {
         }
       }
     },
-    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState, methodAvailability],
+    [selectedDatasetId, effectiveEmbeddingModelId, resetProjectionComponentState],
   );
 
   useEffect(() => {
