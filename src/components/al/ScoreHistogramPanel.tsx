@@ -46,6 +46,16 @@ interface ScoreHistogramPanelProps {
 const SCORE_MIN = 0;
 const SCORE_MAX = 1;
 
+/**
+ * Per-property histogram domain. Most sampler scores are bounded to [0, 1],
+ * but composite is a z-scored blend (mean 0, std <= 1) that can go negative
+ * or above 1 — falls back to alProperties.ts's `range` for each key, and to
+ * [0, 1] only when a property defines no range at all.
+ */
+function propDomain(key: string): [number, number] {
+  return getPropertyByKey(key)?.range ?? [SCORE_MIN, SCORE_MAX];
+}
+
 /** Extract numeric score values for a given key from a list of points. */
 function extractValues(points: FilteredPoint["p"][], key: string): number[] {
   const out: number[] = [];
@@ -68,6 +78,8 @@ interface PropertyRowProps {
   mode?: "range" | "threshold";
   hideLabel?: boolean;
   compact?: boolean;
+  min?: number;
+  max?: number;
 }
 
 const PropertyRow: React.FC<PropertyRowProps> = ({
@@ -80,6 +92,8 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   mode = "threshold",
   hideLabel = false,
   compact = false,
+  min = SCORE_MIN,
+  max = SCORE_MAX,
 }) => (
   <div className="flex flex-col gap-0.5">
     <div
@@ -110,8 +124,8 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
     <HistogramSlider
       values={visibleValues}
       totalValues={allValues}
-      min={SCORE_MIN}
-      max={SCORE_MAX}
+      min={min}
+      max={max}
       mode={mode}
       range={normRange}
       onChange={onSliderChange}
@@ -226,6 +240,10 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     () => extractValues(visiblePoints, singleActiveKey),
     [visiblePoints, singleActiveKey],
   );
+  const singleDomain = useMemo(
+    () => propDomain(singleActiveKey),
+    [singleActiveKey],
+  );
 
   // True when any active filter has a threshold above 0.
   const isFiltered = useMemo(() => {
@@ -244,17 +262,22 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   const multiData = useMemo(() => {
     return (allowedProperties as string[])
       .filter((key) => multiActiveKeys.includes(key))
-      .map((key) => ({
-        key,
-        label: getPropertyByKey(key)?.label ?? key,
-        color: propertyColor(key),
-        allValues: extractValues(enrichedPlotPoints, key),
-        visibleValues: extractValues(visiblePoints, key),
-        normRange: (alFilters.visibility.ranges?.[key] ?? [0, 1]) as [
-          number,
-          number,
-        ],
-      }));
+      .map((key) => {
+        const [min, max] = propDomain(key);
+        return {
+          key,
+          label: getPropertyByKey(key)?.label ?? key,
+          color: propertyColor(key),
+          allValues: extractValues(enrichedPlotPoints, key),
+          visibleValues: extractValues(visiblePoints, key),
+          normRange: (alFilters.visibility.ranges?.[key] ?? [0, 1]) as [
+            number,
+            number,
+          ],
+          min,
+          max,
+        };
+      });
   }, [
     allowedProperties,
     multiActiveKeys,
@@ -369,6 +392,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               mode={sliderMode}
               hideLabel={compact}
               compact={compact}
+              min={singleDomain[0]}
+              max={singleDomain[1]}
             />
           ) : (
             <EmptyState />
@@ -470,8 +495,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       <HistogramSlider
                         values={row.visibleValues}
                         totalValues={row.allValues}
-                        min={SCORE_MIN}
-                        max={SCORE_MAX}
+                        min={row.min}
+                        max={row.max}
                         mode={sliderMode}
                         range={row.normRange}
                         onChange={(newNorm) =>
@@ -548,6 +573,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     }
                     mode={sliderMode}
                     compact={false}
+                    min={row.min}
+                    max={row.max}
                   />
                 </div>
               ))}
