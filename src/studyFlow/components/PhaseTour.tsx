@@ -4,14 +4,17 @@
  * Steps come pre-filtered (only what's new this phase) from the flow. Each step
  * anchors to a `data-tour="<key>"` element; if that element isn't mounted the
  * step renders centred rather than breaking the tour.
+ 
  */
 
 import React, { useEffect } from "react";
 import { Tour, type TourProps } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
+import { useAppSelector } from "../../hooks";
 
 export const PhaseTour: React.FC = () => {
   const { enabled, stage, pendingTourSteps, finishTour } = useStudyFlow();
+  const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
 
   const isTour = enabled && stage === "tour";
   const hasSteps = pendingTourSteps.length > 0;
@@ -23,6 +26,20 @@ export const PhaseTour: React.FC = () => {
   }, [isTour, hasSteps, finishTour]);
 
   if (!isTour || !hasSteps) return null;
+
+  if (selectedDatasetId == null) {
+    const gateStep: NonNullable<TourProps["steps"]>[number] = {
+      title: "Select a dataset first",
+      description:
+        "Pick a dataset from this dropdown to load the audio snippets. The guided tour will continue automatically once a dataset is selected.",
+      placement: "bottomLeft",
+      // Hide "Next" — there is nothing to advance to until a dataset is chosen.
+      nextButtonProps: { style: { display: "none" } },
+      target: () =>
+        document.querySelector('[data-tour="dataset-selector"]') as HTMLElement,
+    };
+    return <Tour open mask={false} steps={[gateStep]} onClose={finishTour} />;
+  }
 
   const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
     title: s.title,

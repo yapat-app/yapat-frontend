@@ -27,7 +27,7 @@ import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
-import { useStudyFlow, phaseSequence } from "../studyFlow";
+import { useStudyFlow, phaseSequence, StudyFlowOverlays } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
 import { studyLogger } from "../studyLogging";
@@ -227,7 +227,7 @@ export const AnnotationHub: React.FC = () => {
       {/* ── Simplified toolbar ── */}
       <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-white shrink-0 flex-wrap">
         {/* Dataset selector */}
-        <div className="flex items-center gap-2">
+        <div data-tour="dataset-selector" className="flex items-center gap-2">
           <DatabaseOutlined className="text-gray-400 text-sm" />
           <Select
             placeholder="Select dataset"
@@ -473,6 +473,11 @@ export const AnnotationHub: React.FC = () => {
         labelScopeOptions={al.labelScopeOptions}
         labelScopeLoading={al.labelScopeLoading}
       />
+
+      {/* Study-flow overlays: instructions modal, guided tour, phase
+          transition and completion screen. Each self-gates on the flow stage
+          and renders nothing when VITE_STUDY_FLOW_ENABLED is off. */}
+      <StudyFlowOverlays />
     </div>
   );
 };

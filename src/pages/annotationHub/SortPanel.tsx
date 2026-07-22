@@ -57,7 +57,7 @@ export const SortPanel: React.FC<SortPanelProps> = ({
   };
 
   return (
-    <div className="border-b border-gray-100 bg-white">
+    <div data-tour="sort-panel" className="border-b border-gray-100 bg-white">
       {/*
         A plain div (not a <button>) — native <button> elements have
         inconsistent flexbox layout behavior in some browsers (the trailing

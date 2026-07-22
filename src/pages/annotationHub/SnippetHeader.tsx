@@ -61,7 +61,10 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
   const hasFeedback = !!feedbacks[snippetId];
 
   return (
-    <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white sticky top-0 z-10">
+    <div
+      data-tour="selection-panel"
+      className="shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white sticky top-0 z-10"
+    >
       <div className="flex items-center gap-2 min-w-0">
         <SoundOutlined className="text-gray-400" />
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 truncate">

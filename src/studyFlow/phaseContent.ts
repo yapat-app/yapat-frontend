@@ -11,13 +11,12 @@
 import type { PhaseContent } from "./types";
 
 export const PHASE_CONTENT: Record<string, PhaseContent> = {
-  // ── Phase 1.1 — Feed only ───────────────────────────────────────────────
-  "P1.1": {
-    title: "Phase 1.1 — Annotating from the feed",
+  // ── Phase 1 — Feed only ─────────────────────────────────────────────────
+  P1: {
+    title: "Phase 1 — Annotating from the feed",
     body: [
       "In this first phase you will label audio snippets one at a time using only the annotation feed.",
       "Listen to each snippet, then add one or more species labels. Work through as many as you can.",
-      "When the timer runs out, the study will allow you to move to the next phase.",
     ],
     tour: [
       {
@@ -33,19 +32,18 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
         target: "labeling",
         title: "Add species labels",
         description:
-          "Pick one or more species labels here. You can add several labels to a single snippet — this area is just a preview during the tour.",
+          "Pick one or more species labels for a snippet here. You can add several labels to a single snippet.",
         placement: "left",
       },
     ],
   },
 
-  // ── Phase 1.2 — Feed + projection ───────────────────────────────────────
-  "P1.2": {
-    title: "Phase 1.2 — Adding the feature projection",
+  // ── Phase 2 — Feed + feature projection ─────────────────────────────────
+  P2: {
+    title: "Phase 2 — Adding the feature projection",
     body: [
       "You now have the same feed plus a feature projection on the left: a 2-D map where each point is one snippet, and nearby points sound similar.",
       "Use the projection to get an overview of the dataset while you keep labelling in the feed on the right.",
-      "When the timer runs out, the study will allow you to move to the next phase.",
     ],
     tour: [
       {
@@ -53,35 +51,97 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
         target: "projection",
         title: "Feature projection",
         description:
-          "Each point is a snippet; similar sounds sit close together. It gives you a map of the whole dataset. Scroll-wheel or pinch to zoom in; drag to pan.",
+          "Each point is a snippet; similar sounds sit close together, giving you a map of the whole dataset.",
         placement: "right",
+      },
+      {
+        featureKey: "projection-methods",
+        target: "projection-methods",
+        title: "Projection method",
+        description:
+          "Switch how the map is laid out — t-SNE, UMAP or PCA. Each method arranges the same snippets differently, so try a few to find the view that separates the clusters most clearly for you.",
+        placement: "bottom",
       },
       {
         featureKey: "zoom-pan",
         target: "projection",
         title: "Zoom & pan the map",
         description:
-          "Scroll-wheel (or pinch on trackpad) to zoom in on a cluster. Click and drag to pan. The map stays zoomed when you click a point.",
+          "Scroll-wheel (or pinch on trackpad) to zoom in on a cluster. Click and drag to pan around the map.",
         placement: "right",
       },
       {
-        featureKey: "projection-method",
-        target: "projection-method",
-        title: "Projection method",
+        featureKey: "projection-count",
+        target: "projection-count",
+        title: "Point counts",
         description:
-          "Switch how the map is computed (e.g. UMAP / t-SNE). The layout changes but each point is still the same snippet.",
+          "These numbers summarise the map: 'X / Y visible' is how many of the total snippets are currently shown, and the 'labeled' tag counts how many you have already annotated.",
         placement: "bottom",
       },
     ],
   },
 
-  // ── Phase 2.1 — Click to inspect + colour ───────────────────────────────
-  "P2.1": {
-    title: "Phase 2.1 — Exploring by clicking the map",
+  // ── Phase 3 — Sidebar sample properties (location + date/time) ──────────
+  P3: {
+    title: "Phase 3 — Filtering by sample properties",
     body: [
-      "The projection is now the main view. Click any point to open that snippet on the right, listen to it, and label it.",
-      "You can also colour the points by a property to reveal the distribution of scores across the dataset.",
-      "When the timer runs out, the study will allow you to move to the next phase.",
+      "Everything from the previous phase still applies. A Filters sidebar is now available on the left.",
+      "Use the Sample Properties there to narrow the dataset by recording location, date range and time of day, so you can focus on the snippets that interest you.",
+    ],
+    tour: [
+      {
+        featureKey: "status-filter",
+        target: "status-filter",
+        title: "Filter by label status",
+        description:
+          "Switch between All, Unlabeled and Labeled to control which snippets you see — for example, choose Unlabeled to focus only on snippets you still need to annotate.",
+        placement: "right",
+      },
+      {
+        featureKey: "sample-properties",
+        target: "sample-properties",
+        title: "Sample Properties",
+        description:
+          "Filter the feed and the map by recording location, date range and time of day. Only snippets matching your selection stay visible.",
+        placement: "right",
+      },
+    ],
+  },
+
+  // ── Phase 4 — Model-derived scores + threshold filtering ────────────────
+  P4: {
+    title: "Phase 4 — Filtering by model scores",
+    body: [
+      "You now have a suite of model-derived scores — uncertainty, diversity, density and confidence — in the sidebar.",
+      "A score histogram shows how snippets are distributed for each property. Drag its threshold slider to hide low-scoring points and focus on the most informative snippets.",
+      "You can also sort the feed by these scores to bring the most relevant snippets to the top.",
+    ],
+    tour: [
+      {
+        featureKey: "model-scores",
+        target: "model-scores",
+        title: "Model derived scores",
+        description:
+          "Pick a property — Uncertainty, Diversity, Density or Confidence — to see its score histogram, then drag the threshold slider to keep only the top-scoring snippets on the map and in the feed. You can enable several properties at once to combine them.",
+        placement: "right",
+      },
+      {
+        featureKey: "sort-panel",
+        target: "sort-panel",
+        title: "Sort the feed",
+        description:
+          "Tap a chip to sort the feed by that property; tap again to flip the direction, and a third time to remove it. Activate several chips to sort by multiple criteria — the number badge shows each one's priority.",
+        placement: "left",
+      },
+    ],
+  },
+
+  // ── Phase 5 — Click the map to inspect ──────────────────────────────────
+  P5: {
+    title: "Phase 5 — Exploring by clicking the map",
+    body: [
+      "Final phase. Everything from before still applies, and the projection points are now clickable.",
+      "Click any point to open that snippet on the right, listen to it, and label it — combine this with the sidebar filters to zero in on the snippets that matter most.",
     ],
     tour: [
       {
@@ -89,92 +149,16 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
         target: "projection",
         title: "Click a point to inspect",
         description:
-          "Click any point and its snippet opens in the panel on the right for listening and labelling. Shift+click selects multiple points.",
+          "Click any point and its snippet opens in the panel on the right for listening and labelling. Shift+click to add more points to the selection.",
         placement: "right",
       },
       {
         featureKey: "selection-panel",
         target: "selection-panel",
-        title: "Selected snippet panel",
+        title: "Selected snippet",
         description:
-          "After clicking a point, the snippet details and labelling controls appear here. Shift+click to add more points to the selection.",
+          "The snippet you click appears here at the top of the feed, ready to play and label.",
         placement: "left",
-      },
-      {
-        featureKey: "color-filter",
-        target: "filter-panel",
-        title: "Colour the points",
-        description:
-          "Choose a property from the 'Color by' dropdown to colour the map — for example, colour by 'Composite score' to see which areas the model considers most informative, or by 'Actual label' to see how sound types cluster.",
-        placement: "right",
-      },
-    ],
-  },
-
-  // ── Phase 2.2 — Adjustable visibility filter ────────────────────────────
-  "P2.2": {
-    title: "Phase 2.2 — Filtering what you see",
-    body: [
-      "Everything from the previous phase still applies. New here: an adjustable filter slider.",
-      "Drag the threshold slider to hide points below a chosen score and focus on the snippets that matter most.",
-      "When the timer runs out, the study will allow you to move to the next phase.",
-    ],
-    tour: [
-      {
-        featureKey: "visibility-filter",
-        target: "filter-panel",
-        title: "Visibility threshold slider",
-        description:
-          "Drag the slider to the right to raise the threshold — points whose score falls below it disappear from the map, narrowing your focus to the most relevant snippets.",
-        placement: "right",
-      },
-    ],
-  },
-
-  // ── Phase 3.1 — Sampler suite + histogram ───────────────────────────────
-  "P3.1": {
-    title: "Phase 3.1 — Sampling strategies",
-    body: [
-      "You now have a suite of sampling properties — uncertainty, diversity and density — to filter the map by, one at a time.",
-      "A score histogram above the map shows how snippets are distributed for the selected property, helping you choose where to set the filter.",
-      "When the timer runs out, the study will allow you to move to the next phase.",
-    ],
-    tour: [
-      {
-        featureKey: "score-histogram",
-        target: "score-histogram",
-        title: "Score histogram",
-        description:
-          "This shows how snippet scores are distributed for the selected property. Blue bars are visible points; grey bars have been filtered out. Use it to choose a sensible threshold.",
-        placement: "bottom",
-      },
-      {
-        featureKey: "sampler-filters",
-        target: "filter-panel",
-        title: "Sampling properties",
-        description:
-          "Switch between Uncertainty, Diversity, Density and Confidence to prioritise different kinds of informative snippets. Confidence reflects how certain the model is about its prediction. Drag the threshold to focus on the top-scoring ones.",
-        placement: "right",
-      },
-    ],
-  },
-
-  // ── Phase 3.2 — Combined filters ────────────────────────────────────────
-  "P3.2": {
-    title: "Phase 3.2 — Combining filters",
-    body: [
-      "Final phase. You can now combine several sampling properties at once instead of using just one.",
-      "Enable multiple properties together to narrow the map to snippets that satisfy all of your chosen criteria simultaneously.",
-      "When the timer runs out, the study is complete.",
-    ],
-    tour: [
-      {
-        featureKey: "multi-filter",
-        target: "filter-panel",
-        title: "Combine multiple filters",
-        description:
-          "Toggle several properties on at once — Uncertainty, Diversity, Density and Confidence — the map keeps only snippets that pass all of them combined. Each property has its own threshold slider.",
-        placement: "right",
       },
     ],
   },
@@ -185,7 +169,7 @@ export function getPhaseContent(phaseId: string): PhaseContent {
   return (
     PHASE_CONTENT[phaseId] ?? {
       title: `Phase ${phaseId}`,
-      body: ["Continue annotating snippets until the timer runs out."],
+      body: ["Continue annotating snippets."],
       tour: [],
     }
   );
