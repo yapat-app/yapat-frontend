@@ -105,6 +105,14 @@ const FPV_METHOD_FETCH_FALLBACK: ProjectionMethod = "pca";
  */
 const SHOW_GENERATE_PROJECTION_BUTTON = false;
 
+/**
+ * Upper bound on consecutive failed projection fetches for one
+ * (dataset, embedding model) scope before fetching is suspended.
+ * Generous enough that a normal page load (one fetch per method, each with a
+ * PCA fallback) never reaches it, low enough to stop a runaway loop quickly.
+ */
+const FPV_MAX_CONSECUTIVE_FAILURES = 6;
+
 function fpvScopeKey(datasetId: number, embeddingModelId: number): string {
   return `${datasetId}:${embeddingModelId}`;
 }
@@ -163,6 +171,11 @@ export const ProjectionView: React.FC = () => {
   >({});
   const inFlightMethodsRef = useRef<Set<ProjectionMethod>>(new Set());
   const fpvUnavailableScopeRef = useRef<string | null>(null);
+  /** Consecutive failed fetches for the current scope; see FPV_MAX_CONSECUTIVE_FAILURES. */
+  const fpvFailureBudgetRef = useRef<{ scope: string; failures: number }>({
+    scope: "",
+    failures: 0,
+  });
   const unmountedRef = useRef(false);
 
   // Dynamic categorical colors (e.g. actual_label) are assigned incrementally
@@ -286,6 +299,29 @@ export const ProjectionView: React.FC = () => {
         return;
       }
 
+      // Circuit breaker: cap consecutive failed fetches per scope.
+      //
+      // fpvUnavailableScopeRef alone is not sufficient, because it is cleared
+      // whenever (selectedDatasetId, effectiveEmbeddingModelId) changes -- and
+      // effectiveEmbeddingModelId can transiently resolve to null and back
+      // while a mode switch settles. Each of those blips re-opens fetching,
+      // which fails, which re-opens again: the loop has been observed to issue
+      // over a thousand requests until the browser refused all further ones.
+      //
+      // This budget lives in a ref (no re-render) and is keyed on the scope,
+      // so churn in the guard above cannot defeat it. It counts only
+      // consecutive failures and is cleared on any success, so normal use --
+      // including switching methods -- is never throttled.
+      if (fpvFailureBudgetRef.current.scope !== scopeKey) {
+        fpvFailureBudgetRef.current = { scope: scopeKey, failures: 0 };
+      }
+      if (
+        !options?.force &&
+        fpvFailureBudgetRef.current.failures >= FPV_MAX_CONSECUTIVE_FAILURES
+      ) {
+        return;
+      }
+
       const projKey = fpvProjectionKey(selectedDatasetId, effectiveEmbeddingModelId, targetMethod);
       const cachedProj = _fpvProjectionCache.get(projKey);
       if (cachedProj) {
@@ -331,6 +367,9 @@ export const ProjectionView: React.FC = () => {
             continue;
           }
           fpvUnavailableScopeRef.current = null;
+          // A good fetch clears the failure budget, so transient errors never
+          // accumulate toward the circuit breaker across a working session.
+          fpvFailureBudgetRef.current = { scope: scopeKey, failures: 0 };
           _fpvPointsCache.set(
             fpvPointsKey(selectedDatasetId, effectiveEmbeddingModelId),
             fpv.points,
@@ -365,6 +404,10 @@ export const ProjectionView: React.FC = () => {
         // itself until the browser refused all further requests. The guard is
         // cleared on a successful fetch, a scope change, or a forced refetch.
         fpvUnavailableScopeRef.current = scopeKey;
+        fpvFailureBudgetRef.current = {
+          scope: scopeKey,
+          failures: fpvFailureBudgetRef.current.failures + 1,
+        };
         if (!options?.background) {
           if (!isProjectionNotReadyMessage(detail)) {
             resetProjectionComponentState();
