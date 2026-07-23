@@ -56,6 +56,11 @@ function propDomain(key: string): [number, number] {
   return getPropertyByKey(key)?.range ?? [SCORE_MIN, SCORE_MAX];
 }
 
+/** Scale a normalised [0,1] slider fraction into actual domain units. */
+function domainValue(frac: number, min: number, max: number): number {
+  return min + frac * (max - min);
+}
+
 /** Extract numeric score values for a given key from a list of points. */
 function extractValues(points: FilteredPoint["p"][], key: string): number[] {
   const out: number[] = [];
@@ -110,13 +115,20 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       <span className="text-gray-400">
         {mode === "range" ? (
           <>
-            <strong style={{ color }}>{normRange[0].toFixed(2)}</strong>
+            <strong style={{ color }}>
+              {domainValue(normRange[0], min, max).toFixed(2)}
+            </strong>
             {" – "}
-            <strong style={{ color }}>{normRange[1].toFixed(2)}</strong>
+            <strong style={{ color }}>
+              {domainValue(normRange[1], min, max).toFixed(2)}
+            </strong>
           </>
         ) : (
           <>
-            ≥ <strong style={{ color }}>{normRange[0].toFixed(2)}</strong>
+            ≥{" "}
+            <strong style={{ color }}>
+              {domainValue(normRange[0], min, max).toFixed(2)}
+            </strong>
           </>
         )}
       </span>
@@ -461,18 +473,18 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       {sliderMode === "range" ? (
                         <>
                           <strong style={{ color }}>
-                            {row.normRange[0].toFixed(2)}
+                            {domainValue(row.normRange[0], row.min, row.max).toFixed(2)}
                           </strong>
                           {" – "}
                           <strong style={{ color }}>
-                            {row.normRange[1].toFixed(2)}
+                            {domainValue(row.normRange[1], row.min, row.max).toFixed(2)}
                           </strong>
                         </>
                       ) : (
                         <>
                           ≥{" "}
                           <strong style={{ color }}>
-                            {row.normRange[0].toFixed(2)}
+                            {domainValue(row.normRange[0], row.min, row.max).toFixed(2)}
                           </strong>
                         </>
                       )}
