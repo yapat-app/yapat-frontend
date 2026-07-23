@@ -1,6 +1,9 @@
 /**
  * Shared quick-label list for blind annotation (classic + AL).
- * Priority: dataset's stored quick_labels → PAM labels.json / checkpoint label_config.
+ * Sources: PAM labels.json / checkpoint label_config, plus any extra labels
+ * manually added via the dataset's stored quick_labels — merged, not
+ * either/or, so adding a custom label (e.g. "No biophony") doesn't hide the
+ * checkpoint's own species list.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "../hooks";
@@ -31,27 +34,25 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     setPamLoading(true);
 
     const load = async () => {
-      // Priority 1: dataset's stored quick_labels
-      if (selectedDatasetId != null) {
-        try {
-          const stored = await datasetApi.getQuickLabels(Number(selectedDatasetId));
-          if (!cancelled && stored.length > 0) {
-            setPamSpecies(stored.map((l) => l.display_name));
-            setPamLoading(false);
-            return;
-          }
-        } catch { /* fall through to checkpoint fallback */ }
-      }
+      const [checkpointList, storedLabels] = await Promise.all([
+        fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId).catch(
+          () => [] as string[],
+        ),
+        selectedDatasetId != null
+          ? datasetApi
+              .getQuickLabels(Number(selectedDatasetId))
+              .catch(() => [])
+          : Promise.resolve([]),
+      ]);
 
-      // Priority 2: checkpoint species list (existing behaviour)
-      try {
-        const list = await fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId);
-        if (!cancelled) setPamSpecies(list);
-      } catch {
-        if (!cancelled) setPamSpecies([]);
-      } finally {
-        if (!cancelled) setPamLoading(false);
-      }
+      if (cancelled) return;
+      setPamSpecies(
+        mergeQuickLabelNames(
+          checkpointList,
+          storedLabels.map((l) => l.display_name),
+        ),
+      );
+      setPamLoading(false);
     };
 
     void load();
