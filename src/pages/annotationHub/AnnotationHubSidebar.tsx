@@ -345,181 +345,194 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
           }
         >
           <div className="flex flex-col gap-2.5">
-            {/* ── Status ── */}
-            <div data-tour="status-filter">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 font-ibm-sans">
-                Status
-              </p>
-              <Segmented
-                block
-                size="small"
-                value={filterAnnotationStatus}
-                onChange={(v) =>
-                  onFilterAnnotationStatusChange(
-                    v as "any" | "annotated" | "unannotated",
-                  )
-                }
-                options={[
-                  { value: "any", label: "All" },
-                  { value: "unannotated", label: "Unlabeled" },
-                  { value: "annotated", label: "Labeled" },
-                ]}
-                className={[
-                  "rounded-lg! bg-gray-100! p-0.75!",
-                  "[&_.ant-segmented-item]:rounded-md! [&_.ant-segmented-item]:font-ibm-sans",
-                  "[&_.ant-segmented-item-selected]:bg-gray-900! [&_.ant-segmented-item-selected]:text-white! [&_.ant-segmented-item-selected]:shadow-none!",
-                  "[&_.ant-segmented-thumb]:rounded-md! [&_.ant-segmented-thumb]:bg-gray-900!",
-                ].join(" ")}
-              />
-            </div>
+            <div data-tour="metadata-filters" className="flex flex-col gap-2.5">
+              {/* ── Status ── */}
+              <div data-tour="status-filter">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 font-ibm-sans">
+                  Status
+                </p>
+                <Segmented
+                  block
+                  size="small"
+                  value={filterAnnotationStatus}
+                  onChange={(v) =>
+                    onFilterAnnotationStatusChange(
+                      v as "any" | "annotated" | "unannotated",
+                    )
+                  }
+                  options={[
+                    { value: "any", label: "All" },
+                    { value: "unannotated", label: "Unlabeled" },
+                    { value: "annotated", label: "Labeled" },
+                  ]}
+                  className={[
+                    "rounded-lg! bg-gray-100! p-0.75!",
+                    "[&_.ant-segmented-item]:rounded-md! [&_.ant-segmented-item]:font-ibm-sans",
+                    "[&_.ant-segmented-item-selected]:bg-gray-900! [&_.ant-segmented-item-selected]:text-white! [&_.ant-segmented-item-selected]:shadow-none!",
+                    "[&_.ant-segmented-thumb]:rounded-md! [&_.ant-segmented-thumb]:bg-gray-900!",
+                  ].join(" ")}
+                />
+              </div>
 
-            {showSampleProperties && (
-              <div data-tour="sample-properties" className="border-t border-gray-100 pt-2.5">
-                <SidebarSubsection title="Sample Properties">
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
-                      <EnvironmentOutlined className="text-gray-400" /> Location
-                    </p>
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      size="small"
-                      variant="borderless"
-                      placeholder="Any location"
-                      loading={locationsLoading}
-                      value={filterLocations}
-                      onChange={onFilterLocationsChange}
-                      style={{ width: "100%" }}
-                      options={recordingLocations.map((loc) => ({
-                        value: loc,
-                        label: loc,
-                      }))}
-                      maxTagCount={1}
-                      notFoundContent={
-                        locationsLoading ? "Loading…" : "No locations"
-                      }
-                      className={[
-                        "[&_.ant-select-selector]:rounded-lg! [&_.ant-select-selector]:border-none! [&_.ant-select-selector]:bg-gray-50!",
-                        "[&_.ant-select-selector]:shadow-[inset_0_0_0_1px_#e5e7eb]! hover:[&_.ant-select-selector]:shadow-[inset_0_0_0_1px_#d1d5db]!",
-                        "[&_.ant-select-selection-item]:rounded-full! [&_.ant-select-selection-item]:border-none! [&_.ant-select-selection-item]:bg-white! [&_.ant-select-selection-item]:text-gray-700!",
-                      ].join(" ")}
-                    />
-                  </div>
-                  {dateTimeData.dateTimeLoading && <DateTimeFilterSkeleton />}
-                  {!dateTimeData.dateTimeLoading &&
-                    dateTimeData.hasAnyDateTime && (
-                    <div className="flex flex-col gap-1">
-                      <DateRangeCalendarPicker
-                        domain={dateTimeData.dateDomain}
-                        range={filterDateRange}
-                        onChange={onCalendarDateRangeChange}
-                        disabled={dateTimeDisabled}
-                      />
-                      <DateTimeRangeFilter
-                        icon={<CalendarOutlined className="text-gray-400" />}
-                        title="Date range"
-                        values={dateTimeData.dateValues}
-                        domain={dateTimeData.dateDomain}
-                        zoomDomain={dateZoomDomain}
-                        range={filterDateRange}
-                        onChange={onFilterDateRangeChange}
-                        onReset={() => onCalendarDateRangeChange(null)}
-                        formatValue={formatDateAxisLabel}
-                        disabled={dateTimeDisabled}
-                      />
-                    </div>
-                  )}
-                  {!dateTimeData.dateTimeLoading &&
-                    dateTimeData.hasAnyDateTime && (
-                    <DateTimeRangeFilter
-                      icon={<ClockCircleOutlined className="text-gray-400" />}
-                      title="Time of day"
-                      values={dateTimeData.timeValues}
-                      domain={TIME_OF_DAY_DOMAIN}
-                      binCount={24}
-                      range={filterTimeRange}
-                      onChange={onFilterTimeRangeChange}
-                      formatValue={formatTimeAxisLabel}
-                      disabled={dateTimeDisabled}
-                    />
-                  )}
-                  {showLabelScope && (
+              {showSampleProperties && (
+                <div
+                  data-tour="sample-properties"
+                  className="border-t border-gray-100 pt-2.5"
+                >
+                  <SidebarSubsection title="Sample Properties">
                     <div>
                       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
-                        <TagsOutlined className="text-gray-400" /> Labels
+                        <EnvironmentOutlined className="text-gray-400" />{" "}
+                        Location
                       </p>
-                      <Popover
-                        trigger="click"
-                        placement="bottomLeft"
-                        open={labelPickerOpen}
-                        onOpenChange={(open) => {
-                          setLabelPickerOpen(open);
-                          if (!open) setLabelSearch("");
-                        }}
-                        content={labelPickerContent}
-                        arrow={false}
-                        styles={{ content: { padding: 0 } }}
-                      >
-                        <button
-                          type="button"
-                          className={[
-                            "flex h-8 w-full items-center gap-2 rounded-lg bg-gray-50 px-2.5 text-left font-ibm-sans transition-all",
-                            "shadow-[inset_0_0_0_1px_#e5e7eb] hover:bg-white hover:shadow-[inset_0_0_0_1px_#d1d5db]",
-                            labelPickerOpen
-                              ? "bg-white shadow-[inset_0_0_0_1px_#60a5fa]"
-                              : "",
-                          ].join(" ")}
+                      <Select
+                        mode="multiple"
+                        allowClear
+                        showSearch
+                        size="small"
+                        variant="borderless"
+                        placeholder="Any location"
+                        loading={locationsLoading}
+                        value={filterLocations}
+                        onChange={onFilterLocationsChange}
+                        style={{ width: "100%" }}
+                        options={recordingLocations.map((loc) => ({
+                          value: loc,
+                          label: loc,
+                        }))}
+                        maxTagCount={1}
+                        notFoundContent={
+                          locationsLoading ? "Loading…" : "No locations"
+                        }
+                        className={[
+                          "[&_.ant-select-selector]:rounded-lg! [&_.ant-select-selector]:border-none! [&_.ant-select-selector]:bg-gray-50!",
+                          "[&_.ant-select-selector]:shadow-[inset_0_0_0_1px_#e5e7eb]! hover:[&_.ant-select-selector]:shadow-[inset_0_0_0_1px_#d1d5db]!",
+                          "[&_.ant-select-selection-item]:rounded-full! [&_.ant-select-selection-item]:border-none! [&_.ant-select-selection-item]:bg-white! [&_.ant-select-selection-item]:text-gray-700!",
+                        ].join(" ")}
+                      />
+                    </div>
+                    {dateTimeData.dateTimeLoading && <DateTimeFilterSkeleton />}
+                    {!dateTimeData.dateTimeLoading &&
+                      dateTimeData.hasAnyDateTime && (
+                        <div className="flex flex-col gap-1">
+                          <DateRangeCalendarPicker
+                            domain={dateTimeData.dateDomain}
+                            range={filterDateRange}
+                            onChange={onCalendarDateRangeChange}
+                            disabled={dateTimeDisabled}
+                          />
+                          <DateTimeRangeFilter
+                            icon={
+                              <CalendarOutlined className="text-gray-400" />
+                            }
+                            title="Date range"
+                            values={dateTimeData.dateValues}
+                            domain={dateTimeData.dateDomain}
+                            zoomDomain={dateZoomDomain}
+                            range={filterDateRange}
+                            onChange={onFilterDateRangeChange}
+                            onReset={() => onCalendarDateRangeChange(null)}
+                            formatValue={formatDateAxisLabel}
+                            disabled={dateTimeDisabled}
+                          />
+                        </div>
+                      )}
+                    {!dateTimeData.dateTimeLoading &&
+                      dateTimeData.hasAnyDateTime && (
+                        <DateTimeRangeFilter
+                          icon={
+                            <ClockCircleOutlined className="text-gray-400" />
+                          }
+                          title="Time of day"
+                          values={dateTimeData.timeValues}
+                          domain={TIME_OF_DAY_DOMAIN}
+                          binCount={24}
+                          range={filterTimeRange}
+                          onChange={onFilterTimeRangeChange}
+                          formatValue={formatTimeAxisLabel}
+                          disabled={dateTimeDisabled}
+                        />
+                      )}
+                    {showLabelScope && (
+                      <div>
+                        <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
+                          <TagsOutlined className="text-gray-400" /> Labels
+                        </p>
+                        <Popover
+                          trigger="click"
+                          placement="bottomLeft"
+                          open={labelPickerOpen}
+                          onOpenChange={(open) => {
+                            setLabelPickerOpen(open);
+                            if (!open) setLabelSearch("");
+                          }}
+                          content={labelPickerContent}
+                          arrow={false}
+                          styles={{ content: { padding: 0 } }}
                         >
-                          <span
+                          <button
+                            type="button"
                             className={[
-                              "min-w-0 flex-1 truncate text-xs",
-                              localLabelScope.length > 0
-                                ? "font-semibold text-gray-800"
-                                : "text-gray-400",
+                              "flex h-8 w-full items-center gap-2 rounded-lg bg-gray-50 px-2.5 text-left font-ibm-sans transition-all",
+                              "shadow-[inset_0_0_0_1px_#e5e7eb] hover:bg-white hover:shadow-[inset_0_0_0_1px_#d1d5db]",
+                              labelPickerOpen
+                                ? "bg-white shadow-[inset_0_0_0_1px_#60a5fa]"
+                                : "",
                             ].join(" ")}
                           >
-                            {labelSummary}
-                          </span>
-                          {localLabelScope.length > 0 && (
-                            <Tooltip title="Clear labels">
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                aria-label="Clear labels"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLocalLabelScope([]);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
+                            <span
+                              className={[
+                                "min-w-0 flex-1 truncate text-xs",
+                                localLabelScope.length > 0
+                                  ? "font-semibold text-gray-800"
+                                  : "text-gray-400",
+                              ].join(" ")}
+                            >
+                              {labelSummary}
+                            </span>
+                            {localLabelScope.length > 0 && (
+                              <Tooltip title="Clear labels">
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-label="Clear labels"
+                                  onClick={(e) => {
                                     e.stopPropagation();
                                     setLocalLabelScope([]);
-                                  }
-                                }}
-                                className="flex h-4 w-4 shrink-0 items-center justify-center text-gray-400 transition-colors hover:text-red-500"
-                              >
-                                <CloseCircleOutlined className="text-[12px]" />
-                              </span>
-                            </Tooltip>
-                          )}
-                          <DownOutlined
-                            className={[
-                              "shrink-0 text-[10px] text-gray-400 transition-transform",
-                              labelPickerOpen ? "rotate-180" : "",
-                            ].join(" ")}
-                          />
-                        </button>
-                      </Popover>
-                    </div>
-                  )}
-                </SidebarSubsection>
-              </div>
-            )}
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setLocalLabelScope([]);
+                                    }
+                                  }}
+                                  className="flex h-4 w-4 shrink-0 items-center justify-center text-gray-400 transition-colors hover:text-red-500"
+                                >
+                                  <CloseCircleOutlined className="text-[12px]" />
+                                </span>
+                              </Tooltip>
+                            )}
+                            <DownOutlined
+                              className={[
+                                "shrink-0 text-[10px] text-gray-400 transition-transform",
+                                labelPickerOpen ? "rotate-180" : "",
+                              ].join(" ")}
+                            />
+                          </button>
+                        </Popover>
+                      </div>
+                    )}
+                  </SidebarSubsection>
+                </div>
+              )}
+            </div>
 
             {showModelScores && (
-              <div data-tour="model-scores" className="border-t border-gray-100 pt-2.5">
+              <div
+                data-tour="model-scores"
+                className="border-t border-gray-100 pt-2.5"
+              >
                 <SidebarSubsection title="Model derived scores">
                   <ScoreHistogramPanel
                     enrichedPlotPoints={enrichedPlotPoints}
@@ -531,7 +544,10 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                     compact
                     onVisibilityKeyChange={(key) =>
                       dispatch(
-                        setVisibilityFilter({ propertyKey: key, range: [0, 1] }),
+                        setVisibilityFilter({
+                          propertyKey: key,
+                          range: [0, 1],
+                        }),
                       )
                     }
                     onVisibilityRangeChange={(range) =>

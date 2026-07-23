@@ -336,6 +336,7 @@ const PredictionCardImpl: React.FC<Props> = ({
 
       {/* ── Spectrogram ── */}
       <div
+        data-tour="spectrogram"
         className="shrink-0 px-5 pt-3 pb-2"
         onClick={(e) => e.stopPropagation()}
       >

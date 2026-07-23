@@ -1,166 +1,189 @@
 /**
- * Authored study content — what each phase tells the participant and which
- * controls its guided tour highlights.
+ * Authored study content — what each phase tells the participant (the "Welcome"
+ * instructions modal) and which controls its guided tour highlights.
  *
- * Incremental tour: every step carries a `featureKey`. The flow only shows steps
- * whose key has NOT already been shown in an earlier phase, so each phase's tour
- * covers only what is new. Edit the copy freely; keep `target` values in sync
- * with the `data-tour="…"` attributes in the components.
+ * Each tour step carries a `featureKey`. Steps whose key was already shown in an
+ * earlier phase are skipped (see StudyFlowProvider `seenTourKeys`). Each phase
+ * therefore lists ONLY the cards it introduces: P1 covers the clip / label /
+ * scroll / tip basics, and each later phase adds just its new capability
+ * (projection, metadata filters, model scores, clickable points). Moving
+ * forward through the phases, a participant never sees the same card twice.
+
  */
 
-import type { PhaseContent } from "./types";
+import type { PhaseContent, TourStepSpec } from "./types";
+
+// ── Shared copy ────────────────────────────────────────────────────────────
+
+const CLIP_DESC =
+  "Each sample is a 3-second audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
+
+const LABEL_DESC = [
+  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label.",
+  "",
+  "• Rhinella icterica (common species) = RHIICT",
+  "• Dendropsophus minutus (complex and different call) = DENMIN",
+  "• Dendropsophus nahdereri (rare species) = DENNAH",
+  "• Scinax alter (not stereotype call) = SCIALT",
+  "• Leptodactylus fuscus (stereotype call) = LEPFUS",
+  "• Ameerega picta (extra species) = AMEPIC",
+].join("\n");
+
+const TIP_DESC =
+  "If you're not confident about a snippet, skip it. Only select None when you're confident there are no target-species vocalizations in the clip.";
+
+const SCROLL_DESC_P1 =
+  "Once you've labeled a snippet, scroll down to load the next snippet. A machine learning model picks and sorts samples it thinks are most useful for it to learn from.";
+
+const PROJECTION_DESC =
+  "Each dot is one sample in the dataset; the yellow-highlighted dot is the snippet you're currently listening to. You can't click dots to pick a sample — but you can switch between projection views (t-SNE, UMAP, PCA) using the thumbnails above the map to see different layouts. Dots are positioned by how similar a machine learning model thinks the sounds are.";
+
+const PROJECTION_DESC_CLICKABLE =
+  "Each dot is one sample in the dataset; the yellow-highlighted dot is the snippet you're currently listening to. Click any dot to load that sample into the feed, with its audio and spectrogram. You can also switch between projection views (t-SNE, UMAP, PCA) using the thumbnails above the map. Dots are positioned by how similar a machine learning model thinks the sounds are.";
+
+const METADATA_DESC = [
+  "On the left, filter which samples appear in the feed and the projection:",
+  "",
+  "• Status — show All, Unlabeled, or already-Labeled samples",
+  "• Location — restrict to a specific recording site",
+  "• Date range / Time of day — restrict to when the recording was made",
+  "",
+  "Filters only change what's shown — they don't remove any data.",
+].join("\n");
+
+const MODEL_SCORES_DESC = [
+  "Further down the sidebar, filter by scores the model assigns to each sample. These reflect how useful a sample is expected to be for improving the model — samples with higher scores are considered more beneficial to annotate.",
+  "",
+  "Hover the ⓘ next to any score for a definition.",
+].join("\n");
+
+// ── Reusable cards ──────────────────────────────────────────────────────────
+// Each phase lists only the cards it INTRODUCES; keys are shared so the flow's
+// `seenTourKeys` dedup guarantees a card is never shown twice as the
+// participant moves forward through the phases.
+
+const clipStep = (): TourStepSpec => ({
+  featureKey: "clip",
+  target: "spectrogram",
+  title: "The clip",
+  description: CLIP_DESC,
+  placement: "left",
+});
+
+const labelStep = (): TourStepSpec => ({
+  featureKey: "label",
+  target: "labeling",
+  title: "Choosing a label",
+  description: LABEL_DESC,
+  placement: "left",
+});
+
+const scrollStep = (description: string): TourStepSpec => ({
+  featureKey: "scroll",
+  target: "feed",
+  title: "Moving to the next sample",
+  description,
+  placement: "left",
+});
+
+const tipStep = (): TourStepSpec => ({
+  featureKey: "tip",
+  target: "labeling",
+  title: "💡 Tip: when you're unsure",
+  description: TIP_DESC,
+  placement: "left",
+});
+
+const projectionStep = (
+  description: string,
+  featureKey = "projection",
+): TourStepSpec => ({
+  featureKey,
+  target: "projection-panel",
+  title: "Feature Projection view",
+  description,
+  placement: "right",
+});
+
+const metadataStep = (): TourStepSpec => ({
+  featureKey: "meta",
+  target: "metadata-filters",
+  title: "Metadata filters",
+  description: METADATA_DESC,
+  placement: "right",
+});
+
+const modelScoresStep = (): TourStepSpec => ({
+  featureKey: "model",
+  target: "model-scores",
+  title: "Model-derived filters",
+  description: MODEL_SCORES_DESC,
+  placement: "right",
+});
+
+const sortStep = (): TourStepSpec => ({
+  featureKey: "sort",
+  target: "sort-panel",
+  title: "Sort the feed",
+  description:
+    "Tap a chip to sort the feed by that property; tap again to flip the direction, and a third time to remove it. Activate several chips to sort by multiple criteria — the number badge shows each one's priority.",
+  placement: "left",
+});
+
+// ── Per-phase intro copy ───────────────────────────────────────────────────
+
+const INTRO_FEED_ONLY =
+  "You're about to enter the annotation workspace. Audio samples will appear in a scrolling feed — each one comes with its spectrogram and playback controls.";
+
+const INTRO_WITH_PROJECTION =
+  "You're about to enter the annotation workspace. On the right, audio samples will appear in a scrolling feed — each one comes with its spectrogram and playback controls. **On the left of the workspace** you'll see a 2D feature projection showing where all samples sit relative to each other.";
+
+const INTRO_WITH_FILTERS =
+  "You're about to enter the annotation workspace. On the right, audio samples appear in a scrolling feed — each one with its spectrogram and playback controls. **In the middle of the workspace** a 2D feature projection shows where all samples sit relative to each other. On the left, you can filter which samples show up in the feed and the feature projection view.";
+
+const INTRO_P5_CLICK_CALLOUT =
+  "**New in this phase: click any point in the feature projection to open that sample in the feed and label it** — exploring the map by clicking is the main focus of Phase 5.";
+
+const INTRO_GUIDE_LINE =
+  "You'll have 15 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
+
+const INTRO_GUIDE_LINE_P5 =
+  "You'll have 25 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
 
 export const PHASE_CONTENT: Record<string, PhaseContent> = {
   // ── Phase 1 — Feed only ─────────────────────────────────────────────────
   P1: {
-    title: "Phase 1 — Annotating from the feed",
-    body: [
-      "In this first phase you will label audio snippets one at a time using only the annotation feed.",
-      "Listen to each snippet, then add one or more species labels. Work through as many as you can.",
-    ],
-    tour: [
-      {
-        featureKey: "feed",
-        target: "feed",
-        title: "Annotation feed",
-        description:
-          "Snippets appear here. Scroll through them, play the audio, and inspect each one before labelling.",
-        placement: "left",
-      },
-      {
-        featureKey: "labeling",
-        target: "labeling",
-        title: "Add species labels",
-        description:
-          "Pick one or more species labels for a snippet here. You can add several labels to a single snippet.",
-        placement: "left",
-      },
-    ],
+    title: "Welcome to Phase 1",
+    body: [INTRO_FEED_ONLY, INTRO_GUIDE_LINE],
+    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep()],
   },
 
-  // ── Phase 2 — Feed + feature projection ─────────────────────────────────
+  // ── Phase 2 — NEW: feature projection ───────────────────────────────────
   P2: {
-    title: "Phase 2 — Adding the feature projection",
-    body: [
-      "You now have the same feed plus a feature projection on the left: a 2-D map where each point is one snippet, and nearby points sound similar.",
-      "Use the projection to get an overview of the dataset while you keep labelling in the feed on the right.",
-    ],
-    tour: [
-      {
-        featureKey: "projection",
-        target: "projection",
-        title: "Feature projection",
-        description:
-          "Each point is a snippet; similar sounds sit close together, giving you a map of the whole dataset.",
-        placement: "right",
-      },
-      {
-        featureKey: "projection-methods",
-        target: "projection-methods",
-        title: "Projection method",
-        description:
-          "Switch how the map is laid out — t-SNE, UMAP or PCA. Each method arranges the same snippets differently, so try a few to find the view that separates the clusters most clearly for you.",
-        placement: "bottom",
-      },
-      {
-        featureKey: "zoom-pan",
-        target: "projection",
-        title: "Zoom & pan the map",
-        description:
-          "Scroll-wheel (or pinch on trackpad) to zoom in on a cluster. Click and drag to pan around the map.",
-        placement: "right",
-      },
-      {
-        featureKey: "projection-count",
-        target: "projection-count",
-        title: "Point counts",
-        description:
-          "These numbers summarise the map: 'X / Y visible' is how many of the total snippets are currently shown, and the 'labeled' tag counts how many you have already annotated.",
-        placement: "bottom",
-      },
-    ],
+    title: "Welcome to Phase 2",
+    body: [INTRO_WITH_PROJECTION, INTRO_GUIDE_LINE],
+    tour: [projectionStep(PROJECTION_DESC)],
   },
 
-  // ── Phase 3 — Sidebar sample properties (location + date/time) ──────────
+  // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
   P3: {
-    title: "Phase 3 — Filtering by sample properties",
-    body: [
-      "Everything from the previous phase still applies. A Filters sidebar is now available on the left.",
-      "Use the Sample Properties there to narrow the dataset by recording location, date range and time of day, so you can focus on the snippets that interest you.",
-    ],
-    tour: [
-      {
-        featureKey: "status-filter",
-        target: "status-filter",
-        title: "Filter by label status",
-        description:
-          "Switch between All, Unlabeled and Labeled to control which snippets you see — for example, choose Unlabeled to focus only on snippets you still need to annotate.",
-        placement: "right",
-      },
-      {
-        featureKey: "sample-properties",
-        target: "sample-properties",
-        title: "Sample Properties",
-        description:
-          "Filter the feed and the map by recording location, date range and time of day. Only snippets matching your selection stay visible.",
-        placement: "right",
-      },
-    ],
+    title: "Welcome to Phase 3",
+    body: [INTRO_WITH_FILTERS, INTRO_GUIDE_LINE],
+    tour: [metadataStep()],
   },
 
-  // ── Phase 4 — Model-derived scores + threshold filtering ────────────────
+  // ── Phase 4 — NEW: model-derived score filters + feed sorting ───────────
   P4: {
-    title: "Phase 4 — Filtering by model scores",
-    body: [
-      "You now have a suite of model-derived scores — uncertainty, diversity, density and confidence — in the sidebar.",
-      "A score histogram shows how snippets are distributed for each property. Drag its threshold slider to hide low-scoring points and focus on the most informative snippets.",
-      "You can also sort the feed by these scores to bring the most relevant snippets to the top.",
-    ],
-    tour: [
-      {
-        featureKey: "model-scores",
-        target: "model-scores",
-        title: "Model derived scores",
-        description:
-          "Pick a property — Uncertainty, Diversity, Density or Confidence — to see its score histogram, then drag the threshold slider to keep only the top-scoring snippets on the map and in the feed. You can enable several properties at once to combine them.",
-        placement: "right",
-      },
-      {
-        featureKey: "sort-panel",
-        target: "sort-panel",
-        title: "Sort the feed",
-        description:
-          "Tap a chip to sort the feed by that property; tap again to flip the direction, and a third time to remove it. Activate several chips to sort by multiple criteria — the number badge shows each one's priority.",
-        placement: "left",
-      },
-    ],
+    title: "Welcome to Phase 4",
+    body: [INTRO_WITH_FILTERS, INTRO_GUIDE_LINE],
+    tour: [modelScoresStep(), sortStep()],
   },
 
-  // ── Phase 5 — Click the map to inspect ──────────────────────────────────
+  // ── Phase 5 — NEW: clickable projection points ──────────────────────────
   P5: {
-    title: "Phase 5 — Exploring by clicking the map",
-    body: [
-      "Final phase. Everything from before still applies, and the projection points are now clickable.",
-      "Click any point to open that snippet on the right, listen to it, and label it — combine this with the sidebar filters to zero in on the snippets that matter most.",
-    ],
-    tour: [
-      {
-        featureKey: "vis-click",
-        target: "projection",
-        title: "Click a point to inspect",
-        description:
-          "Click any point and its snippet opens in the panel on the right for listening and labelling. Shift+click to add more points to the selection.",
-        placement: "right",
-      },
-      {
-        featureKey: "selection-panel",
-        target: "selection-panel",
-        title: "Selected snippet",
-        description:
-          "The snippet you click appears here at the top of the feed, ready to play and label.",
-        placement: "left",
-      },
-    ],
+    title: "Welcome to Phase 5",
+    body: [INTRO_WITH_FILTERS, INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
+    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click")],
   },
 };
 

@@ -12,6 +12,26 @@ import { Tour, type TourProps } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
 import { useAppSelector } from "../../hooks";
 
+/**
+ * Render a step description that may contain multiple lines.
+ */
+function renderDescription(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  return (
+    <div className="flex flex-col gap-1">
+      {lines.map((line, i) => {
+        if (line.trim() === "") return <div key={i} className="h-1.5" />;
+        const isBullet = line.trimStart().startsWith("• ");
+        return (
+          <div key={i} className={isBullet ? "pl-3" : undefined}>
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export const PhaseTour: React.FC = () => {
   const { enabled, stage, pendingTourSteps, finishTour } = useStudyFlow();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
@@ -43,7 +63,7 @@ export const PhaseTour: React.FC = () => {
 
   const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
     title: s.title,
-    description: s.description,
+    description: renderDescription(s.description),
     placement: s.placement,
     // antd renders the step centred when the element isn't found; the cast
     // satisfies its non-null target signature while we tolerate a missing node.

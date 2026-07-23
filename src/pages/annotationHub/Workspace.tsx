@@ -178,7 +178,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   );
 
   const rightPanel = (
-    <div data-tour="feed" className="h-full flex flex-col overflow-hidden bg-[#f7fafc]">
+    <div
+      data-tour="feed"
+      className="h-full flex flex-col overflow-hidden bg-[#f7fafc]"
+    >
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
           Feed
@@ -232,7 +235,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       maxRightPanelPx={4000}
       maxRightRatio={0.55}
       left={
-        <div className="flex flex-col h-full border-r border-gray-200 overflow-hidden">
+        <div
+          data-tour="projection-panel"
+          className="flex flex-col h-full border-r border-gray-200 overflow-hidden"
+        >
           <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
             <Tooltip
               title={
