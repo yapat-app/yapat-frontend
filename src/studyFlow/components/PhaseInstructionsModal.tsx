@@ -7,9 +7,32 @@ import { Modal, Button } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
 import { getPhaseContent } from "../phaseContent";
 
+/**
+ * Render an intro paragraph, turning `**bold**` segments into <strong> so copy
+ * can emphasise key details
+ */
+function renderRichText(text: string): React.ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i} className="font-semibold text-gray-900">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    ),
+  );
+}
+
 export const PhaseInstructionsModal: React.FC = () => {
-  const { enabled, stage, phaseId, beginPhase, sequenceIndex, sequenceLength, pendingTourSteps } =
-    useStudyFlow();
+  const {
+    enabled,
+    stage,
+    phaseId,
+    beginPhase,
+    sequenceIndex,
+    sequenceLength,
+    pendingTourSteps,
+  } = useStudyFlow();
 
   if (!enabled || stage !== "instructions") return null;
 
@@ -37,7 +60,7 @@ export const PhaseInstructionsModal: React.FC = () => {
       <div className="flex flex-col gap-3 py-2">
         {content.body.map((p, i) => (
           <p key={i} className="text-sm text-gray-700 font-ibm-sans leading-6">
-            {p}
+            {renderRichText(p)}
           </p>
         ))}
       </div>
