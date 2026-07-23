@@ -12,6 +12,26 @@ import { Tour, type TourProps } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
 import { useAppSelector } from "../../hooks";
 
+/**
+ * Render a step description that may contain multiple lines.
+ */
+function renderDescription(text: string): React.ReactNode {
+  const lines = text.split("\n");
+  return (
+    <div className="flex flex-col gap-1">
+      {lines.map((line, i) => {
+        if (line.trim() === "") return <div key={i} className="h-1.5" />;
+        const isBullet = line.trimStart().startsWith("• ");
+        return (
+          <div key={i} className={isBullet ? "pl-3" : undefined}>
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export const PhaseTour: React.FC = () => {
   const { enabled, stage, pendingTourSteps, finishTour } = useStudyFlow();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
@@ -24,6 +44,36 @@ export const PhaseTour: React.FC = () => {
   useEffect(() => {
     if (isTour && !hasSteps) finishTour();
   }, [isTour, hasSteps, finishTour]);
+
+  // antd Tour measures the highlighted element once when it opens and only
+  // re-measures on window resize/scroll. Feed content (spectrogram + audio
+  // player) loads asynchronously, so a target can grow taller AFTER the
+  // spotlight was drawn — leaving the player below the highlight. Observe every
+  // `[data-tour]` target while the tour runs and nudge Tour to re-measure
+  // (via a synthetic resize) whenever one changes size or a new one mounts.
+  useEffect(() => {
+    if (!isTour) return;
+    const ro = new ResizeObserver(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    const observed = new WeakSet<Element>();
+    const attach = () => {
+      document.querySelectorAll("[data-tour]").forEach((el) => {
+        if (!observed.has(el)) {
+          observed.add(el);
+          ro.observe(el);
+        }
+      });
+    };
+    attach();
+    // Catch targets that mount after the tour opens (e.g. feed still loading).
+    const mo = new MutationObserver(attach);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [isTour]);
 
   if (!isTour || !hasSteps) return null;
 
@@ -43,7 +93,7 @@ export const PhaseTour: React.FC = () => {
 
   const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
     title: s.title,
-    description: s.description,
+    description: renderDescription(s.description),
     placement: s.placement,
     // antd renders the step centred when the element isn't found; the cast
     // satisfies its non-null target signature while we tolerate a missing node.
