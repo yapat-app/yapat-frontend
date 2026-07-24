@@ -12,6 +12,15 @@ interface DateRangeCalendarPickerProps {
   range: [number, number] | null;
   onChange: (range: [number, number] | null) => void;
   disabled?: boolean;
+  /**
+   * When true and `range` is null, show an empty "Any date" placeholder
+   * instead of filling in the full domain span. Normally the picker shows
+   * the domain span when unset (useful context: "recordings span this
+   * period"), but once another filter (Month) has taken over responsibility
+   * for narrowing dates, showing concrete-looking dates here reads as "a
+   * range is applied" even though it isn't — misleading in that context.
+   */
+  placeholderWhenUnset?: boolean;
 }
 
 /**
@@ -26,13 +35,17 @@ export const DateRangeCalendarPicker: React.FC<DateRangeCalendarPickerProps> = (
   range,
   onChange,
   disabled = false,
+  placeholderWhenUnset = false,
 }) => {
   const [domainMin, domainMax] = domain;
   // Default to the full available date span ("whole year based on the
   // results") whenever no explicit filter is active, rather than showing an
-  // empty/unset picker.
-  const effective = range ?? domain;
-  const value: [Dayjs, Dayjs] = [epochDayToDayjs(effective[0]), epochDayToDayjs(effective[1])];
+  // empty/unset picker — unless placeholderWhenUnset says another filter is
+  // now responsible for narrowing dates, in which case stay empty instead.
+  const effective = range ?? (placeholderWhenUnset ? null : domain);
+  const value: [Dayjs, Dayjs] | null = effective
+    ? [epochDayToDayjs(effective[0]), epochDayToDayjs(effective[1])]
+    : null;
 
   const handleChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
     if (!dates || !dates[0] || !dates[1]) {
@@ -54,6 +67,7 @@ export const DateRangeCalendarPicker: React.FC<DateRangeCalendarPickerProps> = (
       minDate={epochDayToDayjs(domainMin)}
       maxDate={epochDayToDayjs(domainMax)}
       format="MMM D, YYYY"
+      placeholder={["Any date", "Any date"]}
       allowClear
       className="w-full"
     />

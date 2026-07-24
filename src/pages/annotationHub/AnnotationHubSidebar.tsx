@@ -31,6 +31,7 @@ import {
 import {
   formatDateAxisLabel,
   formatTimeAxisLabel,
+  MONTH_ABBREVIATIONS,
 } from "./dateTimeFilterHelpers";
 import { DateTimeRangeFilter } from "./DateTimeRangeFilter";
 import { DateRangeCalendarPicker } from "./DateRangeCalendarPicker";
@@ -58,6 +59,9 @@ export type AnnotationHubSidebarProps = {
   dateZoomDomain: [number, number] | null;
   /** Used by the calendar picker only — also updates dateZoomDomain, unlike the slider's onFilterDateRangeChange. */
   onCalendarDateRangeChange: (v: [number, number] | null) => void;
+  /** Month-of-year filter (1-12, year-independent). ANDs with filterDateRange. */
+  filterMonths: number[];
+  onFilterMonthsChange: (v: number[]) => void;
   filterTimeRange: [number, number] | null;
   onFilterTimeRangeChange: (v: [number, number] | null) => void;
   localLabelScope: string[];
@@ -176,6 +180,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   onFilterDateRangeChange,
   dateZoomDomain,
   onCalendarDateRangeChange,
+  filterMonths,
+  onFilterMonthsChange,
   filterTimeRange,
   onFilterTimeRangeChange,
   localLabelScope,
@@ -197,12 +203,13 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     SCORE_VISIBILITY_MODE,
     SCORE_SLIDER_STYLE,
   );
-  const dateTimeData = useDateTimeFilterData();
+  const dateTimeData = useDateTimeFilterData(filterMonths);
 
   const activeFilterCount = [
     filterAnnotationStatus !== "any" ? 1 : 0,
     filterLocations.length > 0 ? 1 : 0,
     filterDateRange !== null ? 1 : 0,
+    filterMonths.length > 0 ? 1 : 0,
     filterTimeRange !== null ? 1 : 0,
     localLabelScope.length > 0 ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
@@ -229,6 +236,15 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
       return;
     }
     setLocalLabelScope([...localLabelScope, label]);
+  };
+
+  const selectedMonthSet = useMemo(() => new Set(filterMonths), [filterMonths]);
+  const toggleMonth = (month: number) => {
+    onFilterMonthsChange(
+      selectedMonthSet.has(month)
+        ? filterMonths.filter((m) => m !== month)
+        : [...filterMonths, month].sort((a, b) => a - b),
+    );
   };
 
   const labelPickerContent = (
@@ -420,6 +436,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                             range={filterDateRange}
                             onChange={onCalendarDateRangeChange}
                             disabled={dateTimeDisabled}
+                            placeholderWhenUnset={filterMonths.length > 0}
                           />
                           <DateTimeRangeFilter
                             icon={
@@ -435,6 +452,50 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                             formatValue={formatDateAxisLabel}
                             disabled={dateTimeDisabled}
                           />
+                        </div>
+                      )}
+                    {!dateTimeData.dateTimeLoading &&
+                      dateTimeData.hasAnyDateTime && (
+                        <div>
+                          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
+                            <CalendarOutlined className="text-gray-400" />{" "}
+                            Month
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {MONTH_ABBREVIATIONS.map((label, i) => {
+                              const month = i + 1;
+                              const selected = selectedMonthSet.has(month);
+                              return (
+                                <button
+                                  key={month}
+                                  type="button"
+                                  disabled={dateTimeDisabled}
+                                  onClick={() => toggleMonth(month)}
+                                  className={[
+                                    "rounded-md px-2 py-1 text-[11px] font-semibold font-ibm-sans transition-colors",
+                                    selected
+                                      ? "bg-gray-900 text-white"
+                                      : "bg-gray-50 text-gray-600 hover:bg-gray-100",
+                                    dateTimeDisabled
+                                      ? "cursor-not-allowed opacity-50"
+                                      : "cursor-pointer",
+                                  ].join(" ")}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                            {filterMonths.length > 0 && (
+                              <button
+                                type="button"
+                                disabled={dateTimeDisabled}
+                                onClick={() => onFilterMonthsChange([])}
+                                className="rounded-md px-2 py-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-red-500"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     {!dateTimeData.dateTimeLoading &&

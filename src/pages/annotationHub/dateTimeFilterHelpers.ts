@@ -27,6 +27,17 @@ export function formatDateAxisLabel(epochDay: number): string {
   });
 }
 
+/** "2024-05-15" -> 5 (1-12), for the month-of-year filter (year-independent). */
+export function dateStringToMonth(dateStr: string): number {
+  return Number(dateStr.slice(5, 7));
+}
+
+/** Short month labels for the Jan-Dec filter chips, index 0 = January. */
+export const MONTH_ABBREVIATIONS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
 /** Epoch day -> a UTC-anchored Dayjs (midnight UTC of that day), for the calendar range picker. */
 export function epochDayToDayjs(epochDay: number): Dayjs {
   return dayjs.utc(epochDay * MS_PER_DAY);

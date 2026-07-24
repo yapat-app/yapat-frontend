@@ -145,6 +145,9 @@ export const AnnotationHub: React.FC = () => {
   const [filterDateRange, setFilterDateRange] = useState<
     [number, number] | null
   >(null);
+  // Month-of-year filter (1-12, year-independent — e.g. "every June" or a
+  // wraparound season like Dec+Jan+Feb).
+  const [filterMonths, setFilterMonths] = useState<number[]>([]);
   const [filterTimeRange, setFilterTimeRange] = useState<
     [number, number] | null
   >(null);
@@ -158,6 +161,21 @@ export const AnnotationHub: React.FC = () => {
   const handleCalendarDateRangeChange = (r: [number, number] | null) => {
     setFilterDateRange(r);
     setDateZoomDomain(r);
+  };
+  // Month and Date range would otherwise silently AND together (e.g. picking
+  // "January" while a narrow custom date range is still active would only
+  // show January within that range, not January across every year) — so the
+  // *first* month picked (0 -> 1+) resets Date range back to the full domain.
+  // Only on that transition, though: if the user re-sets a Date range
+  // afterward while months are still active, further month toggles (adding
+  // one more, removing one) shouldn't keep silently wiping it out again.
+  const handleFilterMonthsChange = (months: number[]) => {
+    const wasEmpty = filterMonths.length === 0;
+    setFilterMonths(months);
+    if (wasEmpty && months.length > 0) {
+      setFilterDateRange(null);
+      setDateZoomDomain(null);
+    }
   };
   const quickLabelList = useQuickLabelList();
 
@@ -364,6 +382,7 @@ export const AnnotationHub: React.FC = () => {
                 filterAnnotationStatus={filterAnnotationStatus}
                 filterLocations={filterLocations}
                 filterDateRange={filterDateRange}
+                filterMonths={filterMonths}
                 filterTimeRange={filterTimeRange}
                 localLabelScope={al.localLabelScope}
                 feedActionLabel={feedActionLabel}
@@ -408,6 +427,8 @@ export const AnnotationHub: React.FC = () => {
                   onFilterDateRangeChange={setFilterDateRange}
                   dateZoomDomain={dateZoomDomain}
                   onCalendarDateRangeChange={handleCalendarDateRangeChange}
+                  filterMonths={filterMonths}
+                  onFilterMonthsChange={handleFilterMonthsChange}
                   filterTimeRange={filterTimeRange}
                   onFilterTimeRangeChange={setFilterTimeRange}
                   localLabelScope={al.localLabelScope}
@@ -426,6 +447,7 @@ export const AnnotationHub: React.FC = () => {
                     setFilterLocations([]);
                     setFilterDateRange(null);
                     setDateZoomDomain(null);
+                    setFilterMonths([]);
                     setFilterTimeRange(null);
                     al.setLocalLabelScope([]);
                     al.setLocalMinConfidence(null);

@@ -43,6 +43,7 @@ type WorkspaceProps = {
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
   filterLocations: string[];
   filterDateRange: [number, number] | null;
+  filterMonths: number[];
   filterTimeRange: [number, number] | null;
   localLabelScope: string[];
   /** Feed action button ("Generate Feed" / "Edit Feed") — lives on the feed side. */
@@ -59,6 +60,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   filterAnnotationStatus,
   filterLocations,
   filterDateRange,
+  filterMonths,
   filterTimeRange,
   localLabelScope,
   feedActionLabel,
@@ -165,6 +167,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       annotationStatus: filterAnnotationStatus,
       locations: filterLocations,
       dateRange: filterDateRange,
+      months: filterMonths,
       timeRange: filterTimeRange,
       labelScope: localLabelScope,
     }),
@@ -172,6 +175,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       filterAnnotationStatus,
       filterLocations,
       filterDateRange,
+      filterMonths,
       filterTimeRange,
       localLabelScope,
     ],
@@ -213,6 +217,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           filterAnnotationStatus={filterAnnotationStatus}
           filterLocations={filterLocations}
           filterDateRange={filterDateRange}
+          filterMonths={filterMonths}
           filterTimeRange={filterTimeRange}
           localLabelScope={localLabelScope}
           quickLabels={quickLabels}

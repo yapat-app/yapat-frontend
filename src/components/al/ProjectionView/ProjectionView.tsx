@@ -35,7 +35,10 @@ import { ProjectionToolbar } from "./ProjectionToolbar";
 import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
 import { useRecordingLocations } from "../../../pages/annotationHub/useRecordingLocations";
 import { useRecordingDateTimes } from "../../../pages/annotationHub/useRecordingDateTimes";
-import { dateStringToEpochDay } from "../../../pages/annotationHub/dateTimeFilterHelpers";
+import {
+  dateStringToEpochDay,
+  dateStringToMonth,
+} from "../../../pages/annotationHub/dateTimeFilterHelpers";
 import { useSnippetRecordingIds } from "../../../pages/annotationHub/useSnippetRecordingIds";
 
 /** Minimal structural type for the Plotly click/hover events we consume. */
@@ -149,6 +152,8 @@ export interface ProjectionClientFilters {
   annotationStatus: "any" | "annotated" | "unannotated";
   locations: string[];
   dateRange: [number, number] | null;
+  /** Month-of-year filter (1-12, year-independent). ANDs with dateRange. */
+  months: number[];
   timeRange: [number, number] | null;
   labelScope: string[];
 }
@@ -312,7 +317,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
   const wantsDateTimeFilter = Boolean(
-    clientFilters?.dateRange || clientFilters?.timeRange,
+    clientFilters?.dateRange ||
+      clientFilters?.timeRange ||
+      clientFilters?.months.length,
   );
   const {
     locationByRecordingId: recordingLocationById,
@@ -374,14 +381,22 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const extraVisible = useMemo(() => {
     if (!clientFilters) return undefined;
-    const { annotationStatus, locations, dateRange, timeRange, labelScope } =
-      clientFilters;
+    const {
+      annotationStatus,
+      locations,
+      dateRange,
+      months,
+      timeRange,
+      labelScope,
+    } = clientFilters;
     const locationSet = locations.length > 0 ? new Set(locations) : null;
     const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
+    const monthSet = months.length > 0 ? new Set(months) : null;
     if (
       annotationStatus === "any" &&
       !locationSet &&
       !dateRange &&
+      !monthSet &&
       !timeRange &&
       !scopeSet
     ) {
@@ -405,7 +420,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         const location = recordingLocationById.get(recId);
         if (location === undefined || !locationSet.has(location)) return false;
       }
-      if ((dateRange || timeRange) && !dateTimeDataLoading) {
+      if ((dateRange || monthSet || timeRange) && !dateTimeDataLoading) {
         const recId = recordingIdBySnippet?.get(snippetId);
         if (recId === undefined) return false;
         const dt = recordingDateTimeById.get(recId);
@@ -414,6 +429,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           const epochDay = dateStringToEpochDay(dt.date);
           if (epochDay < dateRange[0] || epochDay > dateRange[1]) return false;
         }
+        if (monthSet && !monthSet.has(dateStringToMonth(dt.date))) return false;
         if (timeRange) {
           if (dt.timeSeconds < timeRange[0] || dt.timeSeconds > timeRange[1])
             return false;

@@ -43,7 +43,10 @@ import {
   useRecordingDateTimes,
   type RecordingDateTime,
 } from "../../pages/annotationHub/useRecordingDateTimes";
-import { dateStringToEpochDay } from "../../pages/annotationHub/dateTimeFilterHelpers";
+import {
+  dateStringToEpochDay,
+  dateStringToMonth,
+} from "../../pages/annotationHub/dateTimeFilterHelpers";
 
 const FEED_PAGE_SIZE = 50;
 // Stable reference for "no server labels yet" — `labelsBySnippet[id] ?? []`
@@ -119,6 +122,8 @@ interface PredictionFeedProps {
   filterAnnotationStatus?: "any" | "annotated" | "unannotated";
   filterLocations?: string[];
   filterDateRange?: [number, number] | null;
+  /** Month-of-year filter (1-12, year-independent). ANDs with filterDateRange. */
+  filterMonths?: number[];
   filterTimeRange?: [number, number] | null;
   localLabelScope?: string[];
   quickLabels?: string[];
@@ -133,6 +138,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   filterAnnotationStatus = "any",
   filterLocations = [],
   filterDateRange = null,
+  filterMonths = [],
   filterTimeRange = null,
   localLabelScope = [],
   quickLabels = [],
@@ -228,6 +234,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         filterAnnotationStatus,
         filterLocations.join("\u0000"),
         filterDateRange ? filterDateRange.join(",") : "none",
+        filterMonths.join(","),
         filterTimeRange ? filterTimeRange.join(",") : "none",
         localLabelScope.join("\u0000"),
         sortFieldsKey,
@@ -238,6 +245,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       filterAnnotationStatus,
       filterLocations,
       filterDateRange,
+      filterMonths,
       filterTimeRange,
       localLabelScope,
       sortFieldsKey,
@@ -296,6 +304,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
+    if (filterMonths.length > 0 && !recordingDateTimeLoading) {
+      const monthSet = new Set(filterMonths);
+      result = result.filter((p) => {
+        if (typeof p.recording_id !== "number") return false;
+        const dt = recordingDateTimeById.get(p.recording_id);
+        if (!dt) return false;
+        return monthSet.has(dateStringToMonth(dt.date));
+      });
+    }
+
     if (filterTimeRange && !recordingDateTimeLoading) {
       const [startSeconds, endSeconds] = filterTimeRange;
       result = result.filter((p) => {
@@ -330,6 +348,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     recordingLocationById,
     recordingLocationsLoading,
     filterDateRange,
+    filterMonths,
     filterTimeRange,
     recordingDateTimeById,
     recordingDateTimeLoading,
