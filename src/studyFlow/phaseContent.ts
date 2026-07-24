@@ -135,11 +135,14 @@ const sortStep = (): TourStepSpec => ({
 const INTRO_FEED_ONLY =
   "You're about to enter the annotation workspace. Audio samples will appear in a scrolling feed — each one comes with its spectrogram and playback controls.";
 
-const INTRO_WITH_PROJECTION =
-  "You're about to enter the annotation workspace. On the right, audio samples will appear in a scrolling feed — each one comes with its spectrogram and playback controls. **On the left of the workspace** you'll see a 2D feature projection showing where all samples sit relative to each other.";
+const INTRO_P2_PROJECTION =
+  "**New in this phase: a 2D feature projection** appears on the left of the workspace, showing where all samples sit relative to each other. Keep annotating samples from the scrolling feed on the right.";
 
-const INTRO_WITH_FILTERS =
-  "You're about to enter the annotation workspace. On the right, audio samples appear in a scrolling feed — each one with its spectrogram and playback controls. **In the middle of the workspace** a 2D feature projection shows where all samples sit relative to each other. On the left, you can filter which samples show up in the feed and the feature projection view.";
+const INTRO_P3_FILTERS =
+  "**New in this phase: metadata filters.** Use the panel on the left to filter the samples shown in the feed and feature projection by status, location, date, or time of day.";
+
+const INTRO_P4_MODEL_TOOLS =
+  "**New in this phase: model-derived filters and feed sorting.** Filter samples by how useful the model expects them to be, or sort the feed by one or more properties.";
 
 const INTRO_P5_CLICK_CALLOUT =
   "**New in this phase: click any point in the feature projection to open that sample in the feed and label it** — exploring the map by clicking is the main focus of Phase 5.";
@@ -161,28 +164,28 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   // ── Phase 2 — NEW: feature projection ───────────────────────────────────
   P2: {
     title: "Welcome to Phase 2",
-    body: [INTRO_WITH_PROJECTION, INTRO_GUIDE_LINE],
+    body: [INTRO_P2_PROJECTION, INTRO_GUIDE_LINE],
     tour: [projectionStep(PROJECTION_DESC)],
   },
 
   // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
   P3: {
     title: "Welcome to Phase 3",
-    body: [INTRO_WITH_FILTERS, INTRO_GUIDE_LINE],
+    body: [INTRO_P3_FILTERS, INTRO_GUIDE_LINE],
     tour: [metadataStep()],
   },
 
   // ── Phase 4 — NEW: model-derived score filters + feed sorting ───────────
   P4: {
     title: "Welcome to Phase 4",
-    body: [INTRO_WITH_FILTERS, INTRO_GUIDE_LINE],
+    body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
     tour: [modelScoresStep(), sortStep()],
   },
 
   // ── Phase 5 — NEW: clickable projection points ──────────────────────────
   P5: {
     title: "Welcome to Phase 5",
-    body: [INTRO_WITH_FILTERS, INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
+    body: [INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
     tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click")],
   },
 };
