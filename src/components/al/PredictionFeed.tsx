@@ -647,6 +647,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedIdx !== -1 &&
     !selectionInWindow &&
     overlayDismissedFor !== selectedSnippetId;
+  // Read inside selectCenteredCard (below) via ref so a re-render that flips
+  // showAdHoc doesn't recreate that callback and re-subscribe the
+  // IntersectionObserver every time.
+  const showAdHocRef = useRef(showAdHoc);
+  useEffect(() => {
+    showAdHocRef.current = showAdHoc;
+  }, [showAdHoc]);
   const resolvedAdHocPrediction = showAdHoc
     ? filteredAndSorted[selectedIdx]
     : null;
@@ -731,6 +738,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       // don't let a stray scroll/layout event overwrite it with the centered
       // card. (Cleared ~650ms later, so manual scrolling is unaffected.)
       if (!opts?.force && scrollSyncSuspendedRef.current) return;
+      // The 650ms window above only covers the instant right after the
+      // click. The ad-hoc overlay (see showAdHoc) can legitimately stay open
+      // much longer than that while the user labels it -- e.g. adding one
+      // label out of several for a multilabel snippet reflows the overlay
+      // card and can retrigger the IntersectionObserver below. Since the
+      // overlay's snippet isn't tracked in cardRefs, that would otherwise
+      // silently reassign the selection to whatever real feed card is
+      // centered, yanking focus away mid-multilabel. Only a genuine
+      // scroll/touch/arrow-key on the feed should end the overlay (it calls
+      // setOverlayDismissedFor), so stand down for as long as it's showing.
+      if (!opts?.force && showAdHocRef.current) return;
 
       const containerRect = container.getBoundingClientRect();
       const centerY = containerRect.top + containerRect.height / 2;
