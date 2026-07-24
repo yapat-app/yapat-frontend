@@ -45,8 +45,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     filterMode: "continuous",
     // z-scored weighted blend: mean 0, std <= 1 by construction (weighted
     // sum of unit-variance zero-mean terms whose weights sum to 1), so
-    // [-3, 3] safely covers the practical range without per-dataset scaling.
-    range: [-3, 3],
+    // [-2, 2] covers the practical range without per-dataset scaling.
+    range: [-2, 2],
     supportsVisibility: true,
     supportsColor: true,
     description:

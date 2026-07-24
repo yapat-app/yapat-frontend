@@ -134,15 +134,15 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
 
   /**
    * Composite is a z-scored blend (mean 0, std <= 1 by construction) with
-   * higher values more informative — always interpreted on a fixed [-3, 3]
+   * higher values more informative — always interpreted on a fixed [-2, 2]
    * domain rather than a per-dataset override.
    */
   const compositeDomainLock = filters.visibility.propertyKey === "composite";
   const effectivePropMin = compositeDomainLock
-    ? -3
+    ? -2
     : visibilityRangeOverride?.min ?? visProp?.range?.[0];
   const effectivePropMax = compositeDomainLock
-    ? 3
+    ? 2
     : visibilityRangeOverride?.max ?? visProp?.range?.[1];
   const effectivePropStep = compositeDomainLock ? 0.01 : visibilityRangeOverride?.step;
 

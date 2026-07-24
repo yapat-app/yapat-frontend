@@ -51,7 +51,7 @@ export const UNLABELED_COLOR = "#9ca3af";
 export const LABELED_BORDER_COLOR = "#111827";
 
 // z-scored blend: mean 0, std <= 1 by construction — see alProperties.ts.
-export const COMPOSITE_DOMAIN: [number, number] = [-3, 3];
+export const COMPOSITE_DOMAIN: [number, number] = [-2, 2];
 export const SAMPLE_SCORE_UPPER_EPS = 1e-9;
 export const DISPLAY_MAX_POINTS = 25000;
 
