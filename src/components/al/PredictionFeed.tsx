@@ -655,6 +655,74 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const stickyLabelPrediction =
     selectedIdx !== -1 ? filteredAndSorted[selectedIdx] : null;
 
+  // ArrowDown/ArrowUp move by exactly one snap slot. Keep this on `window` so
+  // the shortcuts still work when focus is on the projection or another
+  // non-form control, but never steal keystrokes while the user is editing a
+  // label/search field.
+  useEffect(() => {
+    if (!isBlind || filteredAndSorted.length === 0) return;
+
+    const handleSnippetArrowKey = (event: KeyboardEvent) => {
+      if (
+        (event.key !== "ArrowDown" && event.key !== "ArrowUp") ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+          ))
+      ) {
+        return;
+      }
+
+      const container = scrollContainerRef.current;
+      if (!container) return;
+
+      const currentIndex =
+        selectedIdx >= 0
+          ? selectedIdx
+          : Math.round(container.scrollTop / blindSlotSize);
+      const nextIndex = currentIndex + (event.key === "ArrowDown" ? 1 : -1);
+      const nextPrediction = filteredAndSorted[nextIndex];
+      if (!nextPrediction) return;
+
+      event.preventDefault();
+      const nextSnippetId = nextPrediction.snippet_id;
+      setOverlayDismissedFor(nextSnippetId);
+      skipScrollIntoViewRef.current = true;
+      markUserScrolling();
+      dispatch(setSelectedSnippet(nextSnippetId));
+      container.scrollTo({
+        top: Math.max(
+          0,
+          nextIndex * blindSlotSize -
+            (container.clientHeight - blindSnapCardHeight) / 2,
+        ),
+        behavior: "smooth",
+      });
+    };
+
+    window.addEventListener("keydown", handleSnippetArrowKey);
+    return () => window.removeEventListener("keydown", handleSnippetArrowKey);
+  }, [
+    blindSlotSize,
+    blindSnapCardHeight,
+    dispatch,
+    filteredAndSorted,
+    isBlind,
+    markUserScrolling,
+    selectedIdx,
+  ]);
+
   const selectCenteredCard = useCallback(
     (opts?: { force?: boolean }) => {
       const container = scrollContainerRef.current;

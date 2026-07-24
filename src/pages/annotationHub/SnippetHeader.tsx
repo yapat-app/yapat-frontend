@@ -82,6 +82,17 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <Tooltip title="Keyboard shortcuts: previous / next snippet">
+          <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 font-ibm-sans cursor-default select-none">
+            <kbd className="min-w-5 rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-center font-ibm-mono text-[10px] leading-none text-gray-500 shadow-sm">
+              ↑
+            </kbd>
+            <kbd className="min-w-5 rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-center font-ibm-mono text-[10px] leading-none text-gray-500 shadow-sm">
+              ↓
+            </kbd>
+            Previous / next
+          </span>
+        </Tooltip>
         {hasFeedback && (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
             Labeled
