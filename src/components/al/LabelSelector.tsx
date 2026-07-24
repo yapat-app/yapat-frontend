@@ -8,12 +8,30 @@
  * Form or can be used standalone.
  */
 
-import React, { useState, useMemo } from "react";
-import { Select, Tag, Spin, Tooltip, Empty, Button } from "antd";
-import { SearchOutlined } from "@ant-design/icons";
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+} from "react";
+import { createPortal } from "react-dom";
+import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
+import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
 
+const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
+const GBIF_DEBOUNCE_MS = 350;
 const MAX_VISIBLE_LABELS = 300;
+
+interface GBIFSuggestion {
+  key: number;
+  scientificName: string;
+  canonicalName?: string;
+  rank?: string;
+  status?: string;
+}
 
 interface Props {
   value?: string[];
@@ -66,14 +84,67 @@ export const LabelSelector: React.FC<Props> = ({
   compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
+  const [gbifLoading, setGbifLoading] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // Anchor the search dropdown to the input via a portal so it can grow and
+  // scroll freely instead of being clipped by the bounded label panel it lives
+  // inside. We track the input's viewport rect and position the dropdown fixed.
+  const searchAnchorRef = useRef<HTMLDivElement | null>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear pending timer on unmount to avoid orphaned GBIF fetches setting state
+  // on an unmounted component when the label selector is opened and closed quickly.
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  const searchGBIF = useCallback((query: string) => {
+    if (!query || query.trim().length < 2) {
+      setGbifResults([]);
+      return;
+    }
+    setGbifLoading(true);
+    fetch(`${GBIF_SUGGEST_URL}?q=${encodeURIComponent(query.trim())}&limit=10`)
+      .then((r) => r.json())
+      .then((data: GBIFSuggestion[]) => setGbifResults(Array.isArray(data) ? data : []))
+      .catch(() => setGbifResults([]))
+      .finally(() => setGbifLoading(false));
+  }, []);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => searchGBIF(query), GBIF_DEBOUNCE_MS);
   };
 
   const pamOptions = useMemo(
     () => quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const })),
     [quickLabels],
+  );
+
+  // De-duplicate GBIF results against the PAM list.
+  const pamSet = useMemo(
+    () => new Set(quickLabels.map((s) => s.toLowerCase())),
+    [quickLabels],
+  );
+  const gbifOptions = useMemo(
+    () =>
+      gbifResults
+        .filter((r) => {
+          const name = r.canonicalName ?? r.scientificName;
+          return name && !pamSet.has(name.toLowerCase());
+        })
+        .map((r) => {
+          const name = r.canonicalName ?? r.scientificName;
+          return { value: name, label: name, source: "gbif" as const, rank: r.rank };
+        }),
+    [gbifResults, pamSet],
   );
 
   const searchQueryLower = useMemo(() => searchQuery.toLowerCase(), [searchQuery]);
@@ -84,6 +155,34 @@ export const LabelSelector: React.FC<Props> = ({
         : pamOptions,
     [pamOptions, searchQuery, searchQueryLower],
   );
+
+  // Search dropdown options: PAM matches, plus GBIF suggestions once the user
+  // has typed 2+ characters. Capped so the dropdown stays snappy.
+  const compactSearchOptions = useMemo(() => {
+    if (searchQuery.trim().length < 2) return filteredPamOptions;
+    return [...filteredPamOptions, ...gbifOptions].slice(0, 20);
+  }, [searchQuery, filteredPamOptions, gbifOptions]);
+
+  const searchDropdownOpen =
+    searchFocused &&
+    searchQuery.trim().length >= 1 &&
+    (gbifLoading || compactSearchOptions.length > 0 || searchQuery.trim().length >= 2);
+
+  // Keep the portalled dropdown pinned to the input as the page scrolls/resizes.
+  useLayoutEffect(() => {
+    if (!searchDropdownOpen) return;
+    const update = () => {
+      const el = searchAnchorRef.current;
+      if (el) setAnchorRect(el.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [searchDropdownOpen]);
 
   const combinedList = useMemo(
     () => filteredPamOptions.slice(0, MAX_VISIBLE_LABELS),
@@ -105,6 +204,19 @@ export const LabelSelector: React.FC<Props> = ({
       labelsAfter: next,
     });
     onChange(next);
+  };
+
+  const addLabel = (label: string) => {
+    const trimmed = label.trim();
+    if (!trimmed || !onChange) return;
+    const normalized = value ?? [];
+    if (normalized.some((x) => x.toLowerCase() === trimmed.toLowerCase())) return;
+    studyLogger.log("label_toggle", {
+      label: trimmed,
+      op: "add",
+      labelsAfter: [...normalized, trimmed],
+    });
+    onChange([...normalized, trimmed]);
   };
 
   const clearAll = () => {
@@ -153,6 +265,100 @@ export const LabelSelector: React.FC<Props> = ({
             </div>
           </div>
         )}
+
+        {/* ── Search — plain input (always typable); GBIF + label list in a
+            portalled dropdown so it escapes the bounded panel's clipping ── */}
+        <div ref={searchAnchorRef} className="shrink-0">
+          <Input
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => window.setTimeout(() => setSearchFocused(false), 150)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && searchQuery.trim()) {
+                e.preventDefault();
+                const q = searchQuery.trim();
+                const match =
+                  compactSearchOptions.find(
+                    (o) => o.value.toLowerCase() === q.toLowerCase(),
+                  ) ?? compactSearchOptions[0];
+                addLabel(match?.value ?? q);
+                setSearchQuery("");
+                setGbifResults([]);
+              }
+            }}
+            disabled={disabled}
+            placeholder={labelsLoading ? "Loading labels…" : "Search species (GBIF)…"}
+            suffix={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
+            allowClear
+          />
+        </div>
+        {searchDropdownOpen &&
+          anchorRect &&
+          (() => {
+            const GAP = 4;
+            const spaceBelow = window.innerHeight - anchorRect.bottom - GAP;
+            const spaceAbove = anchorRect.top - GAP;
+            // Flip above only when there's clearly more room up top.
+            const placeAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
+            const maxHeight = Math.max(
+              120,
+              Math.min(320, (placeAbove ? spaceAbove : spaceBelow) - 8),
+            );
+            const positionStyle: React.CSSProperties = placeAbove
+              ? { bottom: window.innerHeight - anchorRect.top + GAP }
+              : { top: anchorRect.bottom + GAP };
+            return createPortal(
+              <ul
+                className="fixed z-[1100] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1 text-sm"
+                style={{
+                  ...positionStyle,
+                  left: anchorRect.left,
+                  width: anchorRect.width,
+                  maxHeight,
+                }}
+                // Keep the input focused (dropdown open) while interacting.
+                onMouseDown={(e) => e.preventDefault()}
+              >
+              {gbifLoading && (
+                <li className="px-3 py-2 text-xs text-gray-500 flex items-center gap-2">
+                  <Spin size="small" /> Searching GBIF…
+                </li>
+              )}
+              {!gbifLoading &&
+                compactSearchOptions.map((opt) => (
+                  <li key={`${opt.source}:${opt.value}`}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between gap-2"
+                      onClick={() => {
+                        addLabel(opt.value);
+                        setSearchQuery("");
+                        setGbifResults([]);
+                      }}
+                    >
+                      <span>
+                        {selectedSet.has(opt.value.toLowerCase()) ? "✓ " : ""}
+                        {opt.label}
+                      </span>
+                      {opt.source === "gbif" && (
+                        <GlobalOutlined className="text-green-500 text-xs shrink-0" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              {!gbifLoading &&
+                searchQuery.trim().length >= 2 &&
+                compactSearchOptions.length === 0 && (
+                  <li className="px-3 py-2 text-xs text-gray-400 italic">
+                    No results — press Enter to use &quot;{searchQuery.trim()}&quot;
+                  </li>
+                )}
+              </ul>,
+              document.body,
+            );
+          })()}
 
         {/* ── Quick label chips ── */}
         <div className="shrink-0 flex items-center">

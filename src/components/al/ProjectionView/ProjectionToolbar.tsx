@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { Button, Select, Tooltip, Tag } from "antd";
 import { SyncOutlined, ExperimentOutlined } from "@ant-design/icons";
 import { resolveColor } from "../../../utils/alColors";
@@ -51,6 +51,19 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
   onSamplingMethodChange,
   onGenerateNow,
 }) => {
+  const legendScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // The legend row only scrolls horizontally, so a plain vertical mouse-wheel
+  // gesture over it does nothing by default — redirect vertical wheel delta
+  // to horizontal scroll while hovering it.
+  const handleLegendWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = legendScrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    el.scrollLeft += e.deltaY;
+  };
+
   return (
     <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-100 bg-white flex-wrap">
       {showSamplingMethodSelector && (
@@ -91,12 +104,18 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
             </span>
             <div className="relative min-w-0 max-w-[min(52vw,720px)]">
               <div
+                ref={legendScrollRef}
+                onWheel={handleLegendWheel}
                 className={[
-                  "flex items-center gap-1.5 py-0.5 pr-5",
+                  "flex items-center gap-1.5 py-0.5 pr-5 pb-1.5",
                   "overflow-x-auto",
-                  "[scrollbar-width:none] [-ms-overflow-style:none]",
-                  "[&::-webkit-scrollbar]:hidden",
                   "[-webkit-overflow-scrolling:touch]",
+                  "[scrollbar-width:thin]",
+                  "[&::-webkit-scrollbar]:h-1.5",
+                  "[&::-webkit-scrollbar-track]:bg-transparent",
+                  "[&::-webkit-scrollbar-thumb]:bg-gray-300",
+                  "[&::-webkit-scrollbar-thumb]:rounded-full",
+                  "hover:[&::-webkit-scrollbar-thumb]:bg-gray-400",
                 ].join(" ")}
               >
                 {actualLabelLegend.shown.map((lbl) => (
