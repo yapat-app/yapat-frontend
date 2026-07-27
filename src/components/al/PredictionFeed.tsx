@@ -1320,6 +1320,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                     quickLabelsLoading={quickLabelsLoading}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
+                    suppressAudio={showAdHoc}
                     onFindSimilar={onFindSimilar}
                     hideHeader={hideCardHeader}
                     hideLabels

@@ -47,6 +47,13 @@ interface Props {
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
   loadAudioImmediately?: boolean;
+  /**
+   * Skip loading/decoding audio for this card even if it's technically in the
+   * viewport — used for the feed cards sitting *behind* the opaque ad-hoc
+   * overlay, which are invisible yet would otherwise each fetch + STFT-decode
+   * their audio (extra blob reads + main-thread work) for nothing.
+   */
+  suppressAudio?: boolean;
   /** Called when the user wants to find similar snippets to this one. */
   onFindSimilar?: (snippetId: number) => void;
   /** Suppress the inline blind-mode header (a sticky header is rendered above the feed instead). */
@@ -65,6 +72,7 @@ const PredictionCardImpl: React.FC<Props> = ({
   quickLabelsLoading = false,
   scrollRoot,
   loadAudioImmediately = false,
+  suppressAudio = false,
   onFindSimilar,
   hideHeader = false,
   hideLabels = false,
@@ -117,7 +125,8 @@ const PredictionCardImpl: React.FC<Props> = ({
   // scroll even though the user never landed on any of them — that's what
   // made scrolling feel stuck. Only start the expensive work once the same
   // card has actually held one of these states for a beat.
-  const wantsAudio = loadAudioImmediately || isSelected || inView;
+  const wantsAudio =
+    !suppressAudio && (loadAudioImmediately || isSelected || inView);
   const [settledWantsAudio, setSettledWantsAudio] = useState(false);
   useEffect(() => {
     if (!wantsAudio) {

@@ -15,20 +15,35 @@ import {
 } from "./fpvHelpers";
 import { getPropertyByKey } from "../../../constants/alProperties";
 import { resolveColor } from "../../../utils/alColors";
-import type { FPVPointMetadata, FPVProjection2D } from "../../../types/visualisation";
-import type { PAMPrediction, ALFilterState, SampleScores } from "../../../types/al";
+import type {
+  FPVPointMetadata,
+  FPVProjection2D,
+} from "../../../types/visualisation";
+import type {
+  PAMPrediction,
+  ALFilterState,
+  SampleScores,
+} from "../../../types/al";
 import type { VisMode, FilterMode } from "../../../studyPhases";
 
 export interface UseProjectionTracesResult {
   fpvCoordsBySnippet: Record<number, [number, number]> | null;
-  fpvCoordsBySnippetForMethod: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> | null;
-  selectedCoordByMethod: Partial<Record<ProjectionMethod, [number, number]>> | null;
+  fpvCoordsBySnippetForMethod: Partial<
+    Record<ProjectionMethod, Record<number, [number, number]>>
+  > | null;
+  selectedCoordByMethod: Partial<
+    Record<ProjectionMethod, [number, number]>
+  > | null;
   plotPoints: PlotPoint[];
   enrichedPlotPoints: PlotPoint[];
   allCategoricalValues: Record<string, string[]>;
   filtered: Array<{ p: PlotPoint; coord: [number, number]; visible: boolean }>;
   visibleCount: number;
-  thumbnailPoints: Array<{ p: PlotPoint; coord: [number, number]; visible: boolean }>;
+  thumbnailPoints: Array<{
+    p: PlotPoint;
+    coord: [number, number];
+    visible: boolean;
+  }>;
   actualLabelLegend: { shown: string[]; remaining: number; total: number };
   traces: object[];
 }
@@ -93,10 +108,16 @@ export function useProjectionTraces(opts: {
 
   const fpvCoordsBySnippetForMethod = useMemo(() => {
     if (fpvPoints.length === 0) return null;
-    const maps: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> = {};
+    const maps: Partial<
+      Record<ProjectionMethod, Record<number, [number, number]>>
+    > = {};
     for (const m of ALL_PROJECTION_METHODS) {
       const proj = projectionsByMethod[m];
-      if (!proj || !projectionHasValidCoords(proj) || proj.x.length !== fpvPoints.length) {
+      if (
+        !proj ||
+        !projectionHasValidCoords(proj) ||
+        proj.x.length !== fpvPoints.length
+      ) {
         continue;
       }
       const map: Record<number, [number, number]> = {};
@@ -104,7 +125,13 @@ export function useProjectionTraces(opts: {
       for (const i of iter) {
         const x = proj.x[i];
         const y = proj.y[i];
-        if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (
+          x == null ||
+          y == null ||
+          !Number.isFinite(x) ||
+          !Number.isFinite(y)
+        )
+          continue;
         map[fpvPoints[i].snippet_id] = [x as number, y as number];
       }
       maps[m] = map;
@@ -157,7 +184,8 @@ export function useProjectionTraces(opts: {
   }, [visMode, fpvPoints, rawOverlayPredictions, scoresBySnippet]);
 
   const coords: [number, number][] = useMemo(() => {
-    if (!fpvCoordsBySnippet) return plotPoints.map(() => [0, 0] as [number, number]);
+    if (!fpvCoordsBySnippet)
+      return plotPoints.map(() => [0, 0] as [number, number]);
     return plotPoints.map(
       (p) => fpvCoordsBySnippet[p.snippet_id] ?? ([0, 0] as [number, number]),
     );
@@ -175,7 +203,12 @@ export function useProjectionTraces(opts: {
   const allCategoricalValues = useMemo(() => {
     const result: Record<string, string[]> = {};
     for (const p of enrichedPlotPoints) {
-      for (const key of ["sound_type", "birdnet_label", "yamnet_label", "actual_label"] as const) {
+      for (const key of [
+        "sound_type",
+        "birdnet_label",
+        "yamnet_label",
+        "actual_label",
+      ] as const) {
         const val = p.scores?.[key];
         if (val) {
           if (!result[key]) result[key] = [];
@@ -199,15 +232,26 @@ export function useProjectionTraces(opts: {
     return enrichedPlotPoints.map((p, i) => {
       let visible = extraVisible ? extraVisible(p.snippet_id) : true;
 
-      if (visible && (visibilityMode === "single" || visibilityMode === "fixed") && visProp) {
-        const [pMin, pMax] = visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
+      if (
+        visible &&
+        (visibilityMode === "single" || visibilityMode === "fixed") &&
+        visProp
+      ) {
+        const [pMin, pMax] =
+          visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
         const [normLo, normHi] = alFilters.visibility.range;
         const span = pMax - pMin;
         const domainLo = pMin + normLo * span;
-        const domainHi = visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
-        let raw = p.scores?.[visKey as keyof SampleScores] as number | undefined;
+        const domainHi =
+          visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
+        let raw = p.scores?.[visKey as keyof SampleScores] as
+          | number
+          | undefined;
         if (visKey === "composite" && typeof raw === "number") {
-          raw = Math.min(COMPOSITE_DOMAIN[1], Math.max(COMPOSITE_DOMAIN[0], raw));
+          raw = Math.min(
+            COMPOSITE_DOMAIN[1],
+            Math.max(COMPOSITE_DOMAIN[0], raw),
+          );
         }
         if (raw === undefined || raw === null) {
           // Missing score: only hide when an actual constraint is applied.
@@ -224,11 +268,14 @@ export function useProjectionTraces(opts: {
         for (const key of keys) {
           const prop = getPropertyByKey(key);
           if (!prop || !prop.range) continue;
-          const [pMin, pMax] = key === "composite" ? COMPOSITE_DOMAIN : prop.range;
+          const [pMin, pMax] =
+            key === "composite" ? COMPOSITE_DOMAIN : prop.range;
           const [normLo, normHi] = ranges[key] ?? [0, 1];
           const domainLo = pMin + normLo * (pMax - pMin);
           const domainHi = pMin + normHi * (pMax - pMin);
-          const raw = p.scores?.[key as keyof SampleScores] as number | undefined;
+          const raw = p.scores?.[key as keyof SampleScores] as
+            | number
+            | undefined;
           if (raw === undefined || raw === null) {
             // Missing score: sliders only constrain points that have the
             // score (mirrors isPointVisible in useScoreHistogramData, keeping
@@ -259,7 +306,10 @@ export function useProjectionTraces(opts: {
     extraVisible,
   ]);
 
-  const visibleCount = useMemo(() => filtered.filter((f) => f.visible).length, [filtered]);
+  const visibleCount = useMemo(
+    () => filtered.filter((f) => f.visible).length,
+    [filtered],
+  );
 
   const actualLabelLegend = useMemo(() => {
     const labels = Array.from(
@@ -304,8 +354,12 @@ export function useProjectionTraces(opts: {
             x: hidden.map((f) => f.coord[0]),
             y: hidden.map((f) => f.coord[1]),
             customdata: hidden.map((f) => f.p.snippet_id),
-            marker: { color: HIDDEN_COLOR, size: 4, opacity: 0.25, line: { width: 0 } },
-            hovertemplate: "Snippet #%{customdata} (filtered)<extra></extra>",
+            marker: {
+              color: HIDDEN_COLOR,
+              size: 4,
+              opacity: 0.25,
+              line: { width: 0 },
+            },
             hoverinfo: "skip" as const,
           }
         : null;
@@ -332,7 +386,13 @@ export function useProjectionTraces(opts: {
         labeledXs.push(coord[0]);
         labeledYs.push(coord[1]);
         labeledIds.push(p.snippet_id);
-        labeledColors.push(resolveColor(p.scores ?? {}, colorKey, allCategoricalValues[colorKey] ?? []));
+        labeledColors.push(
+          resolveColor(
+            p.scores ?? {},
+            colorKey,
+            allCategoricalValues[colorKey] ?? [],
+          ),
+        );
         labeledHoverNames.push(actual);
       } else {
         unlabeledXs.push(coord[0]);

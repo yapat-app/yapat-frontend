@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { alApi } from "../../../services/alApi";
 import type { Annotation } from "../../../types";
 import type { FeedbackResponse } from "../../../types/al";
@@ -13,7 +13,10 @@ export function useLabeledPool(opts: {
   classicAnnotationsBySnippet: Record<number, Annotation[]>;
   lastRetrainJob: unknown;
   feedbackCount: number;
-}): { labeledSnippetIds: Set<number>; labelsBySnippet: Record<number, string[]> } {
+}): {
+  labeledSnippetIds: Set<number>;
+  labelsBySnippet: Record<number, string[]>;
+} {
   const {
     selectedDatasetId,
     snippetSetId,
@@ -25,8 +28,33 @@ export function useLabeledPool(opts: {
     feedbackCount,
   } = opts;
 
-  const [labeledSnippetIds, setLabeledSnippetIds] = useState<Set<number>>(new Set());
-  const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
+  const [labeledSnippetIds, setLabeledSnippetIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [labelsBySnippet, setLabelsBySnippet] = useState<
+    Record<number, string[]>
+  >({});
+
+  // Content signature of the classic annotations, but ONLY for classic feeds.
+  // For AL-like feeds (e.g. Phase 5) the whole-dataset labeled-snippets /
+  // snippet-labels endpoints don't depend on classic annotations at all — yet
+  // the effects below used to list the raw `classicAnnotationsBySnippet` object
+  // in their deps. That object gets a fresh identity every time the feed
+  // hydrates a snippet's contributors on scroll/click, which re-fired both
+  // large whole-dataset fetches on every snippet. Gating on `isClassicFeed`
+  // means non-classic feeds see a constant "" here and never refetch on scroll;
+  // classic feeds still refetch when the annotation *content* actually changes.
+  const classicSignature = useMemo(() => {
+    if (!isClassicFeed) return "";
+    const parts: string[] = [];
+    for (const [snippetId, annotations] of Object.entries(
+      classicAnnotationsBySnippet,
+    )) {
+      if (annotations.length > 0)
+        parts.push(`${snippetId}:${annotations.length}`);
+    }
+    return parts.sort().join("|");
+  }, [isClassicFeed, classicAnnotationsBySnippet]);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,12 +85,15 @@ export function useLabeledPool(opts: {
     return () => {
       cancelled = true;
     };
+    // classicAnnotationsBySnippet is read via `classicSignature` on purpose —
+    // depending on the raw object refetched on every scroll-driven hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selectedDatasetId,
     snippetSetId,
     showLabeledPool,
     isClassicFeed,
-    classicAnnotationsBySnippet,
+    classicSignature,
     lastRetrainJob,
     feedbackCount,
   ]);
@@ -72,7 +103,9 @@ export function useLabeledPool(opts: {
     async function loadLabels() {
       if (isClassicFeed) {
         const map: Record<number, string[]> = {};
-        for (const [snippetId, annotations] of Object.entries(classicAnnotationsBySnippet)) {
+        for (const [snippetId, annotations] of Object.entries(
+          classicAnnotationsBySnippet,
+        )) {
           const labels = annotations
             .map(annotationDisplayLabel)
             .filter((label): label is string => Boolean(label));
@@ -86,7 +119,10 @@ export function useLabeledPool(opts: {
         return;
       }
       try {
-        const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
+        const r = await alApi.getSnippetLabels(
+          selectedDatasetId,
+          snippetSetId ?? undefined,
+        );
         if (!cancelled) {
           const map: Record<number, string[]> = {};
           for (const it of r.items) map[it.snippet_id] = it.labels;
@@ -100,7 +136,20 @@ export function useLabeledPool(opts: {
     return () => {
       cancelled = true;
     };
-  }, [isClassicFeed, feedbacks, classicAnnotationsBySnippet, selectedDatasetId, snippetSetId]);
+    // Only classicAnnotationsBySnippet is dropped from the deps (read via
+    // `classicSignature`) — it's the object that churns on every scroll-driven
+    // hydration and caused the whole-dataset snippet-labels refetch storm.
+    // `feedbacks` is kept: for non-classic feeds it changes only when the user
+    // labels (never on scroll), so the label map still refreshes on a label —
+    // exactly as before — without refetching on scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isClassicFeed,
+    feedbacks,
+    classicSignature,
+    selectedDatasetId,
+    snippetSetId,
+  ]);
 
   return { labeledSnippetIds, labelsBySnippet };
 }
