@@ -15,7 +15,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "How uncertain the model is between competing labels.",
+    description:
+      "How confused the model is between two or more possible labels for this sample; higher means it can't settle on one.",
   },
   {
     key: "diversity",
@@ -25,7 +26,8 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     range: [0, 1],
     supportsVisibility: true,
     supportsColor: true,
-    description: "How different are the samples from ones already labeled.",
+    description:
+      "How different this sample is from others already labelled; higher means it adds new variety.",
   },
   {
     key: "density",
@@ -36,7 +38,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: true,
     supportsColor: true,
     description:
-      "How representative this sample is of a larger, similar group — higher means many other samples in the dataset look like it.",
+      "How representative this sample is of commonly occurring patterns in the data. Higher means it sits in a well-populated region.",
   },
   {
     key: "composite",
@@ -50,7 +52,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: true,
     supportsColor: true,
     description:
-      "A single blended score combining uncertainty, diversity, and density into one overall ranking value.",
+      "A score combining multiple criteria (e.g. uncertainty and diversity) into a single value. This score was used in phase 1 and 2 for automatic feed generation.",
   },
   {
     key: "confidence",
@@ -61,7 +63,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: true,
     supportsColor: true,
     description:
-      "The model's confidence in its top predicted label — higher means the model is more certain.",
+      "Probability that at least one label from the label scope is present.",
   },
 
   // ── Metadata ───────────────────────────────────────────────────────────────
