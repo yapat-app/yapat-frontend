@@ -20,7 +20,7 @@ const CLIP_DESC =
   "Each sample is a 3-second audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
 
 const LABEL_DESC = [
-  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label.",
+  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label. You can add multiple species for one audio sample.",
   "",
   ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
 ].join("\n");
@@ -126,6 +126,24 @@ const sortStep = (): TourStepSpec => ({
   placement: "left",
 });
 
+const TASK_DESC = [
+  "Your task will be to annotate as many POSITIVE samples as possible in the given time for the following species:",
+  "",
+  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
+].join("\n");
+
+// Shown as the final card of every phase's tour. Each phase uses its own
+// featureKey (task-p1..task-p5) so the tour's cross-phase dedup doesn't
+// suppress it after the first phase — unlike the other cards, this reminder
+// is meant to repeat every time.
+const taskStep = (featureKey: string): TourStepSpec => ({
+  featureKey,
+  target: "task-reminder",
+  title: "Task",
+  description: TASK_DESC,
+  placement: "center",
+});
+
 // ── Per-phase intro copy ───────────────────────────────────────────────────
 
 const INTRO_FEED_ONLY =
@@ -154,35 +172,35 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   P1: {
     title: "Welcome to Phase 1",
     body: [INTRO_FEED_ONLY, INTRO_GUIDE_LINE],
-    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep()],
+    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep(), taskStep("task-p1")],
   },
 
   // ── Phase 2 — NEW: feature projection ───────────────────────────────────
   P2: {
     title: "Welcome to Phase 2",
     body: [INTRO_P2_PROJECTION, INTRO_GUIDE_LINE],
-    tour: [projectionStep(PROJECTION_DESC)],
+    tour: [projectionStep(PROJECTION_DESC), taskStep("task-p2")],
   },
 
   // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
   P3: {
     title: "Welcome to Phase 3",
     body: [INTRO_P3_FILTERS, INTRO_GUIDE_LINE],
-    tour: [metadataStep()],
+    tour: [metadataStep(), taskStep("task-p3")],
   },
 
   // ── Phase 4 — NEW: model-derived score filters + feed sorting ───────────
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [modelScoresStep(), sortStep()],
+    tour: [modelScoresStep(), sortStep(), taskStep("task-p4")],
   },
 
   // ── Phase 5 — NEW: clickable projection points ──────────────────────────
   P5: {
     title: "Welcome to Phase 5",
     body: [INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
-    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click")],
+    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click"), taskStep("task-p5")],
   },
 };
 
