@@ -17,6 +17,7 @@ import {
   clearRetrainDispatch,
   fetchAndAppendSuggestions,
   resetStaleInferenceBinding,
+  resumeFromAnchor,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -172,6 +173,22 @@ export function useHubALSession(
     snippetSets,
     dispatch,
   ]);
+
+  // Resume the feed where the participant left off when the study phase
+  // changes. Each phase renders a different workspace layout (the projection
+  // panel appears from P2 on), which remounts the feed and restarts it at the
+  // first row — so without this a participant re-enters on snippets they
+  // already worked through. Deliberately keyed on a phase *change*, not on
+  // mount: a first-time feed should open at its natural start.
+  const lastResumedPhaseRef = useRef(phase.id);
+  useEffect(() => {
+    if (lastResumedPhaseRef.current === phase.id) return;
+    // Wait for the feed to exist — the anchor can't be located in an empty
+    // list, and the ref stays put so this retries once predictions land.
+    if (predictions.length === 0) return;
+    lastResumedPhaseRef.current = phase.id;
+    dispatch(resumeFromAnchor());
+  }, [phase.id, predictions.length, dispatch]);
 
   useEffect(() => {
     const raw = searchParams.get("dataset_id");

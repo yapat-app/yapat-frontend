@@ -654,6 +654,45 @@ const alSlice = createSlice({
       state.activeSnippetId = action.payload;
       saveFeed(state);
     },
+    /**
+     * Re-anchor the feed on the participant's last position instead of the top.
+     *
+     * Used on study-phase transitions. The workspace renders a different layout
+     * per phase (the projection panel appears from P2 on), which remounts the
+     * feed and restarts it at the first row. Anchoring on `activeSnippetId` —
+     * already persisted alongside the feed — survives that, and also survives
+     * the phase's full-dataset re-inference, which replaces `predictions`
+     * wholesale: row indices don't carry across that swap, snippet ids do.
+     *
+     * Lands on the anchor when it still needs a label, otherwise the next
+     * unlabeled snippet after it, so a phase never reopens on something the
+     * participant just finished.
+     */
+    resumeFromAnchor: (state) => {
+      if (state.predictions.length === 0) return;
+
+      const anchorIdx =
+        state.activeSnippetId === null
+          ? -1
+          : state.predictions.findIndex(
+              (p) => p.snippet_id === state.activeSnippetId,
+            );
+
+      // No anchor, or it's absent from the current list: search from the top
+      // rather than guessing a position.
+      const searchFrom = anchorIdx === -1 ? 0 : anchorIdx;
+      const target =
+        state.predictions
+          .slice(searchFrom)
+          .find((p) => !state.feedbacks[p.snippet_id]) ??
+        // Everything from here on is labeled — stay put rather than jumping.
+        state.predictions[searchFrom];
+
+      if (!target) return;
+      state.selectedSnippetIds = [target.snippet_id];
+      state.activeSnippetId = target.snippet_id;
+      saveFeed(state);
+    },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
       const nextId = normalizeDatasetId(action.payload);
       const currentId = normalizeDatasetId(state.selectedDatasetId);
@@ -1324,6 +1363,7 @@ export const {
   toggleSelectedSnippet,
   clearSelectedSnippets,
   setActiveSnippet,
+  resumeFromAnchor,
   setSelectedDataset,
   setInferenceConfig,
   setColorBy,
