@@ -19,14 +19,11 @@ import { SPECIES_LABELS } from "../constants/speciesLabels";
 const CLIP_DESC =
   "Each sample is a 3-second audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
 
-const LABEL_DESC = [
-  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label. You can add multiple species for one audio sample.",
-  "",
-  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
-].join("\n");
+const LABEL_DESC =
+  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label. You can add multiple species for one audio sample.";
 
 const TIP_DESC =
-  "If you're not confident about a snippet, skip it. Only select None when you're confident there are no target-species vocalizations in the clip.";
+  "If you're not confident about a snippet, skip it.";
 
 const SCROLL_DESC_P1 =
   "Once you've labeled a snippet, scroll down to load the next snippet. A machine learning model picks and sorts samples it thinks are most useful for it to learn from.";
