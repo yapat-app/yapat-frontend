@@ -20,6 +20,7 @@ import { createPortal } from "react-dom";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
 import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
+import { getSpeciesScientificName } from "../../constants/speciesLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -382,13 +383,15 @@ export const LabelSelector: React.FC<Props> = ({
             <div className="flex flex-wrap gap-2">
               {pamOptions.map((opt) => {
                 const isSelected = selectedSet.has(opt.value.toLowerCase());
-                return (
+                const scientificName = getSpeciesScientificName(opt.value);
+                const actionLabel = isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`;
+                const button = (
                   <button
                     key={`pam:${opt.value}`}
                     type="button"
                     disabled={disabled || labelsLoading}
                     onClick={() => toggle(opt.value)}
-                    title={isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`}
+                    title={scientificName ? undefined : actionLabel}
                     className={[
                       "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-sm font-semibold transition-all duration-150 select-none",
                       isSelected
@@ -401,6 +404,12 @@ export const LabelSelector: React.FC<Props> = ({
                   >
                     <span className="truncate max-w-45">{opt.value}</span>
                   </button>
+                );
+                if (!scientificName) return button;
+                return (
+                  <Tooltip key={`pam:${opt.value}`} title={scientificName}>
+                    {button}
+                  </Tooltip>
                 );
               })}
             </div>

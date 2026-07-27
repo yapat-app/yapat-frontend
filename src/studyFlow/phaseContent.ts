@@ -12,6 +12,7 @@
  */
 
 import type { PhaseContent, TourStepSpec } from "./types";
+import { SPECIES_LABELS } from "../constants/speciesLabels";
 
 // ── Shared copy ────────────────────────────────────────────────────────────
 
@@ -21,12 +22,7 @@ const CLIP_DESC =
 const LABEL_DESC = [
   "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label.",
   "",
-  "• Rhinella icterica (common species) = RHIICT",
-  "• Dendropsophus minutus (complex and different call) = DENMIN",
-  "• Dendropsophus nahdereri (rare species) = DENNAH",
-  "• Scinax alter (not stereotype call) = SCIALT",
-  "• Leptodactylus fuscus (stereotype call) = LEPFUS",
-  "• Ameerega picta (extra species) = AMEPIC",
+  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
 ].join("\n");
 
 const TIP_DESC =
