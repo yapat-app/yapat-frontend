@@ -2,9 +2,8 @@ import { NavigationBar } from "../components/NavigationBar";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
 import { Card, Select, Space, Typography } from "antd";
-import { ArrowLeftOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { DatasetCustomQuickLabels } from "../components/DatasetCustomQuickLabels";
@@ -17,23 +16,6 @@ export const Taxonomies = () => {
   const { conversationFreezed } = useAppSelector(
     (state) => state.customTaxonomy,
   );
-  const navigate = useNavigate();
-  // Latches once a freeze happens so the "back to annotation feed" link stays
-  // available even after the chatbot spins up a fresh conversation.
-  const [hasFrozen, setHasFrozen] = useState(false);
-
-  // Subtle way back to the annotation feed once the label space is frozen —
-  // reconstruct the feed URL for the linked dataset (and keep the study phase).
-  const goToAnnotationFeed = () => {
-    const params = new URLSearchParams();
-    params.set("mode", "al");
-    if (selectedDatasetId != null) {
-      params.set("dataset_id", String(selectedDatasetId));
-    }
-    const phaseParam = searchParams.get("phase");
-    if (phaseParam) params.set("phase", phaseParam);
-    navigate(`/annotate?${params.toString()}`);
-  };
   const teams = (allTeams as any[]) ?? [];
   const datasets = (allDatasets as any[]) ?? [];
   const firstTeamId: number | undefined = teams?.[0]?.id;
@@ -62,7 +44,6 @@ export const Taxonomies = () => {
   useEffect(() => {
     if (conversationFreezed) {
       setQuickLabelsRefresh((v) => v + 1);
-      setHasFrozen(true);
     }
   }, [conversationFreezed]);
 
@@ -210,19 +191,6 @@ export const Taxonomies = () => {
               />
             </div>
           )}
-
-          {/* {hasFrozen && (
-            <div className="flex-shrink-0" style={{ marginBottom: 8 }}>
-              <button
-                type="button"
-                onClick={goToAnnotationFeed}
-                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
-              >
-                <ArrowLeftOutlined style={{ fontSize: 11 }} />
-                Back to annotation feed
-              </button>
-            </div>
-          )} */}
 
           <div className="flex gap-4 w-full flex-1 min-h-0 overflow-hidden">
             <div className="flex flex-1 min-w-0 h-full">
