@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks";
 import { alApi } from "../../services/alApi";
 import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
+import { FeedbackButtons } from "./FeedbackButtons";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
@@ -491,6 +492,14 @@ export const PredictionFeed: React.FC = () => {
   }
 
   if (isBlind) {
+    // Single shared label selector for the whole feed: it labels the snippet
+    // currently centered/selected in the feed. Fetching the dataset's quick
+    // labels happens once here (one LabelSelector) instead of once per card.
+    const selectedPrediction =
+      (selectedSnippetId !== null
+        ? predictions.find((p) => p.snippet_id === selectedSnippetId)
+        : undefined) ?? predictions[0];
+
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
         <div
@@ -524,6 +533,7 @@ export const PredictionFeed: React.FC = () => {
                       serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
+                      hideInlineFeedback
                     />
                   </div>
                 );
@@ -539,6 +549,7 @@ export const PredictionFeed: React.FC = () => {
                     serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
+                    hideInlineFeedback
                   />
                 </div>
               );
@@ -551,6 +562,30 @@ export const PredictionFeed: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Sticky shared label selector — labels the selected/centered snippet. */}
+        {selectedPrediction && (
+          <div
+            className="flex-shrink-0 border-t border-gray-200 bg-white px-3 pt-2 pb-2"
+            style={{ height: 260 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full max-w-[1200px] mx-auto h-full flex flex-col min-h-0">
+              <div className="flex-shrink-0 text-[11px] font-semibold uppercase text-gray-400 mb-1">
+                Labels for snippet #{selectedPrediction.snippet_id}
+              </div>
+              <div className="flex-1 min-h-0">
+                <FeedbackButtons
+                  prediction={selectedPrediction}
+                  serverLabels={labelsBySnippet[selectedPrediction.snippet_id] ?? []}
+                  serverLabelDetails={
+                    labelDetailsBySnippet[selectedPrediction.snippet_id] ?? []
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

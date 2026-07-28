@@ -41,6 +41,13 @@ interface Props {
   scrollRoot?: Element | null;
   /** Eager-load audio (first feed card) without waiting for intersection. */
   loadAudioImmediately?: boolean;
+  /**
+   * Blind mode: hide the per-card inline label picker. Used when the feed hoists
+   * a single shared label selector into a sticky footer (labels the selected
+   * snippet), so cards show only the spectrogram and the reserved label-area
+   * height is handed back to the spectrogram.
+   */
+  hideInlineFeedback?: boolean;
 }
 
 export const PredictionCard: React.FC<Props> = ({
@@ -52,6 +59,7 @@ export const PredictionCard: React.FC<Props> = ({
   serverLabelDetails,
   scrollRoot,
   loadAudioImmediately = false,
+  hideInlineFeedback = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -123,7 +131,8 @@ export const PredictionCard: React.FC<Props> = ({
       typeof cardHeightPx === "number"
         ? cardHeightPx
         : Math.max(560, window.innerHeight - 180);
-    const available = cardH - HEADER_H - BODY_PAD_Y - LABEL_AREA_H - 8;
+    const labelAreaH = hideInlineFeedback ? 0 : LABEL_AREA_H;
+    const available = cardH - HEADER_H - BODY_PAD_Y - labelAreaH - 8;
     const melBudget = available - spectrogramChromeHeight();
     setBlindSpecHeight(Math.max(120, Math.min(600, melBudget)));
   };
@@ -134,7 +143,7 @@ export const PredictionCard: React.FC<Props> = ({
     const onResize = () => computeBlindSpecHeightRef.current();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [isBlind, cardHeightPx]);
+  }, [isBlind, cardHeightPx, hideInlineFeedback]);
 
   // Simple in-memory cache so scrolling back doesn't re-download audio.
   // We keep object URLs for the session; 
@@ -319,17 +328,19 @@ export const PredictionCard: React.FC<Props> = ({
         </div>
 
         {/* ── Inline label area ── */}
-        <div
-          className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
-          style={{ height: LABEL_AREA_H }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <FeedbackButtons
-            prediction={prediction}
-            serverLabels={serverLabels}
-            serverLabelDetails={serverLabelDetails}
-          />
-        </div>
+        {!hideInlineFeedback && (
+          <div
+            className="flex-shrink-0 px-4 pb-3 pt-2 border-t border-gray-100 flex flex-col overflow-hidden"
+            style={{ height: LABEL_AREA_H }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FeedbackButtons
+              prediction={prediction}
+              serverLabels={serverLabels}
+              serverLabelDetails={serverLabelDetails}
+            />
+          </div>
+        )}
       </div>
     );
   }
