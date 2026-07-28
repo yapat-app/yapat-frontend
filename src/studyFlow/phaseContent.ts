@@ -34,6 +34,9 @@ const PROJECTION_DESC =
 const PROJECTION_DESC_CLICKABLE =
   "Each dot is one sample in the dataset; the yellow-highlighted dot is the snippet you're currently listening to. Click any dot to load that sample into the feed, with its audio and spectrogram. You can also switch between projection views (t-SNE, UMAP, PCA) using the thumbnails above the map. Dots are positioned by how similar a machine learning model thinks the sounds are.";
 
+const ZOOM_DESC =
+  "Use the − / + buttons in the top-right corner of the projection to zoom out and in. You can also drag a box on the plot to zoom into that area. Double-click the plot to reset the zoom.";
+
 const METADATA_DESC = [
   "On the left, filter which samples appear in the feed and the projection:",
   "",
@@ -96,6 +99,14 @@ const projectionStep = (
   title: "Feature Projection view",
   description,
   placement: "right",
+});
+
+const zoomStep = (): TourStepSpec => ({
+  featureKey: "zoom",
+  target: "projection-zoom",
+  title: "Zooming the projection",
+  description: ZOOM_DESC,
+  placement: "left",
 });
 
 const metadataStep = (): TourStepSpec => ({
@@ -176,7 +187,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   P2: {
     title: "Welcome to Phase 2",
     body: [INTRO_P2_PROJECTION, INTRO_GUIDE_LINE],
-    tour: [projectionStep(PROJECTION_DESC), taskStep("task-p2")],
+    tour: [projectionStep(PROJECTION_DESC), zoomStep(), taskStep("task-p2")],
   },
 
   // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
