@@ -10,6 +10,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../hooks";
 import { wssedApi } from "../services/api";
+import { hasWssedModelPath } from "../utils/wssedModel";
 
 interface WssedActiveLearningHubProps {
   modelTrained: boolean;
@@ -69,7 +70,7 @@ export const WssedActiveLearningHub = ({
         const status = await wssedApi.getLatestTrainingJobStatus(datasetId);
         if (cancelled) return;
 
-        if (status.status === "COMPLETED") {
+        if (hasWssedModelPath(status)) {
           setLastJob({
             job_id: status.job_id,
             model_path: status.model_path,

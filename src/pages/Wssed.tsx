@@ -13,6 +13,7 @@ import { WSLModelTraining } from "../components/WSLModelTraining";
 import { WssedActiveLearningHub } from "../components/WssedActiveLearningHub";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
+import { hasWssedModelPath } from "../utils/wssedModel";
 
 export const Wssed = () => {
   const dispatch = useAppDispatch();
@@ -47,17 +48,19 @@ export const Wssed = () => {
         const status = await wssedApi.getLatestTrainingJobStatus(datasetId);
         if (cancelled) return;
 
-        if (status.status === "COMPLETED") {
-          setIsModelTrained(true);
-          dispatch(setTraining(false));
-        } else if (status.status === "TRAINING") {
+        // A trained model exists whenever the latest job exposes a model_path,
+        // regardless of its status string — that model can be used for Active
+        // Learning. A job that's actively TRAINING takes priority (its path is
+        // not ready yet); otherwise, no path means the user must train first.
+        if (status.status === "TRAINING") {
           setIsModelTrained(false);
           dispatch(setTraining(true));
-        } else if (status.status === "FAILED") {
-          setIsModelTrained(false);
+        } else if (hasWssedModelPath(status)) {
+          setIsModelTrained(true);
           dispatch(setTraining(false));
         } else {
           setIsModelTrained(false);
+          dispatch(setTraining(false));
         }
       } catch {
         if (!cancelled) {
