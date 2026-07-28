@@ -2,15 +2,38 @@ import { NavigationBar } from "../components/NavigationBar";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
 import { Card, Select, Space, Typography } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeftOutlined } from "@ant-design/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import { DatasetCustomQuickLabels } from "../components/DatasetCustomQuickLabels";
 import { useAppDispatch, useAppSelector } from "../hooks";
 
 export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
   const { allDatasets } = useAppSelector((state) => state.dataset);
+  const { conversationFreezed } = useAppSelector(
+    (state) => state.customTaxonomy,
+  );
+  const navigate = useNavigate();
+  // Latches once a freeze happens so the "back to annotation feed" link stays
+  // available even after the chatbot spins up a fresh conversation.
+  const [hasFrozen, setHasFrozen] = useState(false);
+
+  // Subtle way back to the annotation feed once the label space is frozen —
+  // reconstruct the feed URL for the linked dataset (and keep the study phase).
+  const goToAnnotationFeed = () => {
+    const params = new URLSearchParams();
+    params.set("mode", "al");
+    if (selectedDatasetId != null) {
+      params.set("dataset_id", String(selectedDatasetId));
+    }
+    const phaseParam = searchParams.get("phase");
+    if (phaseParam) params.set("phase", phaseParam);
+    navigate(`/annotate?${params.toString()}`);
+  };
   const teams = (allTeams as any[]) ?? [];
   const datasets = (allDatasets as any[]) ?? [];
   const firstTeamId: number | undefined = teams?.[0]?.id;
@@ -21,6 +44,10 @@ export const Taxonomies = () => {
     number | undefined
   >(undefined);
   const [datasetsLoaded, setDatasetsLoaded] = useState(false);
+  const [quickLabelsRefresh, setQuickLabelsRefresh] = useState(0);
+  const [searchParams] = useSearchParams();
+  const datasetIdParam = searchParams.get("dataset_id");
+  const appliedDatasetParamRef = useRef(false);
 
   // Keep selection in sync when teams load/refresh
   useEffect(() => {
@@ -29,6 +56,16 @@ export const Taxonomies = () => {
     }
   }, [firstTeamId, selectedTeamId]);
 
+  // A conversation freeze writes the frozen label space into the dataset's
+  // quick_labels on the backend — re-fetch the custom quick labels panel so it
+  // reflects the newly added labels.
+  useEffect(() => {
+    if (conversationFreezed) {
+      setQuickLabelsRefresh((v) => v + 1);
+      setHasFrozen(true);
+    }
+  }, [conversationFreezed]);
+
   // Persist selection for other screens (e.g. annotate)
   useEffect(() => {
     if (selectedTeamId != null) {
@@ -36,13 +73,27 @@ export const Taxonomies = () => {
     }
   }, [selectedTeamId]);
 
+  // Preselect the dataset passed in the URL (e.g. from the annotation feed's
+  // "edit label space" pencil). Applied once, once the datasets have loaded so
+  // the option exists in the dropdown.
+  useEffect(() => {
+    if (appliedDatasetParamRef.current || !datasetIdParam) return;
+    const id = Number(datasetIdParam);
+    if (!Number.isFinite(id)) return;
+    if (datasets.some((d: any) => Number(d?.id) === id)) {
+      setSelectedDatasetId(id);
+      appliedDatasetParamRef.current = true;
+    }
+  }, [datasetIdParam, datasets]);
+
   // Auto-select when there's exactly one dataset; with several, wait for the
   // user to pick one before the conversation starts.
   useEffect(() => {
+    if (datasetIdParam && !appliedDatasetParamRef.current) return;
     if (selectedDatasetId == null && datasets.length === 1) {
       setSelectedDatasetId(Number(datasets[0]?.id));
     }
-  }, [datasets, selectedDatasetId]);
+  }, [datasets, selectedDatasetId, datasetIdParam]);
 
   const teamOptions = useMemo(
     () =>
@@ -68,7 +119,8 @@ export const Taxonomies = () => {
   const showTeamPicker = false;
 
   const selectedDataset = useMemo(
-    () => datasets.find((d: any) => Number(d?.id) === Number(selectedDatasetId)),
+    () =>
+      datasets.find((d: any) => Number(d?.id) === Number(selectedDatasetId)),
     [datasets, selectedDatasetId],
   );
 
@@ -100,8 +152,18 @@ export const Taxonomies = () => {
           </p>
         </div>
 
-        <Card className="my-4 w-[80%] h-[80vh] ">
-          <div style={{ marginBottom: 12 }}>
+        <Card
+          className="my-4 w-[80%] h-[80vh] "
+          styles={{
+            body: {
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            },
+          }}
+        >
+          <div className="flex-shrink-0" style={{ marginBottom: 12 }}>
             <Space align="center" size={12} wrap>
               {showTeamPicker && (
                 <>
@@ -139,8 +201,31 @@ export const Taxonomies = () => {
               </Typography.Text>
             </Space>
           </div>
-          <div className="flex gap-4 w-full h-[75vh]">
-            <div className="flex w-[85%] h-full">
+
+          {selectedDataset && (
+            <div className="flex-shrink-0">
+              <DatasetCustomQuickLabels
+                dataset={selectedDataset}
+                refreshSignal={quickLabelsRefresh}
+              />
+            </div>
+          )}
+
+          {/* {hasFrozen && (
+            <div className="flex-shrink-0" style={{ marginBottom: 8 }}>
+              <button
+                type="button"
+                onClick={goToAnnotationFeed}
+                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
+              >
+                <ArrowLeftOutlined style={{ fontSize: 11 }} />
+                Back to annotation feed
+              </button>
+            </div>
+          )} */}
+
+          <div className="flex gap-4 w-full flex-1 min-h-0 overflow-hidden">
+            <div className="flex flex-1 min-w-0 h-full">
               <TaxonomyChatbot
                 teamId={teamIdForChat}
                 datasetId={selectedDatasetId}
@@ -148,7 +233,7 @@ export const Taxonomies = () => {
               />
             </div>
 
-            <div className="w-[40%] h-inherit">
+            <div className="w-2/5 min-w-0 h-full">
               <LabelSpace />
             </div>
           </div>

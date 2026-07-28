@@ -776,7 +776,8 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
             ref={messagesContainerRef}
             style={{
               overflowY: "auto",
-              height: "98%",
+              flex: 1,
+              minHeight: 0,
               padding: "24px",
               background: "#f5f5f5",
             }}
