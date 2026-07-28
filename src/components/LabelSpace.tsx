@@ -239,25 +239,30 @@ export const LabelSpace: React.FC = () => {
   };
 
   const renderLabelItem = (label: DisplayItem) => {
+    const rowInteractive = pathname === "/annotate";
     const handleRowClick = () => {
-      if (pathname === "/annotate") {
+      if (rowInteractive) {
         handleSubmit(label);
-      } else {
-        handleRemoveFromLabelSpace(label.id);
       }
     };
     return (
       <div
-        role="button"
-        tabIndex={0}
-        onClick={handleRowClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleRowClick();
-          }
-        }}
-        className=" w-full py-1.5 flex items-center justify-between  cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1 transition-colors"
+        role={rowInteractive ? "button" : undefined}
+        tabIndex={rowInteractive ? 0 : undefined}
+        onClick={rowInteractive ? handleRowClick : undefined}
+        onKeyDown={
+          rowInteractive
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleRowClick();
+                }
+              }
+            : undefined
+        }
+        className={`w-full py-1.5 flex items-center justify-between rounded px-1 -mx-1 transition-colors ${
+          rowInteractive ? "cursor-pointer hover:bg-gray-100" : ""
+        }`}
       >
         <div>
           <div className="flex items-center justify-between">
@@ -322,15 +327,20 @@ export const LabelSpace: React.FC = () => {
             </span>
           </Tooltip>
         ) : (
-          <Tooltip title="Remove (or click anywhere on row)">
-            <span
-              className="w-6 h-6 flex items-center justify-center   rounded-md ml-3 shrink-0 pointer-events-none"
-              aria-hidden
+          <Tooltip title="Remove from label space">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemoveFromLabelSpace(label.id);
+              }}
+              aria-label="Remove from label space"
+              className="w-6 h-6 flex items-center justify-center rounded-md ml-3 shrink-0 cursor-pointer"
             >
               <Tag key="red" color="red" variant="filled">
                 x
               </Tag>
-            </span>
+            </button>
           </Tooltip>
         )}
       </div>
@@ -401,12 +411,12 @@ export const LabelSpace: React.FC = () => {
           </div>
         </div>
         {pathname === "/pre-annotation" &&
-          (((labelSpace ?? []).length > 0) ||
+          ((labelSpace ?? []).length > 0 ||
             conversation?.is_frozen === true) && (
-          <div className="my-3">
-            <FreezeLabelSpace labelSpace={labelSpace ?? []} />
-          </div>
-        )}
+            <div className="my-3">
+              <FreezeLabelSpace labelSpace={labelSpace ?? []} />
+            </div>
+          )}
       </div>
     </div>
   );
