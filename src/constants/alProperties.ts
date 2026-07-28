@@ -16,7 +16,7 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
     supportsVisibility: true,
     supportsColor: true,
     description:
-      "How confused the model is between two or more possible labels for this sample; higher means it can't settle on one.",
+      "How unsure the model is, on average, about whether each label is present or absent for this sample; higher means many labels sit near a 50/50 guess.",
   },
   {
     key: "diversity",
