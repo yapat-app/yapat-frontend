@@ -66,9 +66,15 @@ const initialState: CustomTaxonomyState = {
 
 export const startNewConversation = createAsyncThunk(
   "taxonomy/startConversation",
-  async (teamId: number | null, { rejectWithValue }) => {
+  async (
+    params: { teamId: number | null; datasetId?: number | null },
+    { rejectWithValue },
+  ) => {
     try {
-      return await customtaxonomyApi.startConversation(teamId);
+      return await customtaxonomyApi.startConversation(
+        params.teamId,
+        params.datasetId ?? null,
+      );
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }

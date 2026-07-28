@@ -87,9 +87,15 @@ interface ConversationMessage {
 
 interface TaxonomyChatbotProps {
   teamId?: number;
+  datasetId?: number;
+  requireDataset?: boolean;
 }
 
-const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
+const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
+  teamId,
+  datasetId,
+  requireDataset = false,
+}) => {
   const [openFreeze, setOpenFreeze] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [name, setName] = useState("");
@@ -101,6 +107,10 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const sentMessageRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
+
+  const hasAttemptedStartRef = useRef(false);
+  const attemptedTeamIdRef = useRef<number | null | undefined>(undefined);
+  const attemptedDatasetIdRef = useRef<number | null | undefined>(undefined);
   const dispatch = useAppDispatch();
   const {
     conversation,
@@ -125,29 +135,73 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
     setOpenFreeze(false);
   };
 
+  // Wait for the user to pick a dataset before starting a conversation when a
+  // dataset is required (i.e. there are datasets to choose from). This avoids
+  // spinning up a throwaway dataset-less conversation that we'd immediately
+  // restart once a dataset is selected.
+  const waitingForDataset = requireDataset && datasetId == null;
+
   // ✅ Initialize conversation when component mounts
   useEffect(() => {
-    // Prefer an explicit teamId from parent (e.g. admin selecting a target team),
-    // fall back to the user's first team membership.
+    if (waitingForDataset) return;
+    const resolvedDatasetId = datasetId ?? null;
+    // When a dataset is selected we let the backend derive the owning team from
+    // it (checklist §1), so only resolve a fallback team when there's no dataset
+    // to derive from. An explicit `teamId` from the parent always wins (e.g. an
+    // admin overriding the team, or a teamless dataset that needs one to freeze).
     const resolvedTeamId =
-      teamId ?? (user?.team_ids?.length ? user.team_ids[0] : null);
-    const shouldStartNew =
-      !conversation ||
-      conversation.is_frozen === true ||
-      conversation.status === "cancelled" ||
-      (conversation.team_id ?? null) !== resolvedTeamId;
+      teamId ??
+      (resolvedDatasetId == null && user?.team_ids?.length
+        ? user.team_ids[0]
+        : null);
 
-    if (shouldStartNew) {
-      dispatch(startNewConversation(resolvedTeamId));
+    // Adopt an already-open, usable conversation on first run so navigating back
+    // to this screen doesn't discard an in-progress chat.
+    if (
+      !hasAttemptedStartRef.current &&
+      conversation &&
+      conversation.is_frozen !== true &&
+      conversation.status !== "cancelled"
+    ) {
+      hasAttemptedStartRef.current = true;
+      attemptedTeamIdRef.current = conversation.team_id ?? null;
+      // Backend may not echo dataset_id yet; assume it matches the current pick
+      // so we don't needlessly restart.
+      attemptedDatasetIdRef.current =
+        conversation.dataset_id ?? resolvedDatasetId ?? null;
     }
 
-    // Optional cleanup when component unmounts
-    return () => {
-      // cleanup on unmount if needed
-    };
+    const selectionChanged =
+      hasAttemptedStartRef.current &&
+      (attemptedTeamIdRef.current !== resolvedTeamId ||
+        attemptedDatasetIdRef.current !== resolvedDatasetId);
+    const conversationUnusable =
+      !!conversation &&
+      (conversation.is_frozen === true || conversation.status === "cancelled");
+
+    // Start a new conversation when we've never attempted one, when the user's
+    // team/dataset selection changed, or when the current one is unusable. We do
+    // NOT restart merely because `conversation` is null — that's the state after
+    // a failed start, and retrying would loop.
+    const shouldStartNew =
+      !hasAttemptedStartRef.current || selectionChanged || conversationUnusable;
+
+    if (shouldStartNew) {
+      hasAttemptedStartRef.current = true;
+      attemptedTeamIdRef.current = resolvedTeamId;
+      attemptedDatasetIdRef.current = resolvedDatasetId;
+      dispatch(
+        startNewConversation({
+          teamId: resolvedTeamId,
+          datasetId: resolvedDatasetId,
+        }),
+      );
+    }
   }, [
     dispatch,
     teamId,
+    datasetId,
+    waitingForDataset,
     user?.team_ids,
     conversation?.id,
     conversation?.is_frozen,
@@ -793,13 +847,21 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 <MessageOutlined
                   style={{ fontSize: 64, marginBottom: 24, opacity: 0.3 }}
                 />
-                <Paragraph type="secondary" style={{ fontSize: 12 }}>
-                  Start a conversation to get taxonomy suggestions for your
-                  annotations.
-                </Paragraph>
-                <Paragraph type="secondary" style={{ fontSize: 11 }}>
-                  Example: "I want to annotate Panthera leo"
-                </Paragraph>
+                {waitingForDataset ? (
+                  <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                    Select a dataset above to start a conversation.
+                  </Paragraph>
+                ) : (
+                  <>
+                    <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                      Start a conversation to get taxonomy suggestions for your
+                      annotations.
+                    </Paragraph>
+                    <Paragraph type="secondary" style={{ fontSize: 11 }}>
+                      Example: "I want to annotate Panthera leo"
+                    </Paragraph>
+                  </>
+                )}
               </div>
             ) : (
               <>
@@ -869,9 +931,13 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="I want to annotate Panthera leo"
+                placeholder={
+                  waitingForDataset
+                    ? "Select a dataset to begin"
+                    : "I want to annotate Panthera leo"
+                }
                 autoSize={{ minRows: 1.5, maxRows: 4 }}
-                disabled={messageLoading}
+                disabled={messageLoading || waitingForDataset}
                 style={{
                   resize: "none",
                   borderRadius: "10px 0 0 10px",
@@ -883,7 +949,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 icon={<SendOutlined />}
                 onClick={handleSendMessage}
                 loading={messageLoading}
-                disabled={!inputValue.trim()}
+                disabled={!inputValue.trim() || waitingForDataset}
                 style={{
                   height: "auto",
                   borderRadius: "0 10px 10px 0",

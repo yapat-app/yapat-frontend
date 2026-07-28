@@ -385,10 +385,17 @@ export const customtaxonomyApi = {
    * Ask AI agent to suggest taxonomies for annotating
    */
 
-  startConversation: async (teamId: any): Promise<Conversation> => {
-    const response = await api.post("/api/taxonomy/chat/start", {
-      team_id: teamId,
-    });
+  startConversation: async (
+    teamId?: number | null,
+    datasetId?: number | null,
+  ): Promise<Conversation> => {
+    // Only send team_id when explicitly provided — otherwise let the backend
+    // derive the owning team from the dataset (see /chat/start contract).
+    const body: { team_id?: number; dataset_id: number | null } = {
+      dataset_id: datasetId ?? null,
+    };
+    if (teamId != null) body.team_id = teamId;
+    const response = await api.post("/api/taxonomy/chat/start", body);
     return response.data;
   },
 
