@@ -6,16 +6,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
-import { DatasetCustomQuickLabels } from "../components/DatasetCustomQuickLabels";
 import { useAppDispatch, useAppSelector } from "../hooks";
 
 export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
   const { allDatasets } = useAppSelector((state) => state.dataset);
-  const { conversationFreezed } = useAppSelector(
-    (state) => state.customTaxonomy,
-  );
   const teams = (allTeams as any[]) ?? [];
   const datasets = (allDatasets as any[]) ?? [];
   const firstTeamId: number | undefined = teams?.[0]?.id;
@@ -26,7 +22,6 @@ export const Taxonomies = () => {
     number | undefined
   >(undefined);
   const [datasetsLoaded, setDatasetsLoaded] = useState(false);
-  const [quickLabelsRefresh, setQuickLabelsRefresh] = useState(0);
   const [searchParams] = useSearchParams();
   const datasetIdParam = searchParams.get("dataset_id");
   const appliedDatasetParamRef = useRef(false);
@@ -37,15 +32,6 @@ export const Taxonomies = () => {
       setSelectedTeamId(firstTeamId);
     }
   }, [firstTeamId, selectedTeamId]);
-
-  // A conversation freeze writes the frozen label space into the dataset's
-  // quick_labels on the backend — re-fetch the custom quick labels panel so it
-  // reflects the newly added labels.
-  useEffect(() => {
-    if (conversationFreezed) {
-      setQuickLabelsRefresh((v) => v + 1);
-    }
-  }, [conversationFreezed]);
 
   // Persist selection for other screens (e.g. annotate)
   useEffect(() => {
@@ -121,20 +107,19 @@ export const Taxonomies = () => {
   return (
     <div>
       <NavigationBar />
-      <div className="w-full flex pt-10 justify-center flex-col items-center ">
-        <h1 className="w-[80%] text-xl font-semibold font-ibm-mono text-gray-800 mb-0 ">
-          Pre-Annotation
-        </h1>
-
-        <div className="w-[80%] py-2  border-gray-200">
-          <p className="sub_description_text">
+      <div className="w-full flex pt-8 justify-center flex-col items-center">
+        <div className="w-[80%]">
+          <h1 className="text-xl font-semibold font-ibm-mono text-gray-800 mb-1">
+            Pre-Annotation
+          </h1>
+          <p className="sub_description_text !leading-snug !mb-0">
             Create custom taxonomies and get suggested concepts for your
             annotations—chat below, then add them to your label space.
           </p>
         </div>
 
         <Card
-          className="my-4 w-[80%] h-[80vh] "
+          className="mt-4 mb-6 w-[80%] h-[80vh]"
           styles={{
             body: {
               height: "100%",
@@ -144,7 +129,7 @@ export const Taxonomies = () => {
             },
           }}
         >
-          <div className="flex-shrink-0" style={{ marginBottom: 12 }}>
+          <div className="flex-shrink-0 mb-3">
             <Space align="center" size={12} wrap>
               {showTeamPicker && (
                 <>
@@ -182,15 +167,6 @@ export const Taxonomies = () => {
               </Typography.Text>
             </Space>
           </div>
-
-          {selectedDataset && (
-            <div className="flex-shrink-0">
-              <DatasetCustomQuickLabels
-                dataset={selectedDataset}
-                refreshSignal={quickLabelsRefresh}
-              />
-            </div>
-          )}
 
           <div className="flex gap-4 w-full flex-1 min-h-0 overflow-hidden">
             <div className="flex flex-1 min-w-0 h-full">
