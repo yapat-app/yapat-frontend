@@ -205,11 +205,15 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
     ) {
       console.log(user?.team_ids);
       dispatch(
-        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+        startNewConversation({
+          teamId: user?.team_ids?.length ? user?.team_ids[0] : null,
+        }),
       );
     } else if (!conversation) {
       dispatch(
-        startNewConversation(user?.team_ids?.length ? user?.team_ids[0] : null),
+        startNewConversation({
+          teamId: user?.team_ids?.length ? user?.team_ids[0] : null,
+        }),
       );
     }
   };

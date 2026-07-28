@@ -11,8 +11,10 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
-import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
+import { SearchOutlined, GlobalOutlined, EditOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
+import { useAppSelector } from "../../hooks";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -72,6 +74,22 @@ export const LabelSelector: React.FC<Props> = ({
   compact = false,
 }) => {
   const { labels: quickLabels, loading: labelsLoading } = useQuickLabelList();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+
+  // Jump to the Pre-Annotation screen to edit this dataset's label space,
+  // carrying the dataset id (and current study phase) in the URL.
+  const goToPreAnnotation = useCallback(() => {
+    const params = new URLSearchParams();
+    if (selectedDatasetId != null) {
+      params.set("dataset_id", String(selectedDatasetId));
+    }
+    const phaseParam = searchParams.get("phase");
+    if (phaseParam) params.set("phase", phaseParam);
+    const query = params.toString();
+    navigate(`/pre-annotation${query ? `?${query}` : ""}`);
+  }, [navigate, searchParams, selectedDatasetId]);
 
   const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
   const [gbifLoading, setGbifLoading] = useState(false);
@@ -295,6 +313,18 @@ export const LabelSelector: React.FC<Props> = ({
           <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
             Quick labels
           </span>
+          {selectedDatasetId != null && (
+            <Tooltip title="Edit label space in Pre-Annotation">
+              <button
+                type="button"
+                onClick={goToPreAnnotation}
+                className="ml-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                aria-label="Edit label space in Pre-Annotation"
+              >
+                <EditOutlined style={{ fontSize: 12 }} />
+              </button>
+            </Tooltip>
+          )}
           {labelsLoading && <Spin size="small" className="ml-2" />}
         </div>
 

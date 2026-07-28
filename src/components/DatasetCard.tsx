@@ -11,6 +11,7 @@ import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { DatasetRetrainThresholdSettings } from "./DatasetRetrainThresholdSettings";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
 import { datasetApi } from "../services/api";
+import { useInheritedQuickLabelNames } from "../hooks/useInheritedQuickLabelNames";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -24,6 +25,8 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
 
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
+  // Model/checkpoint-derived labels that stored quick_labels extend (not replace).
+  const inheritedNames = useInheritedQuickLabelNames(dataset.id);
 
   useEffect(() => {
     datasetApi
@@ -31,6 +34,18 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
       .then(setQuickLabels)
       .catch(() => setQuickLabels([]));
   }, [dataset.id]);
+
+  // Effective quick labels shown to annotators: inherited model labels first,
+  // then the dataset's stored labels, deduped by display name.
+  const storedNameKeys = new Set(
+    quickLabels.map((l) => l.display_name.trim().toLowerCase()),
+  );
+  const mergedLabels: { key: string; display_name: string }[] = [
+    ...inheritedNames
+      .filter((n) => !storedNameKeys.has(n.trim().toLowerCase()))
+      .map((n) => ({ key: `ckpt:${n}`, display_name: n })),
+    ...quickLabels.map((l) => ({ key: l.taxon_id, display_name: l.display_name })),
+  ];
 
   const handleStartAL = () => {
     navigate(`/annotate?mode=al&dataset_id=${dataset.id}`);
@@ -67,15 +82,15 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", marginRight: 4 }}>
                     ⚡ Quick Labels
                   </span>
-                  {quickLabels.slice(0, 5).map((l) => (
-                    <Tag key={l.taxon_id} style={{ fontSize: 11, margin: 0 }}>
+                  {mergedLabels.slice(0, 5).map((l) => (
+                    <Tag key={l.key} style={{ fontSize: 11, margin: 0 }}>
                       {l.display_name}
                     </Tag>
                   ))}
-                  {quickLabels.length > 5 && (
-                    <Tooltip title={quickLabels.slice(5).map((l) => l.display_name).join(", ")}>
+                  {mergedLabels.length > 5 && (
+                    <Tooltip title={mergedLabels.slice(5).map((l) => l.display_name).join(", ")}>
                       <Tag style={{ fontSize: 11, margin: 0, color: "#888" }}>
-                        +{quickLabels.length - 5} more
+                        +{mergedLabels.length - 5} more
                       </Tag>
                     </Tooltip>
                   )}

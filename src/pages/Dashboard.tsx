@@ -42,6 +42,17 @@ const CARDS: ServiceCard[] = [
     borderColor: "border-blue-200 hover:border-blue-400",
   },
   {
+    key: "pre-annotation",
+    icon: <TagsOutlined className="text-2xl" />,
+    title: "Label Management",
+    description:
+      "Build and refine your custom label space using the AI taxonomy chatbot. Freeze and publish label sets for your team.",
+    route: "/pre-annotation",
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
+    borderColor: "border-amber-200 hover:border-amber-400",
+  },
+  {
     key: "annotate",
     icon: <AudioOutlined className="text-2xl" />,
     title: "Annotate",
@@ -65,17 +76,6 @@ const CARDS: ServiceCard[] = [
     borderColor: "border-cyan-200 hover:border-cyan-400",
     badge: "Training flow",
     requiresFocalDatasets: true,
-  },
-  {
-    key: "pre-annotation",
-    icon: <TagsOutlined className="text-2xl" />,
-    title: "Label Management",
-    description:
-      "Build and refine your custom label space using the AI taxonomy chatbot. Freeze and publish label sets for your team.",
-    route: "/pre-annotation",
-    color: "text-amber-600",
-    bgColor: "bg-amber-50",
-    borderColor: "border-amber-200 hover:border-amber-400",
   },
   {
     key: "history",
@@ -156,9 +156,7 @@ export const Dashboard: React.FC = () => {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-[85%] mx-auto py-8 px-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-500 font-ibm-sans mb-1">
-              Hello,
-            </p>
+            <p className="text-sm text-gray-500 font-ibm-sans mb-1">Hello,</p>
             <h1 className="text-3xl font-bold font-ibm-mono text-gray-900 capitalize">
               {user?.username ?? "…"}
             </h1>

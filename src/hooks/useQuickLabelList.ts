@@ -31,37 +31,51 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     setPamLoading(true);
 
     const load = async () => {
-      // Priority 1: dataset's stored quick_labels
+      // The dataset's stored quick_labels *extend* the label space — they must
+      // not shadow the model/checkpoint species.
+      // Fetched both sources and merge them (checkpoint species first, then
+      // any curated/extra stored labels), deduped.
+      let storedNames: string[] = [];
       if (selectedDatasetId != null) {
         try {
-          const stored = await datasetApi.getQuickLabels(Number(selectedDatasetId));
-          if (!cancelled && stored.length > 0) {
-            setPamSpecies(stored.map((l) => l.display_name));
-            setPamLoading(false);
-            return;
-          }
-        } catch { /* fall through to checkpoint fallback */ }
+          const stored = await datasetApi.getQuickLabels(
+            Number(selectedDatasetId),
+          );
+          storedNames = stored.map((l) => l.display_name);
+        } catch {
+          /* ignore — fall back to checkpoint species only */
+        }
       }
 
-      // Priority 2: checkpoint species list (existing behaviour)
+      let checkpointNames: string[] = [];
       try {
-        const list = await fetchPamQuickLabelNames(usedCheckpointId, selectedDatasetId);
-        if (!cancelled) setPamSpecies(list);
+        checkpointNames = await fetchPamQuickLabelNames(
+          usedCheckpointId,
+          selectedDatasetId,
+        );
       } catch {
-        if (!cancelled) setPamSpecies([]);
-      } finally {
-        if (!cancelled) setPamLoading(false);
+        /* ignore — fall back to stored labels only */
+      }
+
+      if (!cancelled) {
+        setPamSpecies(mergeQuickLabelNames(checkpointNames, storedNames));
+        setPamLoading(false);
       }
     };
 
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [usedCheckpointId, selectedDatasetId]);
 
   const taxonomyNames = useMemo(() => {
     const fromNodes = labelNamesFromTaxonomyNodes(
-      (allTaxonomies?.[0] as { taxonomy_data?: { nodes?: unknown } } | undefined)
-        ?.taxonomy_data?.nodes,
+      (
+        allTaxonomies?.[0] as
+          | { taxonomy_data?: { nodes?: unknown } }
+          | undefined
+      )?.taxonomy_data?.nodes,
     );
     const fromSpace = labelNamesFromLabelSpace(labelSpace ?? []);
     return mergeQuickLabelNames(fromNodes, fromSpace);
@@ -74,6 +88,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
   return {
     labels,
-    loading: pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
+    loading:
+      pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
   };
 }

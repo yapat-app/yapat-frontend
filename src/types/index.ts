@@ -225,6 +225,7 @@ export interface MessageResponse {
 export interface Conversation {
   id: number;
   team_id: number;
+  dataset_id: number | null;
   user_id: number;
   custom_taxonomy_id: number | null;
   status: "in_progress" | string; // Add other status values as needed
