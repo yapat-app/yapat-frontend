@@ -17,6 +17,7 @@ import {
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setTraining } from "../redux/features/wssedSlice";
 import { wssedApi } from "../services/api";
+import { hasWssedModelPath } from "../utils/wssedModel";
 import {
   readWssedTrainingJobId,
   storeWssedTrainingJobId,
@@ -239,7 +240,7 @@ export const WSLModelTraining = ({
           setTrainingProgress(progress);
           setStatusText(`Resuming job ${jobId}…`);
           startPolling(jobId);
-        } else if (status.status === "COMPLETED") {
+        } else if (hasWssedModelPath(status)) {
           const progress = (status.progress ?? null) as TrainingProgress | null;
           setTrainingProgress(progress);
           setStatusText(`Job ${jobId} completed`);

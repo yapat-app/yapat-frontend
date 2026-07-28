@@ -80,6 +80,15 @@ export const DatasetFolderStructure: React.FC = () => {
 
   const hasDirectory = !!datasetDirectories?.species?.length;
 
+  const selectedDatasetName = useMemo(() => {
+    const id = datasetDirectories?.dataset_id;
+    if (id == null) return null;
+    const match = (allDatasets ?? []).find(
+      (d) => Number(d.id) === Number(id),
+    );
+    return match?.name ?? null;
+  }, [allDatasets, datasetDirectories?.dataset_id]);
+
   const handleConfirmSelectDataset = async () => {
     if (!selectedDatasetId) {
       message.warning("Please select a dataset first");
@@ -222,6 +231,23 @@ export const DatasetFolderStructure: React.FC = () => {
           ) : null
         ) : (
           <div className="h-[90%] overflow-y-auto p-2">
+            <div className="sticky top-0 z-10 -mx-2 mb-2 flex items-center justify-between gap-2 border-b border-gray-100 bg-white px-2 py-2">
+              <span
+                className="truncate font-ibm-mono text-xs text-gray-600"
+                title={selectedDatasetName ?? undefined}
+              >
+                {selectedDatasetName ?? "Selected dataset"}
+              </span>
+              <Tooltip title="Choose a different dataset">
+                <Button
+                  size="small"
+                  icon={<DatabaseOutlined />}
+                  onClick={handleChangeDataset}
+                >
+                  Switch
+                </Button>
+              </Tooltip>
+            </div>
             <Collapse
               accordion
               ghost

@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import { getLoggedInUser } from "../redux/features/authSlice";
 import { wssedApi } from "../services/api";
 import { canAccessWssed } from "../utils/wssedAccess";
 
@@ -12,10 +13,16 @@ export default function WssedAccessGuard({
   children: JSX.Element;
 }) {
   const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, accessToken } = useAppSelector((state) => state.auth);
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const [checking, setChecking] = useState(true);
   const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!user && accessToken) {
+      dispatch(getLoggedInUser(accessToken as any));
+    }
+  }, [user, accessToken, dispatch]);
 
   useEffect(() => {
     if (!user) return;
@@ -63,6 +70,11 @@ export default function WssedAccessGuard({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- check once per user session
   }, [user]);
+
+  // Not logged in at all — don't spin forever, send to login.
+  if (!user && !accessToken) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (!user || checking || enabled === null) {
     return (
