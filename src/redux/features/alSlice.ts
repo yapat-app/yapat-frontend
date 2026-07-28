@@ -510,13 +510,13 @@ export const fetchAndAppendSuggestions = createAsyncThunk(
   "al/fetchAndAppendSuggestions",
   async (body: PAMRunInferenceRequest, { rejectWithValue }) => {
     try {
-      const result = await alApi.runInference(body);
-      if (isInferenceJobDispatch(result)) {
-        return rejectWithValue(
-          "Background job started — cannot append in this state",
-        );
-      }
-      return result as PAMInferenceResult;
+      // The backend can respond with a PAMRetrainJobDispatch (scores still
+      // computing) instead of results — pass it through so the reducer can
+      // hand it to the same retrain/inference polling loop runInference
+      // uses, instead of discarding it. Previously this rejected the whole
+      // request, silently dropping the job id: the scrollable feed would
+      // never pick up post-retrain scores unless the page was reloaded.
+      return await alApi.runInference(body);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -1319,7 +1319,22 @@ const alSlice = createSlice({
     });
 
     builder.addCase(fetchAndAppendSuggestions.fulfilled, (state, action) => {
-      const result = action.payload;
+      const payload = action.payload;
+
+      // Scores aren't ready yet — the backend enqueued a background job.
+      // Hand it to the same lastRetrainDispatch polling loop runInference
+      // uses (see useHubALSession's retrain effect): once that job
+      // completes, it re-dispatches fetchAndAppendSuggestions, which will
+      // resolve with real rows next time.
+      if (isInferenceJobDispatch(payload)) {
+        state.lastRetrainDispatch = payload;
+        state.lastRetrainJob = null;
+        state.retrainLoading = true;
+        state.error = null;
+        return;
+      }
+
+      const result = payload;
       const labelScope = result.label_scope ?? null;
       const newRows = withDisplayFields(result.rows, labelScope);
 
