@@ -25,11 +25,15 @@ export const NavigationBar = () => {
     }
   }, [isAuthenticated]);
 
+  // Only fetch when we don't already have the user. Refetching on every mount
+  // produced a brand-new `user` object each time (normalizeUser), and any
+  // ancestor keying an effect on that object identity would re-run, unmount
+  // this subtree, and remount it -- refetching again, forever.
   useEffect(() => {
-    if (accessToken) {
+    if (accessToken && !user) {
       dispatch(getLoggedInUser());
     }
-  }, [accessToken]);
+  }, [accessToken, user, dispatch]);
 
   const userlogout = () => {
     dispatch(logout());

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Spin } from "antd";
 import { useAppDispatch, useAppSelector } from "../hooks";
@@ -17,29 +17,41 @@ export default function WssedAccessGuard({
   const { allDatasets } = useAppSelector((state) => state.dataset);
   const [checking, setChecking] = useState(true);
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  // Which user id we have already run the access check for. Redux hands back a
+  // fresh `user` object on every auth-slice update, so keying effects on the
+  // object itself re-runs them on identity churn alone -- that flips this guard
+  // back into `checking`, unmounting and remounting the whole WSSED page, and
+  // every remount fires another round of requests. Key on the id instead.
+  const userId = user?.id ?? null;
+  const userRole = user?.role ?? null;
+  const checkedForUserId = useRef<number | string | null>(null);
 
   useEffect(() => {
-    if (!user && accessToken) {
+    if (!userId && accessToken) {
       dispatch(getLoggedInUser(accessToken as any));
     }
-  }, [user, accessToken, dispatch]);
+  }, [userId, accessToken, dispatch]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     if (
-      user.role === "admin" ||
-      user.role === "user" ||
-      user.role === "team_owner"
+      userRole === "admin" ||
+      userRole === "user" ||
+      userRole === "team_owner"
     ) {
       dispatch(fetchAllDatasets());
     }
-  }, [user, dispatch]);
+  }, [userId, userRole, dispatch]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId || !user) return;
 
-    if (user.role === "admin") {
+    // Already resolved for this user -- do not re-enter `checking`.
+    if (checkedForUserId.current === userId) return;
+
+    if (userRole === "admin") {
+      checkedForUserId.current = userId;
       setEnabled(true);
       setChecking(false);
       return;
@@ -60,6 +72,7 @@ export default function WssedAccessGuard({
         }
       } finally {
         if (!cancelled) {
+          checkedForUserId.current = userId;
           setChecking(false);
         }
       }
@@ -68,8 +81,8 @@ export default function WssedAccessGuard({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- check once per user session
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- check once per user id
+  }, [userId, userRole]);
 
   // Not logged in at all — don't spin forever, send to login.
   if (!user && !accessToken) {

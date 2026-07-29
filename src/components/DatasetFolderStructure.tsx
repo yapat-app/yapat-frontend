@@ -36,17 +36,23 @@ export const DatasetFolderStructure: React.FC = () => {
   const [selectingDataset, setSelectingDataset] = useState(false);
   const [restoringDataset, setRestoringDataset] = useState(false);
 
+  // Key on id/role, not the `user` object: redux returns a new object on every
+  // auth-slice update, which would otherwise re-dispatch this on identity churn
+  // alone and spam /datasets on every render cycle.
+  const userId = user?.id ?? null;
+  const userRole = user?.role ?? null;
+
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     if (
-      user.role === "admin" ||
-      user.role === "user" ||
-      user.role === "team_owner"
+      userRole === "admin" ||
+      userRole === "user" ||
+      userRole === "team_owner"
     ) {
       dispatch(fetchAllDatasets());
     }
-  }, [user, dispatch]);
+  }, [userId, userRole, dispatch]);
 
   useEffect(() => {
     if (datasetDirectories || restoringDataset) return;
