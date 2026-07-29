@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Spin, message } from "antd";
 import {
   CheckCircleOutlined,
@@ -58,6 +58,11 @@ export const WssedActiveLearningHub = ({
   const [jobsLoading, setJobsLoading] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [activating, setActivating] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+  // Datasets this user is not allowed to read. A 403 is a permission fact, not
+  // a transient error: retrying cannot fix it, and re-render churn elsewhere on
+  // the page would otherwise turn it into an unbounded request loop.
+  const deniedDatasetIds = useRef<Set<number>>(new Set());
 
   const selectedSpecies =
     datasetDirectories?.species?.[0]?.name ??
@@ -71,11 +76,21 @@ export const WssedActiveLearningHub = ({
     if (!datasetId) {
       setJobs([]);
       setSelectedJobId(null);
+      setForbidden(false);
       return;
     }
+    // Never re-request a dataset this user has already been denied.
+    if (deniedDatasetIds.current.has(datasetId)) {
+      setForbidden(true);
+      setJobs([]);
+      setSelectedJobId(null);
+      return;
+    }
+
     setJobsLoading(true);
     try {
       const rows = await wssedApi.listTrainingJobs(datasetId);
+      setForbidden(false);
       setJobs(rows);
       // Default the selection to whatever Active Learning is already using,
       // falling back to the newest usable model.
@@ -84,8 +99,15 @@ export const WssedActiveLearningHub = ({
         if (prev != null && usable.some((r) => r.job_id === prev)) return prev;
         return (usable.find((r) => r.is_active) ?? usable[0])?.job_id ?? null;
       });
-    } catch {
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 403) {
+        deniedDatasetIds.current.add(datasetId);
+        setForbidden(true);
+      }
       setJobs([]);
+      setSelectedJobId(null);
     } finally {
       setJobsLoading(false);
     }
@@ -234,6 +256,24 @@ export const WssedActiveLearningHub = ({
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
               Choose a dataset from the explorer on the left to pick a trained
               model or start a new training run.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (forbidden) {
+      return (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <LockOutlined className="text-3xl text-slate-300" />
+          <div>
+            <h4 className="text-base font-semibold text-slate-800">
+              No access to this dataset
+            </h4>
+            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+              Your account is not a member of the team that owns this dataset,
+              so its trained models cannot be listed. Ask an administrator for
+              access, or pick a different dataset from the explorer.
             </p>
           </div>
         </div>
