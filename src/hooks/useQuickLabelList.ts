@@ -1,11 +1,9 @@
 /**
  * Shared quick-label list for blind annotation (classic + AL).
- * Priority: dataset's stored quick_labels → PAM labels.json / checkpoint label_config.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "../hooks";
 import { useEnsureTeamTaxonomies } from "./useEnsureTeamTaxonomies";
-import { fetchPamQuickLabelNames } from "../utils/fetchPamQuickLabelNames";
 import {
   labelNamesFromLabelSpace,
   labelNamesFromTaxonomyNodes,
@@ -15,7 +13,7 @@ import { datasetApi } from "../services/api";
 
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const { user } = useAppSelector((s) => s.auth);
-  const { usedCheckpointId, selectedDatasetId } = useAppSelector((s) => s.al);
+  const { selectedDatasetId } = useAppSelector((s) => s.al);
   const { allTaxonomies, labelSpace, taxonomiesStatus } = useAppSelector(
     (s) => s.customTaxonomy,
   );
@@ -31,10 +29,8 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     setPamLoading(true);
 
     const load = async () => {
-      // The dataset's stored quick_labels *extend* the label space — they must
-      // not shadow the model/checkpoint species.
-      // Fetched both sources and merge them (checkpoint species first, then
-      // any curated/extra stored labels), deduped.
+      // Only the dataset's stored quick_labels (custom labels added by the
+      // user). Model/checkpoint-inherited species are intentionally excluded.
       let storedNames: string[] = [];
       if (selectedDatasetId != null) {
         try {
@@ -43,22 +39,12 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
           );
           storedNames = stored.map((l) => l.display_name);
         } catch {
-          /* ignore — fall back to checkpoint species only */
+          /* ignore — no stored quick labels */
         }
       }
 
-      let checkpointNames: string[] = [];
-      try {
-        checkpointNames = await fetchPamQuickLabelNames(
-          usedCheckpointId,
-          selectedDatasetId,
-        );
-      } catch {
-        /* ignore — fall back to stored labels only */
-      }
-
       if (!cancelled) {
-        setPamSpecies(mergeQuickLabelNames(checkpointNames, storedNames));
+        setPamSpecies(storedNames);
         setPamLoading(false);
       }
     };
@@ -67,7 +53,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     return () => {
       cancelled = true;
     };
-  }, [usedCheckpointId, selectedDatasetId]);
+  }, [selectedDatasetId]);
 
   const taxonomyNames = useMemo(() => {
     const fromNodes = labelNamesFromTaxonomyNodes(

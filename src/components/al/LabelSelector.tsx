@@ -313,7 +313,7 @@ export const LabelSelector: React.FC<Props> = ({
           <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
             Quick labels
           </span>
-          {selectedDatasetId != null && (
+          {selectedDatasetId != null && pamOptions.length > 0 && (
             <Tooltip title="Edit label space in Pre-Annotation">
               <button
                 type="button"
@@ -335,10 +335,21 @@ export const LabelSelector: React.FC<Props> = ({
           ].join(" ")}
         >
           {pamOptions.length === 0 && !labelsLoading ? (
-            <p className="text-xs text-gray-400 italic">
-              No labels available. Use the search box above (GBIF) or run Active Learning
-              inference once to load labels.json for this dataset.
-            </p>
+            <div className="flex flex-col items-start gap-1">
+              <p className="text-xs text-gray-400 italic">
+                No quick labels yet for this dataset.
+              </p>
+              {selectedDatasetId != null && (
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<EditOutlined />}
+                  onClick={goToPreAnnotation}
+                >
+                  Add labels in Pre-Annotation
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="flex flex-wrap gap-2">
               {pamOptions.map((opt) => {
