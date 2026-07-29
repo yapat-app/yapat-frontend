@@ -797,6 +797,19 @@ export const wssedApi = {
     return response.data;
   },
 
+  activateCheckpoint: async (
+    checkpointId: number,
+  ): Promise<{
+    dataset_id: number;
+    model_family_name: string;
+    active_checkpoint_id: number;
+  }> => {
+    const response = await api.post(
+      `/api/pam-al/checkpoints/${checkpointId}/activate`,
+    );
+    return response.data;
+  },
+
   registerTrainingJobForAL: async (
     jobId: number,
   ): Promise<{

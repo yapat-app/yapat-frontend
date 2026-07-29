@@ -104,10 +104,15 @@ export const WssedActiveLearningHub = ({
   };
 
   /**
-   * Registration happens automatically when a job completes, so the common
-   * path is a straight navigate. We only call register-al when the chosen
-   * model is not the family's active checkpoint (picking an older model), or
-   * when auto-registration did not land.
+   * Registration happens automatically when a job completes, so most jobs
+   * arrive here already registered.
+   *   - already the family's active checkpoint -> straight navigate.
+   *   - registered before but superseded (al_checkpoint_id set, not active)
+   *     -> just flip which checkpoint is active. No GPU/file access needed,
+   *        so this keeps working even after a later job overwrites the GPU
+   *        server's shared output directory for this dataset.
+   *   - never registered (auto-registration failed at completion time)
+   *     -> fall back to full registration.
    */
   const handleContinue = async () => {
     if (!selectedJob) return;
@@ -119,9 +124,19 @@ export const WssedActiveLearningHub = ({
 
     setActivating(true);
     try {
-      const result = await wssedApi.registerTrainingJobForAL(selectedJob.job_id);
-      await loadJobs();
-      goToActiveLearning(result.model_family_name);
+      if (selectedJob.al_checkpoint_id != null) {
+        const result = await wssedApi.activateCheckpoint(
+          selectedJob.al_checkpoint_id,
+        );
+        await loadJobs();
+        goToActiveLearning(result.model_family_name);
+      } else {
+        const result = await wssedApi.registerTrainingJobForAL(
+          selectedJob.job_id,
+        );
+        await loadJobs();
+        goToActiveLearning(result.model_family_name);
+      }
     } catch (err: unknown) {
       message.error(
         err instanceof Error
@@ -189,7 +204,10 @@ export const WssedActiveLearningHub = ({
         }`}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-semibold text-slate-800">
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-slate-800">
+            <CheckCircleOutlined
+              className={isSelected ? "text-blue-600" : "text-transparent"}
+            />
             #{job.job_id} · {job.model_name ?? "model"}
             {score ? ` · ${score}` : ""}
           </span>
