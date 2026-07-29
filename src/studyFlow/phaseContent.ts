@@ -173,7 +173,7 @@ const INTRO_GUIDE_LINE =
   "You'll have 15 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
 
 const INTRO_GUIDE_LINE_P5 =
-  "You'll have 25 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
+  "You'll have 40 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
 
 export const PHASE_CONTENT: Record<string, PhaseContent> = {
   // ── Phase 1 — Feed only ─────────────────────────────────────────────────
