@@ -6,7 +6,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Tooltip, message } from "antd";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { DatasetFolderStructure } from "../components/DatasetFolderStructure";
 import { WSLModelTraining } from "../components/WSLModelTraining";
@@ -24,6 +24,24 @@ export const Wssed = () => {
   const [showTraining, setShowTraining] = useState(true);
   const [enableWSL, setEnableWSL] = useState(false);
   const [modelTrained, setIsModelTrained] = useState(false);
+  const [trainingPanelPulse, setTrainingPanelPulse] = useState(false);
+  const trainingPanelRef = useRef<HTMLElement | null>(null);
+
+  // "Train a new model" needs to be effective even when the training panel is
+  // already open (the common case) -- setShowTraining(true) alone is then a
+  // no-op re-render, so the button visibly did nothing. Scroll it into view
+  // and pulse it every time, regardless of prior visibility.
+  const revealTrainingPanel = useCallback(() => {
+    setShowTraining(true);
+    requestAnimationFrame(() => {
+      trainingPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    });
+    setTrainingPanelPulse(true);
+    window.setTimeout(() => setTrainingPanelPulse(false), 1200);
+  }, []);
 
   const datasetId = datasetDirectories?.dataset_id
     ? Number(datasetDirectories.dataset_id)
@@ -139,13 +157,18 @@ export const Wssed = () => {
           modelTrained={modelTrained}
           modelTraining={modelTraining}
           datasetId={datasetId}
-          onTrainNew={() => setShowTraining(true)}
+          onTrainNew={revealTrainingPanel}
         />
 
         <aside
+          ref={trainingPanelRef}
           className={`${
             showTraining ? "w-[22%] min-w-[280px]" : "w-fit"
-          } flex min-h-0 shrink-0 flex-col border-l border-[#F0F0F0] bg-white`}
+          } flex min-h-0 shrink-0 flex-col border-l bg-white transition-shadow duration-300 ${
+            trainingPanelPulse
+              ? "border-blue-300 ring-2 ring-blue-200"
+              : "border-[#F0F0F0]"
+          }`}
         >
           {!showTraining && (
             <div className="flex justify-end p-3">
