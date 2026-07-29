@@ -206,10 +206,10 @@ export const WssedActiveLearningHub = ({
     const epochs = job.current_epoch ?? job.total_epochs;
     const date = formatDate(job.completed_at ?? job.created_at);
     const meta = [
-      epochs != null ? `${epochs} ep` : null,
+      epochs != null ? `${epochs} ${epochs === 1 ? "epoch" : "epochs"}` : null,
       date,
+      score,
       job.status !== "COMPLETED" ? job.status.toLowerCase() : null,
-      job.is_active ? "in use" : null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -218,28 +218,54 @@ export const WssedActiveLearningHub = ({
       <button
         key={job.job_id}
         type="button"
+        aria-pressed={isSelected}
         onClick={() => setSelectedJobId(job.job_id)}
-        className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+        className={`group w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
           isSelected
-            ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-200"
-            : "border-slate-200 bg-white hover:border-slate-300"
+            ? "border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-500/30"
+            : "border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50 hover:shadow-sm"
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-slate-800">
-            <CheckCircleOutlined
-              className={isSelected ? "text-blue-600" : "text-transparent"}
-            />
-            #{job.job_id} · {job.model_name ?? "model"}
-            {score ? ` · ${score}` : ""}
+        <div className="flex items-center gap-2.5">
+          {/* Radio-style indicator: unambiguous single-select affordance. */}
+          <span
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+              isSelected
+                ? "border-blue-600"
+                : "border-slate-300 group-hover:border-blue-400"
+            }`}
+          >
+            {isSelected && (
+              <span className="h-2 w-2 rounded-full bg-blue-600" />
+            )}
           </span>
-          {job.is_active && (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-              ACTIVE
+
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span
+                className={`truncate text-sm font-semibold ${
+                  isSelected ? "text-blue-900" : "text-slate-800"
+                }`}
+              >
+                #{job.job_id} · {job.model_name ?? "model"}
+              </span>
+              {job.is_active && (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-700">
+                  IN USE
+                </span>
+              )}
             </span>
-          )}
+            {meta && (
+              <span
+                className={`mt-0.5 block truncate text-[11px] ${
+                  isSelected ? "text-blue-700/70" : "text-slate-500"
+                }`}
+              >
+                {meta}
+              </span>
+            )}
+          </span>
         </div>
-        {meta && <div className="mt-0.5 text-[11px] text-slate-500">{meta}</div>}
       </button>
     );
   };
@@ -344,6 +370,18 @@ export const WssedActiveLearningHub = ({
         <div className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-0.5">
           {usableJobs.map(renderJobRow)}
         </div>
+
+        {/* "IN USE" is what Active Learning runs today; the radio is what you
+            picked. When they differ, say plainly what Continue will change. */}
+        {selectedJob && !selectedJob.is_active && (
+          <p className="rounded-md bg-blue-50 px-3 py-2 text-[11px] leading-5 text-blue-800">
+            Continuing will switch Active Learning to model #
+            {selectedJob.job_id}
+            {usableJobs.some((j) => j.is_active)
+              ? `, replacing #${usableJobs.find((j) => j.is_active)?.job_id}.`
+              : "."}
+          </p>
+        )}
 
         {selectedJob?.metrics?.al_registration_error != null && (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
