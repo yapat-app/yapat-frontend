@@ -1,139 +1,139 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Spin, message } from "antd";
 import {
   CheckCircleOutlined,
   ExperimentOutlined,
   LockOutlined,
   LoadingOutlined,
+  PlusOutlined,
   RocketOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../hooks";
-import { wssedApi } from "../services/api";
+import { wssedApi, type WssedTrainingJobSummary } from "../services/api";
 import { hasWssedModelPath } from "../utils/wssedModel";
 
 interface WssedActiveLearningHubProps {
   modelTrained: boolean;
   modelTraining: boolean;
   datasetId: number | null;
+  onTrainNew?: () => void;
 }
 
-type CompletedJob = {
-  job_id: number;
-  model_path: string | null;
+/**
+ * A job is offerable as a model when it exposes a checkpoint path, regardless
+ * of its status string (same rule as hasWssedModelPath elsewhere). A job still
+ * TRAINING is excluded: its path is not ready yet.
+ */
+const isUsableModel = (job: WssedTrainingJobSummary): boolean =>
+  job.status !== "TRAINING" && hasWssedModelPath(job);
+
+/** Pull the most representative score out of a job's metrics blob, if present. */
+const formatScore = (metrics: Record<string, unknown> | null): string | null => {
+  if (!metrics) return null;
+  const key = Object.keys(metrics).find(
+    (k) => k.toLowerCase().includes("f1") && typeof metrics[k] === "number",
+  );
+  return key ? `F1 ${(metrics[key] as number).toFixed(3)}` : null;
 };
 
-type AlRegistration = {
-  al_checkpoint_id: number;
-  model_family_name: string;
+const formatDate = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
 export const WssedActiveLearningHub = ({
   modelTrained,
   modelTraining,
   datasetId,
+  onTrainNew,
 }: WssedActiveLearningHubProps) => {
   const navigate = useNavigate();
   const { datasetDirectories } = useAppSelector((state) => state.dataset);
 
-  const [jobLoading, setJobLoading] = useState(false);
-  const [lastJob, setLastJob] = useState<CompletedJob | null>(null);
-  const [alRegistration, setAlRegistration] = useState<AlRegistration | null>(
-    null,
-  );
-  const [registeringAl, setRegisteringAl] = useState(false);
+  const [jobs, setJobs] = useState<WssedTrainingJobSummary[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [activating, setActivating] = useState(false);
 
   const selectedSpecies =
     datasetDirectories?.species?.[0]?.name ??
     datasetDirectories?.dataset_name ??
     "Dataset";
 
-  const alModelFamily =
-    alRegistration?.model_family_name ?? "wssed_birdnet_segment";
-  const activeLearningUrl =
-    datasetId != null
-      ? `/active-learning?dataset_id=${datasetId}&model_family=${encodeURIComponent(alModelFamily)}`
-      : "/active-learning";
+  const usableJobs = jobs.filter(isUsableModel);
+  const selectedJob = usableJobs.find((j) => j.job_id === selectedJobId) ?? null;
+
+  const loadJobs = useCallback(async () => {
+    if (!datasetId) {
+      setJobs([]);
+      setSelectedJobId(null);
+      return;
+    }
+    setJobsLoading(true);
+    try {
+      const rows = await wssedApi.listTrainingJobs(datasetId);
+      setJobs(rows);
+      // Default the selection to whatever Active Learning is already using,
+      // falling back to the newest usable model.
+      const usable = rows.filter(isUsableModel);
+      setSelectedJobId((prev) => {
+        if (prev != null && usable.some((r) => r.job_id === prev)) return prev;
+        return (usable.find((r) => r.is_active) ?? usable[0])?.job_id ?? null;
+      });
+    } catch {
+      setJobs([]);
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [datasetId]);
 
   useEffect(() => {
-    if (!datasetId || !modelTrained) {
-      setLastJob(null);
-      setAlRegistration(null);
+    void loadJobs();
+  }, [loadJobs, modelTrained, modelTraining]);
+
+  const goToActiveLearning = (family: string) => {
+    navigate(
+      datasetId != null
+        ? `/active-learning?dataset_id=${datasetId}&model_family=${encodeURIComponent(family)}`
+        : "/active-learning",
+    );
+  };
+
+  /**
+   * Registration happens automatically when a job completes, so the common
+   * path is a straight navigate. We only call register-al when the chosen
+   * model is not the family's active checkpoint (picking an older model), or
+   * when auto-registration did not land.
+   */
+  const handleContinue = async () => {
+    if (!selectedJob) return;
+
+    if (selectedJob.is_active && selectedJob.al_model_family_name) {
+      goToActiveLearning(selectedJob.al_model_family_name);
       return;
     }
 
-    let cancelled = false;
-    setJobLoading(true);
-
-    (async () => {
-      try {
-        const status = await wssedApi.getLatestTrainingJobStatus(datasetId);
-        if (cancelled) return;
-
-        if (hasWssedModelPath(status)) {
-          setLastJob({
-            job_id: status.job_id,
-            model_path: status.model_path,
-          });
-          const metrics = (status.metrics ?? {}) as Record<string, unknown>;
-          const ckptId = metrics.al_checkpoint_id;
-          const family = metrics.al_model_family_name;
-          if (typeof ckptId === "number" && typeof family === "string") {
-            setAlRegistration({
-              al_checkpoint_id: ckptId,
-              model_family_name: family,
-            });
-          } else {
-            setAlRegistration(null);
-          }
-        } else {
-          setLastJob(null);
-          setAlRegistration(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setLastJob(null);
-          setAlRegistration(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setJobLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId, modelTrained, modelTraining]);
-
-  const handleRegisterForAL = async () => {
-    if (!lastJob?.job_id) {
-      message.warning("No completed training job to register.");
-      return;
-    }
-    setRegisteringAl(true);
+    setActivating(true);
     try {
-      const result = await wssedApi.registerTrainingJobForAL(lastJob.job_id);
-      setAlRegistration({
-        al_checkpoint_id: result.al_checkpoint_id,
-        model_family_name: result.model_family_name,
-      });
-      message.success(
-        "Checkpoint registered for Active Learning. Open the flow below to start reviewing snippets.",
-      );
+      const result = await wssedApi.registerTrainingJobForAL(selectedJob.job_id);
+      await loadJobs();
+      goToActiveLearning(result.model_family_name);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to register checkpoint";
-      message.error(msg);
+      message.error(
+        err instanceof Error
+          ? err.message
+          : "Could not prepare this model for Active Learning",
+      );
     } finally {
-      setRegisteringAl(false);
+      setActivating(false);
     }
   };
 
-  const trainingStepDone = modelTrained;
-  const registerStepDone = alRegistration != null;
-  const readyForAl = trainingStepDone && registerStepDone;
+  const chooseStepDone = selectedJob != null;
 
   const renderStep = (
     label: string,
@@ -163,6 +163,47 @@ export const WssedActiveLearningHub = ({
     </div>
   );
 
+  const renderJobRow = (job: WssedTrainingJobSummary) => {
+    const isSelected = job.job_id === selectedJobId;
+    const score = formatScore(job.metrics);
+    const epochs = job.current_epoch ?? job.total_epochs;
+    const date = formatDate(job.completed_at ?? job.created_at);
+    const meta = [
+      epochs != null ? `${epochs} ep` : null,
+      date,
+      job.status !== "COMPLETED" ? job.status.toLowerCase() : null,
+      job.is_active ? "in use" : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    return (
+      <button
+        key={job.job_id}
+        type="button"
+        onClick={() => setSelectedJobId(job.job_id)}
+        className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+          isSelected
+            ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-200"
+            : "border-slate-200 bg-white hover:border-slate-300"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-slate-800">
+            #{job.job_id} · {job.model_name ?? "model"}
+            {score ? ` · ${score}` : ""}
+          </span>
+          {job.is_active && (
+            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              ACTIVE
+            </span>
+          )}
+        </div>
+        {meta && <div className="mt-0.5 text-[11px] text-slate-500">{meta}</div>}
+      </button>
+    );
+  };
+
   const renderContent = () => {
     if (!datasetId) {
       return (
@@ -173,8 +214,8 @@ export const WssedActiveLearningHub = ({
               Select a dataset
             </h4>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Choose a dataset from the explorer on the left to configure
-              training and continue to Active Learning.
+              Choose a dataset from the explorer on the left to pick a trained
+              model or start a new training run.
             </p>
           </div>
         </div>
@@ -191,133 +232,84 @@ export const WssedActiveLearningHub = ({
             </h4>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
               Your WSSED model is training on the GPU server. Progress is shown
-              in the panel on the right. Active Learning will unlock when
-              training finishes.
+              in the panel on the right. It will appear in this list and be
+              registered for Active Learning automatically when it finishes.
             </p>
           </div>
         </div>
       );
     }
 
-    if (!modelTrained) {
-      return (
-        <div className="flex flex-col items-center gap-3 text-center">
-          <ExperimentOutlined className="text-3xl text-slate-300" />
-          <div>
-            <h4 className="text-base font-semibold text-slate-800">
-              Train your event detector first
-            </h4>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Configure and start WSSED training in the panel on the right. Once
-              training completes, you can register the checkpoint and open
-              Active Learning to review model suggestions.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    if (jobLoading) {
+    if (jobsLoading && jobs.length === 0) {
       return (
         <div className="flex flex-col items-center gap-3 text-center">
           <Spin indicator={<LoadingOutlined spin />} size="large" />
-          <p className="text-sm text-slate-500">Loading training status…</p>
+          <p className="text-sm text-slate-500">Loading trained models…</p>
         </div>
       );
     }
 
-    if (!lastJob) {
+    if (usableJobs.length === 0) {
       return (
         <div className="flex flex-col items-center gap-3 text-center">
           <ExperimentOutlined className="text-3xl text-slate-300" />
           <div>
             <h4 className="text-base font-semibold text-slate-800">
-              No completed training job found
+              No trained models yet
             </h4>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Start or wait for a training job to finish in the panel on the
-              right, then return here to continue.
+              Configure and start WSSED training in the panel on the right. When
+              it completes, the model lands here and is registered for Active
+              Learning automatically.
             </p>
           </div>
-        </div>
-      );
-    }
-
-    if (readyForAl) {
-      return (
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="rounded-full bg-emerald-50 p-3">
-            <CheckCircleOutlined className="text-3xl text-emerald-600" />
-          </div>
-          <div>
-            <h4 className="text-lg font-semibold text-slate-900">
-              Ready for Active Learning
-            </h4>
-            <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
-              Checkpoint #{alRegistration.al_checkpoint_id} is registered for
-              model family{" "}
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">
-                {alModelFamily}
-              </code>
-              . Open Active Learning to choose a snippet set, run inference, and
-              review suggestions.
-            </p>
-            {lastJob.model_path && (
-              <p className="mt-3 max-w-lg truncate font-mono text-[11px] text-slate-400">
-                {lastJob.model_path}
-              </p>
-            )}
-          </div>
-          <Button
-            type="primary"
-            size="large"
-            icon={<RocketOutlined />}
-            onClick={() => navigate(activeLearningUrl)}
-          >
-            Open Active Learning
-          </Button>
+          {onTrainNew && (
+            <Button icon={<PlusOutlined />} onClick={onTrainNew}>
+              Train a model
+            </Button>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col items-center gap-4 text-center">
-        <div className="rounded-full bg-amber-50 p-3">
-          <RocketOutlined className="text-3xl text-amber-600" />
+      <div className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            Available models
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {usableJobs.length} {usableJobs.length === 1 ? "model" : "models"}
+          </span>
         </div>
-        <div>
-          <h4 className="text-lg font-semibold text-slate-900">
-            Register for Active Learning
-          </h4>
-          <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
-            Training job #{lastJob.job_id} completed successfully. Register the
-            checkpoint so the Active Learning flow can use this model to
-            generate review suggestions for{" "}
-            <strong>{selectedSpecies}</strong>.
+
+        <div className="flex max-h-64 flex-col gap-2 overflow-y-auto pr-0.5">
+          {usableJobs.map(renderJobRow)}
+        </div>
+
+        {selectedJob?.metrics?.al_registration_error != null && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
+            Automatic registration failed for this model. Continuing will retry
+            it: {String(selectedJob.metrics.al_registration_error)}
           </p>
-          {lastJob.model_path && (
-            <p className="mt-3 max-w-lg truncate font-mono text-[11px] text-slate-400">
-              {lastJob.model_path}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Button
-            type="primary"
-            size="large"
-            loading={registeringAl}
-            onClick={() => void handleRegisterForAL()}
-          >
-            Register for Active Learning
+        )}
+
+        <Button
+          type="primary"
+          size="large"
+          icon={<RocketOutlined />}
+          disabled={!selectedJob}
+          loading={activating}
+          onClick={() => void handleContinue()}
+        >
+          Continue to Active Learning
+        </Button>
+
+        {onTrainNew && (
+          <Button icon={<PlusOutlined />} onClick={onTrainNew}>
+            Train a new model
           </Button>
-          <Button size="large" onClick={() => navigate(activeLearningUrl)}>
-            Open Active Learning
-          </Button>
-        </div>
-        <p className="max-w-md text-xs text-slate-400">
-          You can open Active Learning before registering, but inference will
-          only work after the checkpoint is registered.
-        </p>
+        )}
       </div>
     );
   };
@@ -336,25 +328,11 @@ export const WssedActiveLearningHub = ({
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4 py-4">
         <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-slate-50/50 p-5 shadow-sm">
           <div className="mb-5 flex items-start gap-2">
-            {renderStep("Train model", trainingStepDone, !trainingStepDone, 1)}
+            {renderStep("Choose model", chooseStepDone, !chooseStepDone, 1)}
             <div
-              className={`mt-4 h-0.5 flex-1 ${trainingStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
+              className={`mt-4 h-0.5 flex-1 ${chooseStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
             />
-            {renderStep(
-              "Register checkpoint",
-              registerStepDone,
-              trainingStepDone && !registerStepDone,
-              2,
-            )}
-            <div
-              className={`mt-4 h-0.5 flex-1 ${registerStepDone ? "bg-emerald-200" : "bg-slate-200"}`}
-            />
-            {renderStep(
-              "Active Learning",
-              false,
-              registerStepDone,
-              3,
-            )}
+            {renderStep("Active Learning", false, chooseStepDone, 2)}
           </div>
 
           {renderContent()}

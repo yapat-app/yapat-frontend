@@ -139,6 +139,7 @@ export const Wssed = () => {
           modelTrained={modelTrained}
           modelTraining={modelTraining}
           datasetId={datasetId}
+          onTrainNew={() => setShowTraining(true)}
         />
 
         <aside

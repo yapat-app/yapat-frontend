@@ -695,7 +695,36 @@ export const taskApi = {
 // WSSED API
 // ============================================================================
 
+export interface WssedTrainingJobSummary {
+  job_id: number;
+  dataset_id: number;
+  status: string;
+  model_name: string | null;
+  // Checkpoint paths — a non-empty path means a usable model exists, which is
+  // what hasWssedModelPath() tests (see utils/wssedModel.ts).
+  model_path: string | null;
+  model_paths: Record<string, string> | null;
+  created_at: string | null;
+  completed_at: string | null;
+  total_epochs: number | null;
+  current_epoch: number | null;
+  metrics: Record<string, unknown> | null;
+  al_checkpoint_id: number | null;
+  al_model_family_name: string | null;
+  is_active: boolean;
+  error: string | null;
+}
+
 export const wssedApi = {
+  listTrainingJobs: async (
+    datasetId: number,
+  ): Promise<WssedTrainingJobSummary[]> => {
+    const response = await api.get("/api/wssed/training-jobs", {
+      params: { dataset_id: datasetId },
+    });
+    return response.data;
+  },
+
   getAccess: async (): Promise<{
     enabled: boolean;
     focal_dataset_count: number;
