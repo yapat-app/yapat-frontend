@@ -1223,11 +1223,10 @@ const alSlice = createSlice({
         state.feedbacks[fb.snippet_id] = fb;
 
         // When the backend reports auto-retrain, treat it as already dispatched.
-        if (
-          fb.retrain_triggered &&
-          fb.auto_retrain_job_id &&
-          fb.auto_retrain_checkpoint_id
-        ) {
+        // Only the job_id is required to start polling/showing the loading
+        // state — the checkpoint doesn't exist yet for an async retrain, so
+        // auto_retrain_checkpoint_id is often null on the triggering feedback.
+        if (fb.retrain_triggered && fb.auto_retrain_job_id) {
           // Reset counter locally while the new checkpoint job is pending.
           state.feedbackCount = 0;
           state.feedbacks = {};
@@ -1235,7 +1234,7 @@ const alSlice = createSlice({
           state.lastRetrainFailed = false;
           state.lastRetrainDispatch = {
             job_id: fb.auto_retrain_job_id,
-            checkpoint_id: fb.auto_retrain_checkpoint_id,
+            checkpoint_id: fb.auto_retrain_checkpoint_id ?? null,
             status: "PENDING",
             message: `Auto-retrain job ${fb.auto_retrain_job_id} dispatched`,
           };

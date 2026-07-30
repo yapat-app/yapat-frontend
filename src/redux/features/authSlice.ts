@@ -145,7 +145,6 @@ export const authSlice = createSlice({
         state.error = null;
       })
       .addCase(loginAsync.fulfilled, (state, action) => {
-        console.log(action.payload);
         state.loginLoading = false;
         state.status = "succeeded";
         state.accessToken = action.payload.access_token;

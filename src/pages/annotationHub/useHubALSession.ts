@@ -75,9 +75,11 @@ export function useHubALSession(
     feedbackCount,
     retrainThreshold,
     retrainPending,
+    retrainLoading,
     lastRetrainJob,
     lastInferenceAt,
     lastRetrainDispatch,
+    usedCheckpointId,
   } = useAppSelector((s) => s.al);
 
   const feedbackCountDisplay = useMemo(() => {
@@ -808,8 +810,7 @@ export function useHubALSession(
         if (isRealRetrain) {
           inferenceChainCountRef.current = 0;
         }
-        const shouldChain =
-          isRealRetrain || inferenceChainCountRef.current < 2;
+        const shouldChain = isRealRetrain || inferenceChainCountRef.current < 2;
         if (
           status === "COMPLETED" &&
           shouldChain &&
@@ -818,8 +819,9 @@ export function useHubALSession(
           snippetSetValid
         ) {
           if (!isRealRetrain) inferenceChainCountRef.current += 1;
-          if (phase.feed.mode === "scrollable_topk") {
-            // Scrollable feed: append fresh suggestions without disrupting scroll position.
+          const isSuggestionsFeed = isSuggestionsMode(modelInfo);
+          if (phase.feed.mode === "scrollable_topk" && isSuggestionsFeed) {
+            // Scrollable top-k feed: append fresh suggestions without disrupting scroll position.
             dispatch(
               fetchAndAppendSuggestions({
                 model_family_name: modelFamilyName,
@@ -836,11 +838,13 @@ export function useHubALSession(
               }),
             );
           } else {
-            // single_card_on_select (P2+, P3+): silently replace the prediction pool.
-            // The user is navigating via the projection, so no scroll position is lost.
+            // Whole-dataset (predictions) or single_card feed: replace the
+            // prediction pool with a fresh scoring pass. The just-completed job
+            // warmed the new checkpoint's cache, so this returns real rows and
+            // runInference.fulfilled updates predictions + usedCheckpointId.
             const suggestionParams = buildSuggestionParams(
               inferenceK,
-              isValidateMode || isSuggestionsMode(modelInfo),
+              isValidateMode || isSuggestionsFeed,
             );
             dispatch(
               runInference({
@@ -879,6 +883,78 @@ export function useHubALSession(
     buildSuggestionParams,
     modelInfo,
     phase,
+  ]);
+
+  // ── Keep predictions in sync with the backend's active checkpoint ──────────
+  const refreshedForCheckpointRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isAlLikeMode) return;
+    if (selectedDatasetId === null || modelFamilyName === null) return;
+    // Nothing scored yet, or a job is already in flight — don't interfere.
+    if (predictions.length === 0 || lastInferenceAt === null) return;
+    if (usedCheckpointId === null || snippetSetId === null) return;
+
+    const datasetId = selectedDatasetId;
+    const family = modelFamilyName;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    async function checkActiveCheckpoint() {
+      if (cancelled) return;
+      try {
+        const fc = await alApi.getFeedbackCount(datasetId, family);
+        const active = fc.active_checkpoint_id ?? null;
+        if (
+          !cancelled &&
+          active !== null &&
+          active !== usedCheckpointId &&
+          active !== refreshedForCheckpointRef.current &&
+          !inferenceLoading &&
+          !retrainLoading
+        ) {
+          refreshedForCheckpointRef.current = active;
+          const suggestionParams = buildSuggestionParams(
+            inferenceK,
+            isValidateMode || isSuggestionsMode(modelInfo),
+          );
+          dispatch(
+            runInference({
+              model_family_name: family,
+              dataset_id: datasetId,
+              snippet_set_id: snippetSetId as number,
+              ...suggestionParams,
+              // The new checkpoint's cache is empty; force a fresh scoring pass
+              // so predictions carry the new model's scores.
+              force_refresh: true,
+            }),
+          );
+        }
+      } catch {
+        /* ignore transient poll errors — retried on the next tick */
+      }
+      timer = window.setTimeout(checkActiveCheckpoint, 12000);
+    }
+
+    void checkActiveCheckpoint();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [
+    isAlLikeMode,
+    selectedDatasetId,
+    modelFamilyName,
+    predictions.length,
+    lastInferenceAt,
+    usedCheckpointId,
+    snippetSetId,
+    inferenceLoading,
+    retrainLoading,
+    inferenceK,
+    isValidateMode,
+    buildSuggestionParams,
+    modelInfo,
+    dispatch,
   ]);
 
   const isRestoredFeed = lastInferenceAt !== null && predictions.length > 0;
