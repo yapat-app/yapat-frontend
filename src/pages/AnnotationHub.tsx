@@ -486,8 +486,10 @@ export const AnnotationHub: React.FC = () => {
 
       {/* Study-flow overlays: instructions modal, guided tour, phase
           transition and completion screen. Each self-gates on the flow stage
-          and renders nothing when VITE_STUDY_FLOW_ENABLED is off. */}
-      <StudyFlowOverlays />
+          and renders nothing when VITE_STUDY_FLOW_ENABLED is off. Also gated on
+          an authenticated user so tutorial cards never trigger before/while the
+          user is unauthenticated. */}
+      {user && <StudyFlowOverlays />}
     </div>
   );
 };

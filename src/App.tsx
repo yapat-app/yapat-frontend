@@ -21,6 +21,7 @@ import { LoggerContextBridge } from "./studyLogging";
 import AdminOnlyGuard from "./routes/AdminOnlyGuard";
 import TeamOwnerRedirect from "./routes/TeamOwnerRedirect";
 import WssedAccessGuard from "./routes/WssedAccessGuard";
+import RequireAuth from "./routes/RequireAuth";
 
 function RedirectWithSearch({ to }: { to: string }) {
   const location = useLocation();
@@ -50,7 +51,14 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/pre-annotation" element={<Taxonomies />} />
           <Route path="/history" element={<FeedHistory />} />
-          <Route path="/annotate" element={<AnnotationHub />} />
+          <Route
+          path="/annotate"
+          element={
+            <RequireAuth>
+              <AnnotationHub />
+            </RequireAuth>
+          }
+        />
           {/* Legacy routes — redirect to the unified hub */}
           <Route
             path="/v2AnnotationHub"
