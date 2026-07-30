@@ -12,7 +12,11 @@ export type SamplingMethod =
   | "density"
   | "random"
   | "confidence";
-export type PAMRetrainStatusValue = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+export type PAMRetrainStatusValue =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED";
 export type PAMModelStatusValue = "AVAILABLE" | "LOADING" | "ERROR";
 export type PAMSuggestionMode = "predictions" | "suggestions";
 export type PAMSuggestionStrategy =
@@ -32,9 +36,9 @@ export interface SampleScores {
   density?: number;
   composite?: number;
   confidence?: number;
-  year_cycle?: number;   
-  day_cycle?: number;    // 0–23  (hour)
-  sound_type?: string;   // "Bio" | "Anthro" | "Geo"
+  year_cycle?: number;
+  day_cycle?: number; // 0–23  (hour)
+  sound_type?: string; // "Bio" | "Anthro" | "Geo"
   birdnet_label?: string;
   yamnet_label?: string;
   /**
@@ -230,7 +234,7 @@ export interface PAMTrainFromScratchRequest {
 /** Returned immediately when retrain is dispatched; poll job_id for status. */
 export interface PAMRetrainJobDispatch {
   job_id: number;
-  checkpoint_id: number;
+  checkpoint_id: number | null;
   status: PAMRetrainStatusValue;
   message: string;
 }
@@ -306,14 +310,14 @@ export interface ALState {
   classicAnnotationsBySnippet: Record<number, Annotation[]>;
   /** Model selection */
   modelCheckpointId: number | null; // UI selection only (maps -> model_family_name)
-  modelFamilyName: string | null;   // required by backend PAM-AL endpoints
-  usedCheckpointId: number | null;  // last checkpoint actually used by backend
+  modelFamilyName: string | null; // required by backend PAM-AL endpoints
+  usedCheckpointId: number | null; // last checkpoint actually used by backend
 
   snippetSetId: number | null;
-  embeddingModelId: number | null;  // embedding space used for dataset-level projections
+  embeddingModelId: number | null; // embedding space used for dataset-level projections
   inferenceK: number;
   predictions: PAMPrediction[];
-  projectionPredictions: PAMPrediction[];  // snapshot updated only after retrain
+  projectionPredictions: PAMPrediction[]; // snapshot updated only after retrain
   modelInfo: Record<string, unknown>;
   totalScored: number;
   feedbacks: Record<number, FeedbackResponse>; // keyed by snippet_id
@@ -338,7 +342,7 @@ export interface ALState {
   feedbackLoading: boolean;
   retrainLoading: boolean;
   error: string | null;
-  lastInferenceAt: string | null;      // ISO timestamp of last successful inference
+  lastInferenceAt: string | null; // ISO timestamp of last successful inference
   /** requestId of the most recently dispatched runInference/restoreFeedFromServer
    *  call — lets fulfilled handlers discard a response if a newer request for
    *  predictions has since been dispatched (last-dispatched wins, not last-resolved). */

@@ -197,9 +197,20 @@ const PredictionCardImpl: React.FC<Props> = ({
   );
 
   useLayoutEffect(() => {
-    setAudioBlobUrl(null);
-    setLoadedAudioSnippetId(null);
-    setAudioError(false);
+    // Restore synchronously (before paint) from the session cache so a
+    // re-render/re-mount of an already-loaded snippet doesn't flash a blank spectrogram.
+    const cached = audioUrlCache.get(prediction.snippet_id);
+    if (cached) {
+      audioUrlCacheTouch(prediction.snippet_id);
+      setAudioError(false);
+      setAudioBlobUrl(cached.url);
+      setAudioSampleRate(cached.sampleRate);
+      setLoadedAudioSnippetId(prediction.snippet_id);
+    } else {
+      setAudioBlobUrl(null);
+      setLoadedAudioSnippetId(null);
+      setAudioError(false);
+    }
   }, [prediction.snippet_id]);
 
   useEffect(() => {
@@ -227,6 +238,7 @@ const PredictionCardImpl: React.FC<Props> = ({
 
     const cached = audioUrlCache.get(snippetId);
     if (cached) {
+      audioUrlCacheTouch(snippetId);
       setAudioError(false);
       setAudioBlobUrl(cached.url);
       setAudioSampleRate(cached.sampleRate);
@@ -500,6 +512,20 @@ function audioDownloadRelease() {
   activeDownloads = Math.max(0, activeDownloads - 1);
   const next = downloadWaiters.shift();
   if (next) next();
+}
+
+/**
+ * Mark a snippet as most-recently-used on a cache *read* — otherwise an
+ * actively-viewed snippet keeps aging in the LRU and can be evicted (and its
+ * blob URL revoked) mid-view, forcing a network re-fetch when its card
+ * re-renders (e.g. right after annotating it).
+ */
+function audioUrlCacheTouch(snippetId: number) {
+  const idx = LRU.indexOf(snippetId);
+  if (idx >= 0) {
+    LRU.splice(idx, 1);
+    LRU.push(snippetId);
+  }
 }
 
 function audioUrlCacheSet(snippetId: number, audio: SnippetAudioResult) {
