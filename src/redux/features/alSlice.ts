@@ -510,13 +510,13 @@ export const fetchAndAppendSuggestions = createAsyncThunk(
   "al/fetchAndAppendSuggestions",
   async (body: PAMRunInferenceRequest, { rejectWithValue }) => {
     try {
-      const result = await alApi.runInference(body);
-      if (isInferenceJobDispatch(result)) {
-        return rejectWithValue(
-          "Background job started — cannot append in this state",
-        );
-      }
-      return result as PAMInferenceResult;
+      // The backend can respond with a PAMRetrainJobDispatch (scores still
+      // computing) instead of results — pass it through so the reducer can
+      // hand it to the same retrain/inference polling loop runInference
+      // uses, instead of discarding it. Previously this rejected the whole
+      // request, silently dropping the job id: the scrollable feed would
+      // never pick up post-retrain scores unless the page was reloaded.
+      return await alApi.runInference(body);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -652,6 +652,45 @@ const alSlice = createSlice({
     /** Set the snippet currently visible in the multi-select feed (scroll-driven). */
     setActiveSnippet: (state, action: PayloadAction<number | null>) => {
       state.activeSnippetId = action.payload;
+      saveFeed(state);
+    },
+    /**
+     * Re-anchor the feed on the participant's last position instead of the top.
+     *
+     * Used on study-phase transitions. The workspace renders a different layout
+     * per phase (the projection panel appears from P2 on), which remounts the
+     * feed and restarts it at the first row. Anchoring on `activeSnippetId` —
+     * already persisted alongside the feed — survives that, and also survives
+     * the phase's full-dataset re-inference, which replaces `predictions`
+     * wholesale: row indices don't carry across that swap, snippet ids do.
+     *
+     * Lands on the anchor when it still needs a label, otherwise the next
+     * unlabeled snippet after it, so a phase never reopens on something the
+     * participant just finished.
+     */
+    resumeFromAnchor: (state) => {
+      if (state.predictions.length === 0) return;
+
+      const anchorIdx =
+        state.activeSnippetId === null
+          ? -1
+          : state.predictions.findIndex(
+              (p) => p.snippet_id === state.activeSnippetId,
+            );
+
+      // No anchor, or it's absent from the current list: search from the top
+      // rather than guessing a position.
+      const searchFrom = anchorIdx === -1 ? 0 : anchorIdx;
+      const target =
+        state.predictions
+          .slice(searchFrom)
+          .find((p) => !state.feedbacks[p.snippet_id]) ??
+        // Everything from here on is labeled — stay put rather than jumping.
+        state.predictions[searchFrom];
+
+      if (!target) return;
+      state.selectedSnippetIds = [target.snippet_id];
+      state.activeSnippetId = target.snippet_id;
       saveFeed(state);
     },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
@@ -1280,7 +1319,22 @@ const alSlice = createSlice({
     });
 
     builder.addCase(fetchAndAppendSuggestions.fulfilled, (state, action) => {
-      const result = action.payload;
+      const payload = action.payload;
+
+      // Scores aren't ready yet — the backend enqueued a background job.
+      // Hand it to the same lastRetrainDispatch polling loop runInference
+      // uses (see useHubALSession's retrain effect): once that job
+      // completes, it re-dispatches fetchAndAppendSuggestions, which will
+      // resolve with real rows next time.
+      if (isInferenceJobDispatch(payload)) {
+        state.lastRetrainDispatch = payload;
+        state.lastRetrainJob = null;
+        state.retrainLoading = true;
+        state.error = null;
+        return;
+      }
+
+      const result = payload;
       const labelScope = result.label_scope ?? null;
       const newRows = withDisplayFields(result.rows, labelScope);
 
@@ -1324,6 +1378,7 @@ export const {
   toggleSelectedSnippet,
   clearSelectedSnippets,
   setActiveSnippet,
+  resumeFromAnchor,
   setSelectedDataset,
   setInferenceConfig,
   setColorBy,

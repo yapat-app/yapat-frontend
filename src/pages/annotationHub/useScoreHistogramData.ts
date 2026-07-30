@@ -84,10 +84,11 @@ export function useScoreHistogramData(
   alFilters: ALFilterState;
 } {
   const alFilters = useAppSelector((s) => s.al.alFilters);
-  const rawPredictions = useAppSelector((s) => {
-    const proj = s.al.projectionPredictions;
-    return proj.length > 0 ? proj : s.al.predictions;
-  });
+  // Read the live feed, not `projectionPredictions` — that snapshot is frozen
+  // between retrains to keep the projection scatter plot's coordinates
+  // stable, but the score histogram has no such requirement and should
+  // reflect current scores as soon as a retrain lands new rows.
+  const rawPredictions = useAppSelector((s) => s.al.predictions);
 
   const enrichedPlotPoints = useMemo<EnrichedPoint[]>(
     () => rawPredictions.map((p) => ({ snippet_id: p.snippet_id, scores: p.scores })),

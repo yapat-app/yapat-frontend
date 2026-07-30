@@ -9,7 +9,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Button, Tag, Spin } from "antd";
+import { Select, Button, Spin } from "antd";
 import {
   DatabaseOutlined,
   ExperimentOutlined,
@@ -302,23 +302,11 @@ export const AnnotationHub: React.FC = () => {
                   )}
                 </span>
               </Tooltip> */}
-              {al.lastRetrainJob && (
-                <Tag
-                  color={
-                    (
-                      {
-                        PENDING: "default",
-                        RUNNING: "processing",
-                        COMPLETED: "success",
-                        FAILED: "error",
-                      } as Record<string, string>
-                    )[al.lastRetrainJob.status] ?? "default"
-                  }
-                  className="text-xs"
-                >
-                  Model: {al.lastRetrainJob.status}
-                </Tag>
-              )}
+              {/* Removed: `Model: {status}` printed the raw backend job enum
+                  (RUNNING/PENDING/…) to participants, and duplicated the
+                  projection toolbar's own "Retraining…" / "Post-retrain view"
+                  badges. The sibling status tags above were already hidden for
+                  the study; this one had been left behind. */}
             </>
           )}
           {/* {al.isRestoredFeed && (

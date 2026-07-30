@@ -180,7 +180,11 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
           </Tooltip>
         )}
 
-        {lastRetrainJob && (
+        {/* Gate on COMPLETED: `lastRetrainJob` is reassigned on every poll
+            tick, so a bare truthy check rendered this green "completed" tag
+            (and its "Retrain completed at ?" tooltip) while the job was still
+            RUNNING — directly contradicting the "Retraining…" tag below. */}
+        {lastRetrainJob?.status === "COMPLETED" && (
           <Tooltip title={`Retrain completed at ${lastRetrainJob.completed_at ?? "?"}`}>
             <Tag icon={<ExperimentOutlined />} color="green" className="text-xs">
               Post-retrain view

@@ -934,7 +934,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
             </div>
           ) : !isFpvPlotLoading && activeProjectionReady ? (
             <>
-              <div className="absolute top-2 right-2 z-10 flex flex-col items-end  gap-1 pointer-events-none">
+              <div
+                data-tour="projection-zoom"
+                className="absolute top-2 right-2 z-10 flex flex-col items-end  gap-1 pointer-events-none"
+              >
                 <div className="flex  items-center gap-1 pointer-events-auto">
                   <Tooltip title="Zoom out">
                     <button

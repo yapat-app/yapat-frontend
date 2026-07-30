@@ -17,6 +17,7 @@ import {
   clearRetrainDispatch,
   fetchAndAppendSuggestions,
   resetStaleInferenceBinding,
+  resumeFromAnchor,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -172,6 +173,22 @@ export function useHubALSession(
     snippetSets,
     dispatch,
   ]);
+
+  // Resume the feed where the participant left off when the study phase
+  // changes. Each phase renders a different workspace layout (the projection
+  // panel appears from P2 on), which remounts the feed and restarts it at the
+  // first row — so without this a participant re-enters on snippets they
+  // already worked through. Deliberately keyed on a phase *change*, not on
+  // mount: a first-time feed should open at its natural start.
+  const lastResumedPhaseRef = useRef(phase.id);
+  useEffect(() => {
+    if (lastResumedPhaseRef.current === phase.id) return;
+    // Wait for the feed to exist — the anchor can't be located in an empty
+    // list, and the ref stays put so this retries once predictions land.
+    if (predictions.length === 0) return;
+    lastResumedPhaseRef.current = phase.id;
+    dispatch(resumeFromAnchor());
+  }, [phase.id, predictions.length, dispatch]);
 
   useEffect(() => {
     const raw = searchParams.get("dataset_id");
@@ -721,6 +738,7 @@ export function useHubALSession(
 
   const lastNotifiedJobIdRef = useRef<number | null>(null);
   const retrainStartedAtRef = useRef<Record<number, number>>({});
+  const inferenceChainCountRef = useRef(0);
   useEffect(() => {
     if (!selectedDatasetId || retrainJobId === null) return;
     const stableDatasetId: number = selectedDatasetId;
@@ -778,12 +796,28 @@ export function useHubALSession(
         const snippetSetValid =
           snippetSetId !== null &&
           snippetSets.some((s) => s.id === snippetSetId);
+        // Job dispatches now also flow through this same
+        // lastRetrainDispatch/poll loop when fetchAndAppendSuggestions/
+        // runInference itself gets queued as an async job (checkpoint just
+        // changed, nothing cached for it yet) — so that job's own
+        // completion re-enters this branch too. Chase it until real rows
+        // come back, but cap the chase: if the backend keeps queuing a new
+        // job every time instead of ever serving the now-cached result,
+        // stop rather than loop forever.
+        const isRealRetrain = r.payload.trigger !== "inference";
+        if (isRealRetrain) {
+          inferenceChainCountRef.current = 0;
+        }
+        const shouldChain =
+          isRealRetrain || inferenceChainCountRef.current < 2;
         if (
           status === "COMPLETED" &&
+          shouldChain &&
           modelFamilyName !== null &&
           stillOnSameDataset &&
           snippetSetValid
         ) {
+          if (!isRealRetrain) inferenceChainCountRef.current += 1;
           if (phase.feed.mode === "scrollable_topk") {
             // Scrollable feed: append fresh suggestions without disrupting scroll position.
             dispatch(
@@ -794,7 +828,11 @@ export function useHubALSession(
                 sample_suggestion: true,
                 suggestion_strategy: "uncertainty",
                 k: inferenceK,
-                force_refresh: true,
+                // Not force_refresh: the checkpoint just changed, so the
+                // cache is naturally empty for it — forcing here is what
+                // caused every retry to queue a brand-new job instead of
+                // ever hitting the cached result once it's ready.
+                force_refresh: false,
               }),
             );
           } else {

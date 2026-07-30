@@ -541,7 +541,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   // the target card is still outside the mounted slice. Jump the scroll
   // container directly to the selected snippet's slot so the window remounts
   // around it and the card/audio re-render for that snippet.
-  useEffect(() => {
+  //
+  // Runs as a layout effect so the position is applied before paint. On a
+  // remount (study-phase changes swap the workspace layout) a plain effect
+  // would let the feed paint at row 0 first, showing a visible jump back to
+  // the top of the list before the restore lands.
+  useLayoutEffect(() => {
     if (!isBlind) return;
     if (skipScrollIntoViewRef.current) return;
     if (selectedSnippetId === null) return;

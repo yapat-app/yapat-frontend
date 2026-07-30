@@ -19,14 +19,11 @@ import { SPECIES_LABELS } from "../constants/speciesLabels";
 const CLIP_DESC =
   "Each sample is a 3-second audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
 
-const LABEL_DESC = [
-  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label.",
-  "",
-  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
-].join("\n");
+const LABEL_DESC =
+  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label. You can add multiple species for one audio sample.";
 
 const TIP_DESC =
-  "If you're not confident about a snippet, skip it. Only select None when you're confident there are no target-species vocalizations in the clip.";
+  "If you're not confident about a snippet, skip it.";
 
 const SCROLL_DESC_P1 =
   "Once you've labeled a snippet, scroll down to load the next snippet. A machine learning model picks and sorts samples it thinks are most useful for it to learn from.";
@@ -36,6 +33,9 @@ const PROJECTION_DESC =
 
 const PROJECTION_DESC_CLICKABLE =
   "Each dot is one sample in the dataset; the yellow-highlighted dot is the snippet you're currently listening to. Click any dot to load that sample into the feed, with its audio and spectrogram. You can also switch between projection views (t-SNE, UMAP, PCA) using the thumbnails above the map. Dots are positioned by how similar a machine learning model thinks the sounds are.";
+
+const ZOOM_DESC =
+  "Use the − / + buttons in the top-right corner of the projection to zoom out and in. You can also drag a box on the plot to zoom into that area. Double-click the plot to reset the zoom.";
 
 const METADATA_DESC = [
   "On the left, filter which samples appear in the feed and the projection:",
@@ -101,6 +101,14 @@ const projectionStep = (
   placement: "right",
 });
 
+const zoomStep = (): TourStepSpec => ({
+  featureKey: "zoom",
+  target: "projection-zoom",
+  title: "Zooming the projection",
+  description: ZOOM_DESC,
+  placement: "left",
+});
+
 const metadataStep = (): TourStepSpec => ({
   featureKey: "meta",
   target: "metadata-filters",
@@ -126,6 +134,24 @@ const sortStep = (): TourStepSpec => ({
   placement: "left",
 });
 
+const TASK_DESC = [
+  "Your task will be to annotate as many POSITIVE samples as possible in the given time for the following species:",
+  "",
+  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
+].join("\n");
+
+// Shown as the final card of every phase's tour. Each phase uses its own
+// featureKey (task-p1..task-p5) so the tour's cross-phase dedup doesn't
+// suppress it after the first phase — unlike the other cards, this reminder
+// is meant to repeat every time.
+const taskStep = (featureKey: string): TourStepSpec => ({
+  featureKey,
+  target: "task-reminder",
+  title: "Task",
+  description: TASK_DESC,
+  placement: "center",
+});
+
 // ── Per-phase intro copy ───────────────────────────────────────────────────
 
 const INTRO_FEED_ONLY =
@@ -147,42 +173,42 @@ const INTRO_GUIDE_LINE =
   "You'll have 15 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
 
 const INTRO_GUIDE_LINE_P5 =
-  "You'll have 25 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
+  "You'll have 40 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
 
 export const PHASE_CONTENT: Record<string, PhaseContent> = {
   // ── Phase 1 — Feed only ─────────────────────────────────────────────────
   P1: {
     title: "Welcome to Phase 1",
     body: [INTRO_FEED_ONLY, INTRO_GUIDE_LINE],
-    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep()],
+    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep(), taskStep("task-p1")],
   },
 
   // ── Phase 2 — NEW: feature projection ───────────────────────────────────
   P2: {
     title: "Welcome to Phase 2",
     body: [INTRO_P2_PROJECTION, INTRO_GUIDE_LINE],
-    tour: [projectionStep(PROJECTION_DESC)],
+    tour: [projectionStep(PROJECTION_DESC), zoomStep(), taskStep("task-p2")],
   },
 
   // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
   P3: {
     title: "Welcome to Phase 3",
     body: [INTRO_P3_FILTERS, INTRO_GUIDE_LINE],
-    tour: [metadataStep()],
+    tour: [metadataStep(), taskStep("task-p3")],
   },
 
   // ── Phase 4 — NEW: model-derived score filters + feed sorting ───────────
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [modelScoresStep(), sortStep()],
+    tour: [modelScoresStep(), sortStep(), taskStep("task-p4")],
   },
 
   // ── Phase 5 — NEW: clickable projection points ──────────────────────────
   P5: {
     title: "Welcome to Phase 5",
     body: [INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
-    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click")],
+    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click"), taskStep("task-p5")],
   },
 };
 
