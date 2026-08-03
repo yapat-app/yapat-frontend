@@ -11,6 +11,7 @@ import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { DatasetRetrainThresholdSettings } from "./DatasetRetrainThresholdSettings";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
 import { datasetApi } from "../services/api";
+import { useInheritedQuickLabelNames } from "../hooks/useInheritedQuickLabelNames";
 
 type DatasetCardProps = {
   dataset: Dataset;
@@ -24,6 +25,8 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
 
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
+  // Model-derived labels — present only when the dataset has a model (checkpoint).
+  const inheritedNames = useInheritedQuickLabelNames(dataset.id);
 
   useEffect(() => {
     datasetApi
@@ -32,8 +35,23 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
       .catch(() => setQuickLabels([]));
   }, [dataset.id]);
 
-  // Only the custom labels added by the user (stored quick_labels).
   const hasCustomLabels = quickLabels.length > 0;
+
+  // Effective labels: model-derived (if a model exists) first, then the user's
+  // custom labels, deduped by display name. No model → custom only.
+  const customNameKeys = new Set(
+    quickLabels.map((l) => l.display_name.trim().toLowerCase()),
+  );
+  const displayLabels: { key: string; display_name: string }[] = [
+    ...inheritedNames
+      .filter((n) => !customNameKeys.has(n.trim().toLowerCase()))
+      .map((n) => ({ key: `model:${n}`, display_name: n })),
+    ...quickLabels.map((l) => ({
+      key: l.taxon_id,
+      display_name: l.display_name,
+    })),
+  ];
+  const hasAnyLabels = displayLabels.length > 0;
 
   const handleStartAL = () => {
     navigate(`/annotate?mode=al&dataset_id=${dataset.id}`);
@@ -65,39 +83,64 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   )}
                 </div>
 
-                {/* Quick Labels strip — custom labels only */}
-                <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                  <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", marginRight: 4 }}>
+                {/* Quick Labels strip — model-derived (if any) + custom labels */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    marginTop: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#888",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      marginRight: 4,
+                    }}
+                  >
                     ⚡ Quick Labels
                   </span>
-                  {hasCustomLabels ? (
+                  {hasAnyLabels && (
                     <>
-                      {quickLabels.slice(0, 5).map((l) => (
-                        <Tag key={l.taxon_id} style={{ fontSize: 11, margin: 0 }}>
+                      {displayLabels.slice(0, 5).map((l) => (
+                        <Tag key={l.key} style={{ fontSize: 11, margin: 0 }}>
                           {l.display_name}
                         </Tag>
                       ))}
-                      {quickLabels.length > 5 && (
-                        <Tooltip title={quickLabels.slice(5).map((l) => l.display_name).join(", ")}>
-                          <Tag style={{ fontSize: 11, margin: 0, color: "#888" }}>
-                            +{quickLabels.length - 5} more
+                      {displayLabels.length > 5 && (
+                        <Tooltip
+                          title={displayLabels
+                            .slice(5)
+                            .map((l) => l.display_name)
+                            .join(", ")}
+                        >
+                          <Tag
+                            style={{ fontSize: 11, margin: 0, color: "#888" }}
+                          >
+                            +{displayLabels.length - 5} more
                           </Tag>
                         </Tooltip>
                       )}
-                      <Tag
-                        style={{
-                          fontSize: 11,
-                          margin: 0,
-                          cursor: "pointer",
-                          color: "#1890ff",
-                          borderColor: "#1890ff",
-                          borderStyle: "dashed",
-                        }}
-                        onClick={() => setManagingLabels(true)}
-                      >
-                        Manage
-                      </Tag>
                     </>
+                  )}
+                  {hasCustomLabels ? (
+                    <Tag
+                      style={{
+                        fontSize: 11,
+                        margin: 0,
+                        cursor: "pointer",
+                        color: "#1890ff",
+                        borderColor: "#1890ff",
+                        borderStyle: "dashed",
+                      }}
+                      onClick={() => setManagingLabels(true)}
+                    >
+                      Manage
+                    </Tag>
                   ) : (
                     <Button
                       size="small"

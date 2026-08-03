@@ -9,11 +9,12 @@ import {
   labelNamesFromTaxonomyNodes,
   mergeQuickLabelNames,
 } from "../utils/quickLabelList";
+import { fetchDatasetModelSpecies } from "../utils/fetchDatasetModelSpecies";
 import { datasetApi } from "../services/api";
 
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const { user } = useAppSelector((s) => s.auth);
-  const { selectedDatasetId } = useAppSelector((s) => s.al);
+  const { selectedDatasetId, usedCheckpointId } = useAppSelector((s) => s.al);
   const { allTaxonomies, labelSpace, taxonomiesStatus } = useAppSelector(
     (s) => s.customTaxonomy,
   );
@@ -29,8 +30,6 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     setPamLoading(true);
 
     const load = async () => {
-      // Only the dataset's stored quick_labels (custom labels added by the
-      // user). Model/checkpoint-inherited species are intentionally excluded.
       let storedNames: string[] = [];
       if (selectedDatasetId != null) {
         try {
@@ -43,8 +42,19 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
         }
       }
 
+      // Model-derived species
+      let modelNames: string[] = [];
+      try {
+        modelNames = await fetchDatasetModelSpecies(
+          usedCheckpointId,
+          selectedDatasetId,
+        );
+      } catch {
+        /* ignore — no model species */
+      }
+
       if (!cancelled) {
-        setPamSpecies(storedNames);
+        setPamSpecies(mergeQuickLabelNames(modelNames, storedNames));
         setPamLoading(false);
       }
     };
@@ -53,7 +63,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId]);
+  }, [selectedDatasetId, usedCheckpointId]);
 
   const taxonomyNames = useMemo(() => {
     const fromNodes = labelNamesFromTaxonomyNodes(

@@ -3,6 +3,7 @@ import { Button, Input, Modal, Spin, Tooltip, message } from "antd";
 import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
+import { useInheritedQuickLabelNames } from "../hooks/useInheritedQuickLabelNames";
 
 type Source = "gbif" | "envo" | "local";
 
@@ -28,6 +29,16 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const [searching, setSearching] = useState(false);
   const [localInput, setLocalInput] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Model-derived labels (read-only). Empty when the dataset has no model, so
+  // the "Inherited from model" section below simply doesn't render.
+  const inheritedNames = useInheritedQuickLabelNames(dataset.id, open);
+  const customNameKeys = new Set(
+    labels.map((l) => l.display_name.trim().toLowerCase()),
+  );
+  const inheritedOnly = inheritedNames.filter(
+    (n) => !customNameKeys.has(n.trim().toLowerCase()),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -141,6 +152,49 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
               paddingRight: 16,
             }}
           >
+            {inheritedOnly.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <Tooltip title="Derived from the dataset's model. These lables cannot be edited.">
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "#888",
+                      marginBottom: 8,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Inherited from model ({inheritedOnly.length})
+                  </div>
+                </Tooltip>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    maxHeight: 120,
+                    overflowY: "auto",
+                  }}
+                >
+                  {inheritedOnly.map((n) => (
+                    <span
+                      key={`model:${n}`}
+                      style={{
+                        fontSize: 12,
+                        background: "#f0f5ff",
+                        color: "#5a6b8c",
+                        border: "1px solid #d6e4ff",
+                        borderRadius: 4,
+                        padding: "2px 8px",
+                      }}
+                    >
+                      {n}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div
               style={{
                 fontSize: 11,
