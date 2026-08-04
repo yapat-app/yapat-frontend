@@ -417,6 +417,29 @@ export interface QuickLabel {
   display_name: string;
 }
 
+/**
+ * A quick label added while annotating rather than curated up front — today a
+ * participant picking a species from the GBIF search box. `owned` is false for
+ * dataset-wide entries (the lane the Ontology Engineering service writes into),
+ * which are visible to everyone on the dataset and removable by no one.
+ */
+export interface QuickLabelEntry {
+  id: number;
+  taxon_id: string;
+  display_name: string;
+  rank?: string | null;
+  source: "gbif" | "oe" | "manual";
+  created_at?: string | null;
+  owned: boolean;
+}
+
+export interface QuickLabelEntryCreate {
+  taxon_id: string;
+  display_name: string;
+  rank?: string | null;
+  source?: "gbif" | "manual";
+}
+
 export interface Dataset {
   id: number | string;
   name: string;

@@ -88,6 +88,16 @@ export type StudyLogEvent =
       payload: { label: string; op: "add" | "remove"; labelsAfter: string[] };
     }
   | { eventType: "label_clear"; payload: { labelsBefore: string[] } }
+  | {
+      // A GBIF search result was pinned into the participant's quick labels,
+      // so the next snippet needs no second search.
+      eventType: "quick_label_promoted";
+      payload: { taxonId: string; label: string; source: "gbif" | "manual" };
+    }
+  | {
+      eventType: "quick_label_removed";
+      payload: { taxonId: string; label: string };
+    }
 
   // ── Visualization ───────────────────────────────────────────────────
   | {

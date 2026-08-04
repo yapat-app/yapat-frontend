@@ -323,21 +323,6 @@ export const FeedbackButtons: React.FC<Props> = ({
   // ── Blind-mode annotation UI ─────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-1.5 h-full min-h-0">
-      {/* Transient status — only shown while something is happening */}
-      {(saveState === "saving" || saveState === "error") && (
-        <div className="shrink-0 flex items-center gap-2">
-          {saveState === "saving" && (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-              <Spin size="small" /> Saving…
-            </span>
-          )}
-          {saveState === "error" && (
-            <span className="text-[11px] font-semibold text-red-500">
-              Save failed — try again
-            </span>
-          )}
-        </div>
-      )}
       {!isClassicFeed && !hasCheckpoint && (
         <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
           <span className="shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
@@ -361,6 +346,21 @@ export const FeedbackButtons: React.FC<Props> = ({
         disabled={feedbackDisabled}
         quickLabels={quickLabels}
         labelsLoading={quickLabelsLoading}
+        // Rendered inside the "Quick labels" header row rather than as its own
+        // row: this panel's height feeds the spectrogram sizing, so a status
+        // line that appears and disappears on every save would resize the
+        // spectrogram on every label change.
+        statusSlot={
+          saveState === "saving" ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400 whitespace-nowrap">
+              <Spin size="small" /> Saving…
+            </span>
+          ) : saveState === "error" ? (
+            <span className="text-[11px] font-semibold text-red-500 whitespace-nowrap">
+              Save failed — try again
+            </span>
+          ) : null
+        }
         compact
         showList
         fillHeight

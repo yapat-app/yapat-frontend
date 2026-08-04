@@ -411,7 +411,15 @@ const PredictionCardImpl: React.FC<Props> = ({
               // (new snippet), React fully remounts the player so it re-decodes
               // and re-renders the new spectrogram instead of keeping the
               // previously decoded one.
-              key={`${prediction.snippet_id}|${audioBlobUrl}|${spectrogramBandKey}|${blindSpecHeight}`}
+              //
+              // blindSpecHeight is deliberately NOT in the key. It is derived
+              // from the measured card height, and the card is re-measured
+              // whenever the label area grows -- which it does the moment a
+              // snippet gets its first label, since the LABELS chip row appears.
+              // Keying on it therefore remounted the player on every first
+              // label, blanking the spectrogram while it re-decoded. Height is
+              // passed as a prop and just rescales the SVG.
+              key={`${prediction.snippet_id}|${audioBlobUrl}|${spectrogramBandKey}`}
               src={audioBlobUrl}
               sampleRate={audioSampleRate}
               datasetSpectrogram={datasetSpectrogram}

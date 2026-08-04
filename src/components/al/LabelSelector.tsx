@@ -18,9 +18,10 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
-import { SearchOutlined, GlobalOutlined } from "@ant-design/icons";
+import { SearchOutlined, GlobalOutlined, CloseOutlined } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
 import { getSpeciesScientificName } from "../../constants/speciesLabels";
+import { usePersonalQuickLabels } from "../../hooks/usePersonalQuickLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -62,6 +63,14 @@ interface Props {
   quickLabels: string[];
   labelsLoading: boolean;
   /**
+   * Transient status (e.g. "Saving…") rendered right-aligned in the always-
+   * present "Quick labels" header row. It lives there rather than as its own
+   * flow row so that showing or hiding it costs no vertical space: the label
+   * panel is measured to size the spectrogram, so any height change there
+   * resizes the spectrogram mid-annotation. Compact mode only.
+   */
+  statusSlot?: React.ReactNode;
+  /**
    * Compact inline mode — no outer border, no section headers, no source badges.
    * Renders a search input + a flat wrapping row of small label chips.
    * Designed for inline embedding inside a snippet card below the spectrogram.
@@ -82,6 +91,7 @@ export const LabelSelector: React.FC<Props> = ({
   fillHeight = false,
   quickLabels,
   labelsLoading,
+  statusSlot,
   compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,15 +134,47 @@ export const LabelSelector: React.FC<Props> = ({
     debounceTimer.current = setTimeout(() => searchGBIF(query), GBIF_DEBOUNCE_MS);
   };
 
-  const pamOptions = useMemo(
-    () => quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const })),
-    [quickLabels],
-  );
+  // Labels this participant pinned from GBIF, plus any dataset-wide entries.
+  const personal = usePersonalQuickLabels();
 
-  // De-duplicate GBIF results against the PAM list.
+  // Chip list: the participant's own pinned labels first (server returns them
+  // newest-first, hand-picked ahead of bulk imports), then the checkpoint /
+  // dataset labels. Case-insensitive dedupe, first occurrence wins.
+  const pamOptions = useMemo(() => {
+    const out: {
+      value: string;
+      label: string;
+      source: "pam";
+      taxonId?: string;
+      removable: boolean;
+    }[] = [];
+    const seen = new Set<string>();
+    for (const entry of personal.entries) {
+      const key = entry.display_name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        value: entry.display_name,
+        label: entry.display_name,
+        source: "pam",
+        taxonId: entry.taxon_id,
+        removable: entry.owned,
+      });
+    }
+    for (const sp of quickLabels) {
+      const key = sp.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ value: sp, label: sp, source: "pam", removable: false });
+    }
+    return out;
+  }, [personal.entries, quickLabels]);
+
+  // De-duplicate GBIF results against the chip list, so a species that is
+  // already pinned stops showing up as a fresh suggestion.
   const pamSet = useMemo(
-    () => new Set(quickLabels.map((s) => s.toLowerCase())),
-    [quickLabels],
+    () => new Set(pamOptions.map((o) => o.value.toLowerCase())),
+    [pamOptions],
   );
   const gbifOptions = useMemo(
     () =>
@@ -143,7 +185,13 @@ export const LabelSelector: React.FC<Props> = ({
         })
         .map((r) => {
           const name = r.canonicalName ?? r.scientificName;
-          return { value: name, label: name, source: "gbif" as const, rank: r.rank };
+          return {
+            value: name,
+            label: name,
+            source: "gbif" as const,
+            rank: r.rank,
+            taxonKey: r.key,
+          };
         }),
     [gbifResults, pamSet],
   );
@@ -226,6 +274,26 @@ export const LabelSelector: React.FC<Props> = ({
     onChange([]);
   };
 
+  /**
+   * Apply a search-dropdown option to the snippet, and — when it came from
+   * GBIF — pin it to the participant's quick labels so the next snippet needs
+   * no second search. Pinning is fire-and-forget: it must never delay or block
+   * the label itself.
+   */
+  const pickSearchOption = (opt: (typeof compactSearchOptions)[number]) => {
+    addLabel(opt.value);
+    if (opt.source === "gbif" && opt.taxonKey != null) {
+      personal.promote({
+        taxon_id: `gbif:${opt.taxonKey}`,
+        display_name: opt.value,
+        rank: opt.rank ?? null,
+        source: "gbif",
+      });
+    }
+    setSearchQuery("");
+    setGbifResults([]);
+  };
+
   // ── Compact inline mode ───────────────────────────────────────────────────
   if (compact) {
     return (
@@ -284,9 +352,15 @@ export const LabelSelector: React.FC<Props> = ({
                   compactSearchOptions.find(
                     (o) => o.value.toLowerCase() === q.toLowerCase(),
                   ) ?? compactSearchOptions[0];
-                addLabel(match?.value ?? q);
-                setSearchQuery("");
-                setGbifResults([]);
+                if (match) {
+                  pickSearchOption(match);
+                } else {
+                  // Free text with no match: label the snippet, but don't pin —
+                  // it isn't a resolved taxon.
+                  addLabel(q);
+                  setSearchQuery("");
+                  setGbifResults([]);
+                }
               }
             }}
             disabled={disabled}
@@ -333,11 +407,7 @@ export const LabelSelector: React.FC<Props> = ({
                     <button
                       type="button"
                       className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between gap-2"
-                      onClick={() => {
-                        addLabel(opt.value);
-                        setSearchQuery("");
-                        setGbifResults([]);
-                      }}
+                      onClick={() => pickSearchOption(opt)}
                     >
                       <span>
                         {selectedSet.has(opt.value.toLowerCase()) ? "✓ " : ""}
@@ -362,11 +432,14 @@ export const LabelSelector: React.FC<Props> = ({
           })()}
 
         {/* ── Quick label chips ── */}
-        <div className="shrink-0 flex items-center">
-          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
-            Quick labels
+        <div className="shrink-0 flex items-center justify-between gap-2 min-h-5">
+          <span className="flex items-center">
+            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
+              Quick labels
+            </span>
+            {labelsLoading && <Spin size="small" className="ml-2" />}
           </span>
-          {labelsLoading && <Spin size="small" className="ml-2" />}
+          {statusSlot}
         </div>
 
         <div
@@ -385,30 +458,55 @@ export const LabelSelector: React.FC<Props> = ({
                 const isSelected = selectedSet.has(opt.value.toLowerCase());
                 const scientificName = getSpeciesScientificName(opt.value);
                 const actionLabel = isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`;
-                const button = (
-                  <button
+                const chip = (
+                  // Wrapper so the remove control is a sibling of the chip
+                  // button rather than a nested (invalid) button.
+                  <span
                     key={`pam:${opt.value}`}
-                    type="button"
-                    disabled={disabled || labelsLoading}
-                    onClick={() => toggle(opt.value)}
-                    title={scientificName ? undefined : actionLabel}
-                    className={[
-                      "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-sm font-semibold transition-all duration-150 select-none",
-                      isSelected
-                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                        : "bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
-                      disabled || labelsLoading
-                        ? "opacity-40 cursor-not-allowed"
-                        : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
-                    ].join(" ")}
+                    className="group/chip relative inline-flex"
                   >
-                    <span className="truncate max-w-45">{opt.value}</span>
-                  </button>
+                    <button
+                      type="button"
+                      disabled={disabled || labelsLoading}
+                      onClick={() => toggle(opt.value)}
+                      title={scientificName ? undefined : actionLabel}
+                      className={[
+                        "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-sm font-semibold transition-all duration-150 select-none",
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                          : "bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
+                        // Labels the participant pinned themselves carry a
+                        // green edge, matching the GBIF marker in the dropdown.
+                        opt.removable && !isSelected
+                          ? "border-l-4 border-l-green-500"
+                          : "",
+                        disabled || labelsLoading
+                          ? "opacity-40 cursor-not-allowed"
+                          : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
+                      ].join(" ")}
+                    >
+                      <span className="truncate max-w-45">{opt.value}</span>
+                    </button>
+                    {opt.removable && !disabled && !labelsLoading && (
+                      <button
+                        type="button"
+                        aria-label={`Remove "${opt.value}" from quick labels`}
+                        title="Remove from quick labels"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (opt.taxonId) personal.remove(opt.taxonId);
+                        }}
+                        className="absolute -top-1.5 -right-1.5 hidden group-hover/chip:flex items-center justify-center h-4 w-4 rounded-full bg-gray-600 text-white text-[8px] shadow hover:bg-red-500"
+                      >
+                        <CloseOutlined />
+                      </button>
+                    )}
+                  </span>
                 );
-                if (!scientificName) return button;
+                if (!scientificName) return chip;
                 return (
                   <Tooltip key={`pam:${opt.value}`} title={scientificName}>
-                    {button}
+                    {chip}
                   </Tooltip>
                 );
               })}
@@ -502,7 +600,7 @@ export const LabelSelector: React.FC<Props> = ({
                 <span className="text-[11px] text-gray-500">
                   {searchQuery.trim()
                     ? `${combinedList.length} match${combinedList.length === 1 ? "" : "es"}`
-                    : `${Math.min(quickLabels.length, MAX_VISIBLE_LABELS)} labels`}
+                    : `${Math.min(pamOptions.length, MAX_VISIBLE_LABELS)} labels`}
                 </span>
                 {value.length > 0 && (
                   <Button

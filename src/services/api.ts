@@ -601,6 +601,34 @@ export const datasetApi = {
     const response = await api.put(`/api/datasets/${datasetId}/quick-labels`, labels);
     return response.data;
   },
+
+  /** Quick labels added while annotating: the caller's own picks plus any
+   *  dataset-wide entries. All three calls return the full visible list. */
+  getMyQuickLabels: async (
+    datasetId: number,
+  ): Promise<import("../types").QuickLabelEntry[]> => {
+    const response = await api.get(`/api/datasets/${datasetId}/quick-labels/mine`);
+    return response.data;
+  },
+
+  addMyQuickLabels: async (
+    datasetId: number,
+    labels: import("../types").QuickLabelEntryCreate[],
+  ): Promise<import("../types").QuickLabelEntry[]> => {
+    const response = await api.post(`/api/datasets/${datasetId}/quick-labels/mine`, {
+      labels,
+    });
+    return response.data;
+  },
+
+  deleteMyQuickLabel: async (
+    datasetId: number,
+    taxonId: string,
+  ): Promise<void> => {
+    await api.delete(`/api/datasets/${datasetId}/quick-labels/mine`, {
+      params: { taxon_id: taxonId },
+    });
+  },
 };
 
 // ============================================================================

@@ -109,7 +109,12 @@ export const SnippetSpectrogramPlayer: React.FC<
     [sampleRate],
   );
 
-  const playerKey = `${src}|${fMin}|${fMax}|${plotHeight}|${fftParams.hop_length}`;
+  // Only inputs that change the decoded/analysed signal belong here: a new key
+  // remounts the player, which re-decodes the audio and recomputes the mel
+  // spectrogram (a visible blank gap while it works). Height is deliberately
+  // excluded -- it only scales the rendered SVG, and the player accepts it as a
+  // plain prop. Including it meant any container resize forced a full re-decode.
+  const playerKey = `${src}|${fMin}|${fMax}|${fftParams.hop_length}`;
 
   /**
    * Sizing note: react-audio-spectrogram-player renders the spectrogram as an

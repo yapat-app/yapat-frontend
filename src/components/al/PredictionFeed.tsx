@@ -227,7 +227,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       .map((key) => `${key}:${(visibility.ranges?.[key] ?? [0, 1]).join(",")}`)
       .join("|");
   }, [alFilters.visibility]);
-  const feedViewKey = useMemo(
+  // Every filter input, excluding sort: re-sorting is not re-filtering, so it
+  // must not clear the sticky annotation-status admissions further down.
+  const clientFilterKey = useMemo(
     () =>
       [
         enableClientFilters ? "filters:on" : "filters:off",
@@ -237,7 +239,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         filterMonths.join(","),
         filterTimeRange ? filterTimeRange.join(",") : "none",
         localLabelScope.join("\u0000"),
-        sortFieldsKey,
         scoreVisibilityKey,
       ].join("\u0001"),
     [
@@ -248,10 +249,35 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       filterMonths,
       filterTimeRange,
       localLabelScope,
-      sortFieldsKey,
       scoreVisibilityKey,
     ],
   );
+  const feedViewKey = useMemo(
+    () => [clientFilterKey, sortFieldsKey].join("|"),
+    [clientFilterKey, sortFieldsKey],
+  );
+
+  // Sticky admissions survive re-sorting and re-rendering, but not a change of
+  // filters or a change of feed -- a different dataset, snippet set, feed
+  // source or phase is a different question, not the same one still being
+  // answered. Kept separate from feedViewKey so the scroll/selection resets
+  // keyed off that stay exactly as they were.
+  const statusStickyResetKey = useMemo(
+    () =>
+      [
+        clientFilterKey,
+        selectedDatasetId ?? "none",
+        snippetSetId ?? "none",
+        feedSource ?? "none",
+        phase.id,
+      ].join("|"),
+    [clientFilterKey, selectedDatasetId, snippetSetId, feedSource, phase.id],
+  );
+
+  // Snippet IDs the annotation-status filter has already admitted. See the
+  // filter itself for why they are held rather than re-evaluated.
+  const statusStickyIdsRef = useRef<Set<number>>(new Set());
+  const statusStickyKeyRef = useRef<string | null>(null);
 
   const filteredAndSorted = useMemo(() => {
     if (!enableClientFilters)
@@ -261,11 +287,28 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
     if (filterAnnotationStatus !== "any") {
       const wantAnnotated = filterAnnotationStatus === "annotated";
+
+      // Annotating is what changes this filter's own input, so re-evaluating it
+      // live would yank a snippet out of the feed the instant its first label
+      // lands -- while the user is very likely still adding more, since
+      // labelling is multi-select. Once a snippet has been admitted it stays
+      // admitted; the set is dropped when the filters are next changed, which
+      // is the point at which the user is asking for a fresh answer.
+      if (statusStickyKeyRef.current !== statusStickyResetKey) {
+        statusStickyKeyRef.current = statusStickyResetKey;
+        statusStickyIdsRef.current = new Set<number>();
+      }
+      const admitted = statusStickyIdsRef.current;
+
       result = result.filter((p) => {
         const hasLabel =
           Boolean(feedbacks[p.snippet_id]) ||
           (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0;
-        return hasLabel === wantAnnotated;
+        if (hasLabel === wantAnnotated) {
+          admitted.add(p.snippet_id);
+          return true;
+        }
+        return admitted.has(p.snippet_id);
       });
     }
 
@@ -343,6 +386,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     labelsBySnippet,
     isClassicFeed,
     filterAnnotationStatus,
+    statusStickyResetKey,
     localLabelScope,
     filterLocations,
     recordingLocationById,

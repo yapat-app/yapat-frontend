@@ -18,10 +18,11 @@ body {
     color: #213547;
     background-color: #ffffff;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+
+  /* No bare `button { background-color }` / `a:hover { color }` here. Those
+     were Vite scaffolding defaults, and being unlayered they beat every
+     Tailwind utility -- `bg-blue-600` on a <button> rendered as #f9f9f9, so a
+     selected chip was white text on near-white, app-wide. Tailwind's preflight
+     already resets buttons to a transparent background; anything that wants a
+     fill sets it with a utility. */
 }
