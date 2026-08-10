@@ -12,6 +12,8 @@ export const Taxonomies = () => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
   const { allDatasets } = useAppSelector((state) => state.dataset);
+  const { user } = useAppSelector((state) => state.auth);
+  const isAdmin = user?.role === "admin";
   const teams = (allTeams as any[]) ?? [];
   const datasets = (allDatasets as any[]) ?? [];
   const firstTeamId: number | undefined = teams?.[0]?.id;
@@ -81,9 +83,11 @@ export const Taxonomies = () => {
   );
 
   // Team picker is hidden for now on the pre-annotation screen for all users;
-  // the owning team is derived from the selected dataset (with selectedTeamId
-  // kept only as a fallback for teamless datasets — see teamIdForChat below).
-  const showTeamPicker = false;
+  // Regular users: the owning team is derived from the selected dataset
+  // (selectedTeamId kept only as a fallback for teamless datasets — see
+  // teamIdForChat below). Admins get an explicit team picker so they choose
+  // which team's label-space versions to view/manage.
+  const showTeamPicker = isAdmin;
 
   const selectedDataset = useMemo(
     () =>
@@ -91,11 +95,24 @@ export const Taxonomies = () => {
     [datasets, selectedDatasetId],
   );
 
-  // Let the backend derive the owning team from the dataset when it has one;
-  // only forward a team when there's no dataset selected, or the dataset is
-  // teamless (team_id == null) so freeze would otherwise 400.
-  const teamIdForChat: number | undefined =
-    selectedDatasetId != null && selectedDataset?.team_id != null
+  // Keep the team selection in step with the chosen dataset. For regular users
+  // this guarantees the team id used to build/submit a label space matches the
+  // dataset's team. For admins it pre-fills the picker with the dataset's team
+  // (still overridable) rather than ambushing them with an arbitrary team.
+  useEffect(() => {
+    const datasetTeamId = selectedDataset?.team_id;
+    if (datasetTeamId != null) setSelectedTeamId(Number(datasetTeamId));
+  }, [selectedDataset]);
+
+  // Team the new conversation (and the label space it produces) is associated
+  // with. An admin's label space is dataset-only — never associated with a team
+  // — so we never forward a team for admins (the backend also keeps team_id null
+  // for admins). For regular users, let the backend derive the owning team from
+  // the dataset when it has one, forwarding a team only when there's no dataset
+  // or the dataset is teamless.
+  const teamIdForChat: number | undefined = isAdmin
+    ? undefined
+    : selectedDatasetId != null && selectedDataset?.team_id != null
       ? undefined
       : selectedTeamId;
 
@@ -131,25 +148,6 @@ export const Taxonomies = () => {
         >
           <div className="flex-shrink-0 mb-3">
             <Space align="center" size={12} wrap>
-              {showTeamPicker && (
-                <>
-                  <Typography.Text strong>Target team</Typography.Text>
-                  <Select
-                    style={{ minWidth: 260 }}
-                    placeholder="Select a team"
-                    value={selectedTeamId}
-                    options={teamOptions}
-                    onChange={(v) => setSelectedTeamId(v)}
-                    disabled={teamOptions.length === 0}
-                    showSearch
-                    optionFilterProp="label"
-                  />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    This team will own the frozen label space taxonomy.
-                  </Typography.Text>
-                </>
-              )}
-
               <Typography.Text strong>Dataset</Typography.Text>
               <Select
                 style={{ minWidth: 260 }}
@@ -162,9 +160,25 @@ export const Taxonomies = () => {
                 showSearch
                 optionFilterProp="label"
               />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Link this conversation to a dataset.
-              </Typography.Text>
+
+              {showTeamPicker && (
+                <>
+                  <Typography.Text strong>Team</Typography.Text>
+                  <Select
+                    style={{ minWidth: 220 }}
+                    placeholder="Select a team"
+                    value={selectedTeamId}
+                    options={teamOptions}
+                    onChange={(v) => setSelectedTeamId(v)}
+                    disabled={teamOptions.length === 0}
+                    showSearch
+                    optionFilterProp="label"
+                  />
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    Choose which team's label space versions to view and manage.
+                  </Typography.Text>
+                </>
+              )}
             </Space>
           </div>
 
@@ -178,7 +192,21 @@ export const Taxonomies = () => {
             </div>
 
             <div className="w-2/5 min-w-0 h-full">
-              <LabelSpace />
+              {/* Which team's versions the panel shows. Admins drive it from the
+                  explicit Team picker (pre-filled with the dataset's team, still
+                  overridable) so they aren't shown a team they didn't choose.
+                  Regular users follow the selected dataset's team (authoritative
+                  once a dataset is picked; may be undefined for a teamless
+                  dataset → empty state), falling back to their team beforehand. */}
+              <LabelSpace
+                teamId={
+                  isAdmin
+                    ? selectedTeamId
+                    : selectedDatasetId != null
+                      ? (selectedDataset?.team_id as number | undefined)
+                      : selectedTeamId
+                }
+              />
             </div>
           </div>
         </Card>

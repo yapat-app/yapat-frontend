@@ -242,6 +242,42 @@ export interface FreezeLabelSpaceResponse {
   taxonomy: unknown;
 }
 
+/**
+ * A single versioned label space (one `custom_taxonomy` record). Created by a
+ * member finalizing (`/submit`) and promoted to `active` by the team owner.
+ */
+export interface CustomTaxonomyVersion {
+  id: number;
+  taxonomy_id: string;
+  /** Owning team. Null for admin-created, dataset-only label spaces. */
+  team_id: number | null;
+  /** Dataset this label space is associated with (null for team-only/legacy). */
+  dataset_id?: number | null;
+  created_by_user_id: number;
+  name: string;
+  description?: string | null;
+  status: "draft" | "submitted" | "active" | string;
+  taxonomy_data: {
+    nodes: LabelSpaceItem[];
+    metadata?: Record<string, unknown>;
+  };
+  is_global?: boolean;
+  created_at?: string;
+  updated_at?: string | null;
+}
+
+/** Response from GET /teams/{id}/label-space/submissions */
+export interface CustomTaxonomyListResponse {
+  taxonomies: CustomTaxonomyVersion[];
+  total: number;
+}
+
+/** Response from POST /chat/{id}/submit */
+export interface SubmitLabelSpaceResponse {
+  conversation: Conversation;
+  taxonomy: CustomTaxonomyVersion;
+}
+
 /** Response from POST /chat/{id}/add (add to label space) */
 export interface AddToLabelSpaceResponse {
   conversation: Conversation;

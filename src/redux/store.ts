@@ -9,6 +9,7 @@ import taxonomyReducer from "./features/taxonomySlice";
 import embeddingReducer from "./features/embeddingSlice";
 import feedReducer from "./features/feedSlice";
 import customTaxonomyReducer from "./features/customTaxonomySlice";
+import labelSpaceVersionReducer from "./features/labelSpaceVersionSlice";
 import alReducer from "./features/alSlice";
 import wssedReducer from "./features/wssedSlice";
 import type { PersistedClassicFeedCache } from "../utils/classicFeedPersistence";
@@ -24,6 +25,7 @@ const store = configureStore({
     annotation: annotationReducer,
     taxonomy: taxonomyReducer,
     customTaxonomy: customTaxonomyReducer,
+    labelSpaceVersion: labelSpaceVersionReducer,
     embedding: embeddingReducer,
     feed: feedReducer,
     al: alReducer,

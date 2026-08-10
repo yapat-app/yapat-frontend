@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { DatasetRetrainThresholdSettings } from "./DatasetRetrainThresholdSettings";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
-import { datasetApi } from "../services/api";
+import { datasetApi, teamApi } from "../services/api";
 import { useInheritedQuickLabelNames } from "../hooks/useInheritedQuickLabelNames";
 
 type DatasetCardProps = {
@@ -28,12 +28,46 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   // Model-derived labels — present only when the dataset has a model (checkpoint).
   const inheritedNames = useInheritedQuickLabelNames(dataset.id);
 
+  // Labels shown on the card. For a dataset that belongs to a team, these are
+  // the team's ACTIVE label-space version (the versioned source of truth) — not
+  // the flat, accumulated dataset.quick_labels. Teamless (admin-owned) datasets
+  // keep the legacy quick_labels for now; the admin view is a later step.
   useEffect(() => {
-    datasetApi
-      .getQuickLabels(Number(dataset.id))
-      .then(setQuickLabels)
-      .catch(() => setQuickLabels([]));
-  }, [dataset.id]);
+    let cancelled = false;
+    const apply = (labels: QuickLabel[]) => {
+      if (!cancelled) setQuickLabels(labels);
+    };
+    const teamId = dataset.team_id;
+    if (teamId != null) {
+      Promise.all([
+        teamApi.getActiveLabelSpace(teamId),
+        datasetApi.getQuickLabels(Number(dataset.id)).catch(() => []),
+      ])
+        .then(([version, stored]) => {
+          const versionLabels = (version?.taxonomy_data?.nodes ?? []).map(
+            (n) => ({
+              taxon_id: (n.taxon_id ?? n.id ?? "").toString(),
+              display_name:
+                n.canonical_name || n.scientific_name || n.name || "",
+            }),
+          );
+          const versionKeys = new Set(versionLabels.map((l) => l.taxon_id));
+          const cardAdded = (stored ?? []).filter(
+            (l) => !versionKeys.has(l.taxon_id),
+          );
+          apply([...versionLabels, ...cardAdded]);
+        })
+        .catch(() => apply([]));
+    } else {
+      datasetApi
+        .getQuickLabels(Number(dataset.id))
+        .then(apply)
+        .catch(() => apply([]));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [dataset.id, dataset.team_id]);
 
   const hasCustomLabels = quickLabels.length > 0;
 

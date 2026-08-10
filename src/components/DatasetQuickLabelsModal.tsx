@@ -1,9 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Input, Modal, Spin, Tooltip, message } from "antd";
-import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  CloseOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
 import { useInheritedQuickLabelNames } from "../hooks/useInheritedQuickLabelNames";
+import { useActiveLabelSpace } from "../hooks/useActiveLabelSpace";
 
 type Source = "gbif" | "envo" | "local";
 
@@ -29,12 +36,28 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const [searching, setSearching] = useState(false);
   const [localInput, setLocalInput] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigate = useNavigate();
 
-  // Model-derived labels (read-only). Empty when the dataset has no model, so
-  // the "Inherited from model" section below simply doesn't render.
+  // Version-controlled labels are edited in Pre-Annotation, not here.
+  const goToPreAnnotation = () => {
+    onClose();
+    navigate(`/pre-annotation?dataset_id=${dataset.id}`);
+  };
+
+  const isTeamDataset = dataset.team_id != null;
+  const { labels: versionLabels, loading: activeLoading } = useActiveLabelSpace(
+    isTeamDataset ? dataset.team_id : null,
+  );
+  const listLoading = loading || activeLoading;
+
+  const versionKeys = new Set(versionLabels.map((l) => l.taxon_id));
+  const editableLabels = labels.filter((l) => !versionKeys.has(l.taxon_id));
+
   const inheritedNames = useInheritedQuickLabelNames(dataset.id, open);
   const customNameKeys = new Set(
-    labels.map((l) => l.display_name.trim().toLowerCase()),
+    [...versionLabels, ...editableLabels].map((l) =>
+      l.display_name.trim().toLowerCase(),
+    ),
   );
   const inheritedOnly = inheritedNames.filter(
     (n) => !customNameKeys.has(n.trim().toLowerCase()),
@@ -84,7 +107,11 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   }, [query, source]);
 
   const addLabel = (label: QuickLabel) => {
-    if (labels.some((l) => l.taxon_id === label.taxon_id)) return;
+    if (
+      labels.some((l) => l.taxon_id === label.taxon_id) ||
+      versionKeys.has(label.taxon_id)
+    )
+      return;
     setLabels((prev) => [...prev, label]);
   };
 
@@ -106,7 +133,12 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const save = async () => {
     setSaving(true);
     try {
-      const saved = await datasetApi.putQuickLabels(Number(dataset.id), labels);
+      // Persist only the card-added labels; version-controlled labels live in the
+      // active version, not in dataset.quick_labels.
+      const saved = await datasetApi.putQuickLabels(
+        Number(dataset.id),
+        editableLabels,
+      );
       onSaved(saved);
       message.success("Quick labels saved");
       onClose();
@@ -138,7 +170,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
       ]}
       width={700}
     >
-      {loading ? (
+      {listLoading ? (
         <div style={{ textAlign: "center", padding: 40 }}>
           <Spin />
         </div>
@@ -195,6 +227,73 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
               </div>
             )}
 
+            {/* Version-controlled labels (from the active label-space version) —
+                read-only here; managed via Pre-Annotation. */}
+            {versionLabels.length > 0 && (
+              <>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <Tooltip title="From the team's active label space (LLM pre-annotation). Managed in Pre-Annotation — not editable here.">
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "#888",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      From label space version ({versionLabels.length})
+                    </span>
+                  </Tooltip>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={goToPreAnnotation}
+                    style={{ fontSize: 11, padding: 0, height: "auto" }}
+                  >
+                    Pre-Annotation
+                  </Button>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                    maxHeight: 180,
+                    overflowY: "auto",
+                    marginBottom: 12,
+                  }}
+                >
+                  {versionLabels.map((l) => (
+                    <div
+                      key={`ver:${l.taxon_id}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        background: "#f5f8ff",
+                        borderRadius: 4,
+                        padding: "4px 8px",
+                      }}
+                    >
+                      <Tooltip title={l.taxon_id}>
+                        <span style={{ fontSize: 13, color: "#3f5b8c" }}>
+                          {l.display_name}
+                        </span>
+                      </Tooltip>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             <div
               style={{
                 fontSize: 11,
@@ -204,23 +303,24 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                 textTransform: "uppercase",
               }}
             >
-              Current Labels ({labels.length})
+              Added labels ({editableLabels.length})
             </div>
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: 4,
-                maxHeight: 360,
+                maxHeight: 300,
                 overflowY: "auto",
               }}
             >
-              {labels.length === 0 && (
+              {editableLabels.length === 0 && (
                 <span style={{ color: "#bbb", fontSize: 12 }}>
-                  No labels yet. Add from the right panel.
+                  No added labels. Add GBIF / ENVO / Local labels from the
+                  right.
                 </span>
               )}
-              {labels.map((l) => (
+              {editableLabels.map((l) => (
                 <div
                   key={l.taxon_id}
                   style={{
@@ -248,123 +348,135 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Right: add labels */}
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                fontSize: 11,
-                color: "#888",
-                marginBottom: 8,
-                fontWeight: 600,
-                textTransform: "uppercase",
-              }}
-            >
-              Add Labels
-            </div>
-
-            {/* Source pills */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              {sourcePills.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => {
-                    setSource(p.key);
-                    setQuery("");
-                    setResults([]);
-                  }}
-                  style={{
-                    padding: "3px 10px",
-                    borderRadius: 4,
-                    border: "1px solid",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    background: source === p.key ? "#1890ff" : "#f0f0f0",
-                    color: source === p.key ? "#fff" : "#555",
-                    borderColor: source === p.key ? "#1890ff" : "#d9d9d9",
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            {source === "local" ? (
-              <div style={{ display: "flex", gap: 8 }}>
-                <Input
-                  placeholder="e.g. Wind, No biophony, Rain…"
-                  value={localInput}
-                  onChange={(e) => setLocalInput(e.target.value)}
-                  onPressEnter={addLocal}
-                  size="small"
-                />
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={addLocal}
-                >
-                  Add
-                </Button>
+          {/* Right: add labels (GBIF / ENVO / Local) */}
+          {
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#888",
+                  marginBottom: 8,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                }}
+              >
+                Add Labels
               </div>
-            ) : (
-              <>
-                <Input
-                  prefix={<SearchOutlined style={{ color: "#bbb" }} />}
-                  placeholder={
-                    source === "gbif"
-                      ? "Search species e.g. Turdus merula…"
-                      : "Search ENVO terms e.g. rain, wind…"
-                  }
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  size="small"
-                  suffix={searching ? <Spin size="small" /> : null}
-                />
-                <div
-                  style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}
-                >
-                  {results.map((r) => (
-                    <div
-                      key={r.taxon_id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "4px 0",
-                        borderBottom: "1px solid #f5f5f5",
-                        fontSize: 12,
-                      }}
-                    >
-                      <div>
-                        <span>{r.display_name}</span>
-                        <span
-                          style={{ color: "#bbb", fontSize: 11, marginLeft: 6 }}
-                        >
-                          {r.taxon_id}
-                        </span>
-                      </div>
-                      <Button
-                        size="small"
-                        type="link"
-                        icon={<PlusOutlined />}
-                        disabled={labels.some((l) => l.taxon_id === r.taxon_id)}
-                        onClick={() => addLabel(r)}
-                      >
-                        Add
-                      </Button>
-                    </div>
-                  ))}
-                  {!searching && query.trim() && results.length === 0 && (
-                    <div
-                      style={{ color: "#bbb", fontSize: 12, padding: "8px 0" }}
-                    >
-                      No results found.
-                    </div>
-                  )}
+
+              {/* Source pills */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                {sourcePills.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => {
+                      setSource(p.key);
+                      setQuery("");
+                      setResults([]);
+                    }}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: 4,
+                      border: "1px solid",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      background: source === p.key ? "#1890ff" : "#f0f0f0",
+                      color: source === p.key ? "#fff" : "#555",
+                      borderColor: source === p.key ? "#1890ff" : "#d9d9d9",
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {source === "local" ? (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Input
+                    placeholder="e.g. Wind, No biophony, Rain…"
+                    value={localInput}
+                    onChange={(e) => setLocalInput(e.target.value)}
+                    onPressEnter={addLocal}
+                    size="small"
+                  />
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={addLocal}
+                  >
+                    Add
+                  </Button>
                 </div>
-              </>
-            )}
-          </div>
+              ) : (
+                <>
+                  <Input
+                    prefix={<SearchOutlined style={{ color: "#bbb" }} />}
+                    placeholder={
+                      source === "gbif"
+                        ? "Search species e.g. Turdus merula…"
+                        : "Search ENVO terms e.g. rain, wind…"
+                    }
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    size="small"
+                    suffix={searching ? <Spin size="small" /> : null}
+                  />
+                  <div
+                    style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}
+                  >
+                    {results.map((r) => (
+                      <div
+                        key={r.taxon_id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "4px 0",
+                          borderBottom: "1px solid #f5f5f5",
+                          fontSize: 12,
+                        }}
+                      >
+                        <div>
+                          <span>{r.display_name}</span>
+                          <span
+                            style={{
+                              color: "#bbb",
+                              fontSize: 11,
+                              marginLeft: 6,
+                            }}
+                          >
+                            {r.taxon_id}
+                          </span>
+                        </div>
+                        <Button
+                          size="small"
+                          type="link"
+                          icon={<PlusOutlined />}
+                          disabled={labels.some(
+                            (l) => l.taxon_id === r.taxon_id,
+                          )}
+                          onClick={() => addLabel(r)}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    ))}
+                    {!searching && query.trim() && results.length === 0 && (
+                      <div
+                        style={{
+                          color: "#bbb",
+                          fontSize: 12,
+                          padding: "8px 0",
+                        }}
+                      >
+                        No results found.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          }
         </div>
       )}
     </Modal>
