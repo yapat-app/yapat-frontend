@@ -1,7 +1,7 @@
 import { NavigationBar } from "../components/NavigationBar";
 import TaxonomyChatbot from "../components/TaxonomyChatbot";
 import { LabelSpace } from "../components/LabelSpace";
-import { Card, Select, Space, Typography } from "antd";
+import { Card, Select, Space, Spin, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fetchAllteams } from "../redux/features/teamSlice";
@@ -95,14 +95,11 @@ export const Taxonomies = () => {
     [datasets, selectedDatasetId],
   );
 
-  // Keep the team selection in step with the chosen dataset. For regular users
-  // this guarantees the team id used to build/submit a label space matches the
-  // dataset's team. For admins it pre-fills the picker with the dataset's team
-  // (still overridable) rather than ambushing them with an arbitrary team.
   useEffect(() => {
+    if (isAdmin) return;
     const datasetTeamId = selectedDataset?.team_id;
     if (datasetTeamId != null) setSelectedTeamId(Number(datasetTeamId));
-  }, [selectedDataset]);
+  }, [selectedDataset, isAdmin]);
 
   // Team the new conversation (and the label space it produces) is associated
   // with. An admin's label space is dataset-only — never associated with a team
@@ -111,7 +108,7 @@ export const Taxonomies = () => {
   // the dataset when it has one, forwarding a team only when there's no dataset
   // or the dataset is teamless.
   const teamIdForChat: number | undefined = isAdmin
-    ? undefined
+    ? selectedTeamId
     : selectedDatasetId != null && selectedDataset?.team_id != null
       ? undefined
       : selectedTeamId;
@@ -182,33 +179,36 @@ export const Taxonomies = () => {
             </Space>
           </div>
 
-          <div className="flex gap-4 w-full flex-1 min-h-0 overflow-hidden">
-            <div className="flex flex-1 min-w-0 h-full">
-              <TaxonomyChatbot
-                teamId={teamIdForChat}
-                datasetId={selectedDatasetId}
-                requireDataset={!datasetsLoaded || datasets.length > 0}
-              />
+          {!user ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Spin />
             </div>
+          ) : (
+            <div className="flex gap-4 w-full flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-1 min-w-0 h-full">
+                <TaxonomyChatbot
+                  teamId={teamIdForChat}
+                  datasetId={selectedDatasetId}
+                  requireDataset={!datasetsLoaded || datasets.length > 0}
+                />
+              </div>
 
-            <div className="w-2/5 min-w-0 h-full">
-              {/* Which team's versions the panel shows. Admins drive it from the
-                  explicit Team picker (pre-filled with the dataset's team, still
-                  overridable) so they aren't shown a team they didn't choose.
-                  Regular users follow the selected dataset's team (authoritative
-                  once a dataset is picked; may be undefined for a teamless
-                  dataset → empty state), falling back to their team beforehand. */}
-              <LabelSpace
-                teamId={
-                  isAdmin
-                    ? selectedTeamId
-                    : selectedDatasetId != null
-                      ? (selectedDataset?.team_id as number | undefined)
-                      : selectedTeamId
-                }
-              />
+              <div className="w-2/5 min-w-0 h-full">
+                {/* Which team's versions the panel shows. Admins drive it from
+                    the explicit Team picker; regular users follow the selected
+                    dataset's team (falling back to their team beforehand). */}
+                <LabelSpace
+                  teamId={
+                    isAdmin
+                      ? selectedTeamId
+                      : selectedDatasetId != null
+                        ? (selectedDataset?.team_id as number | undefined)
+                        : selectedTeamId
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       </div>
     </div>

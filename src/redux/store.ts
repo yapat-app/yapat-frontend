@@ -1,4 +1,5 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import type { Reducer } from "@reduxjs/toolkit";
 import { authSlice } from "./features/authSlice";
 import { datasetSlice } from "./features/datasetSlice";
 import { invitationSlice } from "./features/invitationSlice";
@@ -15,22 +16,31 @@ import wssedReducer from "./features/wssedSlice";
 import type { PersistedClassicFeedCache } from "../utils/classicFeedPersistence";
 import { persistClassicFeedSlotsForUser } from "../utils/classicFeedPersistence";
 
+const appReducer = combineReducers({
+  auth: authSlice.reducer,
+  dataset: datasetSlice.reducer,
+  invitation: invitationSlice.reducer,
+  team: teamSlice.reducer,
+  snippet: snippetReducer,
+  annotation: annotationReducer,
+  taxonomy: taxonomyReducer,
+  customTaxonomy: customTaxonomyReducer,
+  labelSpaceVersion: labelSpaceVersionReducer,
+  embedding: embeddingReducer,
+  feed: feedReducer,
+  al: alReducer,
+  wssed: wssedReducer,
+});
+
+const rootReducer: Reducer<ReturnType<typeof appReducer>> = (state, action) => {
+  if (action.type === "auth/logout" && state) {
+    state = { auth: state.auth } as ReturnType<typeof appReducer>;
+  }
+  return appReducer(state, action);
+};
+
 const store = configureStore({
-  reducer: {
-    auth: authSlice.reducer,
-    dataset: datasetSlice.reducer,
-    invitation: invitationSlice.reducer,
-    team: teamSlice.reducer,
-    snippet: snippetReducer,
-    annotation: annotationReducer,
-    taxonomy: taxonomyReducer,
-    customTaxonomy: customTaxonomyReducer,
-    labelSpaceVersion: labelSpaceVersionReducer,
-    embedding: embeddingReducer,
-    feed: feedReducer,
-    al: alReducer,
-    wssed: wssedReducer,
-  },
+  reducer: rootReducer,
 });
 
 /** Persist classic feed cache when it changes (reference + debounce — avoids work on every Redux dispatch). */

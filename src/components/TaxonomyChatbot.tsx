@@ -111,6 +111,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
   const hasAttemptedStartRef = useRef(false);
   const attemptedTeamIdRef = useRef<number | null | undefined>(undefined);
   const attemptedDatasetIdRef = useRef<number | null | undefined>(undefined);
+  const prevPromoteSuccessRef = useRef(false);
   const dispatch = useAppDispatch();
   const {
     conversation,
@@ -121,7 +122,10 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
     conversationFreezed,
     error,
   } = useAppSelector((state) => state.customTaxonomy);
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  // Promoting a version changes the active label space; the working conversation
+  // must re-seed from it (below) or its stale seed shows as "New".
+  const { promoteSuccess } = useAppSelector((state) => state.labelSpaceVersion);
 
   const handleFreeze = () => {
     if (conversation?.id)
@@ -212,6 +216,35 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
     conversation?.team_id,
   ]); // Re-run when selection/user teams/conversation state changes
 
+  useEffect(() => {
+    const rose = promoteSuccess && !prevPromoteSuccessRef.current;
+    prevPromoteSuccessRef.current = promoteSuccess;
+    if (!rose || waitingForDataset) return;
+    const resolvedDatasetId = datasetId ?? null;
+    const resolvedTeamId =
+      teamId ??
+      (resolvedDatasetId == null && user?.team_ids?.length
+        ? user.team_ids[0]
+        : null);
+    attemptedTeamIdRef.current = resolvedTeamId;
+    attemptedDatasetIdRef.current = resolvedDatasetId;
+    hasAttemptedStartRef.current = true;
+    dispatch(
+      startNewConversation({
+        teamId: resolvedTeamId,
+        datasetId: resolvedDatasetId,
+        seedFromActive: true,
+      }),
+    );
+  }, [
+    promoteSuccess,
+    waitingForDataset,
+    teamId,
+    datasetId,
+    user?.team_ids,
+    dispatch,
+  ]);
+
   // When user sends a prompt, scroll the sent message (pending) into view
   useEffect(() => {
     if (pendingMessage) {
@@ -265,10 +298,12 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
   }, [messageSent]);
 
   useEffect(() => {
-    if (error) {
+    // Don't surface API errors once we're logging out — a transient no-token
+    // request during logout otherwise flashes a "Not authenticated" toast.
+    if (error && isAuthenticated) {
       message.error(error);
     }
-  }, [error]);
+  }, [error, isAuthenticated]);
 
   useEffect(() => {
     if (labelAdded) {

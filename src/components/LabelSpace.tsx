@@ -92,10 +92,17 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
   const dispatch = useAppDispatch();
   const { pathname } = useLocation();
   // Custom taxonomy sources
-  const { labelSpace, conversation, labelRemoved, allTaxonomies } =
-    useAppSelector((state) => state.customTaxonomy);
+  const {
+    labelSpace,
+    conversation,
+    labelRemoved,
+    allTaxonomies,
+    labelSpaceSubmitted,
+  } = useAppSelector((state) => state.customTaxonomy);
   const { user } = useAppSelector((state) => state.auth);
-  const { activeVersion } = useAppSelector((state) => state.labelSpaceVersion);
+  const { activeVersion, promoteSuccess } = useAppSelector(
+    (state) => state.labelSpaceVersion,
+  );
   const annotateTeamId = user?.team_ids?.length
     ? user.team_ids[0]
     : Number(localStorage.getItem("preAnnotationTeamId")) || 1;
@@ -123,6 +130,22 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
       dispatch(fetchActiveLabelSpace(preAnnotationTeamId));
     }
   }, [isPreAnnotation, preAnnotationTeamId, dispatch]);
+
+  useEffect(() => {
+    if (
+      (promoteSuccess || labelSpaceSubmitted) &&
+      isPreAnnotation &&
+      preAnnotationTeamId != null
+    ) {
+      dispatch(fetchActiveLabelSpace(preAnnotationTeamId));
+    }
+  }, [
+    promoteSuccess,
+    labelSpaceSubmitted,
+    isPreAnnotation,
+    preAnnotationTeamId,
+    dispatch,
+  ]);
 
   // Taxon ids already in the active version — anything in the current label
   // space that isn't here is a label the user has newly added this session.
