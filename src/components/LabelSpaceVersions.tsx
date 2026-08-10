@@ -136,9 +136,10 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
     }
   }, [labelSpaceSubmitted, teamId, isOwner, dispatch]);
 
+  const isAuthenticated = useAppSelector((s) => s.auth.isAuthenticated);
   useEffect(() => {
-    if (error) message.error(error);
-  }, [error]);
+    if (error && isAuthenticated) message.error(error);
+  }, [error, isAuthenticated]);
 
   const authorName = useMemo(() => {
     const map = new Map<number, string>();
