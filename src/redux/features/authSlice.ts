@@ -97,7 +97,9 @@ export const authSlice = createSlice({
       state.accessToken = null;
       state.loginSuccess = false;
       state.isAuthenticated = false;
+      state.user = null;
       localStorage.removeItem("accessToken");
+      localStorage.removeItem("preAnnotationTeamId");
     },
     clearError: (state) => {
       state.error = null;
@@ -118,13 +120,13 @@ export const authSlice = createSlice({
         state.error = null;
       })
       .addCase(loginAsync.fulfilled, (state, action) => {
-        console.log(action.payload);
         state.loginLoading = false;
         state.status = "succeeded";
         state.accessToken = action.payload.access_token;
         localStorage.setItem("accessToken", action.payload.access_token);
         state.isAuthenticated = true;
         state.loginSuccess = true;
+        state.user = null;
         // state.name = action.payload.name;
         // state.password = action.payload.password;
       })
