@@ -194,6 +194,9 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({
         startNewConversation({
           teamId: resolvedTeamId,
           datasetId: resolvedDatasetId,
+          // Edit a copy of the current active version so the user sees existing
+          // labels alongside anything they add (see versioning contract §4-A).
+          seedFromActive: true,
         }),
       );
     }

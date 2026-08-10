@@ -388,13 +388,21 @@ export const customtaxonomyApi = {
   startConversation: async (
     teamId?: number | null,
     datasetId?: number | null,
+    seedFromActive: boolean = false,
   ): Promise<Conversation> => {
     // Only send team_id when explicitly provided — otherwise let the backend
     // derive the owning team from the dataset (see /chat/start contract).
-    const body: { team_id?: number; dataset_id: number | null } = {
+    const body: {
+      team_id?: number;
+      dataset_id: number | null;
+      seed_from_active?: boolean;
+    } = {
       dataset_id: datasetId ?? null,
     };
     if (teamId != null) body.team_id = teamId;
+    // Pre-fill the working label space with the current active version so the
+    // user edits a copy of it (see §4 Step A of the versioning contract).
+    if (seedFromActive) body.seed_from_active = true;
     const response = await api.post("/api/taxonomy/chat/start", body);
     return response.data;
   },
@@ -418,6 +426,22 @@ export const customtaxonomyApi = {
         name,
         description,
       },
+    );
+    return response.data;
+  },
+
+  /**
+   * Finalize the working label space into a submitted `Version N` awaiting
+   * owner approval (new versioned flow — replaces the legacy `freeze`).
+   */
+  submit: async (params: {
+    conversationId: number;
+    description?: string;
+  }): Promise<import("../types").SubmitLabelSpaceResponse> => {
+    const { conversationId, description } = params;
+    const response = await api.post(
+      `/api/taxonomy/chat/${conversationId}/submit`,
+      description ? { description } : {},
     );
     return response.data;
   },
@@ -636,6 +660,47 @@ export const teamApi = {
       `/api/teams/${body.teamId}/invitations`,
       body,
     );
+    return response.data;
+  },
+
+  /**
+   * Read the team's active label-space version (any member).
+   * Returns `null` (HTTP 200) when the owner hasn't promoted a version yet.
+   */
+  getActiveLabelSpace: async (
+    teamId: string | number,
+  ): Promise<import("../types").CustomTaxonomyVersion | null> => {
+    const response = await api.get(`/api/teams/${teamId}/active-label-space`);
+    return response.data ?? null;
+  },
+
+  /**
+   * List label-space versions — team owner or platform admin.
+   * `status`: `submitted` (default server-side) | `active` | `archived` | `all`.
+   * Use `all` to render a single "all versions" list and flag the active one.
+   */
+  getLabelSpaceSubmissions: async (
+    teamId: string | number,
+    status: "submitted" | "active" | "archived" | "all" = "all",
+  ): Promise<import("../types").CustomTaxonomyListResponse> => {
+    const response = await api.get(
+      `/api/teams/${teamId}/label-space/submissions`,
+      { params: { status } },
+    );
+    return response.data;
+  },
+
+  /**
+   * Promote one version to be the team's active label space — owner only.
+   * `taxonomyDbId` is the integer `id` of the version (not the taxonomy_id string).
+   */
+  promoteActiveLabelSpace: async (
+    teamId: string | number,
+    taxonomyDbId: number,
+  ): Promise<import("../types").CustomTaxonomyVersion> => {
+    const response = await api.put(`/api/teams/${teamId}/active-label-space`, {
+      taxonomy_db_id: taxonomyDbId,
+    });
     return response.data;
   },
 };

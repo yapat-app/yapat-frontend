@@ -1,7 +1,11 @@
-import { Button } from "antd";
+import { Alert, Button } from "antd";
+import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { freezeConversation } from "../redux/features/customTaxonomySlice";
-import { useNavigate } from "react-router-dom";
+import {
+  submitLabelSpace,
+  clearLabelSpaceSubmitted,
+} from "../redux/features/customTaxonomySlice";
+import { message } from "antd";
 
 interface LabelSpaceItem {
   id: string;
@@ -26,54 +30,56 @@ type FreezeLabelSpaceProps = {
   labelSpace: LabelSpaceItem[];
 };
 
-const defaultFreezeName = () =>
-  `Label space ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
-const defaultFreezeDescription = () => "Frozen from pre-annotation";
-
+/**
+ * Finalizes the working label space into a submitted `Version N` awaiting the
+ * team owner's approval (versioned flow — POST /chat/{id}/submit). A submitted
+ * version is NOT usable for annotation until the owner promotes it to active.
+ */
 export const FreezeLabelSpace = ({ labelSpace }: FreezeLabelSpaceProps) => {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const { conversation, conversationFreezed } = useAppSelector(
-    (state) => state.customTaxonomy,
-  );
+  const { conversation, submitting, labelSpaceSubmitted, submittedVersion } =
+    useAppSelector((state) => state.customTaxonomy);
 
-  const isFrozen = conversation?.is_frozen === true || conversationFreezed;
+  const isSubmitted = conversation?.is_frozen === true || labelSpaceSubmitted;
 
-  const handleFreeze = () => {
-    if (conversation?.id)
-      dispatch(
-        freezeConversation({
-          name: defaultFreezeName(),
-          description: defaultFreezeDescription(),
-          conversationId: conversation.id,
-        }),
+  useEffect(() => {
+    if (labelSpaceSubmitted) {
+      message.success("Label space submitted", undefined, () =>
+        dispatch(clearLabelSpaceSubmitted()),
       );
+    }
+  }, [labelSpaceSubmitted, dispatch]);
+
+  const handleSubmit = () => {
+    if (conversation?.id)
+      dispatch(submitLabelSpace({ conversationId: conversation.id }));
   };
 
+  if (isSubmitted) {
+    return (
+      <Alert
+        type="success"
+        showIcon
+        message={
+          submittedVersion?.name
+            ? `Submitted as ${submittedVersion.name}`
+            : "Label space submitted"
+        }
+        description="Awaiting the team owner's approval. Once promoted, it becomes the active label space used for annotation."
+      />
+    );
+  }
+
   return (
-    <div>
-      {isFrozen ? (
-        <div className="my-3">
-          <Button
-            onClick={() => navigate("/annotate")}
-            className="w-full!"
-            size="middle"
-            type="primary"
-          >
-            Label Space created, Start Annotating?
-          </Button>
-        </div>
-      ) : (
-        <Button
-          className="w-full!"
-          size="middle"
-          type="primary"
-          onClick={handleFreeze}
-          disabled={labelSpace.length === 0 || isFrozen}
-        >
-          Add To label space list
-        </Button>
-      )}
-    </div>
+    <Button
+      className="w-full!"
+      size="middle"
+      type="primary"
+      onClick={handleSubmit}
+      loading={submitting}
+      disabled={labelSpace.length === 0 || submitting}
+    >
+      Submit label space
+    </Button>
   );
 };

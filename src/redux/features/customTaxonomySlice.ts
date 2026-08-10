@@ -5,7 +5,11 @@
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { getErrorMessage, customtaxonomyApi } from "../../services/api";
-import type { Conversation, LabelSpaceItem } from "../../types";
+import type {
+  Conversation,
+  CustomTaxonomyVersion,
+  LabelSpaceItem,
+} from "../../types";
 
 export type TaxonomiesFetchStatus = "idle" | "loading" | "succeeded" | "failed";
 
@@ -18,6 +22,11 @@ export interface CustomTaxonomyState {
   taxonomiesStatus: TaxonomiesFetchStatus;
   messageSent: boolean;
   conversationFreezed: boolean;
+  /** True once the working label space has been submitted as a `Version N`. */
+  labelSpaceSubmitted: boolean;
+  submitting: boolean;
+  /** The version created by the last successful submit (for UI feedback). */
+  submittedVersion: CustomTaxonomyVersion | null;
   labelRemoved: boolean;
   messageLoading: boolean;
   labelAdded: boolean;
@@ -52,6 +61,9 @@ const initialState: CustomTaxonomyState = {
   messageSent: false,
   messageLoading: false,
   conversationFreezed: false,
+  labelSpaceSubmitted: false,
+  submitting: false,
+  submittedVersion: null,
   labelRemoved: false,
   allTaxonomies: [],
   loadedTeamId: null,
@@ -67,13 +79,18 @@ const initialState: CustomTaxonomyState = {
 export const startNewConversation = createAsyncThunk(
   "taxonomy/startConversation",
   async (
-    params: { teamId: number | null; datasetId?: number | null },
+    params: {
+      teamId: number | null;
+      datasetId?: number | null;
+      seedFromActive?: boolean;
+    },
     { rejectWithValue },
   ) => {
     try {
       return await customtaxonomyApi.startConversation(
         params.teamId,
         params.datasetId ?? null,
+        params.seedFromActive ?? false,
       );
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
@@ -115,6 +132,20 @@ export const freezeConversation = createAsyncThunk(
   ) => {
     try {
       return await customtaxonomyApi.freeze(params);
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
+export const submitLabelSpace = createAsyncThunk(
+  "taxonomy/submitLabelSpace",
+  async (
+    params: { conversationId: number; description?: string },
+    { rejectWithValue },
+  ) => {
+    try {
+      return await customtaxonomyApi.submit(params);
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -222,6 +253,9 @@ export const customtaxonomySlice = createSlice({
     clearConversationFreezed: (state) => {
       state.conversationFreezed = false;
     },
+    clearLabelSpaceSubmitted: (state) => {
+      state.labelSpaceSubmitted = false;
+    },
     setLabelSpace: (state, action) => {
       state.labelSpace = action.payload;
     },
@@ -309,6 +343,25 @@ export const customtaxonomySlice = createSlice({
         state.error = action.payload as string;
         state.conversationFreezed = false;
       })
+      .addCase(submitLabelSpace.pending, (state) => {
+        state.submitting = true;
+        state.error = null;
+      })
+      .addCase(submitLabelSpace.fulfilled, (state, action) => {
+        state.submitting = false;
+        state.labelSpaceSubmitted = true;
+        state.submittedVersion = action.payload.taxonomy;
+        state.conversation = action.payload.conversation;
+        // Submitting produces a new version — the owner's submissions list is
+        // now stale, so force the next taxonomies fetch to hit the API.
+        state.taxonomiesStatus = "idle";
+        state.loadedTeamId = null;
+      })
+      .addCase(submitLabelSpace.rejected, (state, action) => {
+        state.submitting = false;
+        state.error = action.payload as string;
+        state.labelSpaceSubmitted = false;
+      })
       .addCase(sendMessage.pending, (state) => {
         state.messageLoading = true;
         state.error = null;
@@ -362,6 +415,7 @@ export const {
   resetSentMessage,
   reset,
   clearConversationFreezed,
+  clearLabelSpaceSubmitted,
   setLabelSpace,
   invalidateTaxonomiesCache,
 } = customtaxonomySlice.actions;
