@@ -3,88 +3,94 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "../hooks";
-import { useEnsureTeamTaxonomies } from "./useEnsureTeamTaxonomies";
-import {
-  labelNamesFromLabelSpace,
-  labelNamesFromTaxonomyNodes,
-  mergeQuickLabelNames,
-} from "../utils/quickLabelList";
+import { useActiveLabelSpace } from "./useActiveLabelSpace";
+import { mergeQuickLabelNames } from "../utils/quickLabelList";
 import { fetchDatasetModelSpecies } from "../utils/fetchDatasetModelSpecies";
 import { datasetApi } from "../services/api";
 
+/**
+ * Quick-label list shown in the annotation feed. Three independent sources,
+ * merged and de-duplicated by name:
+ *   1. Model-checkpoint species (annotation targets).
+ *   2. The team's ACTIVE label-space version (LLM pre-annotation, versioned).
+ *   3. Card-added quick labels (GBIF / ENVO / Local in dataset.quick_labels).
+ *
+ * Teamless (admin-owned) datasets have no active version, so their custom part
+ * is just the stored quick_labels.
+ */
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
-  const { user } = useAppSelector((s) => s.auth);
   const { selectedDatasetId, usedCheckpointId } = useAppSelector((s) => s.al);
-  const { allTaxonomies, labelSpace, taxonomiesStatus } = useAppSelector(
-    (s) => s.customTaxonomy,
-  );
+  const { allDatasets } = useAppSelector((s) => s.dataset);
 
-  const [pamSpecies, setPamSpecies] = useState<string[]>([]);
-  const [pamLoading, setPamLoading] = useState(true);
+  const datasetTeamId = useMemo<number | null>(() => {
+    const d = (allDatasets as { id: number | string; team_id?: number }[])?.find(
+      (x) => Number(x.id) === Number(selectedDatasetId),
+    );
+    return d?.team_id ?? null;
+  }, [allDatasets, selectedDatasetId]);
 
-  const teamId = user?.team_ids?.[0] ?? null;
-  useEnsureTeamTaxonomies(teamId, !!user);
+  // Version-controlled custom labels (team datasets).
+  const { labels: activeLabels, loading: activeLoading } =
+    useActiveLabelSpace(datasetTeamId);
+
+  // Model-checkpoint species + card-added quick labels (always fetched).
+  const [modelNames, setModelNames] = useState<string[]>([]);
+  const [storedNames, setStoredNames] = useState<string[]>([]);
+  const [baseLoading, setBaseLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setPamLoading(true);
-
     const load = async () => {
-      let storedNames: string[] = [];
-      if (selectedDatasetId != null) {
-        try {
-          const stored = await datasetApi.getQuickLabels(
-            Number(selectedDatasetId),
-          );
-          storedNames = stored.map((l) => l.display_name);
-        } catch {
-          /* ignore — no stored quick labels */
-        }
-      }
-
-      // Model-derived species
-      let modelNames: string[] = [];
+      let mNames: string[] = [];
       try {
-        modelNames = await fetchDatasetModelSpecies(
+        mNames = await fetchDatasetModelSpecies(
           usedCheckpointId,
           selectedDatasetId,
         );
       } catch {
         /* ignore — no model species */
       }
-
+      let sNames: string[] = [];
+      if (selectedDatasetId != null) {
+        try {
+          const stored = await datasetApi.getQuickLabels(
+            Number(selectedDatasetId),
+          );
+          sNames = stored.map((l) => l.display_name);
+        } catch {
+          /* ignore — no stored quick labels */
+        }
+      }
       if (!cancelled) {
-        setPamSpecies(mergeQuickLabelNames(modelNames, storedNames));
-        setPamLoading(false);
+        setModelNames(mNames);
+        setStoredNames(sNames);
+        setBaseLoading(false);
       }
     };
-
+    setBaseLoading(true);
     void load();
     return () => {
       cancelled = true;
     };
   }, [selectedDatasetId, usedCheckpointId]);
 
-  const taxonomyNames = useMemo(() => {
-    const fromNodes = labelNamesFromTaxonomyNodes(
-      (
-        allTaxonomies?.[0] as
-          | { taxonomy_data?: { nodes?: unknown } }
-          | undefined
-      )?.taxonomy_data?.nodes,
-    );
-    const fromSpace = labelNamesFromLabelSpace(labelSpace ?? []);
-    return mergeQuickLabelNames(fromNodes, fromSpace);
-  }, [allTaxonomies, labelSpace]);
+  const activeNames = useMemo(
+    () =>
+      activeLabels.map((l) => l.display_name).filter((n): n is string => !!n),
+    [activeLabels],
+  );
 
   const labels = useMemo(
-    () => mergeQuickLabelNames(pamSpecies, taxonomyNames),
-    [pamSpecies, taxonomyNames],
+    () =>
+      mergeQuickLabelNames(
+        modelNames,
+        mergeQuickLabelNames(activeNames, storedNames),
+      ),
+    [modelNames, activeNames, storedNames],
   );
 
   return {
     labels,
-    loading:
-      pamLoading || (taxonomiesStatus === "loading" && labels.length === 0),
+    loading: baseLoading || (datasetTeamId != null && activeLoading),
   };
 }

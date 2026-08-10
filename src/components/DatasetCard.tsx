@@ -39,17 +39,24 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
     };
     const teamId = dataset.team_id;
     if (teamId != null) {
-      teamApi
-        .getActiveLabelSpace(teamId)
-        .then((version) =>
-          apply(
-            (version?.taxonomy_data?.nodes ?? []).map((n) => ({
+      Promise.all([
+        teamApi.getActiveLabelSpace(teamId),
+        datasetApi.getQuickLabels(Number(dataset.id)).catch(() => []),
+      ])
+        .then(([version, stored]) => {
+          const versionLabels = (version?.taxonomy_data?.nodes ?? []).map(
+            (n) => ({
               taxon_id: (n.taxon_id ?? n.id ?? "").toString(),
               display_name:
                 n.canonical_name || n.scientific_name || n.name || "",
-            })),
-          ),
-        )
+            }),
+          );
+          const versionKeys = new Set(versionLabels.map((l) => l.taxon_id));
+          const cardAdded = (stored ?? []).filter(
+            (l) => !versionKeys.has(l.taxon_id),
+          );
+          apply([...versionLabels, ...cardAdded]);
+        })
         .catch(() => apply([]));
     } else {
       datasetApi

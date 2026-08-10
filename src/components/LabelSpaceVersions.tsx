@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { Button, Collapse, Empty, List, Spin, Tag, Tooltip, message } from "antd";
-import { CrownOutlined, CheckCircleFilled } from "@ant-design/icons";
+import { Button, Collapse, Empty, Spin, Tag, Tooltip, message } from "antd";
+import { CheckCircleFilled } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { useTeamOwnership } from "../hooks/useTeamOwnership";
 import {
@@ -34,9 +34,9 @@ const taxonKey = (item: { taxon_id?: string; id?: string }) =>
   (item.taxon_id ?? item.id ?? "").toString().toLowerCase();
 
 /**
- * Full label list of one version. When `baselineIds` is provided (the active
- * version's taxon ids), labels not in it are flagged "New" (added vs the active
- * version) so the owner can compare versions at a glance.
+ * Compact chip list of the labels inside one version. When `baselineIds` is
+ * provided (the active version's taxon ids), labels not in it are flagged "New"
+ * (added vs the active version) so the owner can compare versions at a glance.
  */
 const VersionLabels = ({
   nodes,
@@ -44,49 +44,34 @@ const VersionLabels = ({
 }: {
   nodes: LabelSpaceItem[];
   baselineIds?: Set<string>;
-}) => (
-  <List
-    dataSource={nodes ?? []}
-    size="small"
-    split={false}
-    locale={{ emptyText: "No labels in this version." }}
-    renderItem={(item: LabelSpaceItem) => {
-      const isNew = baselineIds != null && !baselineIds.has(taxonKey(item));
-      return (
-        <List.Item className="border-b border-gray-100 last:border-b-0">
-          <div
-            className={`w-full py-0.5 ${
-              isNew ? "bg-green-50 border-l-2 border-green-400 pl-2 -ml-2" : ""
+}) => {
+  if (!nodes || nodes.length === 0) {
+    return (
+      <span className="text-xs text-gray-400">No labels in this version.</span>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5 py-0.5">
+      {nodes.map((item, i) => {
+        const isNew = baselineIds != null && !baselineIds.has(taxonKey(item));
+        const name = item.canonical_name || item.scientific_name || item.name;
+        return (
+          <span
+            key={`${taxonKey(item)}-${i}`}
+            title={item.scientific_name || name}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${
+              isNew
+                ? "bg-green-50 border-green-300 text-green-800"
+                : "bg-gray-50 border-gray-200 text-gray-700"
             }`}
           >
-            <span className="font-ibm-sans text-sm! text-gray-900">
-              {item.canonical_name || item.scientific_name || item.name}
-            </span>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              {isNew && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800">
-                  New
-                </span>
-              )}
-              {item.metadata?.rank && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                  {item.metadata.rank}
-                </span>
-              )}
-              {item.scientific_name &&
-                item.scientific_name !==
-                  (item.canonical_name || item.name) && (
-                  <span className="text-xs text-blue-600 italic">
-                    {item.scientific_name}
-                  </span>
-                )}
-            </div>
-          </div>
-        </List.Item>
-      );
-    }}
-  />
-);
+            <span className="font-ibm-sans">{name}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+};
 
 /**
  * Right-hand panel shown on the pre-annotation screen when the user is NOT
@@ -107,6 +92,9 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
     promoteSuccess,
     error,
   } = useAppSelector((s) => s.labelSpaceVersion);
+  // A submit (from the current-label-space panel above) creates a new version;
+  // watch the flag so the list refreshes without a manual page refresh.
+  const { labelSpaceSubmitted } = useAppSelector((s) => s.customTaxonomy);
 
   // Platform admins get the owner interface for every team; other users are
   // owners only where their membership role is "owner". `isOwner` is null while
@@ -130,9 +118,23 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
       message.success("Active label space updated", undefined, () =>
         dispatch(clearPromoteSuccess()),
       );
-      if (teamId != null) dispatch(fetchLabelSpaceSubmissions(teamId));
+      if (teamId != null) {
+        // Refresh both the submissions list AND the active version so the
+        // "Active" badge, ordering, and the current-list diff update without a
+        // manual page refresh.
+        dispatch(fetchLabelSpaceSubmissions(teamId));
+        dispatch(fetchActiveLabelSpace(teamId));
+      }
     }
   }, [promoteSuccess, teamId, dispatch]);
+
+  // Refresh the versions list as soon as a new version is submitted.
+  useEffect(() => {
+    if (labelSpaceSubmitted && teamId != null && isOwner === true) {
+      dispatch(fetchLabelSpaceSubmissions(teamId));
+      dispatch(fetchActiveLabelSpace(teamId));
+    }
+  }, [labelSpaceSubmitted, teamId, isOwner, dispatch]);
 
   useEffect(() => {
     if (error) message.error(error);
@@ -270,7 +272,6 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
           <Button
             size="small"
             type="primary"
-            icon={<CrownOutlined />}
             loading={promotingId === v.id}
             onClick={(e) => {
               e.stopPropagation();
@@ -295,16 +296,16 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
       <p className="text-xs text-gray-500 mb-2">
-        As team owner, pick which version becomes the active label space used for
-        annotation. Expand any versions — you can open several at once to compare;
-        labels marked{" "}
-        <span className="font-semibold text-green-700">New</span> are additions
-        over the active version.
+        As team owner, pick which version becomes the active label space used
+        for annotation. Expand any versions — you can open several at once to
+        compare.
       </p>
       <Collapse
         size="small"
         items={items}
-        defaultActiveKey={activeVersion ? [String(activeVersion.id)] : undefined}
+        defaultActiveKey={
+          activeVersion ? [String(activeVersion.id)] : undefined
+        }
       />
     </div>
   );

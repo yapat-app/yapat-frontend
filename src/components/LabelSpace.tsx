@@ -296,7 +296,8 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
 
   // On pre-annotation, distinguish labels seeded from the current active
   // version ("existing") from ones the user just added this session ("new").
-  const showVersionDiff = pathname === "/pre-annotation" && activeTaxonIds.size > 0;
+  const showVersionDiff =
+    pathname === "/pre-annotation" && activeTaxonIds.size > 0;
 
   const renderLabelItem = (label: DisplayItem) => {
     const rowInteractive = pathname === "/annotate";
@@ -305,7 +306,9 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
         handleSubmit(label);
       }
     };
-    const labelKey = (label.taxon_id || label.id || "").toString().toLowerCase();
+    const labelKey = (label.taxon_id || label.id || "")
+      .toString()
+      .toLowerCase();
     const isExisting = showVersionDiff && activeTaxonIds.has(labelKey);
     const isNew = showVersionDiff && !isExisting;
     return (
@@ -442,33 +445,62 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
           }`}
         >
           <div className="text-xs text-gray-500 mb-2 shrink-0">
-            Add labels from the chat or remove them with ×, then submit to propose
-            a new version.
-            {showVersionDiff && (
+            Add labels from the chat or remove them with ×, then submit to
+            propose a new version.
+          </div>
+          <div className="text-xs mb-2 shrink-0 flex items-center flex-wrap gap-1.5">
+            {activeVersion ? (
               <>
-                {" "}
-                Labels marked{" "}
-                <span className="font-semibold text-green-700">New</span> are your
-                additions.
+                <span className="text-gray-500">Active version:</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-50 border border-green-300 text-green-800">
+                  {activeVersion.name}
+                </span>
               </>
+            ) : (
+              <span className="text-gray-500">
+                No active version yet — your submission will be the first.
+              </span>
             )}
           </div>
-
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <List
-              dataSource={customItems}
-              size="small"
-              split={false}
-              locale={{ emptyText: "No labels yet. Add them from the chat." }}
-              renderItem={(item) => (
-                <List.Item
-                  key={`${item.__source}-${item.id}`}
-                  className="border-b border-gray-100 last:border-b-0 rounded"
-                >
-                  {renderLabelItem(item)}
-                </List.Item>
-              )}
-            />
+            {customItems.length === 0 ? (
+              <div className="text-xs text-gray-400 py-2">
+                No labels yet. Add them from the chat.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 content-start">
+                {customItems.map((item) => {
+                  const key = (item.taxon_id || item.id || "")
+                    .toString()
+                    .toLowerCase();
+                  const isNew = showVersionDiff && !activeTaxonIds.has(key);
+                  const name =
+                    item.canonical_name || item.scientific_name || item.name;
+                  return (
+                    <span
+                      key={`${item.__source}-${item.id}`}
+                      title={item.scientific_name || name}
+                      className={`inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs border ${
+                        isNew
+                          ? "bg-green-50 border-green-300 text-green-800"
+                          : "bg-gray-50 border-gray-200 text-gray-700"
+                      }`}
+                    >
+                      <span className="font-ibm-sans">{name}</span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromLabelSpace(item.id)}
+                        aria-label={`Remove ${name}`}
+                        className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer leading-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {showSubmit && (
@@ -510,7 +542,9 @@ export const LabelSpace: React.FC<LabelSpaceProps> = ({
             />
 
             {showMerged && suggestionsLoading && (
-              <div className="text-xs text-gray-500 mt-1">Searching online…</div>
+              <div className="text-xs text-gray-500 mt-1">
+                Searching online…
+              </div>
             )}
 
             {!showMerged && (
