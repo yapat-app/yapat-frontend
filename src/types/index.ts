@@ -206,6 +206,10 @@ export interface LabelSpaceItem {
     description: null | string;
   };
   added_at: string;
+  /** User who added this label (per-label attribution). Optional — absent on
+   * labels created before attribution was tracked. */
+  added_by_user_id?: number | null;
+  added_by_username?: string | null;
 }
 
 export interface Message {

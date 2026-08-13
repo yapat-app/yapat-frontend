@@ -215,6 +215,29 @@ export const removeLabels = createAsyncThunk(
   },
 );
 
+/** Remove every label from the conversation's label space (no bulk endpoint —
+ * delete each item sequentially and return the final conversation). */
+export const clearLabelSpace = createAsyncThunk(
+  "taxonomy/clearLabelSpace",
+  async (
+    params: { conversationId: number; itemIds: (number | string)[] },
+    { rejectWithValue },
+  ) => {
+    try {
+      let conversation: Conversation | null = null;
+      for (const itemId of params.itemIds) {
+        conversation = await customtaxonomyApi.removeItem({
+          conversationId: params.conversationId,
+          itemId,
+        });
+      }
+      return conversation;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 export const getAllTaxonomies = createAsyncThunk(
   "taxonomy/getAllTaxonomies",
   async (teamId: number, { rejectWithValue }) => {
@@ -403,6 +426,21 @@ export const customtaxonomySlice = createSlice({
         state.labelRemoved = true;
       })
       .addCase(removeLabels.rejected, (state, { payload }) => {
+        state.loading = false;
+        state.error = payload as string;
+        state.labelRemoved = false;
+      })
+      .addCase(clearLabelSpace.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(clearLabelSpace.fulfilled, (state, action) => {
+        state.loading = false;
+        state.labelRemoved = true;
+        const nextLabelSpace = action.payload?.label_space;
+        state.labelSpace = Array.isArray(nextLabelSpace) ? nextLabelSpace : [];
+      })
+      .addCase(clearLabelSpace.rejected, (state, { payload }) => {
         state.loading = false;
         state.error = payload as string;
         state.labelRemoved = false;
