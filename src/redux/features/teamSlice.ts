@@ -40,9 +40,26 @@ export const fetchAllteams = createAsyncThunk("teams/all", async () => {
 
 export const fetchTeamById = createAsyncThunk(
   "team/fetchById",
-  async (teamId: string | number, { rejectWithValue }) => {
+  async (
+    teamId: string | number,
+    { getState, rejectWithValue },
+  ) => {
     try {
-      return await teamApi.getTeamById(teamId);
+      const { allTeams } = (getState() as { team: TeamState }).team;
+      const existing = allTeams?.find(
+        (t) => String(t.id) === String(teamId),
+      );
+      if (existing) {
+        return existing;
+      }
+      const response = await api.get("/api/teams/");
+      const teamInfo = response.data.find(
+        (t: Team) => String(t.id) === String(teamId),
+      );
+      if (!teamInfo) {
+        throw new Error("Team not found");
+      }
+      return teamInfo;
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
