@@ -100,7 +100,7 @@ export const Teams = () => {
   const handleChangeDataset = (value: string[]) => {
     setTeamInfo((prev: any) => ({
       ...prev,
-      dataset_ids: [value],
+      dataset_ids: value,
     }));
   };
 
@@ -316,8 +316,7 @@ export const Teams = () => {
               okText="Create Team"
               onCancel={handleCancel}
               okButtonProps={{
-                disabled:
-                  !teamInfo.name?.trim() || !teamInfo.dataset_ids?.length,
+                disabled: !teamInfo.name?.trim(),
               }}
             >
               <>
