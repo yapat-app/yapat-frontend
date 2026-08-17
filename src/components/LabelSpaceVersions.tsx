@@ -41,9 +41,12 @@ const taxonKey = (item: { taxon_id?: string; id?: string }) =>
 const VersionLabels = ({
   nodes,
   baselineIds,
+  getAuthor,
 }: {
   nodes: LabelSpaceItem[];
   baselineIds?: Set<string>;
+  /** Resolve the display name of whoever added a label (per-label attribution). */
+  getAuthor?: (item: LabelSpaceItem) => string | null;
 }) => {
   if (!nodes || nodes.length === 0) {
     return (
@@ -55,10 +58,15 @@ const VersionLabels = ({
       {nodes.map((item, i) => {
         const isNew = baselineIds != null && !baselineIds.has(taxonKey(item));
         const name = item.canonical_name || item.scientific_name || item.name;
+        const author = getAuthor?.(item) ?? null;
         return (
           <span
             key={`${taxonKey(item)}-${i}`}
-            title={item.scientific_name || name}
+            title={
+              author
+                ? `${item.scientific_name || name} · added by ${author}`
+                : item.scientific_name || name
+            }
             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border ${
               isNew
                 ? "bg-green-50 border-green-300 text-green-800"
@@ -66,6 +74,9 @@ const VersionLabels = ({
             }`}
           >
             <span className="font-ibm-sans">{name}</span>
+            {author && (
+              <span className="text-[10px] text-gray-400">· {author}</span>
+            )}
           </span>
         );
       })}
@@ -149,6 +160,12 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
     return (userId: number) => map.get(userId) || `User ${userId}`;
   }, [members]);
 
+  const nodeAuthor = (item: LabelSpaceItem): string | null => {
+    if (item.added_by_username) return item.added_by_username;
+    if (item.added_by_user_id != null) return authorName(item.added_by_user_id);
+    return null;
+  };
+
   // Owner/admin view: every version in one list (the backend already returns
   // only genuine label-space versions — is_label_space_version — so no client
   // filtering needed), deduped and sorted active-first. Declared before any
@@ -222,7 +239,10 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
             {speciesCount(activeVersion)} labels
           </span>
         </div>
-        <VersionLabels nodes={activeVersion.taxonomy_data?.nodes ?? []} />
+        <VersionLabels
+          nodes={activeVersion.taxonomy_data?.nodes ?? []}
+          getAuthor={nodeAuthor}
+        />
       </div>
     );
   }
@@ -289,6 +309,7 @@ export const LabelSpaceVersions = ({ teamId }: LabelSpaceVersionsProps) => {
           // Don't diff the active version against itself; other versions show
           // their additions relative to the active one.
           baselineIds={active ? undefined : baselineIds}
+          getAuthor={nodeAuthor}
         />
       ),
     };
