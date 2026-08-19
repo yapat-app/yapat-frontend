@@ -15,13 +15,15 @@
  *   result is visible in each distribution.
  */
 
-import React, { useCallback, useEffect, useMemo } from "react";
-import { Tooltip } from "antd";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Popover, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { HistogramSlider } from "./HistogramSlider";
 import type { ALFilterState, SampleScores } from "../../types/al";
 import type { FilterMode, AllowedProperty } from "../../studyPhases";
 import { getPropertyByKey, propertyColor } from "../../constants/alProperties";
+import { ScoreExplainer, isExplainerKey } from "../scoreExplainer";
+import { useStudyLogger } from "../../studyLogging";
 
 interface FilteredPoint {
   p: { snippet_id: number; scores?: SampleScores };
@@ -71,10 +73,70 @@ function extractValues(points: FilteredPoint["p"][], key: string): number[] {
   return out;
 }
 
+// ── Score info affordance ─────────────────────────────────────────────────────
+
+/**
+ * The ⓘ beside a score name. Scores with an animated explainer open it in a
+ * click-triggered popover — click rather than hover because the panel sits
+ * directly above a slider the participant drags, and a hover popup would flicker
+ * in and out under the cursor. Anything without an explainer keeps the plain
+ * text tooltip.
+ *
+ * The animation clock only runs while the popover is open, so the five idle
+ * rows cost nothing during annotation.
+ */
+const ScoreInfo: React.FC<{ propertyKey: string }> = ({ propertyKey }) => {
+  const [open, setOpen] = useState(false);
+  const openedAt = useRef(0);
+  const { log } = useStudyLogger();
+  const description = getPropertyByKey(propertyKey)?.description;
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      if (next) {
+        openedAt.current = performance.now();
+        return;
+      }
+      log(
+        "score_explainer_view",
+        { property: propertyKey, surface: "popover" },
+        { durationMs: Math.round(performance.now() - openedAt.current) },
+      );
+    },
+    [log, propertyKey],
+  );
+
+  const icon = (
+    <InfoCircleOutlined
+      className="text-gray-400 hover:text-gray-600"
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+
+  if (!isExplainerKey(propertyKey)) {
+    return description ? <Tooltip title={description}>{icon}</Tooltip> : null;
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={handleOpenChange}
+      trigger="click"
+      placement="right"
+      content={<ScoreExplainer scoreKey={propertyKey} variant="popover" active={open} />}
+    >
+      {icon}
+    </Popover>
+  );
+};
+
 // ── Compact faceted histogram row ─────────────────────────────────────────────
 
 interface PropertyRowProps {
   label: string;
+  /** Drives the ⓘ explainer beside the label. */
+  propertyKey: string;
   color: string;
   allValues: number[];
   visibleValues: number[];
@@ -89,6 +151,7 @@ interface PropertyRowProps {
 
 const PropertyRow: React.FC<PropertyRowProps> = ({
   label,
+  propertyKey,
   color,
   allValues,
   visibleValues,
@@ -105,11 +168,14 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}
     >
       {!hideLabel && (
-        <span
-          className="font-semibold uppercase tracking-wide"
-          style={{ color }}
-        >
-          {label}
+        <span className="flex items-center gap-1.5">
+          <span
+            className="font-semibold uppercase tracking-wide"
+            style={{ color }}
+          >
+            {label}
+          </span>
+          <ScoreInfo propertyKey={propertyKey} />
         </span>
       )}
       <span className="text-gray-400">
@@ -396,6 +462,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               label={
                 getPropertyByKey(singleActiveKey)?.label ?? singleActiveKey
               }
+              propertyKey={singleActiveKey}
               color={propertyColor(singleActiveKey)}
               allValues={singleAllValues}
               visibleValues={singleVisibleValues}
@@ -459,14 +526,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       style={{ backgroundColor: isActive ? color : "#d1d5db" }}
                     />
                     {label}
-                    {def?.description && (
-                      <Tooltip title={def.description}>
-                        <InfoCircleOutlined
-                          className="text-gray-300 hover:text-gray-500"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </Tooltip>
-                    )}
+                    <ScoreInfo propertyKey={prop} />
                   </span>
                   {isActive && row ? (
                     <span className="text-[11px] font-ibm-sans text-gray-400">
@@ -573,6 +633,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 <div key={row.key} className="flex-1 min-w-0">
                   <PropertyRow
                     label={row.label}
+                    propertyKey={row.key}
                     color={row.color}
                     allValues={row.allValues}
                     visibleValues={row.visibleValues}

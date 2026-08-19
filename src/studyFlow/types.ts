@@ -2,6 +2,8 @@
  * Study-flow types — the per-phase lifecycle state machine.
  */
 
+import type { ExplainerKey } from "../components/scoreExplainer";
+
 /** Lifecycle stage a participant is in for the *current* phase. */
 export type FlowStage =
   /** Instructions modal is up; waiting for "Begin". */
@@ -38,6 +40,12 @@ export interface TourStepSpec {
   target: string;
   title: string;
   description: string;
+  /**
+   * When set, the step renders the animated ScoreExplainer for this score above
+   * its description. Kept as a key rather than a render prop so phaseContent.ts
+   * stays declarative data.
+   */
+  visual?: ExplainerKey;
   placement?:
     | "top"
     | "bottom"

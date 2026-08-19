@@ -47,10 +47,16 @@ const METADATA_DESC = [
   "Filters only change what's shown — they don't remove any data.",
 ].join("\n");
 
-const MODEL_SCORES_DESC = [
-  "Further down the sidebar, filter by scores the model assigns to each sample. These reflect how useful a sample is expected to be for improving the model — samples with higher scores are considered more beneficial to annotate.",
+// The model-score cards each carry an animated ScoreExplainer, so their text is
+// only what the animation can't say. The first card doubles as the panel intro
+// (there is no separate "here is the panel" step) and picks up confidence,
+// which is the same probability bar read from the other end — that keeps the
+// timed phase to three cards while all five scores still get an animation via
+// the sidebar's ⓘ popovers.
+const MODEL_SCORES_INTRO = [
+  "Further down the sidebar you can filter the feed by the scores the model gives each sample. Confidence is this same bar read from the other end — high confidence means the model has committed.",
   "",
-  "Hover the ⓘ next to any score for a definition.",
+  "Click the ⓘ beside any score to replay these explanations while you annotate.",
 ].join("\n");
 
 // ── Reusable cards ──────────────────────────────────────────────────────────
@@ -117,13 +123,32 @@ const metadataStep = (): TourStepSpec => ({
   placement: "right",
 });
 
-const modelScoresStep = (): TourStepSpec => ({
-  featureKey: "model",
-  target: "model-scores",
-  title: "Model-derived filters",
-  description: MODEL_SCORES_DESC,
-  placement: "right",
-});
+const modelScoreSteps = (): TourStepSpec[] => [
+  {
+    featureKey: "score-needle",
+    target: "model-scores",
+    title: "Uncertainty — when the model is torn",
+    description: MODEL_SCORES_INTRO,
+    placement: "right",
+    visual: "uncertainty",
+  },
+  {
+    featureKey: "score-diversity",
+    target: "model-scores",
+    title: "Diversity — unlike anything labelled yet",
+    description: "",
+    placement: "right",
+    visual: "diversity",
+  },
+  {
+    featureKey: "score-density",
+    target: "model-scores",
+    title: "Density — how typical the clip is",
+    description: "",
+    placement: "right",
+    visual: "density",
+  },
+];
 
 const sortStep = (): TourStepSpec => ({
   featureKey: "sort",
@@ -201,7 +226,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [modelScoresStep(), sortStep(), taskStep("task-p4")],
+    tour: [...modelScoreSteps(), sortStep(), taskStep("task-p4")],
   },
 
   // ── Phase 5 — NEW: clickable projection points ──────────────────────────

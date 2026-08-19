@@ -161,6 +161,14 @@ export type StudyLogEvent =
   | { eventType: "color_property_change"; payload: { property: string | null } }
   | { eventType: "histogram_property_select"; payload: { property: string } }
   | {
+      // An animated score explainer was closed — emitted on tour step advance
+      // or popover close, with dwell time on the envelope's `durationMs`. Pairs
+      // with `model_score_filter_multi_change` to show whether seeing the
+      // explanation changed how the filters were actually used.
+      eventType: "score_explainer_view";
+      payload: { property: string; surface: "tour" | "popover" };
+    }
+  | {
       eventType: "histogram_multi_toggle";
       payload: { property: string; enabled: boolean; keysAfter: string[] };
     }

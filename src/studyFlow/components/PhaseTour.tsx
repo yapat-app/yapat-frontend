@@ -7,10 +7,13 @@
  
  */
 
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Tour, type TourProps } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
 import { useAppSelector } from "../../hooks";
+import { ScoreExplainer, type ExplainerKey } from "../../components/scoreExplainer";
+import { useStudyLogger } from "../../studyLogging";
+import type { TourStepSpec } from "../types";
 
 /**
  * Render a step description that may contain multiple lines.
@@ -32,12 +35,61 @@ function renderDescription(text: string): React.ReactNode {
   );
 }
 
+/**
+ * A step's body: the animated score explainer (when the step declares one)
+ * above its authored text. Steps whose animation says it all carry an empty
+ * description, so the text block is dropped rather than rendered blank.
+ */
+function renderStepBody(step: TourStepSpec): React.ReactNode {
+  const text = step.description.trim() ? renderDescription(step.description) : null;
+  if (!step.visual) return text;
+  return (
+    <div className="flex flex-col gap-2">
+      <ScoreExplainer scoreKey={step.visual} variant="tour" />
+      {text}
+    </div>
+  );
+}
+
 export const PhaseTour: React.FC = () => {
   const { enabled, stage, pendingTourSteps, finishTour } = useStudyFlow();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  const { log } = useStudyLogger();
 
   const isTour = enabled && stage === "tour";
   const hasSteps = pendingTourSteps.length > 0;
+
+  // Dwell tracking for the animated score cards. `viewRef` holds the explainer
+  // currently on screen; it is flushed when the participant advances or closes,
+  // so `durationMs` is how long they actually watched it.
+  const viewRef = useRef<{ key: ExplainerKey; at: number } | null>(null);
+
+  const flushView = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    viewRef.current = null;
+    log(
+      "score_explainer_view",
+      { property: view.key, surface: "tour" },
+      { durationMs: Math.round(performance.now() - view.at) },
+    );
+  }, [log]);
+
+  const enterStep = useCallback(
+    (index: number) => {
+      const visual = pendingTourSteps[index]?.visual;
+      viewRef.current = visual ? { key: visual, at: performance.now() } : null;
+    },
+    [pendingTourSteps],
+  );
+
+  // antd Tour opens on step 0 without firing onChange, so arm the first step here.
+  useEffect(() => {
+    if (isTour && hasSteps) enterStep(0);
+    return () => {
+      viewRef.current = null;
+    };
+  }, [isTour, hasSteps, enterStep]);
 
   // Defensive: if we somehow entered the tour stage with nothing to show, don't
   // trap the participant — start the timer. (Normal path skips tour upfront.)
@@ -93,7 +145,7 @@ export const PhaseTour: React.FC = () => {
 
   const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
     title: s.title,
-    description: renderDescription(s.description),
+    description: renderStepBody(s),
     placement: s.placement,
     // antd renders the step centred when the element isn't found; the cast
     // satisfies its non-null target signature while we tolerate a missing node.
@@ -101,5 +153,15 @@ export const PhaseTour: React.FC = () => {
       document.querySelector(`[data-tour="${s.target}"]`) as HTMLElement,
   }));
 
-  return <Tour open steps={steps} onClose={finishTour} />;
+  const handleChange = (index: number) => {
+    flushView();
+    enterStep(index);
+  };
+
+  const handleClose = () => {
+    flushView();
+    finishTour();
+  };
+
+  return <Tour open steps={steps} onChange={handleChange} onClose={handleClose} />;
 };
