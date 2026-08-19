@@ -494,6 +494,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
             return (
               <div
                 key={prop}
+                // Per-row tour anchor: the guided tour spotlights the single
+                // score its card is about, not the whole model-scores section.
+                data-tour={`score-row-${prop}`}
                 className={[
                   "rounded-lg border transition-colors",
                   isActive

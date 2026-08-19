@@ -71,16 +71,13 @@ export interface ToyCase {
   candidate: ToyPoint;
   caption: string;
   verdict: string;
-  /** True when this beat is the "high score" example. */
-  high: boolean;
 }
 
 export const DIVERSITY_CASES: readonly ToyCase[] = Object.freeze([
   {
     candidate: { x: 262, y: 118 },
-    caption: "far from everything you've labelled",
-    verdict: "high diversity",
-    high: true,
+    caption: "far from the clips you already labelled",
+    verdict: "HIGH DIVERSITY: different to what you labelled",
   },
   {
     // Just outside the labelled cluster rather than inside it: sitting on top
@@ -89,9 +86,8 @@ export const DIVERSITY_CASES: readonly ToyCase[] = Object.freeze([
     // contrast. From here the line is short (~33px) but clearly drawn, against
     // the ~187px of the high-diversity beat.
     candidate: { x: 112, y: 74 },
-    caption: "close to clips you already labelled",
-    verdict: "low diversity",
-    high: false,
+    caption: "close to the clips you already labelled",
+    verdict: "LOW DIVERSITY: similar to what you labelled",
   },
 ]);
 
@@ -99,8 +95,7 @@ export const DENSITY_CASES: readonly ToyCase[] = Object.freeze([
   {
     candidate: { x: 178, y: 104 },
     caption: "in a crowded region",
-    verdict: "high density",
-    high: true,
+    verdict: "Lies in HIGH DENSITY: a common sound",
   },
   {
     // Sparse but not empty: 3 neighbours against the dense beat's 41. An
@@ -108,8 +103,7 @@ export const DENSITY_CASES: readonly ToyCase[] = Object.freeze([
     // and a weaker contrast than a small number — rare is the point, not unique.
     candidate: { x: 232, y: 112 },
     caption: "almost on its own",
-    verdict: "low density",
-    high: false,
+    verdict: "Lies in LOW DENSITY: not a common sound",
   },
 ]);
 

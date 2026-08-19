@@ -56,15 +56,12 @@ export const MapScene: React.FC<{
   const nearest = isDensity ? null : nearestTo(candidate, TOY_LABELLED).point;
 
   // The count ticks up as the halo grows — that IS the mechanism being taught —
-  // but the qualitative phrase is held back until the halo has settled.
-  // Appending it while the count is still climbing produces "0 clips sound like
-  // this — in a crowded region" for the first moments of every cycle.
-  const caption = isDensity
-    ? `${neighbours} clips sound like this${settled ? ` — ${toyCase.caption}` : ""}`
-    : toyCase.caption;
+  // while the verdict is held back until the measurement has settled, so the
+  // scene never asserts "a common sound" over a count still climbing from zero.
+  const caption = isDensity ? `${neighbours} similar clips nearby` : toyCase.caption;
 
   return (
-    <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H + 22}`} className="w-full h-auto" role="img">
+    <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H + 42}`} className="w-full h-auto" role="img">
       <title>
         {isDensity
           ? "A projection map where a halo around the highlighted clip counts how many nearby clips sound similar."
@@ -126,17 +123,11 @@ export const MapScene: React.FC<{
       />
       <circle cx={candidate.x} cy={candidate.y} r={5} fill="none" stroke={accent} strokeWidth={2.5} />
 
-      <text x={14} y={SCENE_H + 16} fontSize={12} fill="#1f2937">
+      <text x={14} y={SCENE_H + 16} fontSize={12} fill="#6b7280">
         {caption}
       </text>
       {settled && (
-        <text
-          x={SCENE_W - 14}
-          y={SCENE_H + 16}
-          fontSize={12}
-          textAnchor="end"
-          fill="#6b7280"
-        >
+        <text x={14} y={SCENE_H + 34} fontSize={12.5} fill="#1f2937">
           {toyCase.verdict}
         </text>
       )}

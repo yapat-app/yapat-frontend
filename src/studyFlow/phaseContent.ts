@@ -13,6 +13,7 @@
 
 import type { PhaseContent, TourStepSpec } from "./types";
 import { SPECIES_LABELS } from "../constants/speciesLabels";
+import { EXPLAINER_COPY } from "../components/scoreExplainer";
 
 // ── Shared copy ────────────────────────────────────────────────────────────
 
@@ -47,17 +48,11 @@ const METADATA_DESC = [
   "Filters only change what's shown — they don't remove any data.",
 ].join("\n");
 
-// The model-score cards each carry an animated ScoreExplainer, so their text is
-// only what the animation can't say. The first card doubles as the panel intro
-// (there is no separate "here is the panel" step) and picks up confidence,
-// which is the same probability bar read from the other end — that keeps the
-// timed phase to three cards while all five scores still get an animation via
-// the sidebar's ⓘ popovers.
-const MODEL_SCORES_INTRO = [
-  "Further down the sidebar you can filter the feed by the scores the model gives each sample. Confidence is this same bar read from the other end — high confidence means the model has committed.",
-  "",
-  "Click the ⓘ beside any score to replay these explanations while you annotate.",
-].join("\n");
+// Each model-score card carries an animated ScoreExplainer and its own
+// one-line definition, so the step text is empty — the card says it all. Only
+// the first adds a sentence, pointing at the ⓘ that reopens any of these later.
+const MODEL_SCORES_INTRO =
+  "Click the ⓘ beside any score to see these explanations again while you annotate.";
 
 // ── Reusable cards ──────────────────────────────────────────────────────────
 // Each phase lists only the cards it INTRODUCES; keys are shared so the flow's
@@ -123,32 +118,18 @@ const metadataStep = (): TourStepSpec => ({
   placement: "right",
 });
 
-const modelScoreSteps = (): TourStepSpec[] => [
-  {
-    featureKey: "score-needle",
-    target: "model-scores",
-    title: "Uncertainty — when the model is torn",
-    description: MODEL_SCORES_INTRO,
-    placement: "right",
-    visual: "uncertainty",
-  },
-  {
-    featureKey: "score-diversity",
-    target: "model-scores",
-    title: "Diversity — unlike anything labelled yet",
-    description: "",
-    placement: "right",
-    visual: "diversity",
-  },
-  {
-    featureKey: "score-density",
-    target: "model-scores",
-    title: "Density — how typical the clip is",
-    description: "",
-    placement: "right",
-    visual: "density",
-  },
-];
+// Each card spotlights only its own score's row (`score-row-<key>` in
+// ScoreHistogramPanel) rather than the whole model-scores section, so the
+// highlight always matches what the card is describing.
+const modelScoreSteps = (): TourStepSpec[] =>
+  (["uncertainty", "confidence", "diversity", "density"] as const).map((key, i) => ({
+    featureKey: `score-${key}`,
+    target: `score-row-${key}`,
+    title: EXPLAINER_COPY[key].title,
+    description: i === 0 ? MODEL_SCORES_INTRO : "",
+    placement: "right" as const,
+    visual: key,
+  }));
 
 const sortStep = (): TourStepSpec => ({
   featureKey: "sort",
@@ -163,6 +144,8 @@ const TASK_DESC = [
   "Your task will be to annotate as many POSITIVE samples as possible in the given time for the following species:",
   "",
   ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
+  "",
+  "If you come across other species, you can annotate those too.",
 ].join("\n");
 
 // Shown as the final card of every phase's tour. Each phase uses its own

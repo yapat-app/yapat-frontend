@@ -2,10 +2,13 @@
  * ScoreExplainer — the animated "what does this score actually mean" card.
  *
  * Mounted in two places from one definition:
- *   • the Phase 4 guided tour (variant "tour"), shown once at the moment the
- *     model-score sidebar is introduced;
+ *   • the Phase 4 guided tour (variant "tour"), shown once as each score is
+ *     introduced;
  *   • the ⓘ popover on each score row in ScoreHistogramPanel (variant
  *     "popover"), so it stays reachable for the rest of the study.
+ *
+ * One definition line, then the animation. Nothing below it: the cards describe
+ * what a score measures and never tell a participant what to annotate.
  *
  * `active` gates the animation clock: the sidebar mounts five of these, and only
  * the open popover should be running a frame loop.
@@ -14,8 +17,9 @@
 import React from "react";
 import { EXPLAINER_COPY, type ExplainerKey } from "./copy";
 import { BlendScene } from "./scenes/BlendScene";
+import { ConfidenceScene } from "./scenes/ConfidenceScene";
+import { DistributionScene } from "./scenes/DistributionScene";
 import { MapScene } from "./scenes/MapScene";
-import { NeedleScene } from "./scenes/NeedleScene";
 
 interface ScoreExplainerProps {
   scoreKey: ExplainerKey;
@@ -27,9 +31,9 @@ interface ScoreExplainerProps {
 function renderScene(scoreKey: ExplainerKey, active: boolean): React.ReactNode {
   switch (scoreKey) {
     case "uncertainty":
-      return <NeedleScene emphasis="torn" active={active} />;
+      return <DistributionScene active={active} />;
     case "confidence":
-      return <NeedleScene emphasis="sure" active={active} />;
+      return <ConfidenceScene active={active} />;
     case "diversity":
     case "density":
       return <MapScene mode={scoreKey} active={active} />;
@@ -54,9 +58,8 @@ export const ScoreExplainer: React.FC<ScoreExplainerProps> = ({
       {isPopover && (
         <p className="mb-0.5 text-[13px] font-semibold text-gray-800">{copy.title}</p>
       )}
-      <p className="mb-2 text-[12px] text-gray-500">{copy.question}</p>
+      <p className="mb-2 text-[12.5px] leading-relaxed text-gray-600">{copy.definition}</p>
       {renderScene(scoreKey, active)}
-      <p className="mt-2 text-[12px] leading-relaxed text-gray-600">{copy.takeaway}</p>
     </div>
   );
 };
