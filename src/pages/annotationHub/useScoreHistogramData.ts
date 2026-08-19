@@ -15,25 +15,61 @@ import type { FilterMode } from "../../studyPhases";
 
 const SCORE_UPPER_EPS = 1e-9;
 
+/** Model-derived score properties whose histogram domain follows the data. */
+export const SCORE_DOMAIN_KEYS = [
+  "uncertainty",
+  "diversity",
+  "density",
+  "composite",
+  "confidence",
+] as const;
+
+export type ScoreDomains = Record<string, [number, number]>;
+
+/**
+ * Actual [min, max] per score property, computed from the live predictions.
+ */
+export function computeScoreDomains(
+  predictions: { scores?: SampleScores }[],
+): ScoreDomains {
+  const domains: ScoreDomains = {};
+  for (const key of SCORE_DOMAIN_KEYS) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const p of predictions) {
+      const v = p.scores?.[key as keyof SampleScores] as number | undefined;
+      if (typeof v === "number" && Number.isFinite(v)) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+    if (min <= max) domains[key] = [min, max];
+  }
+  return domains;
+}
+
 export function isPointVisible(
   scores: SampleScores | undefined,
   alFilters: ALFilterState,
   visibilityMode: FilterMode,
   visSliderStyle: "range" | "threshold",
+  domains?: ScoreDomains,
 ): boolean {
   if (visibilityMode === "single") {
     const visKey = alFilters.visibility.propertyKey;
     if (!visKey) return true;
     const prop = getPropertyByKey(visKey);
     if (!prop) return true;
-    const [pMin, pMax] = prop.range ?? [0, 1];
+    const [pMin, pMax] = domains?.[visKey] ?? prop.range ?? [0, 1];
     const [normLo, normHi] = alFilters.visibility.range ?? [0, 1];
     const span = pMax - pMin || 1;
     const domainLo = pMin + normLo * span;
-    const domainHi = visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
+    const domainHi =
+      visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
     const raw = scores?.[visKey as keyof SampleScores] as number | undefined;
     if (raw === undefined || raw === null) {
-      const hasConstraint = normLo > 0 || (visSliderStyle !== "threshold" && normHi < 1);
+      const hasConstraint =
+        normLo > 0 || (visSliderStyle !== "threshold" && normHi < 1);
       return !hasConstraint;
     }
     return raw >= domainLo && raw <= domainHi + SCORE_UPPER_EPS;
@@ -45,7 +81,7 @@ export function isPointVisible(
     for (const key of keys) {
       const prop = getPropertyByKey(key);
       if (!prop?.range) continue;
-      const [pMin, pMax] = prop.range;
+      const [pMin, pMax] = domains?.[key] ?? prop.range;
       const [normLo, normHi] = ranges[key] ?? [0, 1];
       const domainLo = pMin + normLo * (pMax - pMin);
       const domainHi = pMin + normHi * (pMax - pMin);
@@ -82,6 +118,7 @@ export function useScoreHistogramData(
   enrichedPlotPoints: EnrichedPoint[];
   filtered: FilteredEnrichedPoint[];
   alFilters: ALFilterState;
+  domains: ScoreDomains;
 } {
   const alFilters = useAppSelector((s) => s.al.alFilters);
   // Read the live feed, not `projectionPredictions` — that snapshot is frozen
@@ -91,7 +128,16 @@ export function useScoreHistogramData(
   const rawPredictions = useAppSelector((s) => s.al.predictions);
 
   const enrichedPlotPoints = useMemo<EnrichedPoint[]>(
-    () => rawPredictions.map((p) => ({ snippet_id: p.snippet_id, scores: p.scores })),
+    () =>
+      rawPredictions.map((p) => ({
+        snippet_id: p.snippet_id,
+        scores: p.scores,
+      })),
+    [rawPredictions],
+  );
+
+  const domains = useMemo(
+    () => computeScoreDomains(rawPredictions),
     [rawPredictions],
   );
 
@@ -99,10 +145,16 @@ export function useScoreHistogramData(
     () =>
       enrichedPlotPoints.map((p) => ({
         p,
-        visible: isPointVisible(p.scores, alFilters, visibilityMode, visSliderStyle),
+        visible: isPointVisible(
+          p.scores,
+          alFilters,
+          visibilityMode,
+          visSliderStyle,
+          domains,
+        ),
       })),
-    [enrichedPlotPoints, alFilters, visibilityMode, visSliderStyle],
+    [enrichedPlotPoints, alFilters, visibilityMode, visSliderStyle, domains],
   );
 
-  return { enrichedPlotPoints, filtered, alFilters };
+  return { enrichedPlotPoints, filtered, alFilters, domains };
 }

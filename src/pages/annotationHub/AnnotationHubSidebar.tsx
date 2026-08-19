@@ -199,10 +199,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState("");
 
-  const { enrichedPlotPoints, filtered, alFilters } = useScoreHistogramData(
-    SCORE_VISIBILITY_MODE,
-    SCORE_SLIDER_STYLE,
-  );
+  const { enrichedPlotPoints, filtered, alFilters, domains } =
+    useScoreHistogramData(SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE);
   const dateTimeData = useDateTimeFilterData(filterMonths);
 
   const activeFilterCount = [
@@ -601,6 +599,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                     allowedProperties={SCORE_ALLOWED_PROPERTIES}
                     visibilityMode={SCORE_VISIBILITY_MODE}
                     alFilters={alFilters}
+                    domains={domains}
                     sliderMode={SCORE_SLIDER_STYLE}
                     compact
                     onVisibilityKeyChange={(key) =>

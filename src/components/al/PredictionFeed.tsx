@@ -33,7 +33,10 @@ import type {
   SampleScores,
 } from "../../types/al";
 import type { SortField } from "../../types/sort";
-import { isPointVisible } from "../../pages/annotationHub/useScoreHistogramData";
+import {
+  isPointVisible,
+  computeScoreDomains,
+} from "../../pages/annotationHub/useScoreHistogramData";
 import {
   SCORE_VISIBILITY_MODE,
   SCORE_SLIDER_STYLE,
@@ -279,6 +282,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const statusStickyIdsRef = useRef<Set<number>>(new Set());
   const statusStickyKeyRef = useRef<string | null>(null);
 
+  // Actual per-property score domains — must match the histogram's so the
+  // score-visibility filter agrees with what the (un-clamped) sliders show.
+  const scoreDomains = useMemo(
+    () => computeScoreDomains(predictions),
+    [predictions],
+  );
+
   const filteredAndSorted = useMemo(() => {
     if (!enableClientFilters)
       return applySortFields(predictions, sortFields, recordingDateTimeById);
@@ -374,6 +384,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           alFilters,
           SCORE_VISIBILITY_MODE,
           SCORE_SLIDER_STYLE,
+          scoreDomains,
         ),
       );
     }
@@ -382,6 +393,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   }, [
     enableClientFilters,
     predictions,
+    scoreDomains,
     feedbacks,
     labelsBySnippet,
     isClassicFeed,
@@ -638,10 +650,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       return;
     }
 
-    if (
-      selectedSnippetId !== null &&
-      filteredAndSorted.some((p) => p.snippet_id === selectedSnippetId)
-    ) {
+    // If a snippet is already selected, keep that selection even when it's
+    // not present in the current filtered list. This preserves deliberate
+    // external selections instead of immediately
+    // overwriting them with the list's first item.
+    if (selectedSnippetId !== null) {
+      if (filteredAndSorted.some((p) => p.snippet_id === selectedSnippetId))
+        return;
       return;
     }
 

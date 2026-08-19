@@ -36,6 +36,9 @@ interface ScoreHistogramPanelProps {
   allowedProperties: AllowedProperty[];
   visibilityMode: FilterMode;
   alFilters: ALFilterState;
+  /** Actual per-property [min,max] from the data; overrides the declared range
+   * so out-of-range scores are shown at their true position (not clamped). */
+  domains?: Record<string, [number, number]>;
   onVisibilityKeyChange: (key: string | null) => void;
   onVisibilityRangeChange: (range: [number, number]) => void;
   onMultiVisibilityChange?: (keys: string[]) => void;
@@ -229,8 +232,15 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   onReset,
   sliderMode = "threshold",
   compact = false,
+  domains,
 }) => {
   const isMulti = visibilityMode === "multi";
+
+  // Histogram domain for a property: the data's actual [min,max] when available,
+  // else the property's declared range. Keeps the bars, axis labels, and slider
+  // handles all on the same (un-clamped) scale.
+  const domainFor = (key: string): [number, number] =>
+    domains?.[key] ?? propDomain(key);
 
   // ── P3.1: active key from Redux ──────────────────────────────────────────
   const singleActiveKey: string =
@@ -319,8 +329,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     [visiblePoints, singleActiveKey],
   );
   const singleDomain = useMemo(
-    () => propDomain(singleActiveKey),
-    [singleActiveKey],
+    () => domainFor(singleActiveKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [singleActiveKey, domains],
   );
 
   // True when any active filter has a threshold above 0.
@@ -341,7 +352,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     return (allowedProperties as string[])
       .filter((key) => multiActiveKeys.includes(key))
       .map((key) => {
-        const [min, max] = propDomain(key);
+        const [min, max] = domainFor(key);
         return {
           key,
           label: getPropertyByKey(key)?.label ?? key,
@@ -362,6 +373,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     enrichedPlotPoints,
     visiblePoints,
     alFilters.visibility.ranges,
+    domains,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -536,18 +548,30 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       {sliderMode === "range" ? (
                         <>
                           <strong style={{ color }}>
-                            {domainValue(row.normRange[0], row.min, row.max).toFixed(2)}
+                            {domainValue(
+                              row.normRange[0],
+                              row.min,
+                              row.max,
+                            ).toFixed(2)}
                           </strong>
                           {" – "}
                           <strong style={{ color }}>
-                            {domainValue(row.normRange[1], row.min, row.max).toFixed(2)}
+                            {domainValue(
+                              row.normRange[1],
+                              row.min,
+                              row.max,
+                            ).toFixed(2)}
                           </strong>
                         </>
                       ) : (
                         <>
                           ≥{" "}
                           <strong style={{ color }}>
-                            {domainValue(row.normRange[0], row.min, row.max).toFixed(2)}
+                            {domainValue(
+                              row.normRange[0],
+                              row.min,
+                              row.max,
+                            ).toFixed(2)}
                           </strong>
                         </>
                       )}

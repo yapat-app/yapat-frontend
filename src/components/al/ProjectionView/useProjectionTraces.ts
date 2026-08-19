@@ -471,16 +471,12 @@ export function useProjectionTraces(opts: {
     const queueDotLabels: string[] = [];
 
     for (const id of selectedSnippetIds) {
-      let coord: [number, number] | null = null;
-      let label = "Unlabeled";
+      // Only draw selection highlights for points that are currently
+      // visible according to the active visibility filters.
       const inFiltered = filtered.find((f) => f.p.snippet_id === id);
-      if (inFiltered) {
-        coord = inFiltered.coord;
-        label = inFiltered.p.scores?.actual_label ?? "Unlabeled";
-      } else if (fpvCoordsBySnippet?.[id]) {
-        coord = fpvCoordsBySnippet[id];
-      }
-      if (!coord) continue;
+      if (!inFiltered || !inFiltered.visible) continue;
+      const coord = inFiltered.coord;
+      const label = inFiltered.p.scores?.actual_label ?? "Unlabeled";
 
       if (id === effectiveActiveId) {
         activeRingXs.push(coord[0]);
@@ -574,7 +570,7 @@ export function useProjectionTraces(opts: {
     }
 
     return traces;
-  }, [selectedSnippetIds, activeSnippetId, filtered, fpvCoordsBySnippet]);
+  }, [selectedSnippetIds, activeSnippetId, filtered]);
 
   const traces = useMemo(
     () => [...baseTraces, ...selectionTraces],
