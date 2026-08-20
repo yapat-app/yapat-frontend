@@ -13,7 +13,12 @@
 
 import type { PhaseContent, TourStepSpec } from "./types";
 import { SPECIES_LABELS } from "../constants/speciesLabels";
-import { EXPLAINER_COPY } from "../components/scoreExplainer";
+import {
+  EXPLAINER_COPY,
+  isExplainerKey,
+  type ExplainerKey,
+} from "../components/scoreExplainer";
+import { SCORE_ALLOWED_PROPERTIES } from "../pages/annotationHub/scoreFilterConfig";
 
 // ── Shared copy ────────────────────────────────────────────────────────────
 
@@ -121,8 +126,20 @@ const metadataStep = (): TourStepSpec => ({
 // Each card spotlights only its own score's row (`score-row-<key>` in
 // ScoreHistogramPanel) rather than the whole model-scores section, so the
 // highlight always matches what the card is describing.
+//
+// The ORDER is derived from the sidebar's own render order rather than written
+// out a second time here. Listing it twice is what let the tour open on
+// uncertainty while the panel showed confidence first; deriving it means
+// reordering scoreFilterConfig reorders the cards with it, and the cards walk
+// the panel top to bottom by construction. Composite is deliberately excluded —
+// it's a blend of the others and stays popover-only rather than spending a card
+// in a timed phase.
+const TOUR_SCORE_KEYS = SCORE_ALLOWED_PROPERTIES.filter(
+  (key): key is ExplainerKey => isExplainerKey(key) && key !== "composite",
+);
+
 const modelScoreSteps = (): TourStepSpec[] =>
-  (["uncertainty", "confidence", "diversity", "density"] as const).map((key, i) => ({
+  TOUR_SCORE_KEYS.map((key, i) => ({
     featureKey: `score-${key}`,
     target: `score-row-${key}`,
     title: EXPLAINER_COPY[key].title,
