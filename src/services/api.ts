@@ -648,13 +648,6 @@ export const teamApi = {
     return response.data;
   },
 
-  removeMember: async (
-    teamId: string | number,
-    userId: number,
-  ): Promise<void> => {
-    await api.delete(`/api/teams/${teamId}/members/${userId}`);
-  },
-
   createInvitation: async (body: any): Promise<Invitation> => {
     const response = await api.post(
       `/api/teams/${body.teamId}/invitations`,

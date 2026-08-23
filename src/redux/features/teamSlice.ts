@@ -111,21 +111,6 @@ export const fetchTeamMembers = createAsyncThunk(
   },
 );
 
-export const removeTeamMember = createAsyncThunk(
-  "team/removeMember",
-  async (
-    { teamId, userId }: { teamId: string | number; userId: number },
-    { rejectWithValue },
-  ) => {
-    try {
-      await teamApi.removeMember(teamId, userId);
-      return userId;
-    } catch (error: any) {
-      return rejectWithValue(getErrorMessage(error));
-    }
-  },
-);
-
 export const fetchTeamDatasets = createAsyncThunk(
   "team/getAllDatasets",
   async (body: any) => {
@@ -227,12 +212,6 @@ export const teamSlice = createSlice({
     });
     builder.addCase(fetchTeamMembers.rejected, (state) => {
       state.loading = false;
-    });
-
-    builder.addCase(removeTeamMember.fulfilled, (state, action) => {
-      state.teamMembers = state.teamMembers.filter(
-        (m) => m.user_id !== action.payload,
-      );
     });
 
     builder.addCase(createInvitationLink.pending, (state) => {

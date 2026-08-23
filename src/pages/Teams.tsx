@@ -66,7 +66,6 @@ export const Teams = () => {
   interface DataType {
     id: string;
     name: string;
-    is_ready?: boolean;
     datasets?: {
       id: number;
       name: string;

@@ -7,7 +7,6 @@ import {
   fetchTeamMembers,
   updateTeam,
   deleteTeam,
-  removeTeamMember,
   createInvitationLink,
   resetTeamUpdated,
   resetTeamDeleted,
@@ -24,12 +23,10 @@ import {
   Tooltip,
   message,
   Spin,
-  Popconfirm,
 } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
-  UserDeleteOutlined,
   CopyOutlined,
   SaveOutlined,
   CloseOutlined,
@@ -115,26 +112,23 @@ export const ManageTeam = () => {
     dispatch(deleteTeam(teamId!));
   };
 
-  const handleRemoveMember = (userId: number) => {
-    dispatch(removeTeamMember({ teamId: teamId!, userId }));
-  };
-
   const handleOpenInvite = () => {
     dispatch(clearInvitation());
     setIsInviteModalOpen(true);
   };
 
+  const hasOwner = teamMembers.some((m) => m.role === "owner");
+
   const handleCreateInvite = () => {
-    // Team is ready means it already has an owner → invite users
     const targetRole =
-      user?.role === "team_owner" ? "user" : currentTeam?.is_ready ? "user" : "owner";
+      user?.role === "team_owner" ? "user" : hasOwner ? "user" : "owner";
     dispatch(createInvitationLink({ teamId, target_role: targetRole }));
   };
 
   const invitationRole =
     user?.role === "team_owner"
       ? "user"
-      : invitation?.target_role ?? (currentTeam?.is_ready ? "user" : "owner");
+      : invitation?.target_role ?? (hasOwner ? "user" : "owner");
   const isInvitingMembers = invitationRole === "user";
 
   const memberColumns: TableProps<TeamMember>["columns"] = [
@@ -163,35 +157,6 @@ export const ManageTeam = () => {
       dataIndex: "joined_at",
       key: "joined_at",
       render: (date: string) => new Date(date).toLocaleDateString(),
-    },
-    {
-      title: "Action",
-      key: "action",
-      render: (_, record) => {
-        const isOwner = record.role === "owner";
-        return (
-          <Popconfirm
-            title="Remove member"
-            description={`Remove ${record.full_name || record.username} from the team?`}
-            onConfirm={() => handleRemoveMember(record.user_id)}
-            okText="Remove"
-            okButtonProps={{ danger: true }}
-            cancelText="Cancel"
-            disabled={isOwner}
-          >
-            <Tooltip
-              title={isOwner ? "Owners cannot be removed" : "Remove member"}
-            >
-              <Button
-                type="text"
-                danger
-                icon={<UserDeleteOutlined />}
-                disabled={isOwner}
-              />
-            </Tooltip>
-          </Popconfirm>
-        );
-      },
     },
   ];
 
@@ -324,7 +289,7 @@ export const ManageTeam = () => {
               title={<span className="card_heading_text">Team Members</span>}
               extra={
                 <Button type="primary" onClick={handleOpenInvite}>
-                  {currentTeam.is_ready
+                  {hasOwner
                     ? "Invite Team Members"
                     : "Invite Team Owner"}
                 </Button>

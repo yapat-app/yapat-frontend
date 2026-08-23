@@ -415,7 +415,6 @@ export interface Team {
   id: string;
   name: string;
   description?: string;
-  is_ready: boolean;
   created_at?: string;
   updated_at?: string;
 }
