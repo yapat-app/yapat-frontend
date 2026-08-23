@@ -22,6 +22,7 @@ import type { FPVMethodAvailability, FPVPointMetadata, FPVProjection2D } from ".
 import { embeddingApi } from "../../services/api";
 import type { SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
+import { isWebGLAvailable } from "../../utils/webgl";
 
 const { Option } = Select;
 
@@ -157,6 +158,7 @@ export const ProjectionView: React.FC = () => {
   const isClassicFeed = feedSource === "classic";
 
   const [method, setMethod] = useState<ProjectionMethod>("pca");
+  const [webglAvailable] = useState(() => isWebGLAvailable());
   const [fpvLoading, setFpvLoading] = useState(false);
   const [fpvError, setFpvError] = useState<string | null>(null);
   const [fpvPoints, setFpvPoints] = useState<FPVPointMetadata[]>([]);
@@ -1283,7 +1285,39 @@ export const ProjectionView: React.FC = () => {
           <div className="flex items-center justify-center h-full text-gray-400 text-sm font-ibm-sans">
             Projection not available yet — it will appear once the embedding job finishes (FPV is cached).
           </div>
-        ) : !isFpvPlotLoading && activeProjectionReady ? (
+        ) : !isFpvPlotLoading && activeProjectionReady && !webglAvailable ? (
+          <div className="flex items-center justify-center h-full px-5 sm:px-6">
+            <div className="text-left max-w-[580px]">
+              <p className="text-[20px] font-bold text-gray-800 font-ibm-sans mb-2">
+                WebGL unavailable
+              </p>
+              <p className="text-sm text-gray-500 font-ibm-sans leading-relaxed mb-4">
+                Feature Projection cannot be displayed because graphics acceleration is currently unavailable.
+              </p>
+              <p className="text-sm font-semibold text-gray-700 font-ibm-sans mb-1.5">
+                To enable graphics acceleration:
+              </p>
+              <ol className="text-sm text-gray-500 font-ibm-sans leading-relaxed list-decimal pl-5 space-y-1">
+                <li>Open your browser settings.</li>
+                <li>
+                  In the settings search, look for{" "}
+                  <span className="font-semibold">graphics acceleration</span> or{" "}
+                  <span className="font-semibold">hardware acceleration</span>.
+                  <br />
+                  You can also find this option under{" "}
+                  <span className="font-semibold">System / Performance</span> settings.
+                </li>
+                <li>
+                  Find the graphics/hardware acceleration option and{" "}
+                  <span className="font-semibold">turn it on</span>.
+                </li>
+                <li>
+                  <span className="font-semibold">Restart your browser</span> and open YAPAT again.
+                </li>
+              </ol>
+            </div>
+          </div>
+        ) : !isFpvPlotLoading && activeProjectionReady && webglAvailable ? (
           <Plot
             data={traces}
             layout={{
