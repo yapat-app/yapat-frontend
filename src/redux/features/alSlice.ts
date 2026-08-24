@@ -1334,7 +1334,6 @@ const alSlice = createSlice({
       }
 
       const result = payload;
-      const labelScope = result.label_scope ?? null;
       const newRows = withDisplayFields(result.rows);
 
       // Filter out snippet IDs already present in the feed (including dividers).
