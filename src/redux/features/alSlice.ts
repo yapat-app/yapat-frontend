@@ -36,7 +36,6 @@ import {
   buildClassicFeedback,
   snippetsToPredictions,
 } from "../../utils/classicFeedSync";
-import { aggregateConfidence } from "../../utils/aggregateConfidence";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 10;
@@ -146,10 +145,17 @@ function buildRestoreInferenceRequest(
   return body;
 }
 
-function withDisplayFields(
-  rows: PAMPrediction[],
-  labelScope?: string[] | null,
-): PAMPrediction[] {
+/**
+ * Attach display-only fields to prediction rows.
+ *
+ * Confidence is NOT computed here. It is a model-derived score owned by the
+ * backend, which aggregates it over the request's label_scope and returns it on
+ * each row; recomputing it client-side meant two implementations that had to be
+ * kept in lockstep. The only local work left is picking the highest-probability
+ * label to show as the row's headline, and a max(p) fallback for rows that
+ * predate the server-side field (feeds restored from localStorage).
+ */
+function withDisplayFields(rows: PAMPrediction[]): PAMPrediction[] {
   return rows.map((r) => {
     const probs = r.predicted_probabilities ?? undefined;
     let bestLabel = r.predicted_labels?.[0] ?? "—";
@@ -162,13 +168,7 @@ function withDisplayFields(
         }
       }
     }
-    const scopedConfidence = aggregateConfidence(probs, labelScope);
-    const confidence =
-      labelScope?.length && scopedConfidence > 0
-        ? scopedConfidence
-        : Number.isFinite(bestProb) && bestProb > 0
-          ? bestProb
-          : (r.confidence ?? 0);
+    const confidence = r.confidence ?? (bestProb > 0 ? bestProb : 0);
     const mergedScores = {
       ...(r.scores ?? {}),
       // Ensure sampler score keys exist for filtering/coloring.
@@ -1065,7 +1065,7 @@ const alSlice = createSlice({
       };
       state.totalScored = result.total_predictions;
       state.feedSource = "pam";
-      state.predictions = withDisplayFields(result.rows, labelScope);
+      state.predictions = withDisplayFields(result.rows);
       state.lastInferenceAt = new Date().toISOString();
       state.selectedDatasetId = request.dataset_id;
       // Persist the snippet set used for inference so the projection view can
@@ -1152,7 +1152,7 @@ const alSlice = createSlice({
         label_scope: restoredScope,
       };
       state.totalScored = restored.total_predictions;
-      state.predictions = withDisplayFields(restored.rows, restoredScope);
+      state.predictions = withDisplayFields(restored.rows);
       if (state.projectionPredictions.length === 0) {
         state.projectionPredictions = state.predictions;
       }
@@ -1335,7 +1335,7 @@ const alSlice = createSlice({
 
       const result = payload;
       const labelScope = result.label_scope ?? null;
-      const newRows = withDisplayFields(result.rows, labelScope);
+      const newRows = withDisplayFields(result.rows);
 
       // Filter out snippet IDs already present in the feed (including dividers).
       const existingIds = new Set(
