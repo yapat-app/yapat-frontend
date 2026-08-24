@@ -15,13 +15,12 @@ import type { FilterMode } from "../../studyPhases";
 
 const SCORE_UPPER_EPS = 1e-9;
 
-/** Model-derived score properties whose histogram domain follows the data. */
+/** Model-derived score properties whose histogram domain follows the data.*/
 export const SCORE_DOMAIN_KEYS = [
   "uncertainty",
   "diversity",
   "density",
   "composite",
-  "confidence",
 ] as const;
 
 export type ScoreDomains = Record<string, [number, number]>;

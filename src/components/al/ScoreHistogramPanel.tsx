@@ -15,7 +15,13 @@
  *   result is visible in each distribution.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Popover, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { HistogramSlider } from "./HistogramSlider";
@@ -65,6 +71,30 @@ function propDomain(key: string): [number, number] {
 function domainValue(frac: number, min: number, max: number): number {
   return min + frac * (max - min);
 }
+
+/**
+ * Confidence keeps its precise numeric readout;
+ */
+function usesQualitativeLabel(propertyKey: string): boolean {
+  return propertyKey !== "confidence";
+}
+
+const HandleReadout: React.FC<{
+  propertyKey: string;
+  pole: "low" | "high";
+  frac: number;
+  min: number;
+  max: number;
+  color: string;
+}> = ({ propertyKey, pole, frac, min, max, color }) => (
+  <strong style={{ color }}>
+    {usesQualitativeLabel(propertyKey)
+      ? pole === "low"
+        ? "Low"
+        : "High"
+      : domainValue(frac, min, max).toFixed(2)}
+  </strong>
+);
 
 /** Extract numeric score values for a given key from a list of points. */
 function extractValues(points: FilteredPoint["p"][], key: string): number[] {
@@ -127,7 +157,13 @@ const ScoreInfo: React.FC<{ propertyKey: string }> = ({ propertyKey }) => {
       onOpenChange={handleOpenChange}
       trigger="click"
       placement="right"
-      content={<ScoreExplainer scoreKey={propertyKey} variant="popover" active={open} />}
+      content={
+        <ScoreExplainer
+          scoreKey={propertyKey}
+          variant="popover"
+          active={open}
+        />
+      }
     >
       {icon}
     </Popover>
@@ -181,23 +217,38 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
           <ScoreInfo propertyKey={propertyKey} />
         </span>
       )}
-      <span className="text-gray-400">
+      <span className="text-gray-400 whitespace-nowrap shrink-0">
         {mode === "range" ? (
           <>
-            <strong style={{ color }}>
-              {domainValue(normRange[0], min, max).toFixed(2)}
-            </strong>
+            <HandleReadout
+              propertyKey={propertyKey}
+              pole="low"
+              frac={normRange[0]}
+              min={min}
+              max={max}
+              color={color}
+            />
             {" – "}
-            <strong style={{ color }}>
-              {domainValue(normRange[1], min, max).toFixed(2)}
-            </strong>
+            <HandleReadout
+              propertyKey={propertyKey}
+              pole="high"
+              frac={normRange[1]}
+              min={min}
+              max={max}
+              color={color}
+            />
           </>
         ) : (
           <>
             ≥{" "}
-            <strong style={{ color }}>
-              {domainValue(normRange[0], min, max).toFixed(2)}
-            </strong>
+            <HandleReadout
+              propertyKey={propertyKey}
+              pole="low"
+              frac={normRange[0]}
+              min={min}
+              max={max}
+              color={color}
+            />
           </>
         )}
       </span>
@@ -547,32 +598,35 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     <span className="text-[11px] font-ibm-sans text-gray-400">
                       {sliderMode === "range" ? (
                         <>
-                          <strong style={{ color }}>
-                            {domainValue(
-                              row.normRange[0],
-                              row.min,
-                              row.max,
-                            ).toFixed(2)}
-                          </strong>
+                          <HandleReadout
+                            propertyKey={prop}
+                            pole="low"
+                            frac={row.normRange[0]}
+                            min={row.min}
+                            max={row.max}
+                            color={color}
+                          />
                           {" – "}
-                          <strong style={{ color }}>
-                            {domainValue(
-                              row.normRange[1],
-                              row.min,
-                              row.max,
-                            ).toFixed(2)}
-                          </strong>
+                          <HandleReadout
+                            propertyKey={prop}
+                            pole="high"
+                            frac={row.normRange[1]}
+                            min={row.min}
+                            max={row.max}
+                            color={color}
+                          />
                         </>
                       ) : (
                         <>
                           ≥{" "}
-                          <strong style={{ color }}>
-                            {domainValue(
-                              row.normRange[0],
-                              row.min,
-                              row.max,
-                            ).toFixed(2)}
-                          </strong>
+                          <HandleReadout
+                            propertyKey={prop}
+                            pole="low"
+                            frac={row.normRange[0]}
+                            min={row.min}
+                            max={row.max}
+                            color={color}
+                          />
                         </>
                       )}
                     </span>
