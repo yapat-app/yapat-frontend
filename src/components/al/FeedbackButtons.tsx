@@ -16,10 +16,15 @@ import {
   setClassicSnippetAnnotations,
   submitFeedback,
 } from "../../redux/features/alSlice";
-import type { ALSnippetLabelDetail, PAMPrediction, FeedbackAction } from "../../types/al";
+import type {
+  ALSnippetLabelDetail,
+  PAMPrediction,
+  FeedbackAction,
+} from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { LabelSelector } from "./LabelSelector";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
+import { annotationApi } from "../../services/api";
 
 interface Props {
   prediction: PAMPrediction;
@@ -27,6 +32,15 @@ interface Props {
   serverLabels?: string[];
   /** Source/permission metadata for hydrated labels. */
   serverLabelDetails?: ALSnippetLabelDetail[];
+}
+
+/** Human-readable form of a stored label (e.g. "local:no_biophony" → "no biophony"). */
+function formatLabelForDisplay(label: string): string {
+  const trimmed = label.trim();
+  if (trimmed.toLowerCase().startsWith("local:")) {
+    return trimmed.slice("local:".length).replace(/[_-]+/g, " ").trim();
+  }
+  return trimmed;
 }
 
 function getLabelAttributionTooltip(
@@ -37,7 +51,11 @@ function getLabelAttributionTooltip(
   const details = labelDetailsByLabel.get(label) ?? [];
   if (details.length > 0) {
     const names = Array.from(
-      new Set(details.map((detail) => detail.labeled_by || detail.username).filter(Boolean)),
+      new Set(
+        details
+          .map((detail) => detail.labeled_by || detail.username)
+          .filter(Boolean),
+      ),
     );
     if (names.length > 0) return `Annotated by: ${names.join(", ")}`;
   }
@@ -61,7 +79,9 @@ export const FeedbackButtons: React.FC<Props> = ({
   );
   const [modifyOpen, setModifyOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   // Guided mode: free-text input
   const [customLabel, setCustomLabel] = useState("");
   // Blind mode: multi-select via LabelSelector
@@ -113,10 +133,23 @@ export const FeedbackButtons: React.FC<Props> = ({
     [protectedGroundTruthDetails],
   );
 
+  // Read-only chips for the label picker: ground-truth labels this user may
+  // view but not edit, rendered without a remove (×) control.
+  const readOnlyGroundTruthLabels = useMemo(
+    () =>
+      protectedGroundTruthDetails.map((detail) => ({
+        label: detail.label,
+        display: formatLabelForDisplay(detail.label),
+        tooltip: `${detail.labeled_by || "Ground truth"} label. Only admins and team owners can edit it.`,
+      })),
+    [protectedGroundTruthDetails],
+  );
+
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
-  const submittedLabels = (existingFeedback
-    ? (existingFeedback.final_labels ?? [])
-    : (serverLabels ?? [])
+  const submittedLabels = (
+    existingFeedback
+      ? (existingFeedback.final_labels ?? [])
+      : (serverLabels ?? [])
   ).filter((label) => !protectedGroundTruthLabels.has(label));
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
   const skipNextAutoSubmitRef = useRef<boolean>(true);
@@ -124,14 +157,18 @@ export const FeedbackButtons: React.FC<Props> = ({
   const debounceTimerRef = useRef<number | null>(null);
 
   const selectionKey = useMemo(
-    () => [...selectedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|"),
+    () =>
+      [...selectedLabels]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .sort()
+        .join("|"),
     [selectedLabels],
   );
 
   const submitClassic = async (_action: FeedbackAction, labels?: string[]) => {
     const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
-    const existing =
-      classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+    const existing = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
 
     setSubmitting(true);
     setSaveState("saving");
@@ -144,6 +181,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         {
           datasetId: selectedDatasetId,
           serverLabels,
+          serverLabelDetails,
         },
       );
       dispatch(
@@ -153,14 +191,34 @@ export const FeedbackButtons: React.FC<Props> = ({
         }),
       );
       setSaveState("saved");
-      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
+      window.setTimeout(
+        () => setSaveState((s) => (s === "saved" ? "idle" : s)),
+        1800,
+      );
     } catch (err: unknown) {
       const detail =
         typeof err === "string"
           ? err
-          : (err as { message?: string })?.message ?? "Failed to save annotation";
+          : ((err as { message?: string })?.message ??
+            "Failed to save annotation");
       message.error(detail);
       setSaveState("error");
+      // Reconcile the chips with server truth so a failed or partial write never
+      // leaves the UI showing labels that didn't persist. The sync effect
+      // re-derives selectedLabels from these annotations once they land.
+      try {
+        const fresh = await annotationApi.getAll({
+          snippet_id: prediction.snippet_id,
+        });
+        dispatch(
+          setClassicSnippetAnnotations({
+            snippetId: prediction.snippet_id,
+            annotations: fresh,
+          }),
+        );
+      } catch {
+        // Leave the error state in place; the user can retry.
+      }
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +234,9 @@ export const FeedbackButtons: React.FC<Props> = ({
       return;
     }
     if (!hasCheckpoint) {
-      message.info("No model checkpoint yet. Train/register a checkpoint before submitting feedback.");
+      message.info(
+        "No model checkpoint yet. Train/register a checkpoint before submitting feedback.",
+      );
       return;
     }
     setSubmitting(true);
@@ -195,13 +255,16 @@ export const FeedbackButtons: React.FC<Props> = ({
       if (fb.retrain_triggered) {
         message.info(
           `Model update triggered (${fb.feedback_count_since_retrain}/${retrainThreshold}). ` +
-          "Retraining started — predictions will refresh when ready.",
+            "Retraining started — predictions will refresh when ready.",
         );
       }
 
       setSaveState("saved");
       // Auto-dismiss the "Saved" indicator so it doesn't linger.
-      window.setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1800);
+      window.setTimeout(
+        () => setSaveState((s) => (s === "saved" ? "idle" : s)),
+        1800,
+      );
     } catch (e: any) {
       const detail = String(e?.message ?? e ?? "");
       if (
@@ -210,7 +273,9 @@ export const FeedbackButtons: React.FC<Props> = ({
         modelFamilyName !== null &&
         snippetSetId !== null
       ) {
-        message.warning("Model updated — refreshing predictions. Please retry your feedback.");
+        message.warning(
+          "Model updated — refreshing predictions. Please retry your feedback.",
+        );
         dispatch(
           runInference({
             model_family_name: modelFamilyName,
@@ -232,12 +297,17 @@ export const FeedbackButtons: React.FC<Props> = ({
     }
   };
 
-  const snippetAnnotations = classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
+  const snippetAnnotations =
+    classicAnnotationsBySnippet[prediction.snippet_id] ?? [];
   const labelContributors: Record<string, string[]> = {};
   for (const ann of snippetAnnotations) {
     const label = (ann.resolved_name_snapshot ?? "").trim();
     if (!label) continue;
-    const who = (ann.username ?? teamMemberNameById.get(ann.user_id) ?? `user:${ann.user_id}`).trim();
+    const who = (
+      ann.username ??
+      teamMemberNameById.get(ann.user_id) ??
+      `user:${ann.user_id}`
+    ).trim();
     if (!labelContributors[label]) labelContributors[label] = [];
     if (!labelContributors[label].includes(who)) {
       labelContributors[label].push(who);
@@ -253,7 +323,11 @@ export const FeedbackButtons: React.FC<Props> = ({
       lastSyncedSnippetIdRef.current = prediction.snippet_id;
       setSaveState("idle");
     }
-    const syncedKey = [...submittedLabels].map((s) => s.trim()).filter(Boolean).sort().join("|");
+    const syncedKey = [...submittedLabels]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .sort()
+      .join("|");
     lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
   }, [isBlind, prediction.snippet_id, submittedLabels.join("|")]);
@@ -280,7 +354,8 @@ export const FeedbackButtons: React.FC<Props> = ({
     }, 250);
 
     return () => {
-      if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
     };
   }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
 
@@ -297,7 +372,9 @@ export const FeedbackButtons: React.FC<Props> = ({
               </span>
             )}
             {saveState === "error" && (
-              <span className="text-[11px] font-semibold text-red-500">Save failed — try again</span>
+              <span className="text-[11px] font-semibold text-red-500">
+                Save failed — try again
+              </span>
             )}
           </div>
         )}
@@ -309,14 +386,27 @@ export const FeedbackButtons: React.FC<Props> = ({
           </Tooltip>
         )}
 
-        {/* Compact label picker — fills remaining space */}
+        {/* Compact label picker — fills remaining space. Ground-truth labels the
+            current user can't edit are passed as read-only chips (no ×) shown in
+            the same Labels row, so an annotated snippet reads as annotated while
+            still preventing edits. Editable labels (the user's own or a
+            teammate's) stay dismissible. */}
         <LabelSelector
           value={selectedLabels}
           onChange={(labels) => {
-            setSelectedLabels(labels.filter((label) => !protectedGroundTruthLabels.has(label)));
+            setSelectedLabels(
+              labels.filter((label) => !protectedGroundTruthLabels.has(label)),
+            );
             setSaveState("idle");
           }}
-          getLabelTooltip={(lbl) => getLabelAttributionTooltip(lbl, labelDetailsByLabel, labelContributors)}
+          readOnlyLabels={readOnlyGroundTruthLabels}
+          getLabelTooltip={(lbl) =>
+            getLabelAttributionTooltip(
+              lbl,
+              labelDetailsByLabel,
+              labelContributors,
+            )
+          }
           disabled={feedbackDisabled}
           compact
           showList
@@ -324,20 +414,6 @@ export const FeedbackButtons: React.FC<Props> = ({
           showSelectedRow={false}
           hideSelectedInInput
         />
-        {protectedGroundTruthDetails.length > 0 && (
-          <div className="flex-shrink-0 flex flex-wrap gap-1 pt-1">
-            {protectedGroundTruthDetails.map((detail) => (
-              <Tooltip
-                key={`${detail.source}:${detail.label}`}
-                title={`${detail.labeled_by || "Ground truth"} label. Only admins and team owners can edit it.`}
-              >
-                <Tag color="gold" className="cursor-help">
-                  {detail.label}
-                </Tag>
-              </Tooltip>
-            ))}
-          </div>
-        )}
       </div>
     );
   }
@@ -350,7 +426,9 @@ export const FeedbackButtons: React.FC<Props> = ({
         placeholder="Correct label (press Enter to confirm)"
         value={customLabel}
         onChange={(e) => setCustomLabel(e.target.value)}
-        onPressEnter={() => customLabel.trim() && submit("MODIFY", [customLabel.trim()])}
+        onPressEnter={() =>
+          customLabel.trim() && submit("MODIFY", [customLabel.trim()])
+        }
         autoFocus
       />
       <div className="flex gap-2 justify-end">
@@ -407,9 +485,11 @@ export const FeedbackButtons: React.FC<Props> = ({
               {(existingFeedback.final_labels ?? []).map((lbl) => (
                 <Tooltip
                   key={lbl}
-                  title={
-                    getLabelAttributionTooltip(lbl, labelDetailsByLabel, labelContributors)
-                  }
+                  title={getLabelAttributionTooltip(
+                    lbl,
+                    labelDetailsByLabel,
+                    labelContributors,
+                  )}
                 >
                   <Tag className="cursor-help">{lbl}</Tag>
                 </Tooltip>
@@ -437,7 +517,11 @@ export const FeedbackButtons: React.FC<Props> = ({
               size="small"
               type="primary"
               icon={<CheckOutlined />}
-              style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#fff" }}
+              style={{
+                backgroundColor: "#16a34a",
+                borderColor: "#16a34a",
+                color: "#fff",
+              }}
               disabled={feedbackDisabled}
               onClick={() => submit("ACCEPT")}
             >
