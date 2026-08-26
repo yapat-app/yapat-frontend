@@ -19,7 +19,10 @@ import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
-import { hydrateClassicAnnotations, setSelectedSnippet } from "../../redux/features/alSlice";
+import {
+  hydrateClassicAnnotations,
+  setSelectedSnippet,
+} from "../../redux/features/alSlice";
 import { fetchTeamMembers } from "../../redux/features/teamSlice";
 import type { Annotation } from "../../types";
 import type { ALSnippetLabelDetail } from "../../types/al";
@@ -53,15 +56,31 @@ export const PredictionFeed: React.FC = () => {
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
-  const [recordingNameById, setRecordingNameById] = useState<Record<number, string>>({});
+  const [recordingNameById, setRecordingNameById] = useState<
+    Record<number, string>
+  >({});
 
   const PAGE_SIZE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // FIX 4: Stabilize predictions identity for pagination reset.
+  // Redux actions like hydrateClassicFeedbacks and applyClassicLabelScores
+  // create a NEW predictions array reference (via Array.map) even when the
+  // actual snippet IDs haven't changed. Using the raw `predictions` array as
+  // a dependency caused setVisibleCount(PAGE_SIZE) to fire on every feedback
+  // submission, which reset the scroll position and triggered a cascade of
+  // re-renders (selectCenteredCard → setSelectedSnippet → alSlice update →
+  // PredictionFeed re-render → repeat). Using a stable key based on snippet
+  // IDs ensures the pagination only resets when the ACTUAL feed changes.
+  const predictionsKey = useMemo(
+    () => predictions.map((p) => p.snippet_id).join(","),
+    [predictions],
+  );
+
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [predictions]);
+  }, [predictionsKey]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
@@ -69,7 +88,9 @@ export const PredictionFeed: React.FC = () => {
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, predictions.length));
+          setVisibleCount((prev) =>
+            Math.min(prev + PAGE_SIZE, predictions.length),
+          );
         }
       },
       { root: scrollContainerRef.current, rootMargin: "200px" },
@@ -120,7 +141,8 @@ export const PredictionFeed: React.FC = () => {
       cardRefs.current.forEach((el, sid) => {
         if (!el) return;
         const r = el.getBoundingClientRect();
-        if (r.bottom < containerRect.top || r.top > containerRect.bottom) return;
+        if (r.bottom < containerRect.top || r.top > containerRect.bottom)
+          return;
         const cardCenter = r.top + r.height / 2;
         const d = Math.abs(cardCenter - centerY);
         if (d < bestDist) {
@@ -174,7 +196,9 @@ export const PredictionFeed: React.FC = () => {
     const curInFeed =
       cur !== null && predictions.some((p) => p.snippet_id === cur);
     if (curInFeed) return;
-    const raf = requestAnimationFrame(() => selectCenteredCard({ force: true }));
+    const raf = requestAnimationFrame(() =>
+      selectCenteredCard({ force: true }),
+    );
     return () => cancelAnimationFrame(raf);
   }, [selectCenteredCard, predictions, visibleCount, scrollRoot]);
 
@@ -210,7 +234,9 @@ export const PredictionFeed: React.FC = () => {
       new Set(
         predictions
           .map((p) => p.recording_id)
-          .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
+          .filter(
+            (id): id is number => typeof id === "number" && Number.isFinite(id),
+          ),
       ),
     );
     return ids.join(",");
@@ -312,12 +338,19 @@ export const PredictionFeed: React.FC = () => {
     };
   }, [isBlind, predictions.length]);
 
-  const [labelsBySnippet, setLabelsBySnippet] = useState<Record<number, string[]>>({});
-  const [labelDetailsBySnippet, setLabelDetailsBySnippet] = useState<Record<number, ALSnippetLabelDetail[]>>({});
+  const [labelsBySnippet, setLabelsBySnippet] = useState<
+    Record<number, string[]>
+  >({});
+  const [labelDetailsBySnippet, setLabelDetailsBySnippet] = useState<
+    Record<number, ALSnippetLabelDetail[]>
+  >({});
   const feedbackLabelSignature = useMemo(
     () =>
       Object.entries(feedbacks)
-        .map(([snippetId, fb]) => `${snippetId}:${fb.action}:${(fb.final_labels ?? []).join(",")}`)
+        .map(
+          ([snippetId, fb]) =>
+            `${snippetId}:${fb.action}:${(fb.final_labels ?? []).join(",")}`,
+        )
         .sort()
         .join("|"),
     [feedbacks],
@@ -346,14 +379,20 @@ export const PredictionFeed: React.FC = () => {
           return;
         }
         try {
-          const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
+          const r = await alApi.getSnippetLabels(
+            selectedDatasetId,
+            snippetSetId ?? undefined,
+          );
           for (const it of r.items) {
             map[it.snippet_id] = it.labels;
-            if (it.label_details?.length) detailMap[it.snippet_id] = it.label_details;
+            if (it.label_details?.length)
+              detailMap[it.snippet_id] = it.label_details;
           }
         } catch {
           // Existing label hydration still works without server metadata.
-          for (const [snippetIdStr, labels] of Object.entries(alSnippetLabelsBySnippet)) {
+          for (const [snippetIdStr, labels] of Object.entries(
+            alSnippetLabelsBySnippet,
+          )) {
             const snippetId = Number(snippetIdStr);
             if (labels.length > 0 && !(snippetId in feedbacksRef.current)) {
               map[snippetId] = labels;
@@ -382,13 +421,17 @@ export const PredictionFeed: React.FC = () => {
         return;
       }
       try {
-        const r = await alApi.getSnippetLabels(selectedDatasetId, snippetSetId ?? undefined);
+        const r = await alApi.getSnippetLabels(
+          selectedDatasetId,
+          snippetSetId ?? undefined,
+        );
         if (cancelled) return;
         const map: Record<number, string[]> = {};
         const detailMap: Record<number, ALSnippetLabelDetail[]> = {};
         for (const it of r.items) {
           map[it.snippet_id] = it.labels;
-          if (it.label_details?.length) detailMap[it.snippet_id] = it.label_details;
+          if (it.label_details?.length)
+            detailMap[it.snippet_id] = it.label_details;
         }
         setLabelsBySnippet(map);
         setLabelDetailsBySnippet(detailMap);
@@ -400,8 +443,17 @@ export const PredictionFeed: React.FC = () => {
       }
     }
     loadLabels();
-    return () => { cancelled = true; };
-  }, [isBlind, isClassicFeed, selectedDatasetId, snippetSetId, feedbackLabelSignature, alSnippetLabelsBySnippet]);
+    return () => {
+      cancelled = true;
+    };
+    //alSnippetLabelsBySnippet intentionally EXCLUDED from deps.
+  }, [
+    isBlind,
+    isClassicFeed,
+    selectedDatasetId,
+    snippetSetId,
+    feedbackLabelSignature,
+  ]);
 
   const labeledCount = useMemo(
     () => predictions.filter((p) => !!feedbacks[p.snippet_id]).length,
@@ -449,9 +501,10 @@ export const PredictionFeed: React.FC = () => {
   }
 
   if (phase.feed.mode === "single_card_on_select") {
-    const selected = selectedSnippetId !== null
-      ? predictions.find((p) => p.snippet_id === selectedSnippetId)
-      : undefined;
+    const selected =
+      selectedSnippetId !== null
+        ? predictions.find((p) => p.snippet_id === selectedSnippetId)
+        : undefined;
 
     if (!selected) {
       return (
@@ -477,7 +530,9 @@ export const PredictionFeed: React.FC = () => {
             }
             cardRef={setCardRef(selected.snippet_id)}
             serverLabels={labelsBySnippet[selected.snippet_id] ?? []}
-            serverLabelDetails={labelDetailsBySnippet[selected.snippet_id] ?? []}
+            serverLabelDetails={
+              labelDetailsBySnippet[selected.snippet_id] ?? []
+            }
             scrollRoot={scrollRoot}
             loadAudioImmediately
           />
@@ -522,15 +577,25 @@ export const PredictionFeed: React.FC = () => {
               }
               if (index === visibleCount - 1) {
                 return (
-                  <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
+                  <div
+                    key={key}
+                    className="snap-start shrink-0 w-full"
+                    style={{ height }}
+                  >
                     <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
                     <PredictionCard
                       prediction={p}
-                      recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                      recordingName={
+                        typeof p.recording_id === "number"
+                          ? recordingNameById[p.recording_id]
+                          : undefined
+                      }
                       cardRef={setCardRef(p.snippet_id)}
                       cardHeightPx={height}
                       serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                      serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
+                      serverLabelDetails={
+                        labelDetailsBySnippet[p.snippet_id] ?? []
+                      }
                       scrollRoot={scrollRoot}
                       loadAudioImmediately={index === 0}
                       hideInlineFeedback
@@ -539,14 +604,24 @@ export const PredictionFeed: React.FC = () => {
                 );
               }
               return (
-                <div key={key} className="snap-start shrink-0 w-full" style={{ height }}>
+                <div
+                  key={key}
+                  className="snap-start shrink-0 w-full"
+                  style={{ height }}
+                >
                   <PredictionCard
                     prediction={p}
-                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                    recordingName={
+                      typeof p.recording_id === "number"
+                        ? recordingNameById[p.recording_id]
+                        : undefined
+                    }
                     cardRef={setCardRef(p.snippet_id)}
                     cardHeightPx={height}
                     serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                    serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
+                    serverLabelDetails={
+                      labelDetailsBySnippet[p.snippet_id] ?? []
+                    }
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                     hideInlineFeedback
@@ -577,7 +652,9 @@ export const PredictionFeed: React.FC = () => {
               <div className="flex-1 min-h-0">
                 <FeedbackButtons
                   prediction={selectedPrediction}
-                  serverLabels={labelsBySnippet[selectedPrediction.snippet_id] ?? []}
+                  serverLabels={
+                    labelsBySnippet[selectedPrediction.snippet_id] ?? []
+                  }
                   serverLabelDetails={
                     labelDetailsBySnippet[selectedPrediction.snippet_id] ?? []
                   }
@@ -619,7 +696,9 @@ export const PredictionFeed: React.FC = () => {
                 <Statistic
                   title="Remaining"
                   value={remainingCount}
-                  valueStyle={{ color: remainingCount > 0 ? "#cf1322" : "#3f8600" }}
+                  valueStyle={{
+                    color: remainingCount > 0 ? "#cf1322" : "#3f8600",
+                  }}
                 />
               </Card>
             </Col>
@@ -636,7 +715,10 @@ export const PredictionFeed: React.FC = () => {
         </div>
       </div>
 
-      <div ref={bindScrollContainer} className="flex-1 overflow-y-auto px-4 pb-4">
+      <div
+        ref={bindScrollContainer}
+        className="flex-1 overflow-y-auto px-4 pb-4"
+      >
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           {predictions.map((p, index) => {
             const key = p.id ?? p.snippet_id;
@@ -655,10 +737,16 @@ export const PredictionFeed: React.FC = () => {
                   <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
                   <PredictionCard
                     prediction={p}
-                    recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                    recordingName={
+                      typeof p.recording_id === "number"
+                        ? recordingNameById[p.recording_id]
+                        : undefined
+                    }
                     cardRef={setCardRef(p.snippet_id)}
                     serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                    serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
+                    serverLabelDetails={
+                      labelDetailsBySnippet[p.snippet_id] ?? []
+                    }
                     scrollRoot={scrollRoot}
                     loadAudioImmediately={index === 0}
                   />
@@ -669,7 +757,11 @@ export const PredictionFeed: React.FC = () => {
               <PredictionCard
                 key={key}
                 prediction={p}
-                recordingName={typeof p.recording_id === "number" ? recordingNameById[p.recording_id] : undefined}
+                recordingName={
+                  typeof p.recording_id === "number"
+                    ? recordingNameById[p.recording_id]
+                    : undefined
+                }
                 cardRef={setCardRef(p.snippet_id)}
                 serverLabels={labelsBySnippet[p.snippet_id] ?? []}
                 serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
