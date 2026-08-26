@@ -15,6 +15,8 @@ import {
 } from "./fpvHelpers";
 import { getPropertyByKey } from "../../../constants/alProperties";
 import { resolveColor } from "../../../utils/alColors";
+import { useAppSelector } from "../../../hooks";
+import { computeScoreDomains } from "../../../pages/annotationHub/useScoreHistogramData";
 import type {
   FPVPointMetadata,
   FPVProjection2D,
@@ -228,6 +230,18 @@ export function useProjectionTraces(opts: {
     [visRangeOverride, visProp],
   );
 
+  // Actual per-property score domains, computed from the same live predictions
+  // the feed and the score histogram use. The sliders store normalised [0,1]
+  // fractions, so mapping a handle back onto a real score MUST use the same
+  // domain everywhere — scaling by the property's declared range here while
+  // the feed scaled by the data's [min,max] is what made a density handle mean
+  // e.g. >= 0.50 in the plot but >= 0.01 in the feed, emptying the projection.
+  const livePredictions = useAppSelector((s) => s.al.predictions);
+  const scoreDomains = useMemo(
+    () => computeScoreDomains(livePredictions),
+    [livePredictions],
+  );
+
   const filtered = useMemo(() => {
     return enrichedPlotPoints.map((p, i) => {
       let visible = extraVisible ? extraVisible(p.snippet_id) : true;
@@ -238,9 +252,10 @@ export function useProjectionTraces(opts: {
         visProp
       ) {
         const [pMin, pMax] =
-          visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange;
+          scoreDomains[visKey as string] ??
+          (visKey === "composite" ? COMPOSITE_DOMAIN : effectiveRange);
         const [normLo, normHi] = alFilters.visibility.range;
-        const span = pMax - pMin;
+        const span = pMax - pMin || 1;
         const domainLo = pMin + normLo * span;
         const domainHi =
           visSliderStyle === "threshold" ? pMax : pMin + normHi * span;
@@ -269,7 +284,8 @@ export function useProjectionTraces(opts: {
           const prop = getPropertyByKey(key);
           if (!prop || !prop.range) continue;
           const [pMin, pMax] =
-            key === "composite" ? COMPOSITE_DOMAIN : prop.range;
+            scoreDomains[key] ??
+            (key === "composite" ? COMPOSITE_DOMAIN : prop.range);
           const [normLo, normHi] = ranges[key] ?? [0, 1];
           const domainLo = pMin + normLo * (pMax - pMin);
           const domainHi = pMin + normHi * (pMax - pMin);
@@ -301,6 +317,7 @@ export function useProjectionTraces(opts: {
     visKey,
     alFilters.visibility,
     effectiveRange,
+    scoreDomains,
     visibilityMode,
     visSliderStyle,
     extraVisible,
