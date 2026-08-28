@@ -225,10 +225,18 @@ function saveFeed(
   state: ALState,
   inferenceRequest?: PAMRunInferenceRequest,
 ): void {
-  // Unwrap the Immer draft to a plain snapshot before the debounce timer fires —
-  // draft proxies are revoked once the reducer finalizes, so a deferred
-  // JSON.stringify over draft sub-objects would throw and silently lose the save.
-  state = isDraft(state) ? current(state) : state;
+  // Draft proxies are revoked once the reducer finalizes, so anything held
+  // across the debounce timer below must be unwrapped to a plain snapshot first
+  // or the deferred JSON.stringify would throw and silently lose the save.
+  //
+  // Snapshot per field, never the whole state. `current(state)` deep-copied
+  // every prediction row — plus projectionPredictions, which aliases the same
+  // array and is not even persisted — on every call. saveFeed runs on each
+  // snippet selection, so on a 157k-row dataset that was ~300 MB of synchronous
+  // copying per click: enough to freeze the main thread and kill the tab.
+  // Primitives need no unwrapping, and `tooLarge` is now decided *before* any
+  // copying, so an oversized feed copies nothing at all.
+  const snapshot = <T>(value: T): T => (isDraft(value) ? current(value) : value);
 
   const datasetId = normalizeDatasetId(state.selectedDatasetId);
   const perKey = datasetId !== null ? feedStorageKey(datasetId) : null;
@@ -238,8 +246,8 @@ function saveFeed(
     inferenceRequest?.sample_suggestion ??
     (state.modelInfo?.mode as string | undefined) === "suggestions";
   const data: PersistedFeed = {
-    predictions: tooLarge ? [] : state.predictions,
-    modelInfo: state.modelInfo,
+    predictions: tooLarge ? [] : snapshot(state.predictions),
+    modelInfo: snapshot(state.modelInfo),
     totalScored: state.totalScored,
     modelCheckpointId: state.modelCheckpointId,
     modelFamilyName: state.modelFamilyName,
@@ -255,8 +263,8 @@ function saveFeed(
     labelScope: inferenceRequest?.label_scope,
     minConfidence: inferenceRequest?.min_confidence,
     predictionsTruncated: tooLarge,
-    feedbacks: state.feedbacks,
-    selectedSnippetIds: state.selectedSnippetIds,
+    feedbacks: snapshot(state.feedbacks),
+    selectedSnippetIds: snapshot(state.selectedSnippetIds),
     activeSnippetId: state.activeSnippetId,
   };
 
