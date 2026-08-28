@@ -322,7 +322,10 @@ export const FeedbackButtons: React.FC<Props> = ({
 
   // ── Blind-mode annotation UI ─────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-1.5 h-full min-h-0">
+    // flex-1 (rather than h-full) so this works both inside the fixed-height
+    // inline label area and inside the sticky label bar, whose height is
+    // capped by a max-height rather than being definite.
+    <div className="flex flex-col gap-1.5 flex-1 min-h-0">
       {!isClassicFeed && !hasCheckpoint && (
         <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
           <span className="shrink-0 text-[11px] text-amber-500 cursor-help w-fit">

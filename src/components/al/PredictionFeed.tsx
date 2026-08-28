@@ -1445,7 +1445,15 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             the current snippet, so labels don't repeat under every spectrogram
             and only the spectrograms above actually scroll. */}
         {stickyLabelPrediction && (
-          <div className="shrink-0 border-t border-gray-100 bg-white px-4 pt-2 pb-3">
+          <div
+            className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3"
+            // Datasets with many quick labels would otherwise let this bar grow
+            // until it ate the feed above it and squashed the spectrograms
+            // (card height is measured from the feed's clientHeight). Cap it and
+            // let the chip grid scroll inside instead — small label sets still
+            // size to their content and look exactly as before.
+            style={{ maxHeight: "min(34%, 300px)" }}
+          >
             <FeedbackButtons
               prediction={stickyLabelPrediction}
               serverLabels={
