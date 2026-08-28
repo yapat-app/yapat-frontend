@@ -74,6 +74,15 @@ export interface DatasetAnnotationStats {
   total_annotations: number;
 }
 
+/**
+ * Payload of GET /api/annotations/datasets/stats — a wrapper object, not a bare
+ * list. `datasetAnnotations` in the annotation slice holds this shape.
+ */
+export interface AllDatasetsAnnotationStats {
+  datasets: DatasetAnnotationStats[];
+  total_datasets: number;
+}
+
 export interface ExportAnnotation {
   dataset_id: number | null | string;
   format: string;
@@ -455,6 +464,11 @@ export interface Dataset {
   updated_at?: string;
   is_ready_for_feed?: boolean;
   recording_count?: number;
+  /**
+   * Reference-only training data — never surfaced for annotation. The backend
+   * excludes these from GET /api/datasets/ unless include_reference=true.
+   */
+  is_reference?: boolean;
 }
 
 export interface DatasetUpdate {

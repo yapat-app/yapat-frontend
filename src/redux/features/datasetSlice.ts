@@ -35,10 +35,18 @@ const initialState: DatasetState = {
   loading: false,
 };
 
+/**
+ * The backend defaults to limit=100, so without an explicit limit a deployment
+ * past 100 datasets silently truncates the list with no indication.
+ * Reference-only datasets stay excluded (include_reference defaults to false) —
+ * they are never annotated, so they have no place in this list.
+ */
 export const fetchAllDatasets = createAsyncThunk(
   "dataset/fetchAllDatasets",
   async () => {
-    const response = await api.get("/api/datasets/");
+    const response = await api.get("/api/datasets/", {
+      params: { limit: 1000 },
+    });
     return response.data;
   },
 );

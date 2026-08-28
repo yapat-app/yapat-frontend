@@ -10,12 +10,18 @@ import type {
   Annotation,
   AnnotationCreate,
   AnnotationBatchCreate,
-  DatasetAnnotationStats,
+  AllDatasetsAnnotationStats,
 } from "../../types";
 
 export interface AnnotationState {
   annotations: Annotation[];
-  datasetAnnotations: DatasetAnnotationStats[];
+  /**
+   * GET /api/annotations/datasets/stats returns {datasets, total_datasets} —
+   * a wrapper, not a bare array. This was previously typed as
+   * DatasetAnnotationStats[], which every consumer worked around by selecting
+   * through `(state: any)` and reaching for `.datasets` at runtime.
+   */
+  datasetAnnotations: AllDatasetsAnnotationStats;
   currentAnnotation: Annotation | null;
   loading: boolean;
   error: string | null;
@@ -24,7 +30,7 @@ export interface AnnotationState {
 
 const initialState: AnnotationState = {
   annotations: [],
-  datasetAnnotations: [],
+  datasetAnnotations: { datasets: [], total_datasets: 0 },
   currentAnnotation: null,
   loading: false,
   error: null,

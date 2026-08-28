@@ -32,7 +32,7 @@ import type {
   FeedCreate,
   FeedSimilarityCreate,
   UserFeedSnapshot,
-  DatasetAnnotationStats,
+  AllDatasetsAnnotationStats,
   MessageResponse,
   Conversation,
   AllLabelSpace,
@@ -191,7 +191,7 @@ export const annotationApi = {
   },
 
   // Get annotation stats for a dataset
-  getAnnotationsForDataset: async (): Promise<DatasetAnnotationStats[]> => {
+  getAnnotationsForDataset: async (): Promise<AllDatasetsAnnotationStats> => {
     const response = await api.get(`/api/annotations/datasets/stats`);
     return response.data;
   },
