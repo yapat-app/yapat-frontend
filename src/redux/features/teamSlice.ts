@@ -134,11 +134,8 @@ export const teamSlice = createSlice({
   name: "team",
   initialState,
   reducers: {
-    resetCreateTeam: () => {
-      return {
-        ...initialState,
-        teamCreated: false,
-      };
+    resetCreateTeam: (state) => {
+      state.teamCreated = false;
     },
     resetTeamUpdated: (state) => {
       state.teamUpdated = false;

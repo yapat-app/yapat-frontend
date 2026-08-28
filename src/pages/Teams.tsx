@@ -378,6 +378,7 @@ export const Teams = () => {
                     </p>
 
                     <Select<string[]>
+                      mode="multiple"
                       value={teamInfo.dataset_ids}
                       style={{
                         width: "100%",
