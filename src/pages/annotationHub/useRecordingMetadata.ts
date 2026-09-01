@@ -40,6 +40,18 @@ export interface RecordingMetadataResult {
  */
 const scanCache = new Map<number, Promise<Map<number, RecordingMetadata>>>();
 
+/**
+ * Drop the cached recording-metadata scan so the next `useRecordingMetadata`
+ * for this dataset re-fetches from the server. Call after anything that
+ * mutates recordings' extra_metadata (e.g. a metadata CSV import) — otherwise
+ * the location / date-time filters keep showing the pre-import scan until a
+ * full page reload. Omit `datasetId` to clear every dataset's scan.
+ */
+export function invalidateRecordingMetadataCache(datasetId?: number): void {
+  if (datasetId === undefined) scanCache.clear();
+  else scanCache.delete(datasetId);
+}
+
 function scanRecordingMetadata(datasetId: number): Promise<Map<number, RecordingMetadata>> {
   const cached = scanCache.get(datasetId);
   if (cached) return cached;

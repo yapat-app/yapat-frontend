@@ -5,11 +5,12 @@ import { GenerateFeedModal } from "./GenerateFeed";
 import { useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
 import { Button, Tag, Tooltip } from "antd";
-import { ThunderboltOutlined } from "@ant-design/icons";
+import { ThunderboltOutlined, TableOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { usePhaseConfig } from "../studyPhases";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
+import { DatasetMetadataModal } from "./DatasetMetadataModal";
 import { datasetApi } from "../services/api";
 
 type DatasetCardProps = {
@@ -25,6 +26,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
 
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
+  const [managingMetadata, setManagingMetadata] = useState(false);
 
   useEffect(() => {
     datasetApi
@@ -121,6 +123,13 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     disabled={d.annotated_snippets < 1}
                   />
                 )}
+                <Button
+                  icon={<TableOutlined />}
+                  onClick={() => setManagingMetadata(true)}
+                  title="Download the metadata template or upload metadata for this dataset's recordings"
+                >
+                  Metadata
+                </Button>
                 <GenerateEmbeddings dataset={dataset} />
                 <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
                 <Button
@@ -168,6 +177,12 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
         open={managingLabels}
         onClose={() => setManagingLabels(false)}
         onSaved={(saved) => setQuickLabels(saved)}
+      />
+
+      <DatasetMetadataModal
+        dataset={dataset}
+        open={managingMetadata}
+        onClose={() => setManagingMetadata(false)}
       />
     </div>
   );
