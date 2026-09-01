@@ -77,6 +77,9 @@ export interface DatasetAnnotationStats {
 export interface ExportAnnotation {
   dataset_id: number | null | string;
   format: string;
+  /** Label scope. Snippets carrying any of these labels are exported in full,
+   *  including their co-occurring labels (marked in_scope=false in the output). */
+  labels?: string[];
   taxon_id?: string;
   user_id?: number | null;
   created_after?: string;
