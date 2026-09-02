@@ -1,6 +1,10 @@
 import React from "react";
 import { Alert, Button, Empty, Spin } from "antd";
-import { DatabaseOutlined, DeleteOutlined, HistoryOutlined } from "@ant-design/icons";
+import {
+  DatabaseOutlined,
+  DeleteOutlined,
+  HistoryOutlined,
+} from "@ant-design/icons";
 import { PhaseLayout } from "../ActiveLearning";
 import { ClassicWorkspace } from "../../components/layout/ClassicWorkspace";
 import { clearSavedFeed } from "../../redux/features/alSlice";
@@ -60,7 +64,9 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
         <Spin size="large" />
-        <p className="text-sm text-gray-500 font-ibm-sans">Loading workspace…</p>
+        <p className="text-sm text-gray-500 font-ibm-sans">
+          Loading workspace…
+        </p>
       </div>
     );
   }
@@ -97,7 +103,8 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
           <div className="flex flex-1 items-center justify-center flex-col gap-3 text-gray-400">
             <DatabaseOutlined style={{ fontSize: 48 }} />
             <p className="text-lg font-ibm-sans">
-              Select a dataset to start {mode === "validate" ? "Validate" : "Active Learning"}
+              Select a dataset to start{" "}
+              {mode === "validate" ? "Validate" : "Active Learning"}
             </p>
             <p className="text-sm font-ibm-sans">
               Then click &quot;Generate Feed&quot; to load predictions.
@@ -116,7 +123,9 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
       {isClassicMode && showClassicSpinner && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 min-h-0">
           <Spin size="large" />
-          <p className="text-sm text-gray-500 font-ibm-sans">Restoring your feed…</p>
+          <p className="text-sm text-gray-500 font-ibm-sans">
+            Restoring your feed…
+          </p>
         </div>
       )}
 
@@ -157,10 +166,10 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
           feedActionLabel={generateFeedLabel}
           onOpenFeedConfig={onOpenClassicFeedConfig}
           feedActionLoading={classicGenerateLoading}
-          onOpenSearch={onOpenClassicSearch}
-          searchActive={classicSearchActive}
-          searchCount={classicSearchCount}
-          onExitSearch={onExitClassicSearch}
+          onOpenSearch={mode === "filter" ? onOpenClassicSearch : undefined}
+          searchActive={mode === "filter" && classicSearchActive}
+          searchCount={mode === "filter" ? classicSearchCount : 0}
+          onExitSearch={mode === "filter" ? onExitClassicSearch : undefined}
         />
       )}
     </>
