@@ -9,9 +9,19 @@
  * Form or can be used standalone.
  */
 
-import React, { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
-import { SearchOutlined, GlobalOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  GlobalOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuickLabelList } from "../../hooks/useQuickLabelList";
 import { useAppSelector } from "../../hooks";
@@ -31,6 +41,11 @@ interface GBIFSuggestion {
 interface Props {
   value?: string[];
   onChange?: (labels: string[]) => void;
+  readOnlyLabels?: Array<{
+    label: string;
+    display?: string;
+    tooltip?: string;
+  }>;
   getLabelTooltip?: (label: string) => string | null;
   disabled?: boolean;
   placeholder?: string;
@@ -63,6 +78,7 @@ interface Props {
 export const LabelSelector: React.FC<Props> = ({
   value = [],
   onChange,
+  readOnlyLabels = [],
   getLabelTooltip,
   disabled = false,
   placeholder = "Search species…",
@@ -114,7 +130,9 @@ export const LabelSelector: React.FC<Props> = ({
     setGbifLoading(true);
     fetch(`${GBIF_SUGGEST_URL}?q=${encodeURIComponent(query.trim())}&limit=10`)
       .then((r) => r.json())
-      .then((data: GBIFSuggestion[]) => setGbifResults(Array.isArray(data) ? data : []))
+      .then((data: GBIFSuggestion[]) =>
+        setGbifResults(Array.isArray(data) ? data : []),
+      )
       .catch(() => setGbifResults([]))
       .finally(() => setGbifLoading(false));
   }, []);
@@ -122,19 +140,30 @@ export const LabelSelector: React.FC<Props> = ({
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => searchGBIF(query), GBIF_DEBOUNCE_MS);
+    debounceTimer.current = setTimeout(
+      () => searchGBIF(query),
+      GBIF_DEBOUNCE_MS,
+    );
   };
 
   // Build option groups:
   //  • PAM species list (always present)
   //  • GBIF matches (when user has typed ≥2 chars)
   const pamOptions = useMemo(
-    () => quickLabels.map((sp) => ({ value: sp, label: sp, source: "pam" as const })),
+    () =>
+      quickLabels.map((sp) => ({
+        value: sp,
+        label: sp,
+        source: "pam" as const,
+      })),
     [quickLabels],
   );
 
   // De-duplicate GBIF results against PAM list.
-  const pamSet = useMemo(() => new Set(quickLabels.map((s) => s.toLowerCase())), [quickLabels]);
+  const pamSet = useMemo(
+    () => new Set(quickLabels.map((s) => s.toLowerCase())),
+    [quickLabels],
+  );
   const gbifOptions = gbifResults
     .filter((r) => {
       const name = r.canonicalName ?? r.scientificName;
@@ -142,16 +171,26 @@ export const LabelSelector: React.FC<Props> = ({
     })
     .map((r) => {
       const name = r.canonicalName ?? r.scientificName;
-      return { value: name, label: name, source: "gbif" as const, rank: r.rank };
+      return {
+        value: name,
+        label: name,
+        source: "gbif" as const,
+        rank: r.rank,
+      };
     });
 
   // Filter PAM options by search query for a snappy feel (AntD also filters, but this
   // ensures PAM options surface even during GBIF-debounce delay).
-  const searchQueryLower = useMemo(() => searchQuery.toLowerCase(), [searchQuery]);
+  const searchQueryLower = useMemo(
+    () => searchQuery.toLowerCase(),
+    [searchQuery],
+  );
   const filteredPamOptions = useMemo(
     () =>
       searchQuery
-        ? pamOptions.filter((o) => o.value.toLowerCase().includes(searchQueryLower))
+        ? pamOptions.filter((o) =>
+            o.value.toLowerCase().includes(searchQueryLower),
+          )
         : pamOptions,
     [pamOptions, searchQuery, searchQueryLower],
   );
@@ -165,20 +204,30 @@ export const LabelSelector: React.FC<Props> = ({
     return merged.slice(0, MAX_VISIBLE_LABELS);
   }, [filteredPamOptions, gbifOptions, searchQuery]);
 
-  const selectedSet = useMemo(() => new Set((value ?? []).map((v) => v.toLowerCase())), [value]);
+  const selectedSet = useMemo(
+    () => new Set((value ?? []).map((v) => v.toLowerCase())),
+    [value],
+  );
 
   const toggle = (label: string) => {
     if (!onChange) return;
-    const normalized = (value ?? []);
-    const exists = normalized.some((x) => x.toLowerCase() === label.toLowerCase());
-    onChange(exists ? normalized.filter((x) => x.toLowerCase() !== label.toLowerCase()) : [...normalized, label]);
+    const normalized = value ?? [];
+    const exists = normalized.some(
+      (x) => x.toLowerCase() === label.toLowerCase(),
+    );
+    onChange(
+      exists
+        ? normalized.filter((x) => x.toLowerCase() !== label.toLowerCase())
+        : [...normalized, label],
+    );
   };
 
   const addLabel = (label: string) => {
     const trimmed = label.trim();
     if (!trimmed || !onChange) return;
     const normalized = value ?? [];
-    if (normalized.some((x) => x.toLowerCase() === trimmed.toLowerCase())) return;
+    if (normalized.some((x) => x.toLowerCase() === trimmed.toLowerCase()))
+      return;
     onChange([...normalized, trimmed]);
   };
 
@@ -194,10 +243,14 @@ export const LabelSelector: React.FC<Props> = ({
       : "Type 2+ letters to search species (GBIF)…";
 
     return (
-      <div className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
-
+      <div
+        className={[
+          "flex flex-col gap-2",
+          fillHeight ? "h-full min-h-0" : "",
+        ].join(" ")}
+      >
         {/* ── Current labels — shown as dismissible AntD Tags ── */}
-        {value.length > 0 ? (
+        {value.length > 0 || readOnlyLabels.length > 0 ? (
           <div className="flex-shrink-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
@@ -213,6 +266,16 @@ export const LabelSelector: React.FC<Props> = ({
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
+              {readOnlyLabels.map((item) => (
+                <Tooltip key={`readonly:${item.label}`} title={item.tooltip}>
+                  <Tag
+                    color="blue"
+                    className="text-xs font-semibold rounded-md px-2 py-0.5 m-0 cursor-help"
+                  >
+                    {item.display ?? item.label}
+                  </Tag>
+                </Tooltip>
+              ))}
               {value.map((lbl) => (
                 <Tooltip key={lbl} title={getLabelTooltip?.(lbl) ?? undefined}>
                   <Tag
@@ -258,7 +321,9 @@ export const LabelSelector: React.FC<Props> = ({
               }
             }}
             disabled={disabled}
-            placeholder={labelsLoading ? "Loading labels…" : "Search species (GBIF)…"}
+            placeholder={
+              labelsLoading ? "Loading labels…" : "Search species (GBIF)…"
+            }
             suffix={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
             allowClear
           />
@@ -298,7 +363,8 @@ export const LabelSelector: React.FC<Props> = ({
                   searchQuery.trim().length >= 2 &&
                   compactSearchOptions.length === 0 && (
                     <li className="px-3 py-2 text-xs text-gray-400 italic">
-                      No results — press Enter to use &quot;{searchQuery.trim()}&quot;
+                      No results — press Enter to use &quot;{searchQuery.trim()}
+                      &quot;
                     </li>
                   )}
               </ul>
@@ -330,7 +396,9 @@ export const LabelSelector: React.FC<Props> = ({
 
         <div
           className={[
-            fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "max-h-[160px] overflow-y-auto",
+            fillHeight
+              ? "flex-1 min-h-0 overflow-y-auto"
+              : "max-h-[160px] overflow-y-auto",
             "pr-0.5",
           ].join(" ")}
         >
@@ -360,7 +428,11 @@ export const LabelSelector: React.FC<Props> = ({
                     type="button"
                     disabled={disabled || labelsLoading}
                     onClick={() => toggle(opt.value)}
-                    title={isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`}
+                    title={
+                      isSelected
+                        ? `Remove "${opt.value}"`
+                        : `Add "${opt.value}"`
+                    }
                     className={[
                       "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-sm font-semibold transition-all duration-150 select-none",
                       isSelected
@@ -384,7 +456,12 @@ export const LabelSelector: React.FC<Props> = ({
 
   // ── Full mode (default) ───────────────────────────────────────────────────
   return (
-    <div className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
+    <div
+      className={[
+        "flex flex-col gap-2",
+        fillHeight ? "h-full min-h-0" : "",
+      ].join(" ")}
+    >
       {/* Selected labels (shown outside the search input) */}
       {showSelectedRow && hideSelectedInInput && value.length > 0 && (
         <div
@@ -429,26 +506,45 @@ export const LabelSelector: React.FC<Props> = ({
         }
         style={{ width: "100%" }}
         tagRender={({ value: tagValue, closable, onClose }) => (
-          <Tag closable={closable} onClose={onClose} className="text-xs" color="blue">
+          <Tag
+            closable={closable}
+            onClose={onClose}
+            className="text-xs"
+            color="blue"
+          >
             {tagValue}
           </Tag>
         )}
         maxTagCount={hideSelectedInInput ? 0 : undefined}
         maxTagPlaceholder={hideSelectedInInput ? () => null : undefined}
         optionRender={(option) => {
-          const opt = option.data as (typeof filteredPamOptions | typeof gbifOptions)[number];
+          const opt = option.data as (
+            | typeof filteredPamOptions
+            | typeof gbifOptions
+          )[number];
           const source = (opt as any).source as "pam" | "gbif";
           return (
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm">{opt.label}</span>
-              <Tooltip title={source === "pam" ? "Label list (labels.json)" : "GBIF suggestion"}>
-                {source === "gbif" ? <GlobalOutlined className="text-green-500 text-xs" /> : null}
+              <Tooltip
+                title={
+                  source === "pam"
+                    ? "Label list (labels.json)"
+                    : "GBIF suggestion"
+                }
+              >
+                {source === "gbif" ? (
+                  <GlobalOutlined className="text-green-500 text-xs" />
+                ) : null}
               </Tooltip>
             </div>
           );
         }}
         suffixIcon={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
-        options={[...filteredPamOptions, ...(searchQuery.trim().length >= 2 ? gbifOptions : [])]}
+        options={[
+          ...filteredPamOptions,
+          ...(searchQuery.trim().length >= 2 ? gbifOptions : []),
+        ]}
         virtual={false}
       />
 
@@ -471,9 +567,12 @@ export const LabelSelector: React.FC<Props> = ({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-xs font-ibm-mono font-semibold text-gray-700">Available labels</div>
+                <div className="text-xs font-ibm-mono font-semibold text-gray-700">
+                  Available labels
+                </div>
                 <div className="text-[11px] text-gray-400 mt-0.5">
-                  Click to add/remove. Search shows results from the label list and GBIF.
+                  Click to add/remove. Search shows results from the label list
+                  and GBIF.
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -516,14 +615,20 @@ export const LabelSelector: React.FC<Props> = ({
           <div
             className={[
               "px-3 py-3",
-              fillHeight ? "flex-1 min-h-0 overflow-auto" : "max-h-[380px] overflow-auto",
+              fillHeight
+                ? "flex-1 min-h-0 overflow-auto"
+                : "max-h-[380px] overflow-auto",
             ].join(" ")}
           >
             {combinedList.length === 0 ? (
               <div className="p-3">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<span className="text-xs text-gray-400">No matching labels</span>}
+                  description={
+                    <span className="text-xs text-gray-400">
+                      No matching labels
+                    </span>
+                  }
                 />
               </div>
             ) : (
@@ -531,36 +636,47 @@ export const LabelSelector: React.FC<Props> = ({
                 {/* Group 1: label list */}
                 <div>
                   <div className="px-1 mb-2 flex items-center justify-between">
-                    <div className="text-[11px] text-gray-500 font-ibm-sans">Label list</div>
+                    <div className="text-[11px] text-gray-500 font-ibm-sans">
+                      Label list
+                    </div>
                     {searchQuery.trim() && (
                       <div className="text-[11px] text-gray-400">
-                        {filteredPamOptions.length} match{filteredPamOptions.length === 1 ? "" : "es"}
+                        {filteredPamOptions.length} match
+                        {filteredPamOptions.length === 1 ? "" : "es"}
                       </div>
                     )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {filteredPamOptions.slice(0, MAX_VISIBLE_LABELS).map((opt) => {
-                      const isSelected = selectedSet.has(opt.value.toLowerCase());
-                      return (
-                        <button
-                          key={`pam:${opt.value}`}
-                          type="button"
-                          disabled={disabled || labelsLoading}
-                          onClick={() => toggle(opt.value)}
-                          className={[
-                            "group inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs transition-all",
-                            isSelected
-                              ? "bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300 hover:bg-blue-50"
-                              : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
-                            disabled || labelsLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                            !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-blue-200" : "",
-                          ].join(" ")}
-                          title="labels.json"
-                        >
-                          <span className="truncate">{opt.label}</span>
-                        </button>
-                      );
-                    })}
+                    {filteredPamOptions
+                      .slice(0, MAX_VISIBLE_LABELS)
+                      .map((opt) => {
+                        const isSelected = selectedSet.has(
+                          opt.value.toLowerCase(),
+                        );
+                        return (
+                          <button
+                            key={`pam:${opt.value}`}
+                            type="button"
+                            disabled={disabled || labelsLoading}
+                            onClick={() => toggle(opt.value)}
+                            className={[
+                              "group inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs transition-all",
+                              isSelected
+                                ? "bg-blue-50 text-blue-800 border-blue-200 hover:border-blue-300 hover:bg-blue-50"
+                                : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
+                              disabled || labelsLoading
+                                ? "opacity-50 cursor-not-allowed"
+                                : "cursor-pointer",
+                              !disabled && !labelsLoading
+                                ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                : "",
+                            ].join(" ")}
+                            title="labels.json"
+                          >
+                            <span className="truncate">{opt.label}</span>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
 
@@ -568,12 +684,18 @@ export const LabelSelector: React.FC<Props> = ({
                 {searchQuery.trim().length >= 2 && gbifOptions.length > 0 && (
                   <div>
                     <div className="px-1 mb-2 flex items-center justify-between">
-                      <div className="text-[11px] text-gray-500 font-ibm-sans">GBIF suggestions</div>
-                      <div className="text-[11px] text-gray-400">{gbifOptions.length}</div>
+                      <div className="text-[11px] text-gray-500 font-ibm-sans">
+                        GBIF suggestions
+                      </div>
+                      <div className="text-[11px] text-gray-400">
+                        {gbifOptions.length}
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {gbifOptions.map((opt) => {
-                        const isSelected = selectedSet.has(opt.value.toLowerCase());
+                        const isSelected = selectedSet.has(
+                          opt.value.toLowerCase(),
+                        );
                         return (
                           <button
                             key={`gbif:${opt.value}`}
@@ -585,8 +707,12 @@ export const LabelSelector: React.FC<Props> = ({
                               isSelected
                                 ? "bg-green-50 text-green-800 border-green-200 hover:border-green-300 hover:bg-green-50"
                                 : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50",
-                              disabled || labelsLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                              !disabled && !labelsLoading ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-green-200" : "",
+                              disabled || labelsLoading
+                                ? "opacity-50 cursor-not-allowed"
+                                : "cursor-pointer",
+                              !disabled && !labelsLoading
+                                ? "hover:shadow-sm hover:-translate-y-[1px] focus:outline-none focus:ring-2 focus:ring-green-200"
+                                : "",
                             ].join(" ")}
                             title="GBIF"
                           >
