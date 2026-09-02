@@ -97,6 +97,20 @@ export const snippetApi = {
   },
 
   /**
+   * Search a dataset's snippets by (partial) snippet ID. Returns full Snippet
+   * objects so the caller can build a feed from the selection without a second
+   * request. Backed by GET /api/snippets/ (dataset_id + q filter).
+   */
+  searchBySnippetId: async (params: {
+    dataset_id: number;
+    q?: string;
+    limit?: number;
+  }): Promise<Snippet[]> => {
+    const response = await api.get("/api/snippets/", { params });
+    return response.data;
+  },
+
+  /**
    * Create a new snippet
    */
   create: async (data: SnippetCreate): Promise<Snippet> => {
