@@ -18,7 +18,8 @@ import {
   CheckOutlined,
   ArrowLeftOutlined,
   EnvironmentOutlined,
-  ArrowRightOutlined,
+  EditOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type {
@@ -93,6 +94,10 @@ export const DatasetMetadataModal: React.FC<Props> = ({
   const [locationRenames, setLocationRenames] = useState<
     Record<string, string>
   >({});
+  /** original CSV location -> whether its inline editor is open. */
+  const [editingLocations, setEditingLocations] = useState<
+    Record<string, boolean>
+  >({});
 
   const reset = () => {
     setStep("select");
@@ -102,6 +107,31 @@ export const DatasetMetadataModal: React.FC<Props> = ({
     setResult(null);
     setErrorText(null);
     setLocationRenames({});
+    setEditingLocations({});
+  };
+
+  /** Open the inline editor for a location, seeding it with the current value. */
+  const startEditingLocation = (name: string) => {
+    setLocationRenames((prev) => ({
+      ...prev,
+      [name]: prev[name] ?? name,
+    }));
+    setEditingLocations((prev) => ({ ...prev, [name]: true }));
+  };
+
+  /** Close the inline editor (keeps whatever is currently typed). */
+  const finishEditingLocation = (name: string) => {
+    setEditingLocations((prev) => ({ ...prev, [name]: false }));
+  };
+
+  /** Discard any edit for a location and restore the original detected value. */
+  const resetLocation = (name: string) => {
+    setLocationRenames((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    setEditingLocations((prev) => ({ ...prev, [name]: false }));
   };
 
   const handleClose = () => {
@@ -357,8 +387,8 @@ export const DatasetMetadataModal: React.FC<Props> = ({
             </span>
           </div>
           <Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 13 }}>
-            Rename a location to store a different value, or leave the field
-            blank to keep it as-is.
+            These are the locations detected in your file. Press the edit icon to
+            change how a location is stored, or leave it as-is.
           </Paragraph>
 
           {preview.unique_locations.length === 0 ? (
@@ -368,54 +398,89 @@ export const DatasetMetadataModal: React.FC<Props> = ({
           ) : (
             <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200">
               {preview.unique_locations.map((loc, idx) => {
-                const renamed = (locationRenames[loc.name] ?? "").trim();
-                const willRename = renamed !== "" && renamed !== loc.name;
+                const isEditing = !!editingLocations[loc.name];
+                const draft = locationRenames[loc.name] ?? loc.name;
+                const effective = draft.trim() || loc.name;
+                const changed = effective !== loc.name;
+                const rowClass = `px-3 py-2.5 ${
+                  idx > 0 ? "border-t border-gray-100" : ""
+                }`;
+
+                if (isEditing) {
+                  return (
+                    <div key={loc.name} className={rowClass}>
+                      <div className="mb-1 text-xs text-gray-400">
+                        Original: <span title={loc.name}>{loc.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          autoFocus
+                          size="small"
+                          allowClear
+                          placeholder="Type a new location name"
+                          value={locationRenames[loc.name] ?? ""}
+                          onChange={(e) =>
+                            setLocationRenames((prev) => ({
+                              ...prev,
+                              [loc.name]: e.target.value,
+                            }))
+                          }
+                          onPressEnter={() => finishEditingLocation(loc.name)}
+                        />
+                        <Tooltip title="Done">
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={
+                              <CheckOutlined className="text-emerald-600" />
+                            }
+                            onClick={() => finishEditingLocation(loc.name)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Reset to original">
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<CloseOutlined className="text-gray-400" />}
+                            onClick={() => resetLocation(loc.name)}
+                          />
+                        </Tooltip>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={loc.name}
-                    className={`px-3 py-3 ${
-                      idx > 0 ? "border-t border-gray-100" : ""
-                    }`}
+                    className={`flex items-center gap-2 ${rowClass}`}
                   >
-                    {/* Original value + count */}
-                    <div className="flex items-start justify-between gap-2">
-                      <Tooltip title={loc.name}>
-                        <div className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800">
-                          {loc.name}
+                    <div className="min-w-0 flex-1">
+                      <Tooltip title={changed ? `Original: ${loc.name}` : effective}>
+                        <div className="truncate text-sm font-medium text-gray-800">
+                          {effective}
                         </div>
                       </Tooltip>
-                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-                        {loc.count.toLocaleString()} rec
-                        {loc.count === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    {/* Rename field, full width */}
-                    <Input
-                      className="mt-2"
-                      size="small"
-                      allowClear
-                      prefix={
-                        <span className="text-xs text-gray-400">
-                          Rename to
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span>
+                          {loc.count.toLocaleString()} rec
+                          {loc.count === 1 ? "" : "s"}
                         </span>
-                      }
-                      placeholder="leave blank to keep as-is"
-                      value={locationRenames[loc.name] ?? ""}
-                      onChange={(e) =>
-                        setLocationRenames((prev) => ({
-                          ...prev,
-                          [loc.name]: e.target.value,
-                        }))
-                      }
-                    />
-                    {willRename && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-                        <ArrowRightOutlined />
-                        <span className="truncate">
-                          Will be saved as “{renamed}”
-                        </span>
+                        {changed && (
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-600">
+                            edited
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </div>
+                    <Tooltip title="Edit location">
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<EditOutlined />}
+                        onClick={() => startEditingLocation(loc.name)}
+                      />
+                    </Tooltip>
                   </div>
                 );
               })}
