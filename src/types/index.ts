@@ -596,6 +596,56 @@ export interface RecordingLocationsResponse {
   locations: string[];
 }
 
+/** A distinct `location` value found in an uploaded metadata CSV. */
+export interface RecordingMetadataLocationOption {
+  /** The location string exactly as it appears in the CSV. */
+  name: string;
+  /** How many CSV rows carry this location. */
+  count: number;
+}
+
+/**
+ * Dry-run preview of a recording-metadata CSV import — returned BEFORE any DB
+ * write so the user can confirm. Contract for the not-yet-built backend
+ * endpoint `POST /api/datasets/{id}/recordings/metadata/preview`.
+ */
+export interface RecordingMetadataPreview {
+  /** Rows read from the uploaded CSV (excluding the header). */
+  total_rows: number;
+  /** Rows whose file_name matched a recording in this dataset. */
+  matched: number;
+  /** Distinct recordings that would be updated. */
+  affected_recordings: number;
+  /** Rows whose file_name matched no recording. */
+  unmatched: number;
+  /** file_name values that did not match any recording (may be truncated). */
+  unmatched_file_names: string[];
+  /** Recognised metadata columns present in the uploaded CSV. */
+  columns_present: string[];
+  /** Distinct location values found, with row counts — user may rename these. */
+  unique_locations: RecordingMetadataLocationOption[];
+  /** Human-readable per-row problems (bad formats, missing file_name, ...). */
+  errors?: string[];
+}
+
+/**
+ * Result of committing a recording-metadata CSV import. Contract for the
+ * not-yet-built backend endpoint
+ * `POST /api/datasets/{id}/recordings/metadata/import`.
+ */
+export interface RecordingMetadataImportResult {
+  /** Rows read from the uploaded CSV (excluding the header). */
+  total_rows?: number;
+  /** Recordings whose metadata was updated. */
+  matched?: number;
+  /** Rows whose file_name matched no recording in this dataset. */
+  unmatched?: number;
+  /** file_name values that did not match any recording. */
+  unmatched_file_names?: string[];
+  /** Human-readable per-row problems (bad formats, missing file_name, ...). */
+  errors?: string[];
+}
+
 // ============================================================================
 // Task Types (for Celery tasks)
 // ============================================================================

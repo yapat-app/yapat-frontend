@@ -629,6 +629,51 @@ export const datasetApi = {
       params: { taxon_id: taxonId },
     });
   },
+
+  /**
+   * Dry-run a metadata CSV upload: the backend parses the file, matches rows to
+   * recordings by `file_name`, and returns a preview (match counts, unmatched
+   * filenames, distinct locations) WITHOUT writing anything. The user reviews
+   * this before committing.
+   */
+  previewRecordingMetadata: async (
+    datasetId: number,
+    file: File,
+  ): Promise<import("../types").RecordingMetadataPreview> => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await api.post(
+      `/api/datasets/${datasetId}/recordings/metadata/preview`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
+  },
+
+  /**
+   * Commit a metadata CSV upload: matches rows to recordings by `file_name` and
+   * merges the other columns into each recording's `extra_metadata`.
+   * `locationOverrides` maps an original CSV location string to the value to
+   * store instead (entries absent = keep the original). Parsing/normalization/
+   * merge all happen server-side.
+   */
+  uploadRecordingMetadata: async (
+    datasetId: number,
+    file: File,
+    locationOverrides?: Record<string, string>,
+  ): Promise<import("../types").RecordingMetadataImportResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    if (locationOverrides && Object.keys(locationOverrides).length > 0) {
+      form.append("location_overrides", JSON.stringify(locationOverrides));
+    }
+    const response = await api.post(
+      `/api/datasets/${datasetId}/recordings/metadata/import`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
+  },
 };
 
 // ============================================================================
