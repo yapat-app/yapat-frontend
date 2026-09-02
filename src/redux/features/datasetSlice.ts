@@ -90,17 +90,31 @@ export const createDataset = createAsyncThunk(
 export const exportAllAnnotations = createAsyncThunk(
   "dataset/export_annotations",
   async (data: ExportAnnotation) => {
+    const params = new URLSearchParams({ format: data.format });
+    // Labels filter row by row. include_co_occurring widens that to snippet
+    // level, so matching snippets also bring their other annotations back.
+    if (data.labels?.length) {
+      params.set("labels", data.labels.join(","));
+      if (data.include_co_occurring) {
+        params.set("include_co_occurring", "true");
+      }
+    }
+    if (data.user_id != null) params.set("user_id", String(data.user_id));
+    if (data.created_after) params.set("created_after", data.created_after);
+    if (data.created_before) params.set("created_before", data.created_before);
+
     const response = await api.get(
-      `/api/datasets/${data.dataset_id}/annotations/export?format=${data.format}`,
+      `/api/datasets/${data.dataset_id}/annotations/export?${params.toString()}`,
       { responseType: "blob" },
     );
     // Create a blob URL and trigger download
     const blob = new Blob([response.data], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
 
+    const scopeSuffix = data.labels?.length ? "-scoped" : "";
     const a = document.createElement("a");
     a.href = url;
-    a.download = `annotations-${data.dataset_id}.${data.format}`; // csv/tsv
+    a.download = `annotations-${data.dataset_id}${scopeSuffix}.${data.format}`; // csv/tsv
     document.body.appendChild(a);
     a.click();
     a.remove();
