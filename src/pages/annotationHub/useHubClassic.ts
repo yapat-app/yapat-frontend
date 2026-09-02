@@ -27,7 +27,7 @@ import { pickLatestServerClassicFeed } from "../../utils/classicFeedServerHydrat
 import type { Annotation, FeedSimilarityCreate, Snippet } from "../../types";
 import type { AnnotateMode } from "./types";
 import { fetchAnnotationsBySnippetIds } from "../../utils/batchFetchAnnotationsBySnippetIds";
-import { datasetApi } from "../../services/api";
+import { datasetApi, snippetApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
 
 export function useHubClassic(
@@ -53,6 +53,29 @@ export function useHubClassic(
   const [filterSpecies, setFilterSpecies] = useState<string[]>([]);
   const [speciesOptions, setSpeciesOptions] = useState<string[]>([]);
   const [speciesLoading, setSpeciesLoading] = useState(false);
+
+  // ── Standalone "search snippets by ID" tool ──────────────────────────────
+  const [snippetSearchOpen, setSnippetSearchOpen] = useState(false);
+  const [snippetSearchResultIds, setSnippetSearchResultIds] = useState<number[]>([]);
+  const [snippetSearchSelectedIds, setSnippetSearchSelectedIds] = useState<number[]>([]);
+  const [snippetSearchLoading, setSnippetSearchLoading] = useState(false);
+  const [snippetSearchApplying, setSnippetSearchApplying] = useState(false);
+  // True while the feed is showing search results (not the generated feed).
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchCount, setSearchCount] = useState(0);
+  // The snippet IDs currently APPLIED to the feed (source of truth for what the
+  // modal seeds from on reopen — not the `snippets` variable, which tracks a
+  // different feed source and can be stale).
+  const [appliedSearchIds, setAppliedSearchIds] = useState<number[]>([]);
+  // Snapshot of the feed that was on screen right before entering search mode,
+  // so the "exit search" (×) button can restore it.
+  const preSearchFeedRef = useRef<Snippet[]>([]);
+  // Accumulates every snippet fetched during a search session, so a selected
+  // snippet's full object is available at Apply even if the query has changed
+  // since it was picked.
+  const snippetSearchCacheRef = useRef<Map<number, Snippet>>(new Map());
+  const snippetSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snippetSearchSeq = useRef(0);
   const [similarityState, setSimilarityState] = useState<{
     audioFile: File | null;
     startSec: number;
@@ -299,6 +322,119 @@ export function useHubClassic(
     }
   }, [filterAnnotationStatus, filterSpecies]);
 
+  // Leaving the current dataset/mode invalidates the search view + selection.
+  useEffect(() => {
+    setSearchActive(false);
+    setSearchCount(0);
+    preSearchFeedRef.current = [];
+    snippetSearchCacheRef.current = new Map();
+    setSnippetSearchSelectedIds([]);
+    setSnippetSearchResultIds([]);
+    setAppliedSearchIds([]);
+  }, [classicDatasetId, mode]);
+
+  const openSnippetSearch = useCallback(() => {
+    // Seed the editor from the currently-APPLIED ids so modifying shows exactly
+    // what's on the feed, and Cancel discards in-modal edits (a draft the user
+    // empties but doesn't apply is dropped on reopen). When nothing is applied
+    // yet, start empty. The applied set only clears on exit (×), feed
+    // generation, or dataset/mode change.
+    setSnippetSearchSelectedIds(searchActive ? appliedSearchIds : []);
+    setSnippetSearchResultIds([]);
+    setSnippetSearchLoading(false);
+    setSnippetSearchOpen(true);
+  }, [searchActive, appliedSearchIds]);
+
+  const closeSnippetSearch = useCallback(() => {
+    if (snippetSearchTimer.current) clearTimeout(snippetSearchTimer.current);
+    setSnippetSearchOpen(false);
+  }, []);
+
+  // Debounced search of the dataset's snippets by (partial) ID. Returns full
+  // Snippet objects; we cache them so Apply can build the feed without refetch.
+  const handleSnippetSearch = useCallback(
+    (rawQuery: string) => {
+      const query = rawQuery.trim();
+      if (snippetSearchTimer.current) clearTimeout(snippetSearchTimer.current);
+      const dsId = Number(classicDatasetId);
+      if (!classicDatasetId || Number.isNaN(dsId)) {
+        setSnippetSearchResultIds([]);
+        return;
+      }
+      setSnippetSearchLoading(true);
+      const seq = ++snippetSearchSeq.current;
+      snippetSearchTimer.current = setTimeout(async () => {
+        try {
+          const rows = await snippetApi.searchBySnippetId({
+            dataset_id: dsId,
+            ...(query ? { q: query } : {}),
+            limit: 50,
+          });
+          if (seq !== snippetSearchSeq.current) return; // stale response
+          for (const s of rows) snippetSearchCacheRef.current.set(s.id, s);
+          setSnippetSearchResultIds(rows.map((s) => s.id));
+        } catch {
+          if (seq === snippetSearchSeq.current) setSnippetSearchResultIds([]);
+        } finally {
+          if (seq === snippetSearchSeq.current) setSnippetSearchLoading(false);
+        }
+      }, 300);
+    },
+    [classicDatasetId],
+  );
+
+  // Replace the current feed with exactly the selected snippets (selection
+  // order). Transient: not saved to a feed slot / server snapshot.
+  const applySnippetSearch = useCallback(() => {
+    const dsId = Number(classicDatasetId);
+    if (!classicDatasetId || Number.isNaN(dsId)) return;
+    const selected = snippetSearchSelectedIds
+      .map((id) => snippetSearchCacheRef.current.get(id))
+      .filter((s): s is Snippet => Boolean(s));
+    if (selected.length === 0) {
+      message.warning("No snippets selected.");
+      return;
+    }
+    setSnippetSearchApplying(true);
+    try {
+      // Snapshot the feed we're replacing — but only when entering search mode,
+      // so re-searching while already viewing results still restores the
+      // ORIGINAL pre-search feed.
+      if (!searchActive) preSearchFeedRef.current = snippets;
+      dispatch(setClassicAnnotationFeed({ snippets: selected, datasetId: dsId }));
+      setSearchActive(true);
+      setSearchCount(selected.length);
+      setAppliedSearchIds(selected.map((s) => s.id));
+      setSnippetSearchOpen(false);
+      message.success(
+        `Feed set to ${selected.length} selected snippet${selected.length === 1 ? "" : "s"}`,
+      );
+    } finally {
+      setSnippetSearchApplying(false);
+    }
+  }, [classicDatasetId, snippetSearchSelectedIds, dispatch, searchActive, snippets]);
+
+  // Leave search mode: restore the feed that was showing before the search.
+  const exitSnippetSearch = useCallback(() => {
+    const dsId = Number(classicDatasetId);
+    if (!Number.isNaN(dsId)) {
+      dispatch(
+        setClassicAnnotationFeed({
+          snippets: preSearchFeedRef.current,
+          datasetId: dsId,
+        }),
+      );
+    }
+    preSearchFeedRef.current = [];
+    setSearchActive(false);
+    setSearchCount(0);
+    // Exiting is the point where the working selection is discarded.
+    snippetSearchCacheRef.current = new Map();
+    setSnippetSearchSelectedIds([]);
+    setSnippetSearchResultIds([]);
+    setAppliedSearchIds([]);
+  }, [classicDatasetId, dispatch]);
+
   const { snippetsLoading, snippets: snippetList, error: snippetError } =
     useAppSelector((s) => s.snippet);
   const hasClassicFeed = snippetList.length > 0;
@@ -364,6 +500,14 @@ export function useHubClassic(
       }
 
       dispatch(setClassicAnnotationFeed({ snippets: rows, datasetId: dsId }));
+      // A freshly generated feed replaces any search view + working selection.
+      setSearchActive(false);
+      setSearchCount(0);
+      preSearchFeedRef.current = [];
+      snippetSearchCacheRef.current = new Map();
+      setSnippetSearchSelectedIds([]);
+      setSnippetSearchResultIds([]);
+      setAppliedSearchIds([]);
 
       setClassicConfigOpen(false);
       message.success(
@@ -431,6 +575,20 @@ export function useHubClassic(
     setFilterSpecies,
     speciesOptions,
     speciesLoading,
+    // Snippet search tool
+    snippetSearchOpen,
+    openSnippetSearch,
+    closeSnippetSearch,
+    snippetSearchResultIds,
+    snippetSearchSelectedIds,
+    setSnippetSearchSelectedIds,
+    snippetSearchLoading,
+    snippetSearchApplying,
+    onSnippetSearch: handleSnippetSearch,
+    applySnippetSearch,
+    searchActive,
+    searchCount,
+    exitSnippetSearch,
     feedGenerateBusy,
     similarityState,
     handleSimilarityChange,

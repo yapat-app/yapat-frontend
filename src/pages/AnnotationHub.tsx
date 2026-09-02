@@ -25,6 +25,7 @@ import { AnnotationHubToolbar } from "./annotationHub/AnnotationHubToolbar";
 import { AnnotationHubMain } from "./annotationHub/AnnotationHubMain";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { ClassicFeedConfigModal } from "./annotationHub/ClassicFeedConfigModal";
+import { SnippetSearchModal } from "./annotationHub/SnippetSearchModal";
 
 export const AnnotationHub: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -134,6 +135,10 @@ export const AnnotationHub: React.FC = () => {
         generateFeedLabel={classic.generateFeedLabel}
         classicGenerateLoading={classic.feedGenerateBusy}
         onOpenClassicFeedConfig={() => classic.setClassicConfigOpen(true)}
+        onOpenClassicSearch={classic.openSnippetSearch}
+        classicSearchActive={classic.searchActive}
+        classicSearchCount={classic.searchCount}
+        onExitClassicSearch={classic.exitSnippetSearch}
         alFeedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
         alFeedActionLoading={al.inferenceLoading}
         onOpenAlFeedConfig={al.openInferenceModal}
@@ -197,6 +202,18 @@ export const AnnotationHub: React.FC = () => {
         okText="Apply"
         okDisabled={!classic.classicCanGenerate || classic.feedGenerateBusy}
         okLoading={classic.feedGenerateBusy}
+      />
+
+      <SnippetSearchModal
+        open={classic.snippetSearchOpen}
+        resultIds={classic.snippetSearchResultIds}
+        selectedIds={classic.snippetSearchSelectedIds}
+        onSelectedChange={classic.setSnippetSearchSelectedIds}
+        onSearch={classic.onSnippetSearch}
+        loading={classic.snippetSearchLoading}
+        onCancel={classic.closeSnippetSearch}
+        onApply={classic.applySnippetSearch}
+        applyLoading={classic.snippetSearchApplying}
       />
     </div>
   );

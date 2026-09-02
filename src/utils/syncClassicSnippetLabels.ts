@@ -1,5 +1,6 @@
 import type { AppDispatch } from "../redux/store";
 import type { Annotation } from "../types";
+import type { ALSnippetLabelDetail } from "../types/al";
 import { annotationApi } from "../services/api";
 import { alApi } from "../services/alApi";
 import { createAnnotation, deleteAnnotation } from "../redux/features/annotationSlice";
@@ -31,6 +32,9 @@ export async function syncClassicSnippetLabels(
   opts: {
     datasetId?: number | null;
     serverLabels?: string[];
+    /** Per-label source/permission metadata, so ground-truth labels are
+     *  deleted with the correct source (not silently no-op'd as "user"). */
+    serverLabelDetails?: ALSnippetLabelDetail[];
   } = {},
 ): Promise<Annotation[]> {
   const nextNorm = nextLabels.map((l) => l.trim()).filter(Boolean);
@@ -44,17 +48,34 @@ export async function syncClassicSnippetLabels(
   }
 
   if (opts.datasetId != null) {
+    // Map each server label to its source/permission detail so we delete with
+    // the CORRECT source. Sending "user" for a ground-truth label is a silent
+    // backend no-op — the label then reappears on the next fetch.
+    const detailByLabel = new Map<string, ALSnippetLabelDetail>();
+    for (const d of opts.serverLabelDetails ?? []) {
+      const key = d.label.trim().toLowerCase();
+      if (key) detailByLabel.set(key, d);
+    }
+
     const seenServerLabels = new Set<string>();
     for (const rawLabel of opts.serverLabels ?? []) {
       const label = rawLabel.trim();
       const key = label.toLowerCase();
       if (!label || seenServerLabels.has(key) || nextLower.has(key)) continue;
       seenServerLabels.add(key);
+
+      const detail = detailByLabel.get(key);
+      const isGroundTruth = detail?.source === "ground_truth";
+      // A protected ground-truth label (can_edit === false) must not be
+      // deletable here — the backend enforces this too, but skip to avoid a
+      // guaranteed-rejected request. Only admins/team owners have can_edit.
+      if (isGroundTruth && detail?.can_edit === false) continue;
+
       await alApi.deleteSnippetLabel({
         dataset_id: opts.datasetId,
         snippet_id: snippetId,
         label,
-        source: "user",
+        source: isGroundTruth ? "ground_truth" : "user",
       });
     }
   }

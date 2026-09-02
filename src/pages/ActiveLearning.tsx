@@ -955,7 +955,9 @@ export const BlindAnnotationHeader: React.FC<{
     onClick: () => void;
     loading?: boolean;
   };
-}> = ({ actionButton }) => {
+  /** Optional content shown before the primary button (e.g. the Search control). */
+  secondaryContent?: React.ReactNode;
+}> = ({ actionButton, secondaryContent }) => {
   // Blind mode header intentionally keeps the UI minimal.
 
   return (
@@ -970,6 +972,7 @@ export const BlindAnnotationHeader: React.FC<{
           </div>
         </div>
         <div className="flex-1" />
+        {secondaryContent}
         {actionButton && (
           <Button
             type="primary"

@@ -21,6 +21,10 @@ export type AnnotationHubMainProps = {
   generateFeedLabel: string;
   classicGenerateLoading: boolean;
   onOpenClassicFeedConfig: () => void;
+  onOpenClassicSearch: () => void;
+  classicSearchActive: boolean;
+  classicSearchCount: number;
+  onExitClassicSearch: () => void;
   alFeedActionLabel: string;
   alFeedActionLoading: boolean;
   onOpenAlFeedConfig: () => void;
@@ -40,6 +44,10 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
   generateFeedLabel,
   classicGenerateLoading,
   onOpenClassicFeedConfig,
+  onOpenClassicSearch,
+  classicSearchActive,
+  classicSearchCount,
+  onExitClassicSearch,
   alFeedActionLabel,
   alFeedActionLoading,
   onOpenAlFeedConfig,
@@ -149,6 +157,10 @@ export const AnnotationHubMain: React.FC<AnnotationHubMainProps> = ({
           feedActionLabel={generateFeedLabel}
           onOpenFeedConfig={onOpenClassicFeedConfig}
           feedActionLoading={classicGenerateLoading}
+          onOpenSearch={onOpenClassicSearch}
+          searchActive={classicSearchActive}
+          searchCount={classicSearchCount}
+          onExitSearch={onExitClassicSearch}
         />
       )}
     </>
