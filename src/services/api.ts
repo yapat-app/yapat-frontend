@@ -598,6 +598,15 @@ export const datasetApi = {
     return response.data;
   },
 
+  getAnnotationLabels: async (
+    datasetId: number,
+  ): Promise<import("../types").DatasetAnnotationLabelsResponse> => {
+    const response = await api.get(
+      `/api/datasets/${datasetId}/annotation-labels`,
+    );
+    return response.data;
+  },
+
   getQuickLabels: async (datasetId: number): Promise<import("../types").QuickLabel[]> => {
     const response = await api.get(`/api/datasets/${datasetId}/quick-labels`);
     return response.data;

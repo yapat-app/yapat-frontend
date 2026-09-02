@@ -77,9 +77,12 @@ export interface DatasetAnnotationStats {
 export interface ExportAnnotation {
   dataset_id: number | null | string;
   format: string;
-  /** Label scope. Snippets carrying any of these labels are exported in full,
-   *  including their co-occurring labels (marked in_scope=false in the output). */
+  /** Label filter, applied row by row: only annotations carrying one of these
+   *  labels are exported. */
   labels?: string[];
+  /** Widen `labels` to snippet level, so a matching snippet also brings its
+   *  other annotations, whatever their label. */
+  include_co_occurring?: boolean;
   taxon_id?: string;
   user_id?: number | null;
   created_after?: string;
@@ -585,6 +588,12 @@ export interface FeedParams {
 
 export interface RecordingLocationsResponse {
   locations: string[];
+}
+
+/** Labels present on a dataset's annotations; every value scopes an export
+ *  to at least one snippet. */
+export interface DatasetAnnotationLabelsResponse {
+  labels: string[];
 }
 
 // ============================================================================

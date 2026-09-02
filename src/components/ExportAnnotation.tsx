@@ -1,8 +1,19 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useAppDispatch } from "../hooks";
-import { Space, Button, Dropdown, Modal, Select, Radio, Typography } from "antd";
+import {
+  Space,
+  Button,
+  Checkbox,
+  Dropdown,
+  Modal,
+  Select,
+  Radio,
+  Spin,
+  Typography,
+} from "antd";
 import type { ExportAnnotation } from "../types";
 import { exportAllAnnotations } from "../redux/features/datasetSlice";
+import { datasetApi } from "../services/api";
 import type { MenuProps } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 
@@ -24,11 +35,45 @@ export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
   const [format, setFormat] = useState<string | null>(null);
   const [scope, setScope] = useState<ExportScope>("all");
   const [scopeLabels, setScopeLabels] = useState<string[]>([]);
+  // Off by default: "only selected labels" should mean only those labels. The
+  // snippet-level view is worth having when a co-occurring label is context for
+  // the match (a species heard during rain), not when it is just another
+  // species nobody asked about.
+  const [includeCoOccurring, setIncludeCoOccurring] = useState(false);
+  // Labels actually present on this dataset's annotations. Fetched each time
+  // the dialog opens, so a label added since the page loaded is offered
+  // without a reload.
+  const [available, setAvailable] = useState<string[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+  // Reopening before the previous fetch lands would otherwise let the stale
+  // response overwrite the newer one.
+  const requestRef = useRef(0);
+
+  const loadLabels = (id: string | number) => {
+    const token = ++requestRef.current;
+    setLoadingLabels(true);
+    datasetApi
+      .getAnnotationLabels(Number(id))
+      .then(({ labels }) => {
+        if (token === requestRef.current) setAvailable(labels);
+      })
+      // The picker stays usable without suggestions: it is a tags input, so a
+      // label typed by hand scopes the export just as well.
+      .catch(() => {
+        if (token === requestRef.current) setAvailable([]);
+      })
+      .finally(() => {
+        if (token === requestRef.current) setLoadingLabels(false);
+      });
+  };
 
   const openFor = (nextFormat: string) => {
     setFormat(nextFormat);
     setScope("all");
     setScopeLabels([]);
+    setIncludeCoOccurring(false);
+    setAvailable([]);
+    loadLabels(datasetId);
   };
 
   const close = () => setFormat(null);
@@ -38,7 +83,9 @@ export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
     const payload: ExportAnnotation = {
       dataset_id: datasetId,
       format,
-      ...(scope === "labels" ? { labels: scopeLabels } : {}),
+      ...(scope === "labels"
+        ? { labels: scopeLabels, include_co_occurring: includeCoOccurring }
+        : {}),
     };
     dispatch(exportAllAnnotations(payload));
     close();
@@ -102,12 +149,45 @@ export const ExportAnnotationButton: React.FC<ExportAnnotationButtonProps> = ({
                 placeholder="e.g. Boana cipoensis, rain"
                 tokenSeparators={[","]}
                 autoFocus
+                loading={loadingLabels}
+                options={available.map((label) => ({
+                  value: label,
+                  label,
+                }))}
+                filterOption={(input, option) =>
+                  (option?.value ?? "")
+                    .toString()
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                notFoundContent={
+                  loadingLabels ? (
+                    <Spin size="small" />
+                  ) : (
+                    "No labels on this dataset yet — type one to scope by it"
+                  )
+                }
               />
+              <Checkbox
+                checked={includeCoOccurring}
+                onChange={(e) => setIncludeCoOccurring(e.target.checked)}
+              >
+                Include co-occurring labels on the same snippet
+              </Checkbox>
               <Typography.Text type="secondary">
-                Snippets carrying any of these labels are exported with all of
-                their annotations, so co-occurring labels (wind, rain, stream…)
-                stay visible. The <code>in_scope</code> column marks the rows
-                that matched.
+                {includeCoOccurring ? (
+                  <>
+                    Snippets carrying any of these labels are exported with all
+                    of their annotations, so co-occurring labels (wind, rain,
+                    stream…) stay visible in the <code>label</code> column.
+                  </>
+                ) : (
+                  <>
+                    Only annotations carrying these labels are exported.
+                    Suggestions are the labels already on this dataset; anything
+                    else can still be typed in.
+                  </>
+                )}
               </Typography.Text>
             </>
           )}

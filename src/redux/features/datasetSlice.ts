@@ -91,11 +91,13 @@ export const exportAllAnnotations = createAsyncThunk(
   "dataset/export_annotations",
   async (data: ExportAnnotation) => {
     const params = new URLSearchParams({ format: data.format });
-    // A label scope is resolved server-side at snippet level: snippets matching
-    // any of these labels come back with all their annotations, the extra rows
-    // marked in_scope=false.
+    // Labels filter row by row. include_co_occurring widens that to snippet
+    // level, so matching snippets also bring their other annotations back.
     if (data.labels?.length) {
       params.set("labels", data.labels.join(","));
+      if (data.include_co_occurring) {
+        params.set("include_co_occurring", "true");
+      }
     }
     if (data.user_id != null) params.set("user_id", String(data.user_id));
     if (data.created_after) params.set("created_after", data.created_after);
