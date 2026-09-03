@@ -81,6 +81,12 @@ export const PredictionFeed: React.FC = () => {
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
+    // Always scroll to the top when the feed itself changes (regenerate /
+    // search), regardless of which snippet is selected.
+    const raf = requestAnimationFrame(() => {
+      scrollContainerRef.current?.scrollTo({ top: 0 });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [predictionsKey]);
 
   useEffect(() => {
@@ -98,7 +104,7 @@ export const PredictionFeed: React.FC = () => {
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [predictions.length, scrollRoot]);
+  }, [predictions.length, scrollRoot, visibleCount]);
 
   const bindScrollContainer = useCallback((el: HTMLDivElement | null) => {
     scrollContainerRef.current = el;
