@@ -186,6 +186,7 @@ export const Teams = () => {
   ];
 
   const showModal = () => {
+    setTeamInfo({ name: "", description: "", dataset_ids: [] });
     setIsModalOpen(true);
   };
 
@@ -214,6 +215,7 @@ export const Teams = () => {
     dispatch(fetchAllteams());
     if (teamCreated) {
       setIsModalOpen(false);
+      dispatch(fetchAllDatasets());
       message.success("New team created", undefined, () =>
         dispatch(resetCreateTeam()),
       );
@@ -225,6 +227,7 @@ export const Teams = () => {
       message.success("Team deleted");
       dispatch(resetTeamDeleted());
       dispatch(fetchAllteams());
+      dispatch(fetchAllDatasets());
     }
     if (error) {
       message.error(
@@ -396,10 +399,21 @@ export const Teams = () => {
                         (triggerNode.parentElement as HTMLElement) ?? document.body
                       }
                       onChange={handleChangeDataset}
-                      options={allDatasets.map((dataset) => ({
-                        value: dataset.id,
-                        label: dataset.name,
-                      }))}
+                      options={allDatasets.map((dataset) => {
+                        const isAssigned = dataset.team_id != null;
+                        const label = isAssigned ? (
+                          <Tooltip title="This dataset is already assigned to another team.">
+                            {dataset.name}
+                          </Tooltip>
+                        ) : (
+                          dataset.name
+                        );
+                        return {
+                          value: dataset.id,
+                          label,
+                          disabled: isAssigned,
+                        };
+                      })}
                       placeholder="Select one or more datasets"
                     />
                   </div>
