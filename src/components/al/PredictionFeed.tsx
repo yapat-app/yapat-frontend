@@ -61,6 +61,7 @@ export const PredictionFeed: React.FC = () => {
   >({});
 
   const PAGE_SIZE = 50;
+  const PREFETCH_OFFSET = 8;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -229,10 +230,13 @@ export const PredictionFeed: React.FC = () => {
     };
   }, [dispatch, predictions, visibleCount]);
 
+  // Only the recordings for the cards actually rendered (predictions up to
+  // visibleCount) — NOT the whole feed.
   const neededRecordingIdsKey = useMemo(() => {
     const ids = Array.from(
       new Set(
         predictions
+          .slice(0, visibleCount)
           .map((p) => p.recording_id)
           .filter(
             (id): id is number => typeof id === "number" && Number.isFinite(id),
@@ -240,7 +244,7 @@ export const PredictionFeed: React.FC = () => {
       ),
     );
     return ids.join(",");
-  }, [predictions]);
+  }, [predictions, visibleCount]);
 
   useEffect(() => {
     setRecordingNameById({});
@@ -248,7 +252,6 @@ export const PredictionFeed: React.FC = () => {
 
   useEffect(() => {
     if (!selectedDatasetId || !neededRecordingIdsKey) {
-      setRecordingNameById({});
       return;
     }
     const neededIds = neededRecordingIdsKey
@@ -256,21 +259,24 @@ export const PredictionFeed: React.FC = () => {
       .map(Number)
       .filter((n) => Number.isFinite(n));
 
+    const missing = neededIds.filter((id) => !(id in recordingNameById));
+    if (missing.length === 0) return;
+
     let cancelled = false;
 
     const BATCH = 10;
     const batches: number[][] = [];
-    for (let i = 0; i < neededIds.length; i += BATCH) {
-      batches.push(neededIds.slice(i, i + BATCH));
+    for (let i = 0; i < missing.length; i += BATCH) {
+      batches.push(missing.slice(i, i + BATCH));
     }
 
     async function fetchNames() {
-      const next: Record<number, string> = {};
       for (const batch of batches) {
         if (cancelled) return;
         const results = await Promise.allSettled(
           batch.map((id) => recordingApi.getById(id)),
         );
+        const next: Record<number, string> = {};
         for (const r of results) {
           if (r.status !== "fulfilled") continue;
           const rec = r.value;
@@ -282,17 +288,21 @@ export const PredictionFeed: React.FC = () => {
             null;
           if (name) next[id] = name;
         }
+        if (!cancelled && Object.keys(next).length > 0) {
+          setRecordingNameById((prev) => ({ ...prev, ...next }));
+        }
       }
-      if (!cancelled) setRecordingNameById(next);
     }
 
     void fetchNames().catch(() => {
-      if (!cancelled) setRecordingNameById({});
+      /* leave already-resolved names in place on failure */
     });
 
     return () => {
       cancelled = true;
     };
+    // recordingNameById intentionally excluded — see the "missing" comment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDatasetId, neededRecordingIdsKey]);
 
   const setCardRef = useCallback(
@@ -546,6 +556,12 @@ export const PredictionFeed: React.FC = () => {
     );
   }
 
+  // Index of the card that carries the load-more sentinel: a few cards before
+  // the end of the currently-rendered window, so the next page prefetches
+  // before the user hits the last card. Clamped to the rendered range.
+  const shownCount = Math.min(visibleCount, predictions.length);
+  const sentinelIndex = Math.max(0, shownCount - 1 - PREFETCH_OFFSET);
+
   if (isBlind) {
     // Single shared label selector for the whole feed: it labels the snippet
     // currently centered/selected in the feed. Fetching the dataset's quick
@@ -564,51 +580,19 @@ export const PredictionFeed: React.FC = () => {
         >
           <div className="flex flex-col gap-3 w-full max-w-[1200px] mx-auto">
             {predictions.map((p, index) => {
+              // Render only the real cards up to visibleCount — no trailing placeholders.
+              if (index >= visibleCount) return null;
               const key = p.id ?? p.snippet_id;
               const height = blindSnapCardHeight;
-              if (index >= visibleCount) {
-                return (
-                  <div
-                    key={key}
-                    className="snap-start shrink-0 w-full rounded-lg bg-gray-50 border border-gray-100"
-                    style={{ height }}
-                  />
-                );
-              }
-              if (index === visibleCount - 1) {
-                return (
-                  <div
-                    key={key}
-                    className="snap-start shrink-0 w-full"
-                    style={{ height }}
-                  >
-                    <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
-                    <PredictionCard
-                      prediction={p}
-                      recordingName={
-                        typeof p.recording_id === "number"
-                          ? recordingNameById[p.recording_id]
-                          : undefined
-                      }
-                      cardRef={setCardRef(p.snippet_id)}
-                      cardHeightPx={height}
-                      serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                      serverLabelDetails={
-                        labelDetailsBySnippet[p.snippet_id] ?? []
-                      }
-                      scrollRoot={scrollRoot}
-                      loadAudioImmediately={index === 0}
-                      hideInlineFeedback
-                    />
-                  </div>
-                );
-              }
               return (
                 <div
                   key={key}
                   className="snap-start shrink-0 w-full"
                   style={{ height }}
                 >
+                  {index === sentinelIndex && (
+                    <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
+                  )}
                   <PredictionCard
                     prediction={p}
                     recordingName={
@@ -721,53 +705,30 @@ export const PredictionFeed: React.FC = () => {
       >
         <div className="w-full md:w-[85%] max-w-[1400px] mx-auto flex flex-col gap-3">
           {predictions.map((p, index) => {
+            // Render only the real cards up to visibleCount — no trailing
+            // placeholders (no empty tail to scroll into). The list grows as
+            // visibleCount grows.
+            if (index >= visibleCount) return null;
             const key = p.id ?? p.snippet_id;
-            if (index >= visibleCount) {
-              return (
-                <div
-                  key={key}
-                  className="rounded-lg bg-gray-50 border border-gray-100"
-                  style={{ height: 220 }}
-                />
-              );
-            }
-            if (index === visibleCount - 1) {
-              return (
-                <React.Fragment key={key}>
-                  <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
-                  <PredictionCard
-                    prediction={p}
-                    recordingName={
-                      typeof p.recording_id === "number"
-                        ? recordingNameById[p.recording_id]
-                        : undefined
-                    }
-                    cardRef={setCardRef(p.snippet_id)}
-                    serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                    serverLabelDetails={
-                      labelDetailsBySnippet[p.snippet_id] ?? []
-                    }
-                    scrollRoot={scrollRoot}
-                    loadAudioImmediately={index === 0}
-                  />
-                </React.Fragment>
-              );
-            }
             return (
-              <PredictionCard
-                key={key}
-                prediction={p}
-                recordingName={
-                  typeof p.recording_id === "number"
-                    ? recordingNameById[p.recording_id]
-                    : undefined
-                }
-                cardRef={setCardRef(p.snippet_id)}
-                serverLabels={labelsBySnippet[p.snippet_id] ?? []}
-                serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
-                scrollRoot={scrollRoot}
-                loadAudioImmediately={index === 0}
-              />
+              <React.Fragment key={key}>
+                {index === sentinelIndex && (
+                  <div ref={loadMoreSentinelRef} style={{ height: 0 }} />
+                )}
+                <PredictionCard
+                  prediction={p}
+                  recordingName={
+                    typeof p.recording_id === "number"
+                      ? recordingNameById[p.recording_id]
+                      : undefined
+                  }
+                  cardRef={setCardRef(p.snippet_id)}
+                  serverLabels={labelsBySnippet[p.snippet_id] ?? []}
+                  serverLabelDetails={labelDetailsBySnippet[p.snippet_id] ?? []}
+                  scrollRoot={scrollRoot}
+                  loadAudioImmediately={index === 0}
+                />
+              </React.Fragment>
             );
           })}
 

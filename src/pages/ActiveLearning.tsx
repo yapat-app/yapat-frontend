@@ -959,13 +959,24 @@ export const BlindAnnotationHeader: React.FC<{
   secondaryContent?: React.ReactNode;
 }> = ({ actionButton, secondaryContent }) => {
   // Blind mode header intentionally keeps the UI minimal.
+  // Number of snippets actually in the current feed (the backend returns up to
+  // the Feed limit, so this can be fewer than the limit when fewer match).
+  const snippetCount = useAppSelector((s) => s.al.predictions.length);
 
   return (
     <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-100">
       <div className="flex items-center gap-4">
         <div className="min-w-0 flex-shrink-0 max-w-[360px]">
-          <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
-            Annotation Feed
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-semibold font-ibm-mono text-gray-700 leading-5">
+              Annotation Feed
+            </div>
+            {snippetCount > 0 && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
+                {snippetCount.toLocaleString()} snippet
+                {snippetCount === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-gray-400 font-ibm-sans truncate">
             Listen to each snippet and add one or more species labels
