@@ -428,9 +428,11 @@ export const Teams = () => {
           <Card variant="borderless">
             <div className="flex justify-between items-center">
               <h1 className="card_heading_text">All Teams</h1>
-              <Button type="primary" onClick={showModal}>
-                Create Team
-              </Button>
+              {user?.role === "admin" && (
+                <Button type="primary" onClick={showModal}>
+                  Create Team
+                </Button>
+              )}
             </div>
             {allTeams && allTeams.length > 0 ? (
               <Table<DataType> columns={columns} dataSource={allTeams} />

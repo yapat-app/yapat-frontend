@@ -51,7 +51,7 @@ export const Datasets = () => {
               <div id="dataset_list">
                 <div className="flex justify-between items-center">
                   <h2 className="card_heading_text">Available Datasets</h2>
-                  {(user?.role === "admin" || user?.role === "team_owner") && (
+                  {user?.role === "admin" && (
                     <AddDatasetModal />
                   )}
                 </div>
@@ -66,7 +66,7 @@ export const Datasets = () => {
             <div id="dataset_list">
               <div className="flex justify-between items-center">
                 <h2 className="card_heading_text">Available Datasets</h2>
-                {(user?.role === "admin" || user?.role === "team_owner") && (
+                {user?.role === "admin" && (
                   <AddDatasetModal />
                 )}
               </div>
