@@ -150,6 +150,8 @@ export interface ProjectionThumbnailData {
  */
 export interface ProjectionClientFilters {
   annotationStatus: "any" | "annotated" | "unannotated";
+  /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
+  annotatedSpecies: string[];
   locations: string[];
   dateRange: [number, number] | null;
   /** Month-of-year filter (1-12, year-independent). ANDs with dateRange. */
@@ -383,6 +385,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (!clientFilters) return undefined;
     const {
       annotationStatus,
+      annotatedSpecies,
       locations,
       dateRange,
       months,
@@ -391,9 +394,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     } = clientFilters;
     const locationSet = locations.length > 0 ? new Set(locations) : null;
     const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
+    const annotatedSpeciesSet =
+      annotatedSpecies.length > 0 ? new Set(annotatedSpecies) : null;
     const monthSet = months.length > 0 ? new Set(months) : null;
     if (
       annotationStatus === "any" &&
+      !annotatedSpeciesSet &&
       !locationSet &&
       !dateRange &&
       !monthSet &&
@@ -409,6 +415,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           Boolean(feedbacks[snippetId]) ||
           (labelsBySnippet[snippetId]?.length ?? 0) > 0;
         if (hasLabel !== (annotationStatus === "annotated")) return false;
+      }
+      // Ground-truth species narrowing — always the server's annotation
+      // labels, never predicted_labels.
+      if (annotatedSpeciesSet) {
+        const actual = labelsBySnippet[snippetId] ?? [];
+        if (!actual.some((l) => annotatedSpeciesSet.has(l))) return false;
       }
       if (scopeSet) {
         const labels = predictedLabelsBySnippet?.get(snippetId);

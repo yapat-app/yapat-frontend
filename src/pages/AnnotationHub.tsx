@@ -22,6 +22,7 @@ import { clearSavedFeed } from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubALSession } from "./annotationHub/useHubALSession";
+import { useAnnotatedSpecies } from "./annotationHub/useAnnotatedSpecies";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
@@ -139,6 +140,20 @@ export const AnnotationHub: React.FC = () => {
   const [filterAnnotationStatus, setFilterAnnotationStatus] = useState<
     "any" | "annotated" | "unannotated"
   >("any");
+
+  // ── Annotated-species filter (Status = Labeled only) ──────────────────────
+  // Narrows the already-labelled feed to snippets whose *ground-truth* labels
+  // include one of the selected species.
+  const annotatedStatusActive = filterAnnotationStatus === "annotated";
+  const [annotatedSpeciesScope, setAnnotatedSpeciesScope] = useState<string[]>(
+    [],
+  );
+  const annotatedSpecies = useAnnotatedSpecies(
+    al.selectedDatasetId,
+    al.snippetSetId,
+    annotatedStatusActive,
+  );
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
@@ -206,11 +221,14 @@ export const AnnotationHub: React.FC = () => {
     };
   }, [al.selectedDatasetId]);
 
-  // Selected date/time range reset on dataset change.
+  // Selected date/time range reset on dataset change. The annotated-species
+  // selection resets here too — species differ per dataset, so a carried-over
+  // selection would be meaningless against the new one.
   useEffect(() => {
     setFilterDateRange(null);
     setDateZoomDomain(null);
     setFilterTimeRange(null);
+    setAnnotatedSpeciesScope([]);
   }, [al.selectedDatasetId]);
 
   const visibleRecordingLocations =
@@ -368,6 +386,9 @@ export const AnnotationHub: React.FC = () => {
                   phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
                 }
                 filterAnnotationStatus={filterAnnotationStatus}
+                filterAnnotatedSpecies={
+                  annotatedStatusActive ? annotatedSpeciesScope : []
+                }
                 filterLocations={filterLocations}
                 filterDateRange={filterDateRange}
                 filterMonths={filterMonths}
@@ -425,6 +446,10 @@ export const AnnotationHub: React.FC = () => {
                   setLocalMinConfidence={al.setLocalMinConfidence}
                   labelScopeOptions={al.labelScopeOptions}
                   labelScopeLoading={al.labelScopeLoading}
+                  annotatedSpeciesOptions={annotatedSpecies.options}
+                  annotatedSpeciesLoading={annotatedSpecies.loading}
+                  annotatedSpeciesScope={annotatedSpeciesScope}
+                  setAnnotatedSpeciesScope={setAnnotatedSpeciesScope}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
@@ -437,6 +462,7 @@ export const AnnotationHub: React.FC = () => {
                     setDateZoomDomain(null);
                     setFilterMonths([]);
                     setFilterTimeRange(null);
+                    setAnnotatedSpeciesScope([]);
                     al.setLocalLabelScope([]);
                     al.setLocalMinConfidence(null);
                   }}

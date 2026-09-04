@@ -70,6 +70,10 @@ export type AnnotationHubSidebarProps = {
   setLocalMinConfidence: (v: number | null) => void;
   labelScopeOptions: LabelScopeOption[];
   labelScopeLoading: boolean;
+  annotatedSpeciesOptions: string[];
+  annotatedSpeciesLoading: boolean;
+  annotatedSpeciesScope: string[];
+  setAnnotatedSpeciesScope: (v: string[]) => void;
   onResetFilters: () => void;
   showSampleProperties: boolean;
   dateTimeDisabled?: boolean;
@@ -188,6 +192,10 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   setLocalLabelScope,
   labelScopeOptions,
   labelScopeLoading,
+  annotatedSpeciesOptions,
+  annotatedSpeciesLoading,
+  annotatedSpeciesScope,
+  setAnnotatedSpeciesScope,
   onResetFilters,
   showSampleProperties,
   dateTimeDisabled = false,
@@ -388,6 +396,41 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                 />
               </div>
 
+              {/* ── Annotated species (Status = Labeled only) ── */}
+              {filterAnnotationStatus === "annotated" && (
+                <div data-tour="annotated-species-filter">
+                  <p className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 font-ibm-sans">
+                    <TagsOutlined className="text-gray-400" /> Annotated species
+                  </p>
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    showSearch
+                    size="small"
+                    variant="borderless"
+                    placeholder="Any annotated species"
+                    loading={annotatedSpeciesLoading}
+                    value={annotatedSpeciesScope}
+                    onChange={(v) => setAnnotatedSpeciesScope(v as string[])}
+                    options={annotatedSpeciesOptions.map((s) => ({
+                      value: s,
+                      label: s,
+                    }))}
+                    filterOption={(input, option) =>
+                      String(option?.label ?? "")
+                        .toLowerCase()
+                        .includes(input.toLowerCase())
+                    }
+                    notFoundContent={
+                      annotatedSpeciesLoading
+                        ? "Loading…"
+                        : "No annotated species"
+                    }
+                    className="w-full rounded-md bg-gray-100 px-1"
+                  />
+                </div>
+              )}
+
               {showSampleProperties && (
                 <div
                   data-tour="sample-properties"
@@ -456,8 +499,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       dateTimeData.hasAnyDateTime && (
                         <div>
                           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
-                            <CalendarOutlined className="text-gray-400" />{" "}
-                            Month
+                            <CalendarOutlined className="text-gray-400" /> Month
                           </p>
                           <div className="flex flex-wrap gap-1">
                             {MONTH_ABBREVIATIONS.map((label, i) => {
