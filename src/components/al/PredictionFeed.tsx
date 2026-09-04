@@ -123,6 +123,8 @@ interface PredictionFeedProps {
    */
   enableClientFilters?: boolean;
   filterAnnotationStatus?: "any" | "annotated" | "unannotated";
+  /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
+  filterAnnotatedSpecies?: string[];
   filterLocations?: string[];
   filterDateRange?: [number, number] | null;
   /** Month-of-year filter (1-12, year-independent). ANDs with filterDateRange. */
@@ -139,6 +141,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   sortFields,
   enableClientFilters = false,
   filterAnnotationStatus = "any",
+  filterAnnotatedSpecies = EMPTY_LABELS,
   filterLocations = [],
   filterDateRange = null,
   filterMonths = [],
@@ -322,6 +325,19 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       });
     }
 
+    // Ground-truth species narrowing (Status = Labeled). Always reads the
+    // server's annotation labels — never predicted_labels — so this shows
+    // snippets a human actually annotated with the selected species, not ones
+    // the model merely thinks contain them.
+    if (filterAnnotatedSpecies.length > 0) {
+      const speciesSet = new Set(filterAnnotatedSpecies);
+      result = result.filter((p) =>
+        (labelsBySnippet[p.snippet_id] ?? []).some((label) =>
+          speciesSet.has(label),
+        ),
+      );
+    }
+
     if (localLabelScope.length > 0) {
       const scopeSet = new Set(localLabelScope);
       result = result.filter((p) => {
@@ -398,6 +414,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     labelsBySnippet,
     isClassicFeed,
     filterAnnotationStatus,
+    filterAnnotatedSpecies,
     statusStickyResetKey,
     localLabelScope,
     filterLocations,

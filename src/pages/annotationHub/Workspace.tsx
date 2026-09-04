@@ -41,6 +41,8 @@ const PROJECTION_METHODS: { key: ProjectionMethod; label: string }[] = [
 type WorkspaceProps = {
   onFindSimilar?: (snippetId: number) => void;
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
+  /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
+  filterAnnotatedSpecies: string[];
   filterLocations: string[];
   filterDateRange: [number, number] | null;
   filterMonths: number[];
@@ -58,6 +60,7 @@ type WorkspaceProps = {
 export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
   filterAnnotationStatus,
+  filterAnnotatedSpecies,
   filterLocations,
   filterDateRange,
   filterMonths,
@@ -165,6 +168,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const projectionClientFilters = useMemo(
     () => ({
       annotationStatus: filterAnnotationStatus,
+      annotatedSpecies: filterAnnotatedSpecies,
       locations: filterLocations,
       dateRange: filterDateRange,
       months: filterMonths,
@@ -173,6 +177,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     }),
     [
       filterAnnotationStatus,
+      filterAnnotatedSpecies,
       filterLocations,
       filterDateRange,
       filterMonths,
@@ -215,6 +220,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           sortFields={sortFields}
           enableClientFilters
           filterAnnotationStatus={filterAnnotationStatus}
+          filterAnnotatedSpecies={filterAnnotatedSpecies}
           filterLocations={filterLocations}
           filterDateRange={filterDateRange}
           filterMonths={filterMonths}
