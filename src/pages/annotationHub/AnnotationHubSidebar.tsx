@@ -16,7 +16,7 @@ import {
 import type { AnnotateMode } from "./types";
 import type { LabelScopeOption } from "./useHubALSession";
 import { ScoreHistogramPanel } from "../../components/al/ScoreHistogramPanel";
-import { useAppDispatch } from "../../hooks";
+import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   setVisibilityFilter,
   setVisibilityKeys,
@@ -24,6 +24,7 @@ import {
   resetVisibilityFilter,
 } from "../../redux/features/alSlice";
 import { useScoreHistogramData } from "./useScoreHistogramData";
+import { useSnippetLabels } from "./useSnippetLabels";
 import {
   useDateTimeFilterData,
   TIME_OF_DAY_DOMAIN,
@@ -78,6 +79,15 @@ export type AnnotationHubSidebarProps = {
   showSampleProperties: boolean;
   dateTimeDisabled?: boolean;
   showModelScores: boolean;
+  /**
+   * Model-side species scope, shown with the model scores. Narrows the set to
+   * snippets the model predicts as these species and rescopes Confidence to
+   * them (noisy-OR), so every histogram below describes that population.
+   */
+  predictedSpeciesOptions: LabelScopeOption[];
+  predictedSpeciesLoading: boolean;
+  predictedSpeciesScope: string[];
+  setPredictedSpeciesScope: (v: string[]) => void;
   showFindSimilar: boolean;
   showLabelScope: boolean;
 };
@@ -200,15 +210,46 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showSampleProperties,
   dateTimeDisabled = false,
   showModelScores,
+  predictedSpeciesOptions,
+  predictedSpeciesLoading,
+  predictedSpeciesScope,
+  setPredictedSpeciesScope,
   showFindSimilar,
   showLabelScope,
 }) => {
   const dispatch = useAppDispatch();
+  // Narrow selectors on purpose: subscribing to the whole `s.al` slice
+  // re-rendered this entire sidebar (histograms included) on EVERY al dispatch
+  // — including setActiveSnippet, which fires continuously while the feed is
+  // scrolled. That made scrolling visibly janky.
+  const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  const snippetSetId = useAppSelector((s) => s.al.snippetSetId);
+  const feedbacks = useAppSelector((s) => s.al.feedbacks);
+  // Refetch the ground-truth labels whenever this user annotates, so the
+  // histograms track the same data the feed re-reads on the same trigger.
+  const labelRefreshKey = useMemo(
+    () => Object.keys(feedbacks).sort().join(","),
+    [feedbacks],
+  );
+  // Only needed while a ground-truth filter is actually narrowing the set.
+  const needsSnippetLabels =
+    filterAnnotationStatus !== "any" || annotatedSpeciesScope.length > 0;
+  const { labelsBySnippet } = useSnippetLabels(
+    selectedDatasetId,
+    snippetSetId,
+    needsSnippetLabels,
+    labelRefreshKey,
+  );
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState("");
 
   const { enrichedPlotPoints, filtered, alFilters, domains } =
-    useScoreHistogramData(SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE);
+    useScoreHistogramData(SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE, {
+      predictedSpeciesScope,
+      annotationStatus: filterAnnotationStatus,
+      annotatedSpeciesScope,
+      labelsBySnippet,
+    });
   const dateTimeData = useDateTimeFilterData(filterMonths);
 
   const activeFilterCount = [
@@ -635,6 +676,42 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                 className="border-t border-gray-100 pt-2.5"
               >
                 <SidebarSubsection title="Model derived scores">
+                  {/* Predicted species is the unlabelled-side counterpart of
+                      the annotated-species filter: it scopes model scores, so
+                      it only makes sense while looking at unlabelled snippets. */}
+                  {filterAnnotationStatus === "unannotated" && (
+                  <div className="mb-2">
+                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
+                      <TagsOutlined className="text-gray-400" /> Predicted
+                      species
+                    </p>
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      size="small"
+                      variant="borderless"
+                      placeholder="Any predicted species"
+                      loading={predictedSpeciesLoading}
+                      value={predictedSpeciesScope}
+                      onChange={(v) => setPredictedSpeciesScope(v as string[])}
+                      options={predictedSpeciesOptions.map((o) => ({
+                        value: o.value,
+                        label: o.label,
+                        disabled: o.disabled,
+                      }))}
+                      filterOption={(input, option) =>
+                        String(option?.label ?? "")
+                          .toLowerCase()
+                          .includes(input.toLowerCase())
+                      }
+                      notFoundContent={
+                        predictedSpeciesLoading ? "Loading…" : "No species"
+                      }
+                      className="w-full rounded-md bg-gray-100 px-1"
+                    />
+                  </div>
+                  )}
                   <ScoreHistogramPanel
                     enrichedPlotPoints={enrichedPlotPoints}
                     filtered={filtered}

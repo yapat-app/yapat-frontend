@@ -40,6 +40,11 @@ import {
   dateStringToMonth,
 } from "../../../pages/annotationHub/dateTimeFilterHelpers";
 import { useSnippetRecordingIds } from "../../../pages/annotationHub/useSnippetRecordingIds";
+import {
+  computeScoreDomains,
+  isPointVisible,
+} from "../../../utils/scoreVisibility";
+import { applyPredictedSpeciesScope } from "../../../pages/annotationHub/predictedSpeciesScope";
 
 /** Minimal structural type for the Plotly click/hover events we consume. */
 type PlotlyPointEvent = {
@@ -152,6 +157,8 @@ export interface ProjectionClientFilters {
   annotationStatus: "any" | "annotated" | "unannotated";
   /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
   annotatedSpecies: string[];
+  /** Model-side species scope: narrow to snippets predicted as these species. */
+  predictedSpecies: string[];
   locations: string[];
   dateRange: [number, number] | null;
   /** Month-of-year filter (1-12, year-independent). ANDs with dateRange. */
@@ -320,8 +327,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   const wantsLocationFilter = (clientFilters?.locations.length ?? 0) > 0;
   const wantsDateTimeFilter = Boolean(
     clientFilters?.dateRange ||
-      clientFilters?.timeRange ||
-      clientFilters?.months.length,
+    clientFilters?.timeRange ||
+    clientFilters?.months.length,
   );
   const {
     locationByRecordingId: recordingLocationById,
@@ -367,7 +374,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     snippetSetRecordingIdBySnippet,
   ]);
 
-  const wantsScopeFilter = (clientFilters?.labelScope.length ?? 0) > 0;
+  // Built for BOTH species scopes: the model-side `predictedSpecies` filter
+  // reads the same map, so gating it on labelScope alone left the map null and
+  // rejected every point (0 / N visible).
+  const wantsScopeFilter =
+    (clientFilters?.labelScope.length ?? 0) > 0 ||
+    (clientFilters?.predictedSpecies.length ?? 0) > 0;
   const predictedLabelsBySnippet = useMemo(() => {
     if (!wantsScopeFilter) return null;
     const map = new Map<number, string[]>();
@@ -386,6 +398,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     const {
       annotationStatus,
       annotatedSpecies,
+      predictedSpecies,
       locations,
       dateRange,
       months,
@@ -396,10 +409,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     const scopeSet = labelScope.length > 0 ? new Set(labelScope) : null;
     const annotatedSpeciesSet =
       annotatedSpecies.length > 0 ? new Set(annotatedSpecies) : null;
+    const predictedSpeciesSet =
+      predictedSpecies.length > 0 ? new Set(predictedSpecies) : null;
     const monthSet = months.length > 0 ? new Set(months) : null;
     if (
       annotationStatus === "any" &&
       !annotatedSpeciesSet &&
+      !predictedSpeciesSet &&
       !locationSet &&
       !dateRange &&
       !monthSet &&
@@ -421,6 +437,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       if (annotatedSpeciesSet) {
         const actual = labelsBySnippet[snippetId] ?? [];
         if (!actual.some((l) => annotatedSpeciesSet.has(l))) return false;
+      }
+      // Model-side species scope — mirrors applyPredictedSpeciesScope's
+      // narrowing so the projection shows the same population as the feed.
+      if (predictedSpeciesSet) {
+        const labels = predictedLabelsBySnippet?.get(snippetId);
+        if (!labels || !labels.some((l) => predictedSpeciesSet.has(l)))
+          return false;
       }
       if (scopeSet) {
         const labels = predictedLabelsBySnippet?.get(snippetId);
@@ -460,6 +483,48 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     locationDataLoading,
     dateTimeDataLoading,
   ]);
+
+  // Build the non-sticky authoritative visibility result once. FPV metadata
+  // supplies coordinates only; its labels and scores are not filter inputs.
+  const authoritativeVisibleIds = useMemo<Set<number> | undefined>(() => {
+    if (predictions.length === 0) return undefined;
+    const scopedPredictions = applyPredictedSpeciesScope(
+      predictions,
+      clientFilters?.predictedSpecies ?? [],
+    );
+    const scoreDomains = computeScoreDomains(scopedPredictions);
+    const visibleIds = new Set<number>();
+    for (const prediction of scopedPredictions) {
+      if (
+        (extraVisible?.(prediction.snippet_id) ?? true) &&
+        isPointVisible(
+          prediction.scores,
+          alFilters,
+          visibilityMode,
+          visSliderStyle,
+          scoreDomains,
+        )
+      ) {
+        visibleIds.add(prediction.snippet_id);
+      }
+    }
+    return visibleIds;
+  }, [
+    predictions,
+    clientFilters?.predictedSpecies,
+    extraVisible,
+    alFilters,
+    visibilityMode,
+    visSliderStyle,
+  ]);
+
+  const authoritativeVisibleIdsCoverFpv = useMemo(() => {
+    if (!authoritativeVisibleIds || fpvPoints.length === 0) return false;
+    const predictionIds = new Set(
+      predictions.map((prediction) => prediction.snippet_id),
+    );
+    return fpvPoints.every((point) => predictionIds.has(point.snippet_id));
+  }, [authoritativeVisibleIds, fpvPoints, predictions]);
 
   // ── Visibility range override (async API fetch) ────────────────────────────
 
@@ -508,6 +573,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     actualLabelLegend,
     traces,
   } = useProjectionTraces({
+    predictedSpeciesScope: clientFilters?.predictedSpecies,
     fpvPoints,
     projectionsByMethod,
     rawOverlayPredictions,
@@ -521,6 +587,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     activeSnippetId,
     visRangeOverride,
     extraVisible,
+    authoritativeVisibleIds,
+    authoritativeVisibleIdsCoverFpv,
   });
 
   // Study logging for the model-score filters — co-located here so it can

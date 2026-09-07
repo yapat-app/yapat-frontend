@@ -43,6 +43,8 @@ type WorkspaceProps = {
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
   /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
   filterAnnotatedSpecies: string[];
+  /** Model-side species scope (predicted species). */
+  filterPredictedSpecies: string[];
   filterLocations: string[];
   filterDateRange: [number, number] | null;
   filterMonths: number[];
@@ -61,6 +63,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
   filterAnnotationStatus,
   filterAnnotatedSpecies,
+  filterPredictedSpecies,
   filterLocations,
   filterDateRange,
   filterMonths,
@@ -169,6 +172,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     () => ({
       annotationStatus: filterAnnotationStatus,
       annotatedSpecies: filterAnnotatedSpecies,
+      predictedSpecies: filterPredictedSpecies,
       locations: filterLocations,
       dateRange: filterDateRange,
       months: filterMonths,
@@ -178,6 +182,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     [
       filterAnnotationStatus,
       filterAnnotatedSpecies,
+      filterPredictedSpecies,
       filterLocations,
       filterDateRange,
       filterMonths,
@@ -221,6 +226,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           enableClientFilters
           filterAnnotationStatus={filterAnnotationStatus}
           filterAnnotatedSpecies={filterAnnotatedSpecies}
+          filterPredictedSpecies={filterPredictedSpecies}
           filterLocations={filterLocations}
           filterDateRange={filterDateRange}
           filterMonths={filterMonths}

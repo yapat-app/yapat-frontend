@@ -15,6 +15,7 @@ import {
 } from "./fpvHelpers";
 import { getPropertyByKey } from "../../../constants/alProperties";
 import { resolveColor } from "../../../utils/alColors";
+import { applyPredictedSpeciesScope } from "../../../pages/annotationHub/predictedSpeciesScope";
 import { useAppSelector } from "../../../hooks";
 import { computeScoreDomains } from "../../../pages/annotationHub/useScoreHistogramData";
 import type {
@@ -50,6 +51,9 @@ export interface UseProjectionTracesResult {
   traces: object[];
 }
 
+/** Stable empty scope so the default arg doesn't churn the memo each render. */
+const EMPTY_SPECIES_SCOPE: string[] = [];
+
 export function useProjectionTraces(opts: {
   fpvPoints: FPVPointMetadata[];
   projectionsByMethod: Partial<Record<ProjectionMethod, FPVProjection2D>>;
@@ -70,6 +74,16 @@ export function useProjectionTraces(opts: {
    * sync with the feed's filter pipeline.
    */
   extraVisible?: (snippetId: number) => boolean;
+  /** Non-sticky authoritative visibility result for a fully-covered FPV set. */
+  authoritativeVisibleIds?: Set<number>;
+  authoritativeVisibleIdsCoverFpv?: boolean;
+  /**
+   * Model-side species scope. Score domains MUST be derived from the same
+   * scoped population the feed and the score histogram use: the sliders store
+   * normalised [0,1] fractions, so a domain mismatch makes one handle position
+   * mean two different raw thresholds in the plot vs the feed.
+   */
+  predictedSpeciesScope?: string[];
 }): UseProjectionTracesResult {
   const {
     fpvPoints,
@@ -85,6 +99,9 @@ export function useProjectionTraces(opts: {
     activeSnippetId,
     visRangeOverride,
     extraVisible,
+    authoritativeVisibleIds,
+    authoritativeVisibleIdsCoverFpv = false,
+    predictedSpeciesScope = EMPTY_SPECIES_SCOPE,
   } = opts;
 
   const visKey = alFilters.visibility.propertyKey;
@@ -238,16 +255,27 @@ export function useProjectionTraces(opts: {
   // e.g. >= 0.50 in the plot but >= 0.01 in the feed, emptying the projection.
   const livePredictions = useAppSelector((s) => s.al.predictions);
   const scoreDomains = useMemo(
-    () => computeScoreDomains(livePredictions),
-    [livePredictions],
+    () =>
+      computeScoreDomains(
+        applyPredictedSpeciesScope(livePredictions, predictedSpeciesScope),
+      ),
+    [livePredictions, predictedSpeciesScope],
   );
 
   const filtered = useMemo(() => {
     return enrichedPlotPoints.map((p, i) => {
-      let visible = extraVisible ? extraVisible(p.snippet_id) : true;
+      const useAuthoritativeVisibility =
+        authoritativeVisibleIdsCoverFpv &&
+        authoritativeVisibleIds !== undefined;
+      let visible = useAuthoritativeVisibility
+        ? authoritativeVisibleIds.has(p.snippet_id)
+        : extraVisible
+          ? extraVisible(p.snippet_id)
+          : true;
 
       if (
         visible &&
+        !useAuthoritativeVisibility &&
         (visibilityMode === "single" || visibilityMode === "fixed") &&
         visProp
       ) {
@@ -321,6 +349,8 @@ export function useProjectionTraces(opts: {
     visibilityMode,
     visSliderStyle,
     extraVisible,
+    authoritativeVisibleIds,
+    authoritativeVisibleIdsCoverFpv,
   ]);
 
   const visibleCount = useMemo(
