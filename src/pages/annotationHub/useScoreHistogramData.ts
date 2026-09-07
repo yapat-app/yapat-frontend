@@ -1,11 +1,4 @@
-/**
- * useScoreHistogramData — computes enrichedPlotPoints + filtered from Redux state.
- *
- * The ScoreHistogramPanel only needs snippet scores and visibility booleans — it
- * doesn't need x/y projection coordinates. This hook derives that data from the
- * predictions array in Redux, so the sidebar can render the histogram without
- * being inside ProjectionView's data pipeline.
- */
+/** Derives histogram points and visibility from live Redux predictions. */
 
 import { useDeferredValue, useMemo } from "react";
 import { useAppSelector } from "../../hooks";
@@ -16,7 +9,7 @@ import type { FilterMode } from "../../studyPhases";
 
 const SCORE_UPPER_EPS = 1e-9;
 
-/** Model-derived score properties whose histogram domain follows the data.*/
+/** Score properties whose domains are derived from the current data. */
 export const SCORE_DOMAIN_KEYS = [
   "uncertainty",
   "diversity",
@@ -26,9 +19,7 @@ export const SCORE_DOMAIN_KEYS = [
 
 export type ScoreDomains = Record<string, [number, number]>;
 
-/**
- * Actual [min, max] per score property, computed from the live predictions.
- */
+/** Computes the actual [min, max] domain for each score property. */
 export function computeScoreDomains(
   predictions: { scores?: SampleScores }[],
 ): ScoreDomains {
@@ -87,10 +78,8 @@ export function isPointVisible(
       const domainHi = pMin + normHi * (pMax - pMin);
       const raw = scores?.[key as keyof SampleScores] as number | undefined;
       if (raw === undefined || raw === null) {
-        // Missing score: the histogram/slider never represents unscored
-        // points, so a threshold must not hide them — otherwise combining a
-        // slider with e.g. the "Labeled" filter (whose labeled-pool snippets
-        // often have no sampler scores) empties the view entirely.
+        // Unscored points are outside the histogram, so score filters do not
+        // hide them when combined with other filters.
         continue;
       }
       const v = Math.min(pMax, Math.max(pMin, raw));
@@ -111,7 +100,7 @@ export interface FilteredEnrichedPoint {
   visible: boolean;
 }
 
-/** Stable empty scope so the default arg doesn't churn the memo each render. */
+/** Stable defaults used by the memoized calculations. */
 const EMPTY_SCOPE: string[] = [];
 const EMPTY_LABELS: Record<number, string[]> = {};
 
@@ -137,14 +126,10 @@ export function useScoreHistogramData(
   domains: ScoreDomains;
 } {
   const alFilters = useAppSelector((s) => s.al.alFilters);
-  // Read the live feed, not `projectionPredictions` — that snapshot is frozen
-  // between retrains to keep the projection scatter plot's coordinates
-  // stable, but the score histogram has no such requirement and should
-  // reflect current scores as soon as a retrain lands new rows.
+  // Histograms use live predictions; projection predictions are a frozen
+  // coordinate snapshot.
   const allPredictions = useAppSelector((s) => s.al.predictions);
-  // Narrow + rescope confidence before anything derives domains or visibility,
-  // so the histograms, their [min,max] domains and the sliders all describe the
-  // same species-scoped population.
+  // Apply population filters before deriving domains or visibility.
   const {
     predictedSpeciesScope: rawPredictedSpeciesScope = EMPTY_SCOPE,
     annotationStatus: rawAnnotationStatus = "any",
@@ -152,29 +137,24 @@ export function useScoreHistogramData(
     labelsBySnippet = EMPTY_LABELS,
   } = options;
 
-  // Re-deriving these histograms walks the whole prediction set (65k+ rows) and
-  // then bins it per property, which is far too slow to run synchronously in the
-  // click that flips a filter — it froze the UI for the duration. Deferring the
-  // filter inputs lets React paint the click immediately and recompute the bars
-  // at lower priority, so the control stays responsive and the histogram catches
-  // up a frame or two later.
+  // Defer large dataset recalculations so filter controls remain responsive.
   const predictedSpeciesScope = useDeferredValue(rawPredictedSpeciesScope);
   const annotationStatus = useDeferredValue(rawAnnotationStatus);
   const annotatedSpeciesScope = useDeferredValue(rawAnnotatedSpeciesScope);
 
-  // Mirror the feed's population filters so "visible in the histogram" implies
-  // "visible in the feed". The score sliders themselves are deliberately NOT
-  // applied here: `filtered` below marks each point visible/dimmed, so the bars
-  // keep showing what lies outside the current selection — otherwise the
-  // histogram would collapse onto the selection and could never be widened.
+  // Match the feed's population filters. Score ranges are applied separately
+  // below so the histogram still shows values outside the current selection.
   const rawPredictions = useMemo(() => {
-    let rows = applyPredictedSpeciesScope(allPredictions, predictedSpeciesScope);
+    let rows = applyPredictedSpeciesScope(
+      allPredictions,
+      predictedSpeciesScope,
+    );
 
     if (annotationStatus !== "any") {
       const wantAnnotated = annotationStatus === "annotated";
       rows = rows.filter(
         (p) =>
-          ((labelsBySnippet[p.snippet_id]?.length ?? 0) > 0) === wantAnnotated,
+          (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0 === wantAnnotated,
       );
     }
 
