@@ -7,6 +7,7 @@ import {
   buildMelTicks,
   formatSpectrogramHz,
   formatSpectrogramTime,
+  minDurationForSpectrogram,
   resolveSpectrogramDisplayRange,
   spectrogramLayoutHeights,
   spectrogramParamsForSampleRate,
@@ -109,6 +110,14 @@ export const SnippetSpectrogramPlayer: React.FC<
     [sampleRate],
   );
 
+  // The WASM backend traps (as a bare `RuntimeError: unreachable`, which React
+  // cannot recover from) when the clip is shorter than roughly one window. Only
+  // suppress once the duration is actually known — `null` means "still loading",
+  // and treating that as too-short would hide the player on every mount.
+  const tooShortForSpectrogram =
+    resolvedDuration !== null &&
+    resolvedDuration < minDurationForSpectrogram(sampleRate);
+
   // Only inputs that change the decoded/analysed signal belong here: a new key
   // remounts the player, which re-decodes the audio and recomputes the mel
   // spectrogram (a visible blank gap while it works). Height is deliberately
@@ -152,22 +161,32 @@ export const SnippetSpectrogramPlayer: React.FC<
 
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="w-full min-w-0 overflow-x-hidden">
-            <SpectrogramPlayer
-              key={playerKey}
-              src={src}
-              sampleRate={sampleRate}
-              n_fft={fftParams.n_fft}
-              win_length={fftParams.win_length}
-              hop_length={fftParams.hop_length}
-              f_min={fMin}
-              f_max={fMax}
-              n_mels={fftParams.n_mels}
-              specHeight={plotHeight}
-              navigator={navigator}
-              settings={settings}
-              dark={dark}
-              colormap={colormap}
-            />
+            {tooShortForSpectrogram ? (
+              <div
+                className="flex flex-col items-center justify-center gap-1 rounded bg-gray-50 text-[11px] text-gray-500 font-ibm-sans"
+                style={{ height: plotHeight }}
+              >
+                <span>Clip too short for a spectrogram</span>
+                <audio src={src} controls className="max-w-full" />
+              </div>
+            ) : (
+              <SpectrogramPlayer
+                key={playerKey}
+                src={src}
+                sampleRate={sampleRate}
+                n_fft={fftParams.n_fft}
+                win_length={fftParams.win_length}
+                hop_length={fftParams.hop_length}
+                f_min={fMin}
+                f_max={fMax}
+                n_mels={fftParams.n_mels}
+                specHeight={plotHeight}
+                navigator={navigator}
+                settings={settings}
+                dark={dark}
+                colormap={colormap}
+              />
+            )}
           </div>
 
           {/* Time axis */}

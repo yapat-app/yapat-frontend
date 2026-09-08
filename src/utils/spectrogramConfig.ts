@@ -6,11 +6,35 @@ export const SPECTROGRAM_N_MELS = 128;
 export const SPECTROGRAM_F_MIN = 0;
 export const SPECTROGRAM_FALLBACK_SAMPLE_RATE = 16000;
 
+/**
+ * Upper bound on `n_fft`.
+ *
+ * The mel spectrogram is computed synchronously on the main thread, so this is
+ * really a cap on how long the UI freezes while a snippet renders. Measured on
+ * a 3 s clip: n_fft 4096 ≈ 295 ms, 8192 ≈ 620 ms, 16384 ≈ 1.25 s. 8192 keeps
+ * 192 kHz (the common ultrasonic rate) at a full 25 ms window while bounding
+ * the freeze at roughly half a second; above that the window shortens instead
+ * of the page locking up for over a second.
+ *
+ * At 8192 the `win_length >= hop_length` invariant still holds for any sample
+ * rate up to 819 kHz — beyond any real recording.
+ */
+export const SPECTROGRAM_MAX_N_FFT = 8192;
+
+/** Window/hop expressed in time, so framing is sample-rate independent. */
+const WIN_SECONDS = 0.025;
+const HOP_SECONDS = 0.01;
+
 export interface SpectrogramParams {
   n_fft: number;
   win_length: number;
   hop_length: number;
   n_mels: number;
+}
+
+/** Smallest power of two >= n. */
+function nextPowerOfTwo(n: number): number {
+  return 2 ** Math.ceil(Math.log2(Math.max(1, n)));
 }
 
 /**
@@ -24,8 +48,26 @@ export interface SpectrogramParams {
  * proportional to the sample rate (10 ms hop, 25 ms window), the window count
  * (and therefore the compute cost) is bounded no matter the recording's rate.
  *
- * `n_fft` and `n_mels` stay fixed so per-window cost is flat; at 16 kHz this
- * returns exactly the legacy constants.
+ * The Rust/WASM backend (`rust-melspec-wasm`, called by
+ * `react-audio-spectrogram-player`) asserts
+ *
+ *     n_fft >= win_length >= hop_length,  n_fft a power of two
+ *
+ * and a violated assertion compiles to `unreachable` in release WASM — surfacing
+ * in the browser as a bare `RuntimeError: unreachable` with no message and an
+ * unreadable stack. A previous version pinned `n_fft` (and therefore capped
+ * `win_length`) at 1024 while leaving `hop_length` free to grow, so every
+ * recording above ~102.4 kHz — ultrasonic/bat datasets at 192, 250 or 384 kHz —
+ * crashed the player on render.
+ *
+ * The fix deliberately does NOT re-frame recordings that already worked: while
+ * the fixed 1024-point FFT still satisfies the assertion we keep it, so every
+ * dataset that renders today keeps byte-identical output (and the same render
+ * cost). Only once `hop_length` outgrows the 1024-point window does `n_fft`
+ * start scaling with the sample rate. `clampSpectrogramParams` re-checks the
+ * invariant as a backstop either way.
+ *
+ * At 16 kHz this returns exactly the legacy constants (1024 / 400 / 160).
  */
 export function spectrogramParamsForSampleRate(
   sampleRate: number,
@@ -35,19 +77,80 @@ export function spectrogramParamsForSampleRate(
       ? sampleRate
       : SPECTROGRAM_FALLBACK_SAMPLE_RATE;
 
-  // 10 ms hop, 25 ms window — at 16 kHz these equal the legacy 160 / 400.
-  const hop_length = Math.max(160, Math.round(sr * 0.01));
-  const win_length = Math.min(
-    SPECTROGRAM_N_FFT,
-    Math.max(400, Math.round(sr * 0.025)),
+  // 25 ms window, 10 ms hop — at 16 kHz these are the legacy 400 / 160.
+  const targetWin = Math.max(
+    SPECTROGRAM_WIN_LENGTH,
+    Math.round(sr * WIN_SECONDS),
+  );
+  const targetHop = Math.max(
+    SPECTROGRAM_HOP_LENGTH,
+    Math.round(sr * HOP_SECONDS),
   );
 
-  return {
-    n_fft: SPECTROGRAM_N_FFT,
-    win_length,
-    hop_length,
+  // Legacy framing: fixed 1024-point FFT, window truncated to fit inside it.
+  const legacyWin = Math.min(SPECTROGRAM_N_FFT, targetWin);
+  if (targetHop <= legacyWin) {
+    // Still satisfies the assertion (true up to ~102.4 kHz), so leave it alone.
+    return clampSpectrogramParams({
+      n_fft: SPECTROGRAM_N_FFT,
+      win_length: legacyWin,
+      hop_length: targetHop,
+      n_mels: SPECTROGRAM_N_MELS,
+    });
+  }
+
+  // The hop has outgrown a 1024-point window. Grow n_fft to the next power of
+  // two that holds the full 25 ms window, restoring proper framing instead of
+  // truncating the window below the hop (which is what used to trap).
+  const n_fft = Math.min(
+    SPECTROGRAM_MAX_N_FFT,
+    Math.max(SPECTROGRAM_N_FFT, nextPowerOfTwo(targetWin)),
+  );
+
+  return clampSpectrogramParams({
+    n_fft,
+    win_length: targetWin,
+    hop_length: targetHop,
     n_mels: SPECTROGRAM_N_MELS,
+  });
+}
+
+/**
+ * Force `n_fft >= win_length >= hop_length` and `n_mels <= n_fft`.
+ *
+ * Defence in depth: `spectrogramParamsForSampleRate` already satisfies this, but
+ * the cost of being wrong is an uncatchable WASM trap rather than a bad-looking
+ * plot, so the invariant is re-imposed at the boundary.
+ */
+export function clampSpectrogramParams(p: SpectrogramParams): SpectrogramParams {
+  const win_length = Math.min(p.n_fft, p.win_length);
+  return {
+    n_fft: p.n_fft,
+    win_length,
+    hop_length: Math.min(win_length, p.hop_length),
+    n_mels: Math.min(p.n_fft, p.n_mels),
   };
+}
+
+/**
+ * Fewest samples the WASM backend accepts for these params. Below this it
+ * indexes past the reflect-padded signal and traps (again as `unreachable`), so
+ * callers must skip the spectrogram rather than hand it a very short clip.
+ *
+ * Because window and hop both scale with the sample rate, this is ~17.5 ms of
+ * audio at any rate.
+ */
+export function minSamplesForSpectrogram(p: SpectrogramParams): number {
+  return Math.floor((p.win_length + p.hop_length) / 2) + 1;
+}
+
+/** Shortest clip the spectrogram can render at this sample rate, in seconds. */
+export function minDurationForSpectrogram(sampleRate: number): number {
+  const sr =
+    Number.isFinite(sampleRate) && sampleRate > 0
+      ? sampleRate
+      : SPECTROGRAM_FALLBACK_SAMPLE_RATE;
+  return minSamplesForSpectrogram(spectrogramParamsForSampleRate(sr)) / sr;
 }
 
 /** Reserved below the mel canvas (time axis row + optional caption). */

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "verify:spectrogram": "node --experimental-strip-types scripts/verify-spectrogram-params.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
