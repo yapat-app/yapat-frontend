@@ -676,10 +676,12 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                 className="border-t border-gray-100 pt-2.5"
               >
                 <SidebarSubsection title="Model derived scores">
-                  {/* Predicted species is the unlabelled-side counterpart of
-                      the annotated-species filter: it scopes model scores, so
-                      it only makes sense while looking at unlabelled snippets. */}
-                  {filterAnnotationStatus === "unannotated" && (
+                  {/* Shown under Status = All: narrows to snippets the model
+                      predicts as the selected species, regardless of whether
+                      they've been annotated yet, and rescopes Confidence to
+                      them. Distinct from "Annotated species" (Status =
+                      Labeled), which filters by ground truth instead. */}
+                  {filterAnnotationStatus === "any" && (
                   <div className="mb-2">
                     <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
                       <TagsOutlined className="text-gray-400" /> Predicted

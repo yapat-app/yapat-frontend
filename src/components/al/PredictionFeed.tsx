@@ -152,6 +152,12 @@ interface PredictionFeedProps {
   localLabelScope?: string[];
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
+  /**
+   * Publishes the snippet ids that survive this feed's client-side filters, so
+   * sibling views (the projection) can highlight exactly the same set instead
+   * of re-deriving it from their own, separately-generated data.
+   */
+  onVisibleSnippetIdsChange?: (ids: Set<number>) => void;
 }
 
 export const PredictionFeed: React.FC<PredictionFeedProps> = ({
@@ -169,6 +175,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   localLabelScope = [],
   quickLabels = [],
   quickLabelsLoading = false,
+  onVisibleSnippetIdsChange,
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -458,6 +465,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     alFilters,
     sortFields,
   ]);
+
+  // Publish the filtered set upward (ids only). Runs once per settled filter
+  // change, not per point, and the Set is rebuilt only when the filtered list
+  // actually changes — the projection depends on its identity.
+  useEffect(() => {
+    if (!onVisibleSnippetIdsChange || !enableClientFilters) return;
+    onVisibleSnippetIdsChange(
+      new Set(filteredAndSorted.map((p) => p.snippet_id)),
+    );
+  }, [filteredAndSorted, enableClientFilters, onVisibleSnippetIdsChange]);
 
   // Reset pagination whenever the filtered list changes, following React's
   // "adjust state during render" pattern (avoids a cascading effect render).

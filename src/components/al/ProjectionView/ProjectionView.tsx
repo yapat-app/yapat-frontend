@@ -159,6 +159,13 @@ export interface ProjectionClientFilters {
   annotatedSpecies: string[];
   /** Model-side species scope: narrow to snippets predicted as these species. */
   predictedSpecies: string[];
+  /**
+   * Authoritative set of snippet ids that passed the feed's filters. When
+   * present (and covering the plotted points) it replaces every per-point
+   * filter below — the feed's data is current and species-scoped, whereas the
+   * FPV payload is a Redis-cached snapshot whose labels/scores can be stale.
+   */
+  visibleSnippetIds: Set<number> | null;
   locations: string[];
   dateRange: [number, number] | null;
   /** Month-of-year filter (1-12, year-independent). ANDs with dateRange. */
@@ -395,6 +402,14 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const extraVisible = useMemo(() => {
     if (!clientFilters) return undefined;
+    // Feed-authoritative path: one hash lookup per point, and identical to the
+    // feed by construction. Only used when the prediction set covers the
+    // plotted points — in top-K/suggestion modes it holds a handful of rows, so
+    // fall through to the per-point filters rather than greying out the cloud.
+    const authoritative = clientFilters.visibleSnippetIds;
+    if (authoritative && rawOverlayPredictions.length >= fpvPoints.length) {
+      return (snippetId: number): boolean => authoritative.has(snippetId);
+    }
     const {
       annotationStatus,
       annotatedSpecies,

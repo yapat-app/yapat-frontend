@@ -305,7 +305,11 @@ export function useProjectionTraces(opts: {
         } else {
           visible = raw >= domainLo && raw <= domainHi + SAMPLE_SCORE_UPPER_EPS;
         }
-      } else if (visible && visibilityMode === "multi") {
+      } else if (
+        visible &&
+        !useAuthoritativeVisibility &&
+        visibilityMode === "multi"
+      ) {
         const keys = alFilters.visibility.propertyKeys ?? [];
         const ranges = alFilters.visibility.ranges ?? {};
         for (const key of keys) {

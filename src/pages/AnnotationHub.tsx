@@ -153,7 +153,10 @@ export const AnnotationHub: React.FC = () => {
   // Narrows the already-labelled feed to snippets whose *ground-truth* labels
   // include one of the selected species.
   const annotatedStatusActive = filterAnnotationStatus === "annotated";
-  const unlabeledStatusActive = filterAnnotationStatus === "unannotated";
+  // Predicted species now lives under Status = All: with no status narrowing
+  // in play, selecting a species surfaces every matching snippet regardless of
+  // whether it has already been annotated.
+  const allStatusActive = filterAnnotationStatus === "any";
   const [annotatedSpeciesScope, setAnnotatedSpeciesScope] = useState<string[]>(
     [],
   );
@@ -417,7 +420,7 @@ export const AnnotationHub: React.FC = () => {
                   annotatedStatusActive ? annotatedSpeciesScope : NO_SPECIES
                 }
                 filterPredictedSpecies={
-                  unlabeledStatusActive ? predictedSpeciesScope : NO_SPECIES
+                  allStatusActive ? predictedSpeciesScope : NO_SPECIES
                 }
                 filterLocations={filterLocations}
                 filterDateRange={filterDateRange}
