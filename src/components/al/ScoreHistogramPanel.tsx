@@ -52,6 +52,7 @@ interface ScoreHistogramPanelProps {
   onReset?: () => void;
   sliderMode?: "range" | "threshold";
   compact?: boolean;
+  confidenceExtra?: React.ReactNode;
 }
 
 const SCORE_MIN = 0;
@@ -284,6 +285,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   sliderMode = "threshold",
   compact = false,
   domains,
+  confidenceExtra,
 }) => {
   const isMulti = visibilityMode === "multi";
 
@@ -636,6 +638,10 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     </span>
                   )}
                 </button>
+
+                {isActive && prop === "confidence" && confidenceExtra && (
+                  <div className="mt-1 mb-2.5">{confidenceExtra}</div>
+                )}
 
                 {isActive &&
                   row &&

@@ -42,6 +42,14 @@ const { Option } = Select;
 const DATE_TIME_FILTER_LOG_DELAY_MS = 1200;
 
 /**
+ * Stable "no selection" reference. Inlining `[]` in JSX allocates a fresh array
+ * on EVERY render, which changes the prop identity and cascades into
+ * recomputing the species scope over the whole prediction set (65k rows) plus
+ * re-filtering the projection — on every render. That blocked the main thread.
+ */
+const NO_SPECIES: string[] = [];
+
+/**
  * Debounce-logs changes to a date/time range filter. Range sliders fire a
  * new value on every drag tick, so — unlike a discrete control — we wait for
  * the value to settle before emitting a study-log event.
@@ -145,13 +153,34 @@ export const AnnotationHub: React.FC = () => {
   // Narrows the already-labelled feed to snippets whose *ground-truth* labels
   // include one of the selected species.
   const annotatedStatusActive = filterAnnotationStatus === "annotated";
+  // Predicted species now lives under Status = All: with no status narrowing
+  // in play, selecting a species surfaces every matching snippet regardless of
+  // whether it has already been annotated.
+  const allStatusActive = filterAnnotationStatus === "any";
   const [annotatedSpeciesScope, setAnnotatedSpeciesScope] = useState<string[]>(
     [],
+  );
+  // Refetch the species list when this user annotates, so a newly-used species
+  // appears in the dropdown without a reload.
+  const annotationFeedbacks = useAppSelector((s) => s.al.feedbacks);
+  const annotatedSpeciesRefreshKey = React.useMemo(
+    () => Object.keys(annotationFeedbacks).sort().join(","),
+    [annotationFeedbacks],
   );
   const annotatedSpecies = useAnnotatedSpecies(
     al.selectedDatasetId,
     al.snippetSetId,
     annotatedStatusActive,
+    annotatedSpeciesRefreshKey,
+  );
+
+  // ── Predicted-species scope (sits with the model-derived scores) ──────────
+  // Narrows to snippets the model predicts as these species and rescopes
+  // Confidence to them (noisy-OR over predicted_probabilities, matching the
+  // backend). Entirely client-side — the probabilities already ship on every
+  // prediction row, so no inference call is involved.
+  const [predictedSpeciesScope, setPredictedSpeciesScope] = useState<string[]>(
+    [],
   );
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -229,6 +258,7 @@ export const AnnotationHub: React.FC = () => {
     setDateZoomDomain(null);
     setFilterTimeRange(null);
     setAnnotatedSpeciesScope([]);
+    setPredictedSpeciesScope([]);
   }, [al.selectedDatasetId]);
 
   const visibleRecordingLocations =
@@ -387,7 +417,10 @@ export const AnnotationHub: React.FC = () => {
                 }
                 filterAnnotationStatus={filterAnnotationStatus}
                 filterAnnotatedSpecies={
-                  annotatedStatusActive ? annotatedSpeciesScope : []
+                  annotatedStatusActive ? annotatedSpeciesScope : NO_SPECIES
+                }
+                filterPredictedSpecies={
+                  allStatusActive ? predictedSpeciesScope : NO_SPECIES
                 }
                 filterLocations={filterLocations}
                 filterDateRange={filterDateRange}
@@ -450,6 +483,10 @@ export const AnnotationHub: React.FC = () => {
                   annotatedSpeciesLoading={annotatedSpecies.loading}
                   annotatedSpeciesScope={annotatedSpeciesScope}
                   setAnnotatedSpeciesScope={setAnnotatedSpeciesScope}
+                  predictedSpeciesOptions={al.labelScopeOptions}
+                  predictedSpeciesLoading={al.labelScopeLoading}
+                  predictedSpeciesScope={predictedSpeciesScope}
+                  setPredictedSpeciesScope={setPredictedSpeciesScope}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
@@ -463,6 +500,7 @@ export const AnnotationHub: React.FC = () => {
                     setFilterMonths([]);
                     setFilterTimeRange(null);
                     setAnnotatedSpeciesScope([]);
+                    setPredictedSpeciesScope([]);
                     al.setLocalLabelScope([]);
                     al.setLocalMinConfidence(null);
                   }}

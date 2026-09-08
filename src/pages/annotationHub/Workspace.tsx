@@ -43,6 +43,8 @@ type WorkspaceProps = {
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
   /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
   filterAnnotatedSpecies: string[];
+  /** Model-side species scope (predicted species). */
+  filterPredictedSpecies: string[];
   filterLocations: string[];
   filterDateRange: [number, number] | null;
   filterMonths: number[];
@@ -61,6 +63,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
   filterAnnotationStatus,
   filterAnnotatedSpecies,
+  filterPredictedSpecies,
   filterLocations,
   filterDateRange,
   filterMonths,
@@ -164,25 +167,37 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     setSortFields(defaultSortFields(phase.sort.nonModel, phase.sort.model));
   }
 
+  // The feed is the single source of truth for "what passes the filters": it
+  // publishes the surviving snippet ids and the projection highlights exactly
+  // those. Avoids the projection re-deriving the set from its own (separately
+  // generated, Redis-cached) labels and scores, which disagreed with the feed.
+  const [visibleSnippetIds, setVisibleSnippetIds] = useState<Set<number> | null>(
+    null,
+  );
+
   // Same filters the feed applies — passed to the projection so both stay in sync.
   const projectionClientFilters = useMemo(
     () => ({
       annotationStatus: filterAnnotationStatus,
       annotatedSpecies: filterAnnotatedSpecies,
+      predictedSpecies: filterPredictedSpecies,
       locations: filterLocations,
       dateRange: filterDateRange,
       months: filterMonths,
       timeRange: filterTimeRange,
       labelScope: localLabelScope,
+      visibleSnippetIds,
     }),
     [
       filterAnnotationStatus,
       filterAnnotatedSpecies,
+      filterPredictedSpecies,
       filterLocations,
       filterDateRange,
       filterMonths,
       filterTimeRange,
       localLabelScope,
+      visibleSnippetIds,
     ],
   );
 
@@ -221,6 +236,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           enableClientFilters
           filterAnnotationStatus={filterAnnotationStatus}
           filterAnnotatedSpecies={filterAnnotatedSpecies}
+          filterPredictedSpecies={filterPredictedSpecies}
           filterLocations={filterLocations}
           filterDateRange={filterDateRange}
           filterMonths={filterMonths}
@@ -228,6 +244,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           localLabelScope={localLabelScope}
           quickLabels={quickLabels}
           quickLabelsLoading={quickLabelsLoading}
+          onVisibleSnippetIdsChange={setVisibleSnippetIds}
         />
       </div>
     </div>

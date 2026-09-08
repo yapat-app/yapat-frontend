@@ -37,6 +37,7 @@ import {
   isPointVisible,
   computeScoreDomains,
 } from "../../pages/annotationHub/useScoreHistogramData";
+import { applyPredictedSpeciesScope } from "../../pages/annotationHub/predictedSpeciesScope";
 import {
   SCORE_VISIBILITY_MODE,
   SCORE_SLIDER_STYLE,
@@ -52,6 +53,22 @@ import {
 } from "../../pages/annotationHub/dateTimeFilterHelpers";
 
 const FEED_PAGE_SIZE = 50;
+/** Wait for a value to settle before acting on it. */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [value, delayMs]);
+  return settled;
+}
+/**
+ * Dragging a score slider genuinely changes which snippets pass the filter on
+ * every tick, so the visible window's ids really do change each time — the
+ * string-key guards below only stop *reference* churn. Without debouncing, one
+ * drag fires a /recordings and an /annotations request per tick.
+ */
+const FEED_HYDRATION_DEBOUNCE_MS = 250;
 // Stable reference for "no server labels yet" — `labelsBySnippet[id] ?? []`
 // would otherwise allocate a new array every render, breaking memoization
 // on the PredictionCard consuming it as `serverLabels`.
@@ -125,6 +142,8 @@ interface PredictionFeedProps {
   filterAnnotationStatus?: "any" | "annotated" | "unannotated";
   /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
   filterAnnotatedSpecies?: string[];
+  /** Model-side species scope: narrows to predicted species + rescopes confidence. */
+  filterPredictedSpecies?: string[];
   filterLocations?: string[];
   filterDateRange?: [number, number] | null;
   /** Month-of-year filter (1-12, year-independent). ANDs with filterDateRange. */
@@ -133,6 +152,12 @@ interface PredictionFeedProps {
   localLabelScope?: string[];
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
+  /**
+   * Publishes the snippet ids that survive this feed's client-side filters, so
+   * sibling views (the projection) can highlight exactly the same set instead
+   * of re-deriving it from their own, separately-generated data.
+   */
+  onVisibleSnippetIdsChange?: (ids: Set<number>) => void;
 }
 
 export const PredictionFeed: React.FC<PredictionFeedProps> = ({
@@ -142,6 +167,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   enableClientFilters = false,
   filterAnnotationStatus = "any",
   filterAnnotatedSpecies = EMPTY_LABELS,
+  filterPredictedSpecies = EMPTY_LABELS,
   filterLocations = [],
   filterDateRange = null,
   filterMonths = [],
@@ -149,6 +175,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   localLabelScope = [],
   quickLabels = [],
   quickLabelsLoading = false,
+  onVisibleSnippetIdsChange,
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -287,16 +314,26 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   // Actual per-property score domains — must match the histogram's so the
   // score-visibility filter agrees with what the (un-clamped) sliders show.
+  // Scope once and share: this rebuilds every row when a species is selected,
+  // so calling it separately for the domains and the filtered list doubled the
+  // work over the whole prediction set.
+  const scopedPredictions = useMemo(
+    () => applyPredictedSpeciesScope(predictions, filterPredictedSpecies),
+    [predictions, filterPredictedSpecies],
+  );
+
   const scoreDomains = useMemo(
-    () => computeScoreDomains(predictions),
-    [predictions],
+    () => computeScoreDomains(scopedPredictions),
+    [scopedPredictions],
   );
 
   const filteredAndSorted = useMemo(() => {
+    // Narrowed + confidence-rescoped upstream (scopedPredictions), so the score
+    // sliders here and the sidebar histograms agree on the population.
     if (!enableClientFilters)
-      return applySortFields(predictions, sortFields, recordingDateTimeById);
+      return applySortFields(scopedPredictions, sortFields, recordingDateTimeById);
 
-    let result = predictions;
+    let result = scopedPredictions;
 
     if (filterAnnotationStatus !== "any") {
       const wantAnnotated = filterAnnotationStatus === "annotated";
@@ -408,7 +445,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return applySortFields(result, sortFields, recordingDateTimeById);
   }, [
     enableClientFilters,
-    predictions,
+    scopedPredictions,
     scoreDomains,
     feedbacks,
     labelsBySnippet,
@@ -428,6 +465,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     alFilters,
     sortFields,
   ]);
+
+  // Publish the filtered set upward (ids only). Runs once per settled filter
+  // change, not per point, and the Set is rebuilt only when the filtered list
+  // actually changes — the projection depends on its identity.
+  useEffect(() => {
+    if (!onVisibleSnippetIdsChange || !enableClientFilters) return;
+    onVisibleSnippetIdsChange(
+      new Set(filteredAndSorted.map((p) => p.snippet_id)),
+    );
+  }, [filteredAndSorted, enableClientFilters, onVisibleSnippetIdsChange]);
 
   // Reset pagination whenever the filtered list changes, following React's
   // "adjust state during render" pattern (avoids a cascading effect render).
@@ -573,6 +620,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const visiblePredictionWindowKey = useMemo(
     () => visiblePredictionWindow.map((p) => p.snippet_id).join(","),
     [visiblePredictionWindow],
+  );
+  const settledWindowKey = useDebouncedValue(
+    visiblePredictionWindowKey,
+    FEED_HYDRATION_DEBOUNCE_MS,
   );
 
   const skipScrollIntoViewRef = useRef(false);
@@ -953,7 +1004,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         // `filteredAndSorted` (e.g. every mousemove while dragging a filter
         // slider) even when its contents are unchanged, which would refire
         // this fetch on every tick of a drag instead of once per settled window.
-        const ids = visiblePredictionWindowKey
+        const ids = settledWindowKey
           .split(",")
           .map(Number)
           .filter((n) => Number.isFinite(n));
@@ -974,7 +1025,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [dispatch, predictions.length, visiblePredictionWindowKey]);
+  }, [dispatch, predictions.length, settledWindowKey]);
 
   const neededRecordingIdsKey = useMemo(() => {
     // Only fetch names for currently visible predictions — computing over all
@@ -990,6 +1041,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     );
     return ids.join(",");
   }, [visiblePredictionWindow]);
+  const settledRecordingIdsKey = useDebouncedValue(
+    neededRecordingIdsKey,
+    FEED_HYDRATION_DEBOUNCE_MS,
+  );
 
   // Clear cached recording names when the dataset changes or there is nothing
   // to name, following the "adjust state during render" pattern.
@@ -1004,8 +1059,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   }
 
   useEffect(() => {
-    if (!selectedDatasetId || !neededRecordingIdsKey) return;
-    const neededIds = neededRecordingIdsKey
+    if (!selectedDatasetId || !settledRecordingIdsKey) return;
+    const neededIds = settledRecordingIdsKey
       .split(",")
       .map(Number)
       .filter((n) => Number.isFinite(n));
@@ -1042,7 +1097,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId, neededRecordingIdsKey]);
+  }, [selectedDatasetId, settledRecordingIdsKey]);
 
   // A single stable callback (created once, never recreated) passed
   // identically to every card — PredictionCard (wrapped in React.memo) calls
