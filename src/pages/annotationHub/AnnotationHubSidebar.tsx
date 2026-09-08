@@ -377,6 +377,41 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     </div>
   );
 
+  const predictedSpeciesControl =
+    filterAnnotationStatus === "any" ? (
+      <div>
+        <p className="mb-1 flex items-center gap-1 text-[10px] font-medium text-gray-400 font-ibm-sans">
+          <TagsOutlined className="text-gray-300" /> Species
+        </p>
+        <Select
+          mode="multiple"
+          allowClear
+          showSearch
+          size="small"
+          variant="borderless"
+          placeholder="Focus on species…"
+          loading={predictedSpeciesLoading}
+          value={predictedSpeciesScope}
+          onChange={(v) => setPredictedSpeciesScope(v as string[])}
+          options={predictedSpeciesOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+            disabled: o.disabled,
+          }))}
+          filterOption={(input, option) =>
+            String(option?.label ?? "")
+              .toLowerCase()
+              .includes(input.toLowerCase())
+          }
+          notFoundContent={predictedSpeciesLoading ? "Loading…" : "No species"}
+          // Collapses into "+N" once the (now narrow, nested-in-row) space
+          // runs out, instead of every tag wrapping onto its own line.
+          maxTagCount="responsive"
+          className="w-full rounded-md bg-gray-100 px-1"
+        />
+      </div>
+    ) : null;
+
   return (
     <aside className="flex h-full w-full min-w-0 shrink-0 flex-col overflow-hidden bg-white">
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -676,44 +711,6 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                 className="border-t border-gray-100 pt-2.5"
               >
                 <SidebarSubsection title="Model derived scores">
-                  {/* Shown under Status = All: narrows to snippets the model
-                      predicts as the selected species, regardless of whether
-                      they've been annotated yet, and rescopes Confidence to
-                      them. Distinct from "Annotated species" (Status =
-                      Labeled), which filters by ground truth instead. */}
-                  {filterAnnotationStatus === "any" && (
-                  <div className="mb-2">
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
-                      <TagsOutlined className="text-gray-400" /> Predicted
-                      species
-                    </p>
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      showSearch
-                      size="small"
-                      variant="borderless"
-                      placeholder="Any predicted species"
-                      loading={predictedSpeciesLoading}
-                      value={predictedSpeciesScope}
-                      onChange={(v) => setPredictedSpeciesScope(v as string[])}
-                      options={predictedSpeciesOptions.map((o) => ({
-                        value: o.value,
-                        label: o.label,
-                        disabled: o.disabled,
-                      }))}
-                      filterOption={(input, option) =>
-                        String(option?.label ?? "")
-                          .toLowerCase()
-                          .includes(input.toLowerCase())
-                      }
-                      notFoundContent={
-                        predictedSpeciesLoading ? "Loading…" : "No species"
-                      }
-                      className="w-full rounded-md bg-gray-100 px-1"
-                    />
-                  </div>
-                  )}
                   <ScoreHistogramPanel
                     enrichedPlotPoints={enrichedPlotPoints}
                     filtered={filtered}
@@ -723,6 +720,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                     domains={domains}
                     sliderMode={SCORE_SLIDER_STYLE}
                     compact
+                    confidenceExtra={predictedSpeciesControl}
                     onVisibilityKeyChange={(key) =>
                       dispatch(
                         setVisibilityFilter({
