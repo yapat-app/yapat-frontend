@@ -3,6 +3,7 @@ import "./App.css";
 import { Login } from "./pages/Login";
 import { SignUp } from "./pages/SignUp";
 import { Datasets } from "./pages/Datasets";
+import { DatasetFiles } from "./pages/DatasetFiles";
 import { Teams } from "./pages/Teams";
 import { ManageTeam } from "./pages/ManageTeam";
 import { AnnotationHub } from "./pages/AnnotationHub";
@@ -25,6 +26,7 @@ function App() {
         <Route path="/signUp" element={<SignUp />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/datasets" element={<Datasets />} />
+        <Route path="/datasets/:datasetId/files" element={<DatasetFiles />} />
         <Route
           path="/teams"
           element={
