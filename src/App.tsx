@@ -3,6 +3,7 @@ import "./App.css";
 import { Login } from "./pages/Login";
 import { SignUp } from "./pages/SignUp";
 import { Datasets } from "./pages/Datasets";
+import { DatasetFiles } from "./pages/DatasetFiles";
 import { Teams } from "./pages/Teams";
 import { ManageTeam } from "./pages/ManageTeam";
 import { AnnotationHub } from "./pages/AnnotationHub";
@@ -51,14 +52,15 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/pre-annotation" element={<Taxonomies />} />
           <Route path="/history" element={<FeedHistory />} />
+          <Route path="/datasets/:datasetId/files" element={<DatasetFiles />} />
           <Route
-          path="/annotate"
-          element={
-            <RequireAuth>
-              <AnnotationHub />
-            </RequireAuth>
-          }
-        />
+            path="/annotate"
+            element={
+              <RequireAuth>
+                <AnnotationHub />
+              </RequireAuth>
+            }
+          />
           {/* Legacy routes — redirect to the unified hub */}
           <Route
             path="/v2AnnotationHub"

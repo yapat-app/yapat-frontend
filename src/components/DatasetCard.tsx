@@ -154,12 +154,17 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-          <div className="rounded-md bg-gray-50 px-3 py-2">
-            <p className="text-xs text-gray-500">Audio files</p>
-            <p className="text-lg font-semibold text-gray-600">
-              {dataset.recording_count}
-            </p>
-          </div>
+          <Tooltip title="Tap to view files">
+            <div
+              onClick={() => navigate(`/datasets/${dataset.id}/files`)}
+              className="rounded-md bg-gray-50 px-3 py-2 cursor-pointer transition-colors hover:bg-gray-100"
+            >
+              <p className="text-xs text-gray-500">Audio files</p>
+              <p className="text-lg font-semibold text-gray-600">
+                {dataset.recording_count}
+              </p>
+            </div>
+          </Tooltip>
           <div className="rounded-md bg-gray-50 px-3 py-2">
             <p className="text-xs text-gray-500">Total snippets</p>
             <p className="text-lg font-semibold text-gray-700">
