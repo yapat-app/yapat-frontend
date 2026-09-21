@@ -19,7 +19,15 @@
 import React, { useCallback, useMemo, useRef } from "react";
 
 interface HistogramSliderProps {
-  values: number[];
+  /** Raw values to bin client-side. Ignored when `binCounts` is given. */
+  values?: number[];
+  /**
+   * Pre-binned counts (e.g. from /api/explore/summary), one per bar over
+   * [min, max]. Lets huge datasets render without shipping raw values.
+   */
+  binCounts?: number[];
+  /** Pre-binned totals for stacked mode; pairs with `binCounts`. */
+  totalBinCounts?: number[];
   /** When true, only the bar area is rendered — no track, no handles, no label. */
   hideSlider?: boolean;
   /** When true, the axis tick labels (0.00 … 1.00) are omitted for a denser layout. */
@@ -63,8 +71,12 @@ function computeBins(values: number[], binCount: number, min: number, max: numbe
   return bins;
 }
 
+const NO_VALUES: number[] = [];
+
 export const HistogramSlider: React.FC<HistogramSliderProps> = ({
-  values,
+  values = NO_VALUES,
+  binCounts,
+  totalBinCounts,
   hideSlider = false,
   hideAxis = false,
   totalValues,
@@ -85,13 +97,15 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
 
   // bins  = highlighted (blue) counts
   const bins = useMemo(
-    () => computeBins(values, binCount, min, max),
-    [values, binCount, min, max],
+    () => binCounts ?? computeBins(values, binCount, min, max),
+    [binCounts, values, binCount, min, max],
   );
   // totalBins = scale-setting counts (when stacked mode is active)
   const totalBins = useMemo(
-    () => (totalValues ? computeBins(totalValues, binCount, min, max) : null),
-    [totalValues, binCount, min, max],
+    () =>
+      totalBinCounts ??
+      (totalValues ? computeBins(totalValues, binCount, min, max) : null),
+    [totalBinCounts, totalValues, binCount, min, max],
   );
   // Y-axis scale is driven by whichever dataset is larger
   const maxBin = useMemo(
@@ -173,7 +187,7 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
           }
 
           // Original mode: colour by slider range
-          const t = i / (binCount - 1);
+          const t = i / Math.max(1, bins.length - 1);
           const inRange = mode === "threshold" ? t >= lo : t >= lo && t <= hi;
           return (
             <div

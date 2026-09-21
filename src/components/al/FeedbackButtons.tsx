@@ -82,6 +82,14 @@ export const FeedbackButtons: React.FC<Props> = ({
       ? (existingFeedback.final_labels ?? [])
       : (serverLabels ?? []);
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
+  // Autosave must only ever persist a USER edit. Every LabelSelector change
+  // bumps userEditRevRef; the sync effect records the revision it synced at.
+  // A selection change without a newer user edit (mount, remount, server
+  // refresh, snippet switch arriving before the synced labels render) is
+  // never submitted — previously such transient empty selections could
+  // REJECT, i.e. wipe, a snippet's existing labels.
+  const userEditRevRef = useRef(0);
+  const syncedEditRevRef = useRef(0);
   // Selection key the sync effect just wrote, so the auto-submit effect can
   // skip that exact state instead of treating it as a user edit. A bare
   // boolean flag can be re-armed by a later sync run and swallow the user's
@@ -268,6 +276,7 @@ export const FeedbackButtons: React.FC<Props> = ({
       .filter(Boolean)
       .sort()
       .join("|");
+    syncedEditRevRef.current = userEditRevRef.current;
     skipAutoSubmitKeyRef.current = syncedKey;
     lastSubmittedKeyRef.current = syncedKey;
     setSelectedLabels(submittedLabels);
@@ -284,6 +293,7 @@ export const FeedbackButtons: React.FC<Props> = ({
     }
     if (!isClassicFeed && !hasCheckpoint) return;
     if (feedbackDisabled) return;
+    if (userEditRevRef.current === syncedEditRevRef.current) return;
     if (selectionKey === lastSubmittedKeyRef.current) return;
 
     const doSubmit = () => {
@@ -315,8 +325,17 @@ export const FeedbackButtons: React.FC<Props> = ({
     debounceTimerRef.current = window.setTimeout(doSubmit, 250);
 
     return () => {
-      if (debounceTimerRef.current)
+      if (debounceTimerRef.current) {
         window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      // The timer for this selection is gone, so its submit must go too.
+      // Leaving it queued let the snippet-change flush above fire a stale
+      // submit — e.g. the transient empty selection seen on mount, which
+      // REJECTed (wiped) the labels of the snippet the bar mounted on.
+      if (pendingSubmitRef.current === doSubmit) {
+        pendingSubmitRef.current = null;
+      }
     };
   }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
 
@@ -338,6 +357,7 @@ export const FeedbackButtons: React.FC<Props> = ({
       <LabelSelector
         value={selectedLabels}
         onChange={(labels) => {
+          userEditRevRef.current += 1;
           setSelectedLabels(labels);
           setSaveState("idle");
         }}

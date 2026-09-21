@@ -1,6 +1,26 @@
 import type { PAMRunInferenceRequest, PAMSuggestionMode } from "../../types/al";
 import type { PhaseConfig } from "../../studyPhases/types";
 
+/**
+ * The Annotation Hub no longer downloads the full prediction set: the feed,
+ * histograms and projection are served page-by-page by /api/explore. An
+ * inference call only has to make sure predictions exist for the active
+ * checkpoint (and report which checkpoint that is), so it asks for a small,
+ * SQL-ranked top-K instead of every row.
+ */
+export const EXPLORE_BOOTSTRAP_K = 20;
+
+export function exploreBootstrapParams(): Pick<
+  PAMRunInferenceRequest,
+  "sample_suggestion" | "suggestion_strategy" | "k"
+> {
+  return {
+    sample_suggestion: true,
+    suggestion_strategy: "composite",
+    k: EXPLORE_BOOTSTRAP_K,
+  };
+}
+
 export function buildInferenceSuggestionParams(
   phase: PhaseConfig,
   topKOnly: boolean,
@@ -17,7 +37,7 @@ export function buildInferenceSuggestionParams(
   const feedSupportsSuggestions =
     phase.feed.mode !== "single_card_on_select" && phase.feed.mode !== "hidden";
   if (!topKOnly || !feedSupportsSuggestions) {
-    return { sample_suggestion: false };
+    return exploreBootstrapParams();
   }
   const strategy = (phase.feed.samplingStrategy ??
     samplingMethod) as PAMRunInferenceRequest["suggestion_strategy"];

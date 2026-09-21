@@ -15,9 +15,8 @@ import {
   pollRetrainJob,
   trainFromScratch,
   clearRetrainDispatch,
-  fetchAndAppendSuggestions,
   resetStaleInferenceBinding,
-  resumeFromAnchor,
+  requestFeedResume,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { alApi } from "../../services/alApi";
@@ -36,6 +35,7 @@ import { usePhaseConfig } from "../../studyPhases";
 import {
   buildInferenceSuggestionParams,
   buildValidateInferenceParams,
+  exploreBootstrapParams,
   isSuggestionsMode,
 } from "./alInferenceHelpers";
 import { fetchPamQuickLabelNames } from "../../utils/fetchPamQuickLabelNames";
@@ -120,62 +120,6 @@ export function useHubALSession(
   );
   const [localSS, setLocalSS] = useState<number | null>(snippetSetId);
 
-  // Upgrade top-K suggestions to the full dataset when the phase needs it.
-  // A ref guards against repeated dispatches — Immer creates a new modelInfo
-  // object reference on every fulfilled action, which would otherwise re-run
-  // this effect even after the upgrade completed.
-  const hasUpgradedRef = useRef(false);
-  const isSuggestions =
-    (modelInfo as Record<string, unknown>)?.mode === "suggestions";
-  // Reset the guard when suggestions mode clears (upgrade completed) or dataset changes.
-  useEffect(() => {
-    if (!isSuggestions) hasUpgradedRef.current = false;
-  }, [isSuggestions]);
-
-  useEffect(() => {
-    if (isValidateMode) return;
-    const needsFullSet =
-      phase.feed.mode === "single_card_on_select" ||
-      phase.visualization.mode === "whole_dataset";
-    if (
-      needsFullSet &&
-      isSuggestions &&
-      selectedDatasetId !== null &&
-      snippetSetId !== null &&
-      modelFamilyName !== null &&
-      !inferenceLoading &&
-      !hasUpgradedRef.current &&
-      // Only upgrade once we've confirmed this snippetSetId actually belongs to
-      // the current dataset — otherwise a stale/cross-dataset snippetSetId
-      // (e.g. from a corrupted persisted feed) is sent as (dataset_id,
-      // snippet_set_id) and the backend rejects it.
-      snippetSets.length > 0 &&
-      snippetSets.some((s) => s.id === snippetSetId)
-    ) {
-      hasUpgradedRef.current = true;
-      dispatch(
-        runInference({
-          model_family_name: modelFamilyName,
-          dataset_id: selectedDatasetId,
-          snippet_set_id: snippetSetId,
-          sample_suggestion: false,
-        }),
-      );
-    }
-  }, [
-    phase.id,
-    phase.feed.mode,
-    phase.visualization.mode,
-    isSuggestions,
-    isValidateMode,
-    selectedDatasetId,
-    snippetSetId,
-    modelFamilyName,
-    inferenceLoading,
-    snippetSets,
-    dispatch,
-  ]);
-
   // Resume the feed where the participant left off when the study phase
   // changes. Each phase renders a different workspace layout (the projection
   // panel appears from P2 on), which remounts the feed and restarts it at the
@@ -189,7 +133,7 @@ export function useHubALSession(
     // list, and the ref stays put so this retries once predictions land.
     if (predictions.length === 0) return;
     lastResumedPhaseRef.current = phase.id;
-    dispatch(resumeFromAnchor());
+    dispatch(requestFeedResume());
   }, [phase.id, predictions.length, dispatch]);
 
   useEffect(() => {
@@ -282,7 +226,6 @@ export function useHubALSession(
   useEffect(() => {
     hasAttemptedRestoreRef.current = false;
     hasAutoInferredRef.current = false;
-    hasUpgradedRef.current = false;
   }, [selectedDatasetId]);
 
   // Clear snippet-set and checkpoint state when the dataset changes.
@@ -427,7 +370,8 @@ export function useHubALSession(
         model_family_name: effectiveFamily,
         dataset_id: selectedDatasetId,
         snippet_set_id: resolvedSnippetSetId,
-        sample_suggestion: false,
+        // Only ensures predictions exist; the feed itself is paged by /explore.
+        ...exploreBootstrapParams(),
       }),
     );
     dispatch(
@@ -819,42 +763,21 @@ export function useHubALSession(
           snippetSetValid
         ) {
           if (!isRealRetrain) inferenceChainCountRef.current += 1;
-          const isSuggestionsFeed = isSuggestionsMode(modelInfo);
-          if (phase.feed.mode === "scrollable_topk" && isSuggestionsFeed) {
-            // Scrollable top-k feed: append fresh suggestions without disrupting scroll position.
-            dispatch(
-              fetchAndAppendSuggestions({
-                model_family_name: modelFamilyName,
-                dataset_id: stableDatasetId,
-                snippet_set_id: snippetSetId as number,
-                sample_suggestion: true,
-                suggestion_strategy: "uncertainty",
-                k: inferenceK,
-                // Not force_refresh: the checkpoint just changed, so the
-                // cache is naturally empty for it — forcing here is what
-                // caused every retry to queue a brand-new job instead of
-                // ever hitting the cached result once it's ready.
-                force_refresh: false,
-              }),
-            );
-          } else {
-            // Whole-dataset (predictions) or single_card feed: replace the
-            // prediction pool with a fresh scoring pass. The just-completed job
-            // warmed the new checkpoint's cache, so this returns real rows and
-            // runInference.fulfilled updates predictions + usedCheckpointId.
-            const suggestionParams = buildSuggestionParams(
-              inferenceK,
-              isValidateMode || isSuggestionsFeed,
-            );
-            dispatch(
-              runInference({
-                model_family_name: modelFamilyName,
-                dataset_id: stableDatasetId,
-                snippet_set_id: snippetSetId as number,
-                ...suggestionParams,
-              }),
-            );
-          }
+          // Re-resolve the active checkpoint with a small top-K request. The
+          // explore feed, histograms and projection follow the new
+          // used_checkpoint_id automatically, keeping the scroll position.
+          const suggestionParams = buildSuggestionParams(
+            inferenceK,
+            isValidateMode || isSuggestionsMode(modelInfo),
+          );
+          dispatch(
+            runInference({
+              model_family_name: modelFamilyName,
+              dataset_id: stableDatasetId,
+              snippet_set_id: snippetSetId as number,
+              ...suggestionParams,
+            }),
+          );
         }
         try {
           const updated = await alApi.getCheckpoints(stableDatasetId);

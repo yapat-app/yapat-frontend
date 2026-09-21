@@ -22,7 +22,6 @@ import { clearSavedFeed } from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubALSession } from "./annotationHub/useHubALSession";
-import { useAnnotatedSpecies } from "./annotationHub/useAnnotatedSpecies";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
@@ -36,6 +35,10 @@ import {
   formatDateAxisLabel,
   formatTimeAxisLabel,
 } from "./annotationHub/dateTimeFilterHelpers";
+import { buildExploreFilters } from "../explore/filters";
+import { useStickyAdmissions } from "../explore/useStickyAdmissions";
+import { useExploreScope } from "../explore/useExploreScope";
+import { useExploreFacets } from "../explore/useExploreSummary";
 
 const { Option } = Select;
 
@@ -167,18 +170,20 @@ export const AnnotationHub: React.FC = () => {
     () => Object.keys(annotationFeedbacks).sort().join(","),
     [annotationFeedbacks],
   );
-  const annotatedSpecies = useAnnotatedSpecies(
-    al.selectedDatasetId,
-    al.snippetSetId,
-    annotatedStatusActive,
-    annotatedSpeciesRefreshKey,
-  );
+  // Filter options (annotated species, locations, date/time histograms) come
+  // from the server; refetched when this user annotates so a newly-used
+  // species appears in the dropdown without a reload.
+  const { scope: exploreScope } = useExploreScope();
+  const facets = useExploreFacets(exploreScope, annotatedSpeciesRefreshKey);
+  const annotatedSpecies = {
+    options: facets.data?.annotated_species ?? NO_SPECIES,
+    loading: facets.loading && !facets.data,
+  };
 
   // ── Predicted-species scope (sits with the model-derived scores) ──────────
   // Narrows to snippets the model predicts as these species and rescopes
-  // Confidence to them (noisy-OR over predicted_probabilities, matching the
-  // backend). Entirely client-side — the probabilities already ship on every
-  // prediction row, so no inference call is involved.
+  // Confidence to them (noisy-OR over the model's probabilities, computed on
+  // the server).
   const [predictedSpeciesScope, setPredictedSpeciesScope] = useState<string[]>(
     [],
   );
@@ -262,7 +267,63 @@ export const AnnotationHub: React.FC = () => {
   }, [al.selectedDatasetId]);
 
   const visibleRecordingLocations =
-    al.selectedDatasetId === null ? [] : recordingLocations;
+    al.selectedDatasetId === null
+      ? []
+      : (facets.data?.locations ?? recordingLocations);
+
+  // ── Canonical explore filters ─────────────────────────────────────────────
+  // One spec, built once, drives the server-side feed, the sidebar histograms
+  // and the projection — so the three views always answer the same question.
+  const alFilters = useAppSelector((s) => s.al.alFilters);
+  const effectiveAnnotatedSpecies = annotatedStatusActive
+    ? annotatedSpeciesScope
+    : NO_SPECIES;
+  const effectivePredictedSpecies = allStatusActive
+    ? predictedSpeciesScope
+    : NO_SPECIES;
+  // Sticky admissions reset whenever the question changes (not on sort).
+  const stickyResetKey = JSON.stringify({
+    status: filterAnnotationStatus,
+    annotated: effectiveAnnotatedSpecies,
+    predicted: effectivePredictedSpecies,
+    locations: filterLocations,
+    date: filterDateRange,
+    months: filterMonths,
+    time: filterTimeRange,
+    labels: al.localLabelScope,
+    scores: alFilters.visibility,
+    dataset: al.selectedDatasetId,
+    snippetSet: al.snippetSetId,
+    phase: phase.id,
+  });
+  const stickyIds = useStickyAdmissions(stickyResetKey, annotationFeedbacks);
+  const exploreFilters = React.useMemo(
+    () =>
+      buildExploreFilters({
+        annotationStatus: filterAnnotationStatus,
+        annotatedSpecies: effectiveAnnotatedSpecies,
+        predictedSpecies: effectivePredictedSpecies,
+        labelScope: al.localLabelScope,
+        locations: filterLocations,
+        dateRange: filterDateRange,
+        months: filterMonths,
+        timeRange: filterTimeRange,
+        alFilters,
+        stickyIds,
+      }),
+    [
+      filterAnnotationStatus,
+      effectiveAnnotatedSpecies,
+      effectivePredictedSpecies,
+      al.localLabelScope,
+      filterLocations,
+      filterDateRange,
+      filterMonths,
+      filterTimeRange,
+      alFilters,
+      stickyIds,
+    ],
+  );
 
   // ── Find Similar handler ─────────────────────────────────────────────────
   const handleFindSimilar = useCallback(() => {
@@ -415,18 +476,7 @@ export const AnnotationHub: React.FC = () => {
                 onFindSimilar={
                   phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
                 }
-                filterAnnotationStatus={filterAnnotationStatus}
-                filterAnnotatedSpecies={
-                  annotatedStatusActive ? annotatedSpeciesScope : NO_SPECIES
-                }
-                filterPredictedSpecies={
-                  allStatusActive ? predictedSpeciesScope : NO_SPECIES
-                }
-                filterLocations={filterLocations}
-                filterDateRange={filterDateRange}
-                filterMonths={filterMonths}
-                filterTimeRange={filterTimeRange}
-                localLabelScope={al.localLabelScope}
+                exploreFilters={exploreFilters}
                 feedActionLabel={feedActionLabel}
                 feedActionLoading={al.inferenceLoading}
                 feedActionDisabled={!al.selectedDatasetId}
@@ -459,6 +509,9 @@ export const AnnotationHub: React.FC = () => {
                 <AnnotationHubSidebar
                   mode={mode}
                   setMode={setMode}
+                  exploreFilters={exploreFilters}
+                  exploreFacets={facets.data}
+                  exploreFacetsLoading={facets.loading && !facets.data}
                   filterAnnotationStatus={filterAnnotationStatus}
                   onFilterAnnotationStatusChange={setFilterAnnotationStatus}
                   filterLocations={filterLocations}

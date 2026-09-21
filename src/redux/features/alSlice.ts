@@ -36,6 +36,7 @@ import {
   buildClassicFeedback,
   snippetsToPredictions,
 } from "../../utils/classicFeedSync";
+import { EXPLORE_BOOTSTRAP_K } from "../../pages/annotationHub/alInferenceHelpers";
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 10;
@@ -119,18 +120,21 @@ function buildRestoreInferenceRequest(
     return null;
   }
 
-  const sampleSuggestion =
-    saved.sampleSuggestion ??
-    (saved.modelInfo?.mode as string | undefined) === "suggestions";
-
+  // The full prediction set is served page-by-page by /api/explore, so a
+  // restore only needs a small top-K (older saves may still say otherwise).
   const body: PAMRunInferenceRequest = {
     dataset_id: datasetId,
     snippet_set_id: snippetSetId,
     model_family_name: modelFamilyName,
-    sample_suggestion: sampleSuggestion,
+    sample_suggestion: true,
+    suggestion_strategy: "composite",
+    k: EXPLORE_BOOTSTRAP_K,
   };
 
-  if (sampleSuggestion) {
+  const wasSuggestions =
+    saved.sampleSuggestion ??
+    (saved.modelInfo?.mode as string | undefined) === "suggestions";
+  if (wasSuggestions) {
     body.k = saved.inferenceK ?? state.inferenceK;
     body.suggestion_strategy = (saved.suggestionStrategy ??
       state.samplingMethod) as PAMSuggestionStrategy;
@@ -350,19 +354,17 @@ function applyPersistedFeed(state: ALState, saved: PersistedFeed): void {
   }
   applyPersistedMetadata(state, saved);
 
-  // Restore selection — keep only IDs that still exist in the prediction set.
+  // Restore selection. The stored rows are only a small top-K now — the feed
+  // itself comes from /api/explore — so a saved selection outside them is
+  // still valid and is kept.
   if (state.predictions.length > 0) {
-    const predSet = new Set(state.predictions.map((p) => p.snippet_id));
-    const restoredIds = (saved.selectedSnippetIds ?? []).filter((id) =>
-      predSet.has(id),
-    );
+    const restoredIds = saved.selectedSnippetIds ?? [];
     if (restoredIds.length > 0) {
       state.selectedSnippetIds = restoredIds;
-      const restoredActive =
-        saved.activeSnippetId != null && predSet.has(saved.activeSnippetId)
+      state.activeSnippetId =
+        saved.activeSnippetId != null && restoredIds.includes(saved.activeSnippetId)
           ? saved.activeSnippetId
           : restoredIds[0];
-      state.activeSnippetId = restoredActive;
     } else {
       // Saved selection is stale (predictions changed) — default to first.
       state.selectedSnippetIds = [state.predictions[0].snippet_id];
@@ -392,6 +394,7 @@ function clearSessionState(state: ALState): void {
   state.embeddingModelId = null;
   state.lastInferenceAt = null;
   state.error = null;
+  state.feedResumeRequest = null;
 }
 
 /**
@@ -461,6 +464,7 @@ function buildInitialState(): ALState {
     error: null,
     lastInferenceAt: null,
     lastPredictionsRequestId: null,
+    feedResumeRequest: null,
   };
 
   if (!savedMatchesUrl) {
@@ -667,39 +671,21 @@ const alSlice = createSlice({
      *
      * Used on study-phase transitions. The workspace renders a different layout
      * per phase (the projection panel appears from P2 on), which remounts the
-     * feed and restarts it at the first row. Anchoring on `activeSnippetId` —
-     * already persisted alongside the feed — survives that, and also survives
-     * the phase's full-dataset re-inference, which replaces `predictions`
-     * wholesale: row indices don't carry across that swap, snippet ids do.
-     *
-     * Lands on the anchor when it still needs a label, otherwise the next
-     * unlabeled snippet after it, so a phase never reopens on something the
-     * participant just finished.
+     * feed and restarts it at the first row. The feed resolves the anchor —
+     * `activeSnippetId`, or the next unlabeled snippet after it — on the server
+     * (row indices don't carry across phases, snippet ids do) and clears the
+     * request with `clearFeedResume`.
      */
-    resumeFromAnchor: (state) => {
-      if (state.predictions.length === 0) return;
-
-      const anchorIdx =
-        state.activeSnippetId === null
-          ? -1
-          : state.predictions.findIndex(
-              (p) => p.snippet_id === state.activeSnippetId,
-            );
-
-      // No anchor, or it's absent from the current list: search from the top
-      // rather than guessing a position.
-      const searchFrom = anchorIdx === -1 ? 0 : anchorIdx;
-      const target =
-        state.predictions
-          .slice(searchFrom)
-          .find((p) => !state.feedbacks[p.snippet_id]) ??
-        // Everything from here on is labeled — stay put rather than jumping.
-        state.predictions[searchFrom];
-
-      if (!target) return;
-      state.selectedSnippetIds = [target.snippet_id];
-      state.activeSnippetId = target.snippet_id;
-      saveFeed(state);
+    requestFeedResume: (state) => {
+      state.feedResumeRequest = {
+        anchorSnippetId: state.activeSnippetId,
+        nonce: (state.feedResumeRequest?.nonce ?? 0) + 1,
+      };
+    },
+    clearFeedResume: (state, action: PayloadAction<number>) => {
+      if (state.feedResumeRequest?.nonce === action.payload) {
+        state.feedResumeRequest = null;
+      }
     },
     setSelectedDataset: (state, action: PayloadAction<number | null>) => {
       const nextId = normalizeDatasetId(action.payload);
@@ -1087,13 +1073,13 @@ const alSlice = createSlice({
       // when switching between modes (AL ↔ validate) or after a retrain.
       state.projectionPredictions = state.predictions;
 
-      // Auto-select the first prediction if nothing is selected or the current
-      // selection is no longer in the new prediction set (e.g. after a mode switch).
-      const newIds = new Set(state.predictions.map((p) => p.snippet_id));
+      // Auto-select the first row only when nothing is selected. The returned
+      // rows are a small top-K (the feed is paged by /api/explore), so a
+      // selection outside them is still valid — e.g. the snippet the user was
+      // on when a retrain finished.
       if (
         state.predictions.length > 0 &&
-        (state.selectedSnippetIds.length === 0 ||
-          state.selectedSnippetIds.every((id) => !newIds.has(id)))
+        state.selectedSnippetIds.length === 0
       ) {
         state.selectedSnippetIds = [state.predictions[0].snippet_id];
         state.activeSnippetId = state.predictions[0].snippet_id;
@@ -1170,14 +1156,12 @@ const alSlice = createSlice({
         state.predictions.length > 0 &&
         state.selectedSnippetIds.length === 0
       ) {
-        const predSet = new Set(state.predictions.map((p) => p.snippet_id));
-        const restoredIds = (saved?.selectedSnippetIds ?? []).filter((id) =>
-          predSet.has(id),
-        );
+        const restoredIds = saved?.selectedSnippetIds ?? [];
         if (restoredIds.length > 0) {
           state.selectedSnippetIds = restoredIds;
           const restoredActive =
-            saved?.activeSnippetId != null && predSet.has(saved.activeSnippetId)
+            saved?.activeSnippetId != null &&
+            restoredIds.includes(saved.activeSnippetId)
               ? saved.activeSnippetId
               : restoredIds[0];
           state.activeSnippetId = restoredActive;
@@ -1384,7 +1368,8 @@ export const {
   toggleSelectedSnippet,
   clearSelectedSnippets,
   setActiveSnippet,
-  resumeFromAnchor,
+  requestFeedResume,
+  clearFeedResume,
   setSelectedDataset,
   setInferenceConfig,
   setColorBy,

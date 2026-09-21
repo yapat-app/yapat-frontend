@@ -6,8 +6,12 @@ import { HistogramSlider } from "../../components/al/HistogramSlider";
 interface DateTimeRangeFilterProps {
   icon: React.ReactNode;
   title: string;
-  /** Raw values in domain units (epoch days for Date range, seconds for Time of day) — one per visible prediction with a parseable value. */
-  values: number[];
+  /**
+   * [value, count] pairs in domain units (epoch days for Date range, seconds
+   * for Time of day), pre-aggregated on the server so large datasets never
+   * ship one value per recording.
+   */
+  valueCounts: [number, number][];
   domain: [number, number];
   /**
    * Optional fixed display window to bin/show against instead of the full
@@ -46,7 +50,7 @@ interface DateTimeRangeFilterProps {
 export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
   icon,
   title,
-  values,
+  valueCounts,
   domain,
   zoomDomain,
   binCount,
@@ -60,12 +64,21 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
   const [dispMin, dispMax] = zoomDomain ?? domain;
   const span = dispMax - dispMin || 1;
 
-  // Points outside the zoom window are dropped (not clamped) so they don't
-  // pile into the edge bins and distort the histogram once zoomed in.
-  const scopedValues = useMemo(
-    () => (zoomDomain ? values.filter((v) => v >= dispMin && v <= dispMax) : values),
-    [values, zoomDomain, dispMin, dispMax],
-  );
+  const bars = binCount ?? 28;
+  // Weighted equivalent of HistogramSlider's computeBins. Values outside the
+  // zoom window are dropped (not clamped) so they don't pile into the edge
+  // bins and distort the histogram once zoomed in.
+  const binCounts = useMemo(() => {
+    const bins = new Array<number>(bars).fill(0);
+    const binSpan = dispMax - dispMin || 1;
+    for (const [value, count] of valueCounts) {
+      if (zoomDomain && (value < dispMin || value > dispMax)) continue;
+      const clamped = Math.max(dispMin, Math.min(dispMax, value));
+      const idx = Math.min(bars - 1, Math.floor(((clamped - dispMin) / binSpan) * bars));
+      bins[idx] += count;
+    }
+    return bins;
+  }, [valueCounts, zoomDomain, dispMin, dispMax, bars]);
 
   const normalized: [number, number] = range
     ? [(range[0] - dispMin) / span, (range[1] - dispMin) / span]
@@ -105,10 +118,10 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
         )}
       </p>
       <HistogramSlider
-        values={scopedValues}
+        binCounts={binCounts}
         min={dispMin}
         max={dispMax}
-        binCount={binCount}
+        binCount={bars}
         mode="range"
         range={normalized}
         onChange={handleSliderChange}

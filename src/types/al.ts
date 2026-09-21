@@ -347,4 +347,10 @@ export interface ALState {
    *  call — lets fulfilled handlers discard a response if a newer request for
    *  predictions has since been dispatched (last-dispatched wins, not last-resolved). */
   lastPredictionsRequestId: string | null;
+  /**
+   * Set when the feed should re-anchor on the participant's last position
+   * (study-phase change). Consumed by the server-driven feed, which resolves
+   * the anchor — or the next unlabeled snippet after it — via /explore/feed.
+   */
+  feedResumeRequest: { anchorSnippetId: number | null; nonce: number } | null;
 }

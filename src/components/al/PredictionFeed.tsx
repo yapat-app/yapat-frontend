@@ -11,7 +11,6 @@ import React, {
 import { Spin, Empty, Alert, Card, Progress, Row, Col, Statistic } from "antd";
 import { CheckCircleOutlined, SoundOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { alApi } from "../../services/alApi";
 import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
 import { FeedbackButtons } from "./FeedbackButtons";
@@ -25,34 +24,31 @@ import {
   hydrateClassicAnnotations,
   setSelectedSnippet,
   setActiveSnippet,
+  clearFeedResume,
+  runInference,
 } from "../../redux/features/alSlice";
+import { ExploreRequestError } from "../../services/exploreApi";
+import { exploreBootstrapParams } from "../../pages/annotationHub/alInferenceHelpers";
 import type { Annotation } from "../../types";
-import type {
-  ALFilterState,
-  PAMPrediction,
-  SampleScores,
-} from "../../types/al";
+import type { PAMPrediction, SampleScores } from "../../types/al";
 import type { SortField } from "../../types/sort";
+import type { ExploreFilters } from "../../types/explore";
+import { buildExploreSort } from "../../explore/filters";
 import {
-  isPointVisible,
-  computeScoreDomains,
-} from "../../pages/annotationHub/useScoreHistogramData";
-import { applyPredictedSpeciesScope } from "../../pages/annotationHub/predictedSpeciesScope";
-import {
-  SCORE_VISIBILITY_MODE,
-  SCORE_SLIDER_STYLE,
-} from "../../pages/annotationHub/scoreFilterConfig";
-import { useRecordingLocations } from "../../pages/annotationHub/useRecordingLocations";
-import {
-  useRecordingDateTimes,
-  type RecordingDateTime,
-} from "../../pages/annotationHub/useRecordingDateTimes";
-import {
-  dateStringToEpochDay,
-  dateStringToMonth,
-} from "../../pages/annotationHub/dateTimeFilterHelpers";
+  EXPLORE_FEED_PAGE_SIZE,
+  useExploreFeed,
+} from "../../explore/useExploreFeed";
+import { useExploreScope } from "../../explore/useExploreScope";
 
 const FEED_PAGE_SIZE = 50;
+/**
+ * Browsers cap an element's height (~2^24 px in Chromium), so a virtual list
+ * of full-viewport cards stops scrolling correctly past a few tens of
+ * thousands of rows. Nobody scrolls that far card-by-card; beyond the cap the
+ * feed asks the user to narrow the filters instead.
+ */
+const MAX_VIRTUAL_ROWS = 20_000;
+
 /** Wait for a value to settle before acting on it. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [settled, setSettled] = useState(value);
@@ -63,36 +59,20 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return settled;
 }
 /**
- * Dragging a score slider genuinely changes which snippets pass the filter on
- * every tick, so the visible window's ids really do change each time — the
- * string-key guards below only stop *reference* churn. Without debouncing, one
- * drag fires a /recordings and an /annotations request per tick.
+ * The visible window's ids change on every scroll step, so hydration requests
+ * (recording names, annotations) wait for the window to settle.
  */
 const FEED_HYDRATION_DEBOUNCE_MS = 250;
-// Stable reference for "no server labels yet" — `labelsBySnippet[id] ?? []`
-// would otherwise allocate a new array every render, breaking memoization
-// on the PredictionCard consuming it as `serverLabels`.
+// Stable reference for "no server labels yet" — `labels ?? []` would allocate
+// a new array every render, breaking memoization on PredictionCard.
 const EMPTY_LABELS: string[] = [];
 
-function getSortValue(
-  prediction: PAMPrediction,
-  property: SortField["property"],
-  recordingDateTimeById: Map<number, RecordingDateTime>,
-): number {
-  if (property === "time" || property === "date") {
-    const dt =
-      typeof prediction.recording_id === "number"
-        ? recordingDateTimeById.get(prediction.recording_id)
-        : undefined;
-    if (!dt) return -Infinity; // no recorded date/time for this snippet — sorts first
-    return property === "time" ? dt.timeSeconds : dateStringToEpochDay(dt.date);
-  }
+/** Client-side sort for the legacy (non-server) feed — model scores only. */
+function getSortValue(prediction: PAMPrediction, property: SortField["property"]): number {
   if (property === "confidence")
     return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
   if (property === "composite")
-    return (
-      prediction.composite_score ?? prediction.scores?.composite ?? -Infinity
-    );
+    return prediction.composite_score ?? prediction.scores?.composite ?? -Infinity;
   const key = property as keyof SampleScores;
   const v = prediction.scores?.[key];
   return typeof v === "number" ? v : -Infinity;
@@ -101,14 +81,13 @@ function getSortValue(
 function applySortFields(
   predictions: PAMPrediction[],
   sortFields: SortField[] | undefined,
-  recordingDateTimeById: Map<number, RecordingDateTime>,
 ): PAMPrediction[] {
   const active = (sortFields ?? []).filter((f) => !f.disabled);
   if (active.length === 0) return predictions;
   return [...predictions].sort((a, b) => {
     for (const field of active) {
-      const av = getSortValue(a, field.property, recordingDateTimeById);
-      const bv = getSortValue(b, field.property, recordingDateTimeById);
+      const av = getSortValue(a, field.property);
+      const bv = getSortValue(b, field.property);
       if (av === bv) continue;
       const cmp = av < bv ? -1 : 1;
       return field.direction === "asc" ? cmp : -cmp;
@@ -117,65 +96,31 @@ function applySortFields(
   });
 }
 
-function hasActiveScoreVisibilityFilters(alFilters: ALFilterState): boolean {
-  const visibility = alFilters.visibility;
-  const keys = visibility.propertyKeys ?? [];
-  const ranges = visibility.ranges ?? {};
-  return keys.some((key: string) => {
-    const [lo, hi] = ranges[key] ?? [0, 1];
-    return lo > 0 || hi < 1;
-  });
-}
-
 interface PredictionFeedProps {
   onFindSimilar?: (snippetId: number) => void;
   /** Suppress the per-card header (a sticky header is rendered above the feed instead). */
   hideCardHeader?: boolean;
-  /** Client-side multi-field sort applied before rendering the feed. */
+  /** Multi-field sort. Applied by the server in the explore feed. */
   sortFields?: SortField[];
   /**
-   * Turns on the live client-side filter pipeline below (status, tags,
-   * location, model scores). Defaults to off so callers that never pass any
-   * of the filter props keep showing every prediction, unfiltered.
+   * Serve the feed from /api/explore with these filters — every snippet in
+   * the dataset, filtered and sorted server-side, loaded page by page. When
+   * omitted the feed shows the in-memory predictions unfiltered.
    */
-  enableClientFilters?: boolean;
-  filterAnnotationStatus?: "any" | "annotated" | "unannotated";
-  /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
-  filterAnnotatedSpecies?: string[];
-  /** Model-side species scope: narrows to predicted species + rescopes confidence. */
-  filterPredictedSpecies?: string[];
-  filterLocations?: string[];
-  filterDateRange?: [number, number] | null;
-  /** Month-of-year filter (1-12, year-independent). ANDs with filterDateRange. */
-  filterMonths?: number[];
-  filterTimeRange?: [number, number] | null;
-  localLabelScope?: string[];
+  exploreFilters?: ExploreFilters;
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
-  /**
-   * Publishes the snippet ids that survive this feed's client-side filters, so
-   * sibling views (the projection) can highlight exactly the same set instead
-   * of re-deriving it from their own, separately-generated data.
-   */
-  onVisibleSnippetIdsChange?: (ids: Set<number>) => void;
 }
+
+type FeedRowSlot = { index: number; prediction: PAMPrediction | undefined };
 
 export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   onFindSimilar,
   hideCardHeader = false,
   sortFields,
-  enableClientFilters = false,
-  filterAnnotationStatus = "any",
-  filterAnnotatedSpecies = EMPTY_LABELS,
-  filterPredictedSpecies = EMPTY_LABELS,
-  filterLocations = [],
-  filterDateRange = null,
-  filterMonths = [],
-  filterTimeRange = null,
-  localLabelScope = [],
+  exploreFilters,
   quickLabels = [],
   quickLabelsLoading = false,
-  onVisibleSnippetIdsChange,
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -185,10 +130,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     selectedSnippetIds,
     feedbacks,
     selectedDatasetId,
-    snippetSetId,
     feedSource,
-    alFilters,
     classicAnnotationsBySnippet,
+    feedResumeRequest,
+    modelFamilyName,
   } = useAppSelector((state) => state.al);
   // Backward-compat scalar used by scroll-sync and single-card paths.
   const selectedSnippetId = selectedSnippetIds[0] ?? null;
@@ -196,15 +141,109 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const phase = usePhaseConfig();
   const isBlind = phase.ui.labelingMode === "blind";
 
+  // ── Data source ─────────────────────────────────────────────────────────
+  const { scope, revision } = useExploreScope();
+  const serverMode = Boolean(exploreFilters) && scope !== null && !isClassicFeed;
+  const exploreSort = useMemo(() => buildExploreSort(sortFields), [sortFields]);
+  const EMPTY_FILTERS = useMemo<ExploreFilters>(
+    () => ({
+      annotation_status: "any",
+      annotated_species: [],
+      predicted_species: [],
+      label_scope: [],
+      locations: [],
+      date_range: null,
+      months: [],
+      time_range: null,
+      score_ranges: {},
+      sticky_ids: [],
+    }),
+    [],
+  );
+  const feed = useExploreFeed({
+    scope,
+    filters: exploreFilters ?? EMPTY_FILTERS,
+    sort: exploreSort,
+    enabled: serverMode,
+    revision,
+  });
+
+  // Stable callbacks (the controller object itself is rebuilt every render).
+  const {
+    rowAt: feedRowAt,
+    indexOf: feedIndexOf,
+    rowById: feedRowById,
+  } = feed;
+
+  const legacyRows = useMemo(
+    () => (serverMode ? [] : applySortFields(predictions, sortFields)),
+    [serverMode, predictions, sortFields],
+  );
+
+  const feedTotal = serverMode ? (feed.total ?? 0) : legacyRows.length;
+  const rowCount = serverMode ? Math.min(feedTotal, MAX_VIRTUAL_ROWS) : legacyRows.length;
+  const rowAt = useCallback(
+    (index: number): PAMPrediction | undefined =>
+      serverMode ? feedRowAt(index) : legacyRows[index],
+    [serverMode, feedRowAt, legacyRows],
+  );
+  const indexOf = useCallback(
+    (snippetId: number): number =>
+      serverMode
+        ? feedIndexOf(snippetId)
+        : legacyRows.findIndex((p) => p.snippet_id === snippetId),
+    [serverMode, feedIndexOf, legacyRows],
+  );
+  const rowById = useCallback(
+    (snippetId: number): PAMPrediction | undefined =>
+      serverMode
+        ? feedRowById(snippetId)
+        : predictions.find((p) => p.snippet_id === snippetId),
+    [serverMode, feedRowById, predictions],
+  );
+  const hasRows = serverMode ? feedTotal > 0 : predictions.length > 0;
+
+  const selectedRow =
+    selectedSnippetId === null ? undefined : rowById(selectedSnippetId);
+  // While the selected row is briefly unavailable (its page reloading after a
+  // filter change) keep the last row we had for that snippet, so the sticky
+  // label bar neither unmounts nor sees its labels flicker to empty — both of
+  // which disturb its autosave.
+  const [lastSelectedRow, setLastSelectedRow] = useState<PAMPrediction | null>(
+    null,
+  );
+  if (selectedRow && selectedRow !== lastSelectedRow) {
+    setLastSelectedRow(selectedRow);
+  }
+  const heldSelectedRow: PAMPrediction | null =
+    selectedRow ??
+    (lastSelectedRow && lastSelectedRow.snippet_id === selectedSnippetId
+      ? lastSelectedRow
+      : null);
+
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [recordingNameById, setRecordingNameById] = useState<
     Record<number, string>
   >({});
-  const [labelsBySnippet, setLabelsBySnippet] = useState<
+  const [classicLabelsBySnippet, setClassicLabelsBySnippet] = useState<
     Record<number, string[]>
   >({});
+
+  const labelsFor = useCallback(
+    (snippetId: number): string[] => {
+      if (serverMode) {
+        const row = (feedRowById(snippetId) ??
+          (heldSelectedRow?.snippet_id === snippetId
+            ? heldSelectedRow
+            : undefined)) as { labels?: string[] } | undefined;
+        return row?.labels ?? EMPTY_LABELS;
+      }
+      return classicLabelsBySnippet[snippetId] ?? EMPTY_LABELS;
+    },
+    [serverMode, feedRowById, heldSelectedRow, classicLabelsBySnippet],
+  );
 
   const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -218,7 +257,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   // Flag the feed as being actively scrolled by the user so useALSync's
   // scrollIntoView doesn't fight native scroll momentum / CSS scroll-snap.
-  // Cheap: sets a ref + resets an idle timer, no React state / re-render.
   const markUserScrolling = useCallback(() => {
     isUserScrollingRef.current = true;
     if (userScrollIdleTimerRef.current !== null) {
@@ -237,15 +275,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
   }, []);
 
-  const {
-    locationByRecordingId: recordingLocationById,
-    loading: recordingLocationsLoading,
-  } = useRecordingLocations(enableClientFilters ? selectedDatasetId : null);
-  const {
-    dateTimeByRecordingId: recordingDateTimeById,
-    loading: recordingDateTimeLoading,
-  } = useRecordingDateTimes(enableClientFilters ? selectedDatasetId : null);
-  const sortFieldsKey = useMemo(
+  // The question being asked (filters + sort). A new checkpoint after a
+  // retrain refreshes the data but is NOT a new question, so it keeps the
+  // scroll position and selection.
+  const legacySortKey = useMemo(
     () =>
       (sortFields ?? [])
         .filter((f) => !f.disabled)
@@ -253,235 +286,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .join("|"),
     [sortFields],
   );
-  const scoreVisibilityKey = useMemo(() => {
-    const visibility = alFilters.visibility;
-    const keys = visibility.propertyKeys ?? [];
-    return keys
-      .map((key) => `${key}:${(visibility.ranges?.[key] ?? [0, 1]).join(",")}`)
-      .join("|");
-  }, [alFilters.visibility]);
-  // Every filter input, excluding sort: re-sorting is not re-filtering, so it
-  // must not clear the sticky annotation-status admissions further down.
-  const clientFilterKey = useMemo(
-    () =>
-      [
-        enableClientFilters ? "filters:on" : "filters:off",
-        filterAnnotationStatus,
-        filterLocations.join("\u0000"),
-        filterDateRange ? filterDateRange.join(",") : "none",
-        filterMonths.join(","),
-        filterTimeRange ? filterTimeRange.join(",") : "none",
-        localLabelScope.join("\u0000"),
-        scoreVisibilityKey,
-      ].join("\u0001"),
-    [
-      enableClientFilters,
-      filterAnnotationStatus,
-      filterLocations,
-      filterDateRange,
-      filterMonths,
-      filterTimeRange,
-      localLabelScope,
-      scoreVisibilityKey,
-    ],
-  );
-  const feedViewKey = useMemo(
-    () => [clientFilterKey, sortFieldsKey].join("|"),
-    [clientFilterKey, sortFieldsKey],
-  );
+  const feedViewKey = serverMode ? `explore:${feed.viewKey}` : `legacy:${legacySortKey}`;
 
-  // Sticky admissions survive re-sorting and re-rendering, but not a change of
-  // filters or a change of feed -- a different dataset, snippet set, feed
-  // source or phase is a different question, not the same one still being
-  // answered. Kept separate from feedViewKey so the scroll/selection resets
-  // keyed off that stay exactly as they were.
-  const statusStickyResetKey = useMemo(
-    () =>
-      [
-        clientFilterKey,
-        selectedDatasetId ?? "none",
-        snippetSetId ?? "none",
-        feedSource ?? "none",
-        phase.id,
-      ].join("|"),
-    [clientFilterKey, selectedDatasetId, snippetSetId, feedSource, phase.id],
-  );
-
-  // Snippet IDs the annotation-status filter has already admitted. See the
-  // filter itself for why they are held rather than re-evaluated.
-  const statusStickyIdsRef = useRef<Set<number>>(new Set());
-  const statusStickyKeyRef = useRef<string | null>(null);
-
-  // Actual per-property score domains — must match the histogram's so the
-  // score-visibility filter agrees with what the (un-clamped) sliders show.
-  // Scope once and share: this rebuilds every row when a species is selected,
-  // so calling it separately for the domains and the filtered list doubled the
-  // work over the whole prediction set.
-  const scopedPredictions = useMemo(
-    () => applyPredictedSpeciesScope(predictions, filterPredictedSpecies),
-    [predictions, filterPredictedSpecies],
-  );
-
-  const scoreDomains = useMemo(
-    () => computeScoreDomains(scopedPredictions),
-    [scopedPredictions],
-  );
-
-  const filteredAndSorted = useMemo(() => {
-    // Narrowed + confidence-rescoped upstream (scopedPredictions), so the score
-    // sliders here and the sidebar histograms agree on the population.
-    if (!enableClientFilters)
-      return applySortFields(scopedPredictions, sortFields, recordingDateTimeById);
-
-    let result = scopedPredictions;
-
-    if (filterAnnotationStatus !== "any") {
-      const wantAnnotated = filterAnnotationStatus === "annotated";
-
-      // Annotating is what changes this filter's own input, so re-evaluating it
-      // live would yank a snippet out of the feed the instant its first label
-      // lands -- while the user is very likely still adding more, since
-      // labelling is multi-select. Once a snippet has been admitted it stays
-      // admitted; the set is dropped when the filters are next changed, which
-      // is the point at which the user is asking for a fresh answer.
-      if (statusStickyKeyRef.current !== statusStickyResetKey) {
-        statusStickyKeyRef.current = statusStickyResetKey;
-        statusStickyIdsRef.current = new Set<number>();
-      }
-      const admitted = statusStickyIdsRef.current;
-
-      result = result.filter((p) => {
-        const hasLabel =
-          Boolean(feedbacks[p.snippet_id]) ||
-          (labelsBySnippet[p.snippet_id]?.length ?? 0) > 0;
-        if (hasLabel === wantAnnotated) {
-          admitted.add(p.snippet_id);
-          return true;
-        }
-        return admitted.has(p.snippet_id);
-      });
-    }
-
-    // Ground-truth species narrowing (Status = Labeled). Always reads the
-    // server's annotation labels — never predicted_labels — so this shows
-    // snippets a human actually annotated with the selected species, not ones
-    // the model merely thinks contain them.
-    if (filterAnnotatedSpecies.length > 0) {
-      const speciesSet = new Set(filterAnnotatedSpecies);
-      result = result.filter((p) =>
-        (labelsBySnippet[p.snippet_id] ?? []).some((label) =>
-          speciesSet.has(label),
-        ),
-      );
-    }
-
-    if (localLabelScope.length > 0) {
-      const scopeSet = new Set(localLabelScope);
-      result = result.filter((p) => {
-        const labels = isClassicFeed
-          ? (labelsBySnippet[p.snippet_id] ?? [])
-          : (p.predicted_labels ?? []);
-        return labels.some((label) => scopeSet.has(label));
-      });
-    }
-
-    // While the recording->location map is still loading, don't hide items —
-    // otherwise everything briefly disappears the moment a location filter is
-    // picked, until the fetch resolves (it then snaps to the correct set).
-    if (filterLocations.length > 0 && !recordingLocationsLoading) {
-      const locationSet = new Set(filterLocations);
-      result = result.filter((p) => {
-        if (typeof p.recording_id !== "number") return false;
-        const location = recordingLocationById.get(p.recording_id);
-        return location !== undefined && locationSet.has(location);
-      });
-    }
-
-    // Same reasoning as the location guard above — don't hide anything
-    // while the recording->date/time map is still loading.
-    if (filterDateRange && !recordingDateTimeLoading) {
-      const [startDay, endDay] = filterDateRange;
-      result = result.filter((p) => {
-        if (typeof p.recording_id !== "number") return false;
-        const dt = recordingDateTimeById.get(p.recording_id);
-        if (!dt) return false;
-        const epochDay = dateStringToEpochDay(dt.date);
-        return epochDay >= startDay && epochDay <= endDay;
-      });
-    }
-
-    if (filterMonths.length > 0 && !recordingDateTimeLoading) {
-      const monthSet = new Set(filterMonths);
-      result = result.filter((p) => {
-        if (typeof p.recording_id !== "number") return false;
-        const dt = recordingDateTimeById.get(p.recording_id);
-        if (!dt) return false;
-        return monthSet.has(dateStringToMonth(dt.date));
-      });
-    }
-
-    if (filterTimeRange && !recordingDateTimeLoading) {
-      const [startSeconds, endSeconds] = filterTimeRange;
-      result = result.filter((p) => {
-        if (typeof p.recording_id !== "number") return false;
-        const dt = recordingDateTimeById.get(p.recording_id);
-        if (!dt) return false;
-        return dt.timeSeconds >= startSeconds && dt.timeSeconds <= endSeconds;
-      });
-    }
-
-    if (hasActiveScoreVisibilityFilters(alFilters)) {
-      result = result.filter((p) =>
-        isPointVisible(
-          p.scores,
-          alFilters,
-          SCORE_VISIBILITY_MODE,
-          SCORE_SLIDER_STYLE,
-          scoreDomains,
-        ),
-      );
-    }
-
-    return applySortFields(result, sortFields, recordingDateTimeById);
-  }, [
-    enableClientFilters,
-    scopedPredictions,
-    scoreDomains,
-    feedbacks,
-    labelsBySnippet,
-    isClassicFeed,
-    filterAnnotationStatus,
-    filterAnnotatedSpecies,
-    statusStickyResetKey,
-    localLabelScope,
-    filterLocations,
-    recordingLocationById,
-    recordingLocationsLoading,
-    filterDateRange,
-    filterMonths,
-    filterTimeRange,
-    recordingDateTimeById,
-    recordingDateTimeLoading,
-    alFilters,
-    sortFields,
-  ]);
-
-  // Publish the filtered set upward (ids only). Runs once per settled filter
-  // change, not per point, and the Set is rebuilt only when the filtered list
-  // actually changes — the projection depends on its identity.
-  useEffect(() => {
-    if (!onVisibleSnippetIdsChange || !enableClientFilters) return;
-    onVisibleSnippetIdsChange(
-      new Set(filteredAndSorted.map((p) => p.snippet_id)),
-    );
-  }, [filteredAndSorted, enableClientFilters, onVisibleSnippetIdsChange]);
-
-  // Reset pagination whenever the filtered list changes, following React's
-  // "adjust state during render" pattern (avoids a cascading effect render).
-  const [prevFilteredForPaging, setPrevFilteredForPaging] =
-    useState(filteredAndSorted);
-  if (filteredAndSorted !== prevFilteredForPaging) {
-    setPrevFilteredForPaging(filteredAndSorted);
+  // Reset legacy pagination whenever the list changes, following React's
+  // "adjust state during render" pattern.
+  const [prevLegacyRows, setPrevLegacyRows] = useState(legacyRows);
+  if (legacyRows !== prevLegacyRows) {
+    setPrevLegacyRows(legacyRows);
     setVisibleCount(FEED_PAGE_SIZE);
   }
 
@@ -489,10 +300,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useLayoutEffect(() => {
     if (prevFeedViewKeyRef.current === feedViewKey) return;
     prevFeedViewKeyRef.current = feedViewKey;
-    // `visibleCount` is already reset during render (the prevFilteredForPaging
-    // pattern above) since a feed-view change produces a new filtered list.
-    // Here we only reset the DOM scroll position; the blind-window recompute
-    // effect then re-derives the visible card window from the new scrollTop.
+    // Only reset the DOM scroll position; the blind-window recompute effect
+    // then re-derives the visible card window from the new scrollTop.
     const el = scrollContainerRef.current;
     if (el) el.scrollTop = 0;
   }, [feedViewKey]);
@@ -504,7 +313,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       (entries) => {
         if (entries[0]?.isIntersecting) {
           setVisibleCount((prev) =>
-            Math.min(prev + FEED_PAGE_SIZE, filteredAndSorted.length),
+            Math.min(prev + FEED_PAGE_SIZE, legacyRows.length),
           );
         }
       },
@@ -512,7 +321,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     );
     obs.observe(sentinel);
     return () => obs.disconnect();
-  }, [filteredAndSorted.length, scrollRoot]);
+  }, [legacyRows.length, scrollRoot]);
 
   const [blindSnapCardHeight, setBlindSnapCardHeight] = useState(560);
 
@@ -521,12 +330,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   // rendered, sandwiched between two spacer divs whose heights stand in for the
   // off-screen cards. Every rendered card is a fixed-height `snap-start` slot,
   // so native CSS scroll-snap stays smooth and the scrollbar maps linearly
-  // across the whole list. The window is derived from the *live* scrollTop, so
-  // dragging the scrollbar anywhere instantly mounts the cards there.
-  //
-  // Rendering the full N-row list (30k+ slots) every time the window shifts was
-  // the perf regression — at 60fps during a fling that meant ~30k element
-  // allocations per frame. Spacers keep every render at ~15 elements.
+  // across the whole list. Server rows load page by page as the window moves.
   const BLIND_WINDOW_OVERSCAN = 4;
   const BLIND_SLOT_GAP_PX = 12; // matches the inter-card gap
   const [blindWindow, setBlindWindow] = useState<{
@@ -537,20 +341,19 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     end: 8,
   });
   const blindSlotSize = blindSnapCardHeight + BLIND_SLOT_GAP_PX;
-  const filteredLen = filteredAndSorted.length;
   const recomputeBlindWindow = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const first = Math.floor(el.scrollTop / blindSlotSize);
     const last = Math.ceil((el.scrollTop + el.clientHeight) / blindSlotSize);
-    const start = Math.max(0, first - BLIND_WINDOW_OVERSCAN);
-    const end = Math.min(filteredLen, last + BLIND_WINDOW_OVERSCAN);
+    const start = Math.max(0, Math.min(rowCount, first - BLIND_WINDOW_OVERSCAN));
+    const end = Math.min(rowCount, last + BLIND_WINDOW_OVERSCAN);
     // Only re-render when the window boundaries actually change — cards are
     // hundreds of px tall, so this fires roughly once per card of scroll.
     setBlindWindow((prev) =>
       prev.start === start && prev.end === end ? prev : { start, end },
     );
-  }, [blindSlotSize, filteredLen]);
+  }, [blindSlotSize, rowCount]);
 
   const blindScrollRafRef = useRef<number | null>(null);
   const handleBlindScroll = useCallback(() => {
@@ -574,33 +377,35 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useLayoutEffect(() => {
     if (!isBlind) return;
     recomputeBlindWindow();
-  }, [
-    isBlind,
-    filteredAndSorted,
-    blindSnapCardHeight,
-    scrollRoot,
-    recomputeBlindWindow,
-  ]);
+  }, [isBlind, rowCount, blindSnapCardHeight, scrollRoot, recomputeBlindWindow]);
 
-  // The actual card rows to render for the blind feed (small slice, with each
-  // row's absolute index preserved for spacer math + audio priority).
-  const blindVisibleRows = useMemo(() => {
+  // Load the pages around the window (one page of look-ahead each way).
+  const { ensureRange } = feed;
+  useEffect(() => {
+    if (!serverMode) return;
+    ensureRange(
+      Math.max(0, blindWindow.start - EXPLORE_FEED_PAGE_SIZE / 2),
+      blindWindow.end + EXPLORE_FEED_PAGE_SIZE / 2,
+    );
+  }, [serverMode, ensureRange, blindWindow]);
+
+  // The card slots to render for the blind feed; a slot's row may still be
+  // loading (rendered as a placeholder of the same height).
+  const blindVisibleRows = useMemo<FeedRowSlot[]>(() => {
     if (!isBlind) return [];
-    return filteredAndSorted
-      .slice(blindWindow.start, blindWindow.end)
-      .map((prediction, offset) => ({
-        prediction,
-        index: blindWindow.start + offset,
-      }));
-  }, [isBlind, filteredAndSorted, blindWindow]);
+    const slots: FeedRowSlot[] = [];
+    for (let i = blindWindow.start; i < blindWindow.end; i++) {
+      slots.push({ index: i, prediction: rowAt(i) });
+    }
+    return slots;
+  }, [isBlind, blindWindow, rowAt]);
   const blindTopSpacer = blindWindow.start * blindSlotSize;
   const blindBottomSpacer =
-    Math.max(0, filteredLen - blindWindow.end) * blindSlotSize;
+    Math.max(0, rowCount - blindWindow.end) * blindSlotSize;
 
-  // Metadata hydration (annotations + recording names) is expensive — a network
-  // batch fetch plus redux dispatches. Debounce it behind a settled copy of the
-  // window so a fast scroll doesn't fire a fetch per card crossed; it runs once
-  // the scroll pauses. Card audio already lazy-loads on its own settle timer.
+  // Metadata hydration (annotations + recording names) is expensive — debounce
+  // it behind a settled copy of the window so a fast scroll doesn't fire a
+  // fetch per card crossed.
   const [hydrationWindow, setHydrationWindow] = useState(blindWindow);
   useEffect(() => {
     if (!isBlind) return;
@@ -608,15 +413,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => window.clearTimeout(t);
   }, [isBlind, blindWindow]);
 
-  // Predictions whose metadata we hydrate — the settled window for the blind
-  // feed, or the current page for the other feeds.
-  const visiblePredictionWindow = useMemo(
-    () =>
-      isBlind
-        ? filteredAndSorted.slice(hydrationWindow.start, hydrationWindow.end)
-        : predictions.slice(0, visibleCount),
-    [isBlind, filteredAndSorted, hydrationWindow, predictions, visibleCount],
-  );
+  // Rows whose metadata we hydrate — the settled window for the blind feed,
+  // or the current page for the other feeds.
+  const visiblePredictionWindow = useMemo(() => {
+    if (!isBlind) return legacyRows.slice(0, visibleCount);
+    const rows: PAMPrediction[] = [];
+    for (let i = hydrationWindow.start; i < hydrationWindow.end; i++) {
+      const row = rowAt(i);
+      if (row) rows.push(row);
+    }
+    return rows;
+  }, [isBlind, legacyRows, hydrationWindow, rowAt, visibleCount]);
   const visiblePredictionWindowKey = useMemo(
     () => visiblePredictionWindow.map((p) => p.snippet_id).join(","),
     [visiblePredictionWindow],
@@ -628,11 +435,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   const skipScrollIntoViewRef = useRef(false);
   // Briefly held after a selection change that came from OUTSIDE the feed (a
-  // projection click). While set, selectCenteredCard stands down so a stray
-  // scroll/layout event right after the click can't overwrite the clicked
-  // snippet with whatever card happens to be centered in the feed. It's only
-  // set for such external changes (not for selectCenteredCard's own updates),
-  // so ordinary manual scrolling keeps driving the selection normally.
+  // projection click), so a stray scroll/layout event can't overwrite the
+  // clicked snippet with whatever card happens to be centered.
   const scrollSyncSuspendedRef = useRef(false);
   const cardVisibilityObserverRef = useRef<IntersectionObserver | null>(null);
   const selectedSnippetIdRef = useRef<number | null>(selectedSnippetId);
@@ -646,9 +450,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   }, [selectedSnippetId]);
 
   useEffect(() => {
-    // selectCenteredCard sets skipScrollIntoViewRef before dispatching, so
-    // its own scroll-driven updates don't trip the suspension — only genuine
-    // external selection changes (projection clicks) do.
     if (skipScrollIntoViewRef.current) {
       skipScrollIntoViewRef.current = false;
       return;
@@ -660,57 +461,58 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => window.clearTimeout(t);
   }, [selectedSnippetId]);
 
+  const scrollToIndex = useCallback(
+    (index: number, behavior: ScrollBehavior = "auto") => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      el.scrollTo({
+        top: Math.max(0, index * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2),
+        behavior,
+      });
+    },
+    [blindSlotSize, blindSnapCardHeight],
+  );
+
+  const selectedIdx = selectedSnippetId === null ? -1 : indexOf(selectedSnippetId);
+
   // `useALSync` can only scroll to a mounted card. In blind mode the feed
-  // renders a small virtualized window, so a FPV click can update Redux while
-  // the target card is still outside the mounted slice. Jump the scroll
-  // container directly to the selected snippet's slot so the window remounts
-  // around it and the card/audio re-render for that snippet.
-  //
-  // Runs as a layout effect so the position is applied before paint. On a
-  // remount (study-phase changes swap the workspace layout) a plain effect
-  // would let the feed paint at row 0 first, showing a visible jump back to
-  // the top of the list before the restore lands.
+  // renders a small virtualized window, so jump the scroll container directly
+  // to the selected snippet's slot when its position is known. Runs as a
+  // layout effect so a remount doesn't paint row 0 first.
   useLayoutEffect(() => {
     if (!isBlind) return;
     if (skipScrollIntoViewRef.current) return;
     if (selectedSnippetId === null) return;
     if (cardRefs.current.has(selectedSnippetId)) return;
+    if (selectedIdx === -1 || selectedIdx >= rowCount) return;
+    scrollToIndex(selectedIdx);
+  }, [isBlind, selectedSnippetId, selectedIdx, rowCount, scrollToIndex]);
 
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    const idx = filteredAndSorted.findIndex(
-      (p) => p.snippet_id === selectedSnippetId,
-    );
-    if (idx === -1) return;
-
-    el.scrollTop = Math.max(
-      0,
-      idx * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
-    );
-  }, [
-    isBlind,
-    selectedSnippetId,
-    filteredAndSorted,
-    blindSlotSize,
-    blindSnapCardHeight,
-  ]);
-
+  // ── Selection follows the question ──────────────────────────────────────
+  // A new question (filters/sort) selects its first row once that row loads;
+  // an emptied list clears the selection; an existing selection is kept.
+  const firstRowId = rowAt(0)?.snippet_id ?? null;
+  const pendingFirstSelectRef = useRef<string | null>(null);
   const selectionFeedViewKeyRef = useRef(feedViewKey);
+  const listSettled = serverMode ? feed.total !== null && !feed.loading : true;
   useEffect(() => {
-    if (!enableClientFilters) return;
+    if (!exploreFilters) return;
 
-    const feedViewChanged = selectionFeedViewKeyRef.current !== feedViewKey;
-    selectionFeedViewKeyRef.current = feedViewKey;
+    if (selectionFeedViewKeyRef.current !== feedViewKey) {
+      selectionFeedViewKeyRef.current = feedViewKey;
+      pendingFirstSelectRef.current = feedViewKey;
+    }
+    if (!listSettled) return;
 
-    if (feedViewChanged) {
-      const firstSnippetId = filteredAndSorted[0]?.snippet_id ?? null;
+    if (pendingFirstSelectRef.current === feedViewKey) {
+      if (firstRowId === null && feedTotal > 0) return; // first page not in yet
+      pendingFirstSelectRef.current = null;
       skipScrollIntoViewRef.current = true;
-      dispatch(setSelectedSnippet(firstSnippetId));
+      dispatch(setSelectedSnippet(firstRowId));
       return;
     }
 
-    if (filteredAndSorted.length === 0) {
+    if (feedTotal === 0) {
       if (selectedSnippetId !== null) {
         skipScrollIntoViewRef.current = true;
         dispatch(setSelectedSnippet(null));
@@ -718,33 +520,45 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       return;
     }
 
-    // If a snippet is already selected, keep that selection even when it's
-    // not present in the current filtered list. This preserves deliberate
-    // external selections instead of immediately
-    // overwriting them with the list's first item.
-    if (selectedSnippetId !== null) {
-      if (filteredAndSorted.some((p) => p.snippet_id === selectedSnippetId))
-        return;
-      return;
-    }
-
-    const firstSnippetId = filteredAndSorted[0]?.snippet_id;
-    if (firstSnippetId === undefined) return;
+    // Keep a deliberate selection even when it isn't in the loaded rows.
+    if (selectedSnippetId !== null) return;
+    if (firstRowId === null) return;
     skipScrollIntoViewRef.current = true;
-    dispatch(setSelectedSnippet(firstSnippetId));
+    dispatch(setSelectedSnippet(firstRowId));
   }, [
     dispatch,
-    enableClientFilters,
+    exploreFilters,
     feedViewKey,
-    filteredAndSorted,
+    listSettled,
+    firstRowId,
+    feedTotal,
     selectedSnippetId,
   ]);
 
-  // Auto-scroll-to-selection is disabled in blind mode: the list can exceed the
-  // browser's max element height (~2^24px) for large datasets, so index→scrollTop
-  // positioning is unreliable past ~33k items (see memory: feed scroll height
-  // cap). Instead, a projection click shows the chosen snippet via the on-demand
-  // overlay below, and manual scrolling still drives the selection normally.
+  // ── Resume on the participant's anchor (study-phase change) ─────────────
+  const { locate } = feed;
+  useEffect(() => {
+    if (!serverMode || !feedResumeRequest || !listSettled) return;
+    const { anchorSnippetId, nonce } = feedResumeRequest;
+    let cancelled = false;
+    void (async () => {
+      const target =
+        anchorSnippetId !== null ? await locate(anchorSnippetId, true) : null;
+      if (cancelled) return;
+      dispatch(clearFeedResume(nonce));
+      if (!target || target.index >= MAX_VIRTUAL_ROWS) return;
+      skipScrollIntoViewRef.current = true;
+      dispatch(setSelectedSnippet(target.snippetId));
+      scrollToIndex(target.index);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [serverMode, feedResumeRequest, listSettled, locate, dispatch, scrollToIndex]);
+
+  // Auto-scroll-to-selection is disabled in blind mode: a projection click
+  // shows the chosen snippet via the on-demand overlay below, and manual
+  // scrolling still drives the selection normally.
   useALSync(cardRefs, {
     skipScrollIntoViewRef,
     isUserScrollingRef,
@@ -752,54 +566,40 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   });
 
   // ── On-demand overlay for the selected snippet ───────────────────────────
-  // In blind mode we can't reliably scroll a 90k-item virtual list to an
-  // arbitrary clicked snippet (height-cap limit), so when the selection isn't
-  // in the currently-rendered window we render just that snippet in an overlay.
-  // The feed already holds every prediction, so no fetch is needed — we read it
-  // straight out of filteredAndSorted. The overlay dismisses as soon as the
-  // user scrolls the feed (so manual browsing + FPV-sync keep working) and
-  // reappears on the next projection click.
-  const selectedIdx = useMemo(
-    () =>
-      selectedSnippetId === null
-        ? -1
-        : filteredAndSorted.findIndex(
-            (p) => p.snippet_id === selectedSnippetId,
-          ),
-    [filteredAndSorted, selectedSnippetId],
-  );
+  // When the selection isn't in the rendered window (e.g. a projection click on
+  // a snippet thousands of rows away, or not loaded yet), render just that
+  // snippet in an overlay. It dismisses as soon as the user scrolls the feed.
   const selectionInWindow =
     selectedIdx >= blindWindow.start && selectedIdx < blindWindow.end;
+  const { loadRows } = feed;
+  useEffect(() => {
+    if (!serverMode || selectedSnippetId === null || selectedRow) return;
+    void loadRows([selectedSnippetId]);
+  }, [serverMode, selectedSnippetId, selectedRow, loadRows]);
+
   const [overlayDismissedFor, setOverlayDismissedFor] = useState<number | null>(
     null,
   );
   const showAdHoc =
     isBlind &&
     selectedSnippetId !== null &&
-    selectedIdx !== -1 &&
+    selectedRow !== undefined &&
     !selectionInWindow &&
     overlayDismissedFor !== selectedSnippetId;
-  // Read inside selectCenteredCard (below) via ref so a re-render that flips
-  // showAdHoc doesn't recreate that callback and re-subscribe the
-  // IntersectionObserver every time.
+  // Read inside selectCenteredCard via ref so a re-render that flips showAdHoc
+  // doesn't recreate that callback and re-subscribe the IntersectionObserver.
   const showAdHocRef = useRef(showAdHoc);
   useEffect(() => {
     showAdHocRef.current = showAdHoc;
   }, [showAdHoc]);
-  const resolvedAdHocPrediction = showAdHoc
-    ? filteredAndSorted[selectedIdx]
-    : null;
-  // The snippet the shared sticky label bar acts on: the current selection
-  // (centered card while scrolling, or the clicked/overlay snippet).
-  const stickyLabelPrediction =
-    selectedIdx !== -1 ? filteredAndSorted[selectedIdx] : null;
+  const resolvedAdHocPrediction = showAdHoc ? selectedRow : null;
+  // The snippet the shared sticky label bar acts on (see heldSelectedRow).
+  const stickyLabelPrediction = heldSelectedRow;
 
-  // ArrowDown/ArrowUp move by exactly one snap slot. Keep this on `window` so
-  // the shortcuts still work when focus is on the projection or another
-  // non-form control, but never steal keystrokes while the user is editing a
-  // label/search field.
+  // ArrowDown/ArrowUp move by exactly one snap slot. Never steal keystrokes
+  // while the user is editing a label/search field.
   useEffect(() => {
-    if (!isBlind || filteredAndSorted.length === 0) return;
+    if (!isBlind || rowCount === 0) return;
 
     const handleSnippetArrowKey = (event: KeyboardEvent) => {
       if (
@@ -831,35 +631,34 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           ? selectedIdx
           : Math.round(container.scrollTop / blindSlotSize);
       const nextIndex = currentIndex + (event.key === "ArrowDown" ? 1 : -1);
-      const nextPrediction = filteredAndSorted[nextIndex];
-      if (!nextPrediction) return;
-
+      if (nextIndex < 0 || nextIndex >= rowCount) return;
+      const nextPrediction = rowAt(nextIndex);
       event.preventDefault();
+      if (!nextPrediction) {
+        // Row still loading — move the viewport; selection follows on settle.
+        markUserScrolling();
+        scrollToIndex(nextIndex, "smooth");
+        return;
+      }
       const nextSnippetId = nextPrediction.snippet_id;
       setOverlayDismissedFor(nextSnippetId);
       skipScrollIntoViewRef.current = true;
       markUserScrolling();
       dispatch(setSelectedSnippet(nextSnippetId));
-      container.scrollTo({
-        top: Math.max(
-          0,
-          nextIndex * blindSlotSize -
-            (container.clientHeight - blindSnapCardHeight) / 2,
-        ),
-        behavior: "smooth",
-      });
+      scrollToIndex(nextIndex, "smooth");
     };
 
     window.addEventListener("keydown", handleSnippetArrowKey);
     return () => window.removeEventListener("keydown", handleSnippetArrowKey);
   }, [
     blindSlotSize,
-    blindSnapCardHeight,
     dispatch,
-    filteredAndSorted,
+    rowAt,
+    rowCount,
     isBlind,
     markUserScrolling,
     selectedIdx,
+    scrollToIndex,
   ]);
 
   const selectCenteredCard = useCallback(
@@ -867,19 +666,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       const container = scrollContainerRef.current;
       if (!container) return;
       // A projection click just set the selection from outside the feed —
-      // don't let a stray scroll/layout event overwrite it with the centered
-      // card. (Cleared ~650ms later, so manual scrolling is unaffected.)
+      // don't let a stray scroll/layout event overwrite it.
       if (!opts?.force && scrollSyncSuspendedRef.current) return;
-      // The 650ms window above only covers the instant right after the
-      // click. The ad-hoc overlay (see showAdHoc) can legitimately stay open
-      // much longer than that while the user labels it -- e.g. adding one
-      // label out of several for a multilabel snippet reflows the overlay
-      // card and can retrigger the IntersectionObserver below. Since the
-      // overlay's snippet isn't tracked in cardRefs, that would otherwise
-      // silently reassign the selection to whatever real feed card is
-      // centered, yanking focus away mid-multilabel. Only a genuine
-      // scroll/touch/arrow-key on the feed should end the overlay (it calls
-      // setOverlayDismissedFor), so stand down for as long as it's showing.
+      // While the overlay is showing (possibly for a long multilabel session)
+      // only a genuine scroll/touch/arrow-key on the feed should end it.
       if (!opts?.force && showAdHocRef.current) return;
 
       const containerRect = container.getBoundingClientRect();
@@ -927,7 +717,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || predictions.length === 0) return;
+    if (!container || !hasRows) return;
 
     let rafId: number | null = null;
     let settleTimer: number | null = null;
@@ -977,10 +767,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       if (settleTimer !== null) window.clearTimeout(settleTimer);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [selectCenteredCard, predictions.length, scrollRoot]);
+  }, [selectCenteredCard, hasRows, scrollRoot]);
 
+  // Legacy feed: when the selection isn't part of the in-memory list, fall
+  // back to whatever card is centered. (The server feed keeps deliberate
+  // selections — they may simply not be loaded.)
   useEffect(() => {
-    if (predictions.length === 0) return;
+    if (serverMode || predictions.length === 0) return;
     const cur = selectedSnippetIdRef.current;
     const curInFeed =
       cur !== null && predictions.some((p) => p.snippet_id === cur);
@@ -989,25 +782,22 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       selectCenteredCard({ force: true }),
     );
     return () => cancelAnimationFrame(raf);
-  }, [selectCenteredCard, predictions, visibleCount, scrollRoot]);
+  }, [serverMode, selectCenteredCard, predictions, visibleCount, scrollRoot]);
 
   useEffect(() => {
     let cancelled = false;
     async function hydrateSnippetContributors() {
-      if (predictions.length === 0) {
+      if (!hasRows) {
         dispatch(hydrateClassicAnnotations({}));
         return;
       }
       try {
-        // Derived from the stable string key, not `visiblePredictionWindow`
-        // itself — that array gets a new reference on every recompute of
-        // `filteredAndSorted` (e.g. every mousemove while dragging a filter
-        // slider) even when its contents are unchanged, which would refire
-        // this fetch on every tick of a drag instead of once per settled window.
+        // Derived from the stable string key so a recompute with unchanged
+        // contents (e.g. while dragging a filter slider) doesn't refetch.
         const ids = settledWindowKey
           .split(",")
           .map(Number)
-          .filter((n) => Number.isFinite(n));
+          .filter((n) => Number.isFinite(n) && n > 0);
         const all = await fetchAnnotationsBySnippetIds(ids);
         if (cancelled) return;
         const bySnippet: Record<number, Annotation[]> = {};
@@ -1025,11 +815,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [dispatch, predictions.length, settledWindowKey]);
+  }, [dispatch, hasRows, settledWindowKey]);
 
   const neededRecordingIdsKey = useMemo(() => {
-    // Only fetch names for currently visible predictions — computing over all
-    // 24k+ predictions would trigger hundreds of paginated bulk requests.
+    // Only fetch names for the currently visible rows.
     const ids = Array.from(
       new Set(
         visiblePredictionWindow
@@ -1099,11 +888,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
   }, [selectedDatasetId, settledRecordingIdsKey]);
 
-  // A single stable callback (created once, never recreated) passed
-  // identically to every card — PredictionCard (wrapped in React.memo) calls
-  // it with its own snippet id. Currying a fresh/cached closure per id here
-  // would either break memoization (new function every render) or require
-  // reading a ref cache during render (not allowed) — this sidesteps both.
+  // A single stable callback passed identically to every card — PredictionCard
+  // (wrapped in React.memo) calls it with its own snippet id.
   const registerCard = useCallback(
     (snippetId: number, el: HTMLDivElement | null) => {
       const observer = cardVisibilityObserverRef.current;
@@ -1129,14 +915,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       if (!el) return;
       const h = el.clientHeight;
       // Card fills exactly one scroll viewport so snap-scroll lands one card at
-      // a time and the centered (selected) card is always the visible one. A
-      // fixed floor larger than the viewport would make cards overflow, so the
-      // highlighted card could scroll off-screen while a neighbour stays in view.
+      // a time and the centered (selected) card is always the visible one.
       if (h > 0) setBlindSnapCardHeight(h);
     };
 
-    // Defer slightly so the new scroll container is fully laid out after
-    // switching between single / multi select branches.
     const raf = requestAnimationFrame(() => {
       measure();
       const el = scrollContainerRef.current;
@@ -1152,7 +934,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     };
     // Re-run whenever the selection count crosses the single↔multi boundary
     // so we capture the newly-mounted scroll container element.
-  }, [isBlind, predictions.length, selectedSnippetIds.length]);
+  }, [isBlind, hasRows, selectedSnippetIds.length]);
 
   const feedbackLabelSignature = useMemo(
     () =>
@@ -1176,11 +958,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .join("|"),
     [classicAnnotationsBySnippet],
   );
-  // Classic feed: labels are derived locally from hydrated annotations (no
-  // fetch). Keyed on the label *signature* (a content string) rather than the
-  // raw classicAnnotationsBySnippet object — the latter gets a fresh reference
-  // on every scroll-driven contributor hydration even when the labels are
-  // unchanged, which would rebuild this map needlessly on every scroll tick.
+  // Classic feed: labels are derived locally from hydrated annotations.
   useEffect(() => {
     if (!isBlind || !isClassicFeed) return;
     const map: Record<number, string[]> = {};
@@ -1192,51 +970,56 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .filter((label): label is string => Boolean(label));
       if (labels.length > 0) map[Number(snippetId)] = labels;
     }
-    setLabelsBySnippet(map);
+    setClassicLabelsBySnippet(map);
     // classicAnnotationsBySnippet is read via the signature dep on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBlind, isClassicFeed, classicAnnotationLabelSignature]);
 
-  // Non-classic blind feed (the study feed): labels come from the server. This
-  // must refetch ONLY when feedback actually changes — previously it also
-  // depended on the classic annotation signature/object, so every scroll-driven
-  // annotation hydration refetched the entire dataset's snippet-labels and
-  // re-rendered the feed (the visible "refresh glitch" mid-scroll).
+  // Server feed: when feedback changes, refresh the labels of the rows the
+  // user can see (window + selection) in place. Never re-queries the list, so
+  // labelling doesn't reshuffle or scroll the feed.
+  const { refreshRows } = feed;
+  const refreshIdsRef = useRef<number[]>([]);
   useEffect(() => {
-    if (!isBlind) {
-      setLabelsBySnippet({});
-      return;
+    const ids = new Set<number>();
+    for (let i = blindWindow.start; i < blindWindow.end; i++) {
+      const row = rowAt(i);
+      if (row) ids.add(row.snippet_id);
     }
-    if (isClassicFeed) return; // handled by the classic effect above
-    if (!selectedDatasetId) {
-      setLabelsBySnippet({});
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const r = await alApi.getSnippetLabels(
-          selectedDatasetId,
-          snippetSetId ?? undefined,
-        );
-        if (cancelled) return;
-        const map: Record<number, string[]> = {};
-        for (const it of r.items) map[it.snippet_id] = it.labels;
-        setLabelsBySnippet(map);
-      } catch {
-        if (!cancelled) setLabelsBySnippet({});
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    isBlind,
-    isClassicFeed,
-    selectedDatasetId,
-    snippetSetId,
-    feedbackLabelSignature,
-  ]);
+    if (selectedSnippetId !== null) ids.add(selectedSnippetId);
+    refreshIdsRef.current = [...ids];
+  }, [blindWindow, rowAt, selectedSnippetId]);
+  const lastRefreshedSignatureRef = useRef(feedbackLabelSignature);
+  useEffect(() => {
+    if (!serverMode) return;
+    if (lastRefreshedSignatureRef.current === feedbackLabelSignature) return;
+    lastRefreshedSignatureRef.current = feedbackLabelSignature;
+    const timer = window.setTimeout(() => {
+      void refreshRows(refreshIdsRef.current);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [serverMode, feedbackLabelSignature, refreshRows]);
+
+  // The checkpoint's predictions are missing server-side (e.g. cleaned up):
+  // regenerate them once for this query; the new inference revision reloads.
+  const missingPredictions =
+    serverMode &&
+    feed.error instanceof ExploreRequestError &&
+    feed.error.code === "no_predictions";
+  const regeneratedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!missingPredictions || !scope || !modelFamilyName) return;
+    if (regeneratedForRef.current === feed.queryKey) return;
+    regeneratedForRef.current = feed.queryKey;
+    dispatch(
+      runInference({
+        model_family_name: modelFamilyName,
+        dataset_id: scope.dataset_id,
+        snippet_set_id: scope.snippet_set_id,
+        ...exploreBootstrapParams(),
+      }),
+    );
+  }, [missingPredictions, scope, modelFamilyName, feed.queryKey, dispatch]);
 
   const labeledCount = useMemo(
     () => predictions.filter((p) => !!feedbacks[p.snippet_id]).length,
@@ -1250,7 +1033,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   if (phase.feed.mode === "hidden") return null;
 
-  if (error) {
+  if (error && !serverMode) {
     return (
       <Alert
         type="error"
@@ -1261,18 +1044,44 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     );
   }
 
-  if (inferenceLoading && predictions.length === 0) {
+  if (missingPredictions) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex flex-col items-center justify-center h-full">
         <Spin size="large" />
         <p className="text-sm text-gray-400 font-ibm-sans mt-3">
-          Running inference…
+          Generating predictions for the current model…
         </p>
       </div>
     );
   }
 
-  if (!inferenceLoading && predictions.length === 0) {
+  if (serverMode && feed.error && feed.total === null) {
+    return (
+      <Alert
+        type="error"
+        message="Failed to load the feed"
+        description={feed.error.message}
+        className="m-4"
+      />
+    );
+  }
+
+  if (serverMode ? feed.loading && feed.total === null : inferenceLoading && predictions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <Spin size="large" />
+        <p className="text-sm text-gray-400 font-ibm-sans mt-3">
+          {serverMode
+            ? feed.building
+              ? "Preparing this dataset for browsing…"
+              : "Loading feed…"
+            : "Running inference…"}
+        </p>
+      </div>
+    );
+  }
+
+  if (!serverMode && !inferenceLoading && predictions.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <Empty
@@ -1300,10 +1109,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     if (selectedSnippetIds.length > 1) {
       const multiSelected = applySortFields(
         selectedSnippetIds
-          .map((id) => predictions.find((p) => p.snippet_id === id))
+          .map((id) => rowById(id))
           .filter((p): p is PAMPrediction => p !== undefined),
         sortFields,
-        recordingDateTimeById,
       );
 
       return (
@@ -1316,7 +1124,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             <div className="flex flex-col gap-3 w-full">
               {multiSelected.map((p) => (
                 <div
-                  // key={p.id ?? p.snippet_id}
                   key={p.snippet_id}
                   className="snap-start shrink-0 w-full"
                   style={{ height: blindSnapCardHeight }}
@@ -1330,7 +1137,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                     }
                     cardRef={registerCard}
                     cardHeightPx={blindSnapCardHeight}
-                    serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
+                    serverLabels={labelsFor(p.snippet_id)}
                     quickLabels={quickLabels}
                     quickLabelsLoading={quickLabelsLoading}
                     scrollRoot={scrollRoot}
@@ -1345,10 +1152,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       );
     }
 
-    // ── Single selection (existing behaviour) ───────────────────────────────
-    const selected = predictions.find(
-      (p) => p.snippet_id === selectedSnippetIds[0],
-    );
+    // ── Single selection ─────────────────────────────────────────────────────
+    const selected = rowById(selectedSnippetIds[0]);
 
     if (!selected) {
       return (
@@ -1365,7 +1170,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3"
         >
           <PredictionCard
-            // key={selected.id ?? selected.snippet_id}
             key={selected.snippet_id}
             prediction={selected}
             recordingName={
@@ -1374,7 +1178,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                 : undefined
             }
             cardRef={registerCard}
-            serverLabels={labelsBySnippet[selected.snippet_id] ?? EMPTY_LABELS}
+            serverLabels={labelsFor(selected.snippet_id)}
             quickLabels={quickLabels}
             quickLabelsLoading={quickLabelsLoading}
             scrollRoot={scrollRoot}
@@ -1393,27 +1197,22 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   }
 
   if (isBlind) {
-    if (enableClientFilters && filteredAndSorted.length === 0) {
+    if (rowCount === 0) {
       return (
         <div className="flex items-center justify-center h-full px-6 text-center">
-          <Empty description="No snippets match the current filters." />
+          <Empty
+            description={
+              serverMode
+                ? "No snippets match the current filters."
+                : "No predictions yet. Configure the model and run inference."
+            }
+          />
         </div>
       );
     }
+    const truncated = serverMode && feedTotal > MAX_VIRTUAL_ROWS;
     return (
       <div className="flex flex-col h-full min-h-0 overflow-hidden relative">
-        {filterLocations.length > 0 && recordingLocationsLoading && (
-          <div className="shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
-            <Spin size="small" />
-            Applying location filter…
-          </div>
-        )}
-        {(filterDateRange || filterTimeRange) && recordingDateTimeLoading && (
-          <div className="shrink-0 flex items-center justify-center gap-2 py-1.5 text-[11px] font-ibm-sans text-blue-700 bg-blue-50 border-b border-blue-200">
-            <Spin size="small" />
-            Applying date/time filter…
-          </div>
-        )}
         {/* Middle region: the scrollable spectrogram feed, plus the on-demand
             overlay. The overlay covers only this region — never the sticky
             label bar below it. */}
@@ -1423,50 +1222,67 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             className="absolute inset-0 overflow-y-auto px-3 pt-2 pb-2"
             // overflowAnchor:none is essential for this virtualized list: as the
             // window shifts, the top spacer's height changes, and the browser's
-            // default scroll-anchoring would add that delta to scrollTop to keep
-            // an element visually put — which, during a programmatic scroll,
-            // compounds and drags the position all the way to the bottom.
+            // default scroll-anchoring would compound that into scrollTop.
             style={{ scrollSnapType: "y mandatory", overflowAnchor: "none" }}
             onScroll={handleBlindScroll}
           >
             <div className="w-full max-w-300 mx-auto">
               {/* Spacer for the off-screen cards above the window. */}
               <div style={{ height: blindTopSpacer }} />
-              {blindVisibleRows.map(({ prediction: p, index }) => (
-                <div
-                  // key={p.id ?? p.snippet_id}
-                  key={p.snippet_id}
-                  className="snap-start shrink-0 w-full"
-                  style={{
-                    height: blindSnapCardHeight,
-                    marginBottom: BLIND_SLOT_GAP_PX,
-                  }}
-                >
-                  <PredictionCard
-                    prediction={p}
-                    recordingName={
-                      typeof p.recording_id === "number"
-                        ? recordingNameById[p.recording_id]
-                        : undefined
-                    }
-                    cardRef={registerCard}
-                    cardHeightPx={blindSnapCardHeight}
-                    serverLabels={labelsBySnippet[p.snippet_id] ?? EMPTY_LABELS}
-                    quickLabels={quickLabels}
-                    quickLabelsLoading={quickLabelsLoading}
-                    scrollRoot={scrollRoot}
-                    loadAudioImmediately={index === 0}
-                    suppressAudio={showAdHoc}
-                    onFindSimilar={onFindSimilar}
-                    hideHeader={hideCardHeader}
-                    hideLabels
-                  />
-                </div>
-              ))}
+              {blindVisibleRows.map(({ prediction: p, index }) =>
+                p ? (
+                  <div
+                    key={p.snippet_id}
+                    className="snap-start shrink-0 w-full"
+                    style={{
+                      height: blindSnapCardHeight,
+                      marginBottom: BLIND_SLOT_GAP_PX,
+                    }}
+                  >
+                    <PredictionCard
+                      prediction={p}
+                      recordingName={
+                        typeof p.recording_id === "number"
+                          ? recordingNameById[p.recording_id]
+                          : undefined
+                      }
+                      cardRef={registerCard}
+                      cardHeightPx={blindSnapCardHeight}
+                      serverLabels={labelsFor(p.snippet_id)}
+                      quickLabels={quickLabels}
+                      quickLabelsLoading={quickLabelsLoading}
+                      scrollRoot={scrollRoot}
+                      loadAudioImmediately={index === 0}
+                      suppressAudio={showAdHoc}
+                      onFindSimilar={onFindSimilar}
+                      hideHeader={hideCardHeader}
+                      hideLabels
+                    />
+                  </div>
+                ) : (
+                  <div
+                    key={`pending-${index}`}
+                    className="snap-start shrink-0 w-full flex items-center justify-center rounded-xl border border-gray-100 bg-white"
+                    style={{
+                      height: blindSnapCardHeight,
+                      marginBottom: BLIND_SLOT_GAP_PX,
+                    }}
+                  >
+                    <Spin size="small" />
+                  </div>
+                ),
+              )}
               {/* Spacer for the off-screen cards below the window. */}
               <div style={{ height: blindBottomSpacer }} />
+              {truncated && blindWindow.end >= rowCount && (
+                <div className="py-6 text-center text-xs text-gray-500 font-ibm-sans">
+                  Showing the first {MAX_VIRTUAL_ROWS.toLocaleString()} of{" "}
+                  {feedTotal.toLocaleString()} snippets — narrow the filters to
+                  see the rest.
+                </div>
+              )}
 
-              {inferenceLoading && (
+              {(inferenceLoading || (serverMode && feed.loading)) && (
                 <div className="flex justify-center py-4">
                   <Spin size="small" />
                 </div>
@@ -1495,10 +1311,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                         : undefined
                     }
                     cardHeightPx={blindSnapCardHeight}
-                    serverLabels={
-                      labelsBySnippet[resolvedAdHocPrediction.snippet_id] ??
-                      EMPTY_LABELS
-                    }
+                    serverLabels={labelsFor(resolvedAdHocPrediction.snippet_id)}
                     quickLabels={quickLabels}
                     quickLabelsLoading={quickLabelsLoading}
                     scrollRoot={scrollRoot}
@@ -1514,24 +1327,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         </div>
 
         {/* Sticky label bar — one shared instance for the whole feed, targeting
-            the current snippet, so labels don't repeat under every spectrogram
-            and only the spectrograms above actually scroll. */}
+            the current snippet. Capped so large quick-label sets scroll inside
+            it instead of squashing the spectrograms. */}
         {stickyLabelPrediction && (
           <div
             className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3"
-            // Datasets with many quick labels would otherwise let this bar grow
-            // until it ate the feed above it and squashed the spectrograms
-            // (card height is measured from the feed's clientHeight). Cap it and
-            // let the chip grid scroll inside instead — small label sets still
-            // size to their content and look exactly as before.
             style={{ maxHeight: "min(34%, 300px)" }}
           >
             <FeedbackButtons
               prediction={stickyLabelPrediction}
-              serverLabels={
-                labelsBySnippet[stickyLabelPrediction.snippet_id] ??
-                EMPTY_LABELS
-              }
+              serverLabels={labelsFor(stickyLabelPrediction.snippet_id)}
               quickLabels={quickLabels}
               quickLabelsLoading={quickLabelsLoading}
             />
@@ -1595,9 +1400,6 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       >
         <div className="w-full md:w-[85%] max-w-350 mx-auto flex flex-col gap-3">
           {predictions.slice(0, visibleCount).map((p, index) => {
-            // const key = p._isDivider
-            //   ? `divider-${p.snippet_id}`
-            //   : (p.id ?? p.snippet_id);
             const key = p._isDivider
               ? `divider-${p.snippet_id}`
               : `snippet-${p.snippet_id}`;

@@ -30,6 +30,7 @@ import { defaultSortFields } from "./sortPanelHelpers";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import type { SortField } from "../../types/sort";
+import type { ExploreFilters } from "../../types/explore";
 
 const PROJECTION_METHODS: { key: ProjectionMethod; label: string }[] = [
   { key: "tsne", label: "t-SNE" },
@@ -40,16 +41,8 @@ const PROJECTION_METHODS: { key: ProjectionMethod; label: string }[] = [
 
 type WorkspaceProps = {
   onFindSimilar?: (snippetId: number) => void;
-  filterAnnotationStatus: "any" | "annotated" | "unannotated";
-  /** Ground-truth species narrowing the labelled set; empty = no narrowing. */
-  filterAnnotatedSpecies: string[];
-  /** Model-side species scope (predicted species). */
-  filterPredictedSpecies: string[];
-  filterLocations: string[];
-  filterDateRange: [number, number] | null;
-  filterMonths: number[];
-  filterTimeRange: [number, number] | null;
-  localLabelScope: string[];
+  /** Canonical explore filters shared by the feed, histograms and projection. */
+  exploreFilters: ExploreFilters;
   /** Feed action button ("Generate Feed" / "Edit Feed") — lives on the feed side. */
   feedActionLabel: string;
   feedActionLoading: boolean;
@@ -61,14 +54,7 @@ type WorkspaceProps = {
 
 export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
-  filterAnnotationStatus,
-  filterAnnotatedSpecies,
-  filterPredictedSpecies,
-  filterLocations,
-  filterDateRange,
-  filterMonths,
-  filterTimeRange,
-  localLabelScope,
+  exploreFilters,
   feedActionLabel,
   feedActionLoading,
   feedActionDisabled,
@@ -167,40 +153,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     setSortFields(defaultSortFields(phase.sort.nonModel, phase.sort.model));
   }
 
-  // The feed is the single source of truth for "what passes the filters": it
-  // publishes the surviving snippet ids and the projection highlights exactly
-  // those. Avoids the projection re-deriving the set from its own (separately
-  // generated, Redis-cached) labels and scores, which disagreed with the feed.
-  const [visibleSnippetIds, setVisibleSnippetIds] = useState<Set<number> | null>(
-    null,
-  );
-
-  // Same filters the feed applies — passed to the projection so both stay in sync.
-  const projectionClientFilters = useMemo(
-    () => ({
-      annotationStatus: filterAnnotationStatus,
-      annotatedSpecies: filterAnnotatedSpecies,
-      predictedSpecies: filterPredictedSpecies,
-      locations: filterLocations,
-      dateRange: filterDateRange,
-      months: filterMonths,
-      timeRange: filterTimeRange,
-      labelScope: localLabelScope,
-      visibleSnippetIds,
-    }),
-    [
-      filterAnnotationStatus,
-      filterAnnotatedSpecies,
-      filterPredictedSpecies,
-      filterLocations,
-      filterDateRange,
-      filterMonths,
-      filterTimeRange,
-      localLabelScope,
-      visibleSnippetIds,
-    ],
-  );
-
   const rightPanel = (
     <div
       data-tour="feed"
@@ -233,18 +185,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           onFindSimilar={onFindSimilar}
           hideCardHeader
           sortFields={sortFields}
-          enableClientFilters
-          filterAnnotationStatus={filterAnnotationStatus}
-          filterAnnotatedSpecies={filterAnnotatedSpecies}
-          filterPredictedSpecies={filterPredictedSpecies}
-          filterLocations={filterLocations}
-          filterDateRange={filterDateRange}
-          filterMonths={filterMonths}
-          filterTimeRange={filterTimeRange}
-          localLabelScope={localLabelScope}
+          exploreFilters={exploreFilters}
           quickLabels={quickLabels}
           quickLabelsLoading={quickLabelsLoading}
-          onVisibleSnippetIdsChange={setVisibleSnippetIds}
         />
       </div>
     </div>
@@ -342,7 +285,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               projectionMethod={projMethod}
               onProjectionMethodChange={setProjMethod}
               onThumbnailData={handleThumbnailData}
-              clientFilters={projectionClientFilters}
+              exploreFilters={exploreFilters}
             />
           </div>
         </div>

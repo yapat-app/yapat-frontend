@@ -15,7 +15,10 @@ import {
 } from "@ant-design/icons";
 import type { AnnotateMode } from "./types";
 import type { LabelScopeOption } from "./useHubALSession";
-import { ScoreHistogramPanel } from "../../components/al/ScoreHistogramPanel";
+import {
+  ScoreHistogramPanel,
+  type ScoreHistogramData,
+} from "../../components/al/ScoreHistogramPanel";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   setVisibilityFilter,
@@ -23,17 +26,14 @@ import {
   setVisibilityRangeFor,
   resetVisibilityFilter,
 } from "../../redux/features/alSlice";
-import { useScoreHistogramData } from "./useScoreHistogramData";
-import { useSnippetLabels } from "./useSnippetLabels";
-import {
-  useDateTimeFilterData,
-  TIME_OF_DAY_DOMAIN,
-} from "./useDateTimeFilterData";
 import {
   formatDateAxisLabel,
   formatTimeAxisLabel,
   MONTH_ABBREVIATIONS,
 } from "./dateTimeFilterHelpers";
+import type { ExploreFacets, ExploreFilters } from "../../types/explore";
+import { useExploreScope } from "../../explore/useExploreScope";
+import { useExploreSummary } from "../../explore/useExploreSummary";
 import { DateTimeRangeFilter } from "./DateTimeRangeFilter";
 import { DateRangeCalendarPicker } from "./DateRangeCalendarPicker";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -43,7 +43,16 @@ import {
   SCORE_ALLOWED_PROPERTIES,
 } from "./scoreFilterConfig";
 
+const TIME_OF_DAY_DOMAIN: [number, number] = [0, 86400];
+const MS_PER_DAY = 86_400_000;
+const NO_COUNTS: [number, number][] = [];
+
 export type AnnotationHubSidebarProps = {
+  /** Canonical explore filters — drive the server-computed histograms. */
+  exploreFilters: ExploreFilters;
+  /** Filter options + date/time histograms from /api/explore/facets. */
+  exploreFacets: ExploreFacets | null;
+  exploreFacetsLoading: boolean;
   mode: AnnotateMode;
   setMode: (m: AnnotateMode) => void;
   filterAnnotationStatus: "any" | "annotated" | "unannotated";
@@ -216,41 +225,76 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   setPredictedSpeciesScope,
   showFindSimilar,
   showLabelScope,
+  exploreFilters,
+  exploreFacets,
+  exploreFacetsLoading,
 }) => {
   const dispatch = useAppDispatch();
   // Narrow selectors on purpose: subscribing to the whole `s.al` slice
   // re-rendered this entire sidebar (histograms included) on EVERY al dispatch
   // — including setActiveSnippet, which fires continuously while the feed is
   // scrolled. That made scrolling visibly janky.
-  const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
-  const snippetSetId = useAppSelector((s) => s.al.snippetSetId);
   const feedbacks = useAppSelector((s) => s.al.feedbacks);
-  // Refetch the ground-truth labels whenever this user annotates, so the
-  // histograms track the same data the feed re-reads on the same trigger.
+  const alFilters = useAppSelector((s) => s.al.alFilters);
+  // Refetch the histograms whenever this user annotates, so label-dependent
+  // filters (status, annotated species) stay current.
   const labelRefreshKey = useMemo(
-    () => Object.keys(feedbacks).sort().join(","),
+    () =>
+      Object.entries(feedbacks)
+        .map(([id, fb]) => `${id}:${fb.action}:${(fb.final_labels ?? []).join(",")}`)
+        .sort()
+        .join("|"),
     [feedbacks],
-  );
-  // Only needed while a ground-truth filter is actually narrowing the set.
-  const needsSnippetLabels =
-    filterAnnotationStatus !== "any" || annotatedSpeciesScope.length > 0;
-  const { labelsBySnippet } = useSnippetLabels(
-    selectedDatasetId,
-    snippetSetId,
-    needsSnippetLabels,
-    labelRefreshKey,
   );
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelSearch, setLabelSearch] = useState("");
 
-  const { enrichedPlotPoints, filtered, alFilters, domains } =
-    useScoreHistogramData(SCORE_VISIBILITY_MODE, SCORE_SLIDER_STYLE, {
-      predictedSpeciesScope,
-      annotationStatus: filterAnnotationStatus,
-      annotatedSpeciesScope,
-      labelsBySnippet,
-    });
-  const dateTimeData = useDateTimeFilterData(filterMonths);
+  // Score histograms over the whole dataset, computed on the server with the
+  // same filter spec the feed and projection use.
+  const { scope, revision } = useExploreScope();
+  const summary = useExploreSummary(
+    scope,
+    exploreFilters,
+    `${revision}|${labelRefreshKey}`,
+    showModelScores,
+  );
+  const histogramData = useMemo<ScoreHistogramData | null>(
+    () =>
+      summary.data
+        ? {
+            bins: summary.data.histograms,
+            visibleCount: summary.data.counts.visible,
+            totalCount: summary.data.counts.non_score,
+          }
+        : null,
+    [summary.data],
+  );
+  const domains = summary.data?.domains;
+
+  // Date / time histograms: recording-level counts from the server. The month
+  // filter narrows the date bars (not the domain) so the histogram shows where
+  // the selected months fall across every year.
+  const monthsKey = filterMonths.join(",");
+  const dateTimeData = useMemo(() => {
+    const monthSet = filterMonths.length > 0 ? new Set(filterMonths) : null;
+    const dateCounts = exploreFacets?.date_counts ?? NO_COUNTS;
+    const dateValueCounts = monthSet
+      ? dateCounts.filter(([day]) =>
+          monthSet.has(new Date(day * MS_PER_DAY).getUTCMonth() + 1),
+        )
+      : dateCounts;
+    const timeValueCounts: [number, number][] = (
+      exploreFacets?.time_counts ?? NO_COUNTS
+    ).map(([minute, count]) => [minute * 60, count]);
+    return {
+      dateValueCounts,
+      timeValueCounts,
+      dateDomain: (exploreFacets?.date_domain ?? [0, 1]) as [number, number],
+      hasAnyDateTime: Boolean(exploreFacets?.has_date_time),
+      dateTimeLoading: exploreFacetsLoading,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploreFacets, exploreFacetsLoading, monthsKey]);
 
   const activeFilterCount = [
     filterAnnotationStatus !== "any" ? 1 : 0,
@@ -560,7 +604,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                               <CalendarOutlined className="text-gray-400" />
                             }
                             title="Date range"
-                            values={dateTimeData.dateValues}
+                            valueCounts={dateTimeData.dateValueCounts}
                             domain={dateTimeData.dateDomain}
                             zoomDomain={dateZoomDomain}
                             range={filterDateRange}
@@ -621,7 +665,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                             <ClockCircleOutlined className="text-gray-400" />
                           }
                           title="Time of day"
-                          values={dateTimeData.timeValues}
+                          valueCounts={dateTimeData.timeValueCounts}
                           domain={TIME_OF_DAY_DOMAIN}
                           binCount={24}
                           range={filterTimeRange}
@@ -712,8 +756,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
               >
                 <SidebarSubsection title="Model derived scores">
                   <ScoreHistogramPanel
-                    enrichedPlotPoints={enrichedPlotPoints}
-                    filtered={filtered}
+                    data={histogramData}
                     allowedProperties={SCORE_ALLOWED_PROPERTIES}
                     visibilityMode={SCORE_VISIBILITY_MODE}
                     alFilters={alFilters}

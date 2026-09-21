@@ -25,20 +25,25 @@ import React, {
 import { Popover, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { HistogramSlider } from "./HistogramSlider";
-import type { ALFilterState, SampleScores } from "../../types/al";
+import type { ALFilterState } from "../../types/al";
 import type { FilterMode, AllowedProperty } from "../../studyPhases";
 import { getPropertyByKey, propertyColor } from "../../constants/alProperties";
 import { ScoreExplainer, isExplainerKey } from "../scoreExplainer";
 import { useStudyLogger } from "../../studyLogging";
 
-interface FilteredPoint {
-  p: { snippet_id: number; scores?: SampleScores };
-  visible: boolean;
+/**
+ * Server-computed histogram data (/api/explore/summary). `total` bars count
+ * snippets passing every non-score filter; `visible` bars those passing all
+ * filters — so each row shows the combined effect of every active filter.
+ */
+export interface ScoreHistogramData {
+  bins: Partial<Record<string, { total: number[]; visible: number[] }>>;
+  visibleCount: number;
+  totalCount: number;
 }
 
 interface ScoreHistogramPanelProps {
-  enrichedPlotPoints: FilteredPoint["p"][];
-  filtered: FilteredPoint[];
+  data: ScoreHistogramData | null;
   allowedProperties: AllowedProperty[];
   visibilityMode: FilterMode;
   alFilters: ALFilterState;
@@ -97,14 +102,19 @@ const HandleReadout: React.FC<{
   </strong>
 );
 
-/** Extract numeric score values for a given key from a list of points. */
-function extractValues(points: FilteredPoint["p"][], key: string): number[] {
-  const out: number[] = [];
-  for (const p of points) {
-    const v = p.scores?.[key as keyof SampleScores];
-    if (typeof v === "number" && Number.isFinite(v)) out.push(v);
-  }
-  return out;
+const NO_BINS: number[] = [];
+
+function binsFor(
+  data: ScoreHistogramData | null,
+  key: string,
+): { total: number[]; visible: number[]; count: number } {
+  const entry = data?.bins[key];
+  if (!entry) return { total: NO_BINS, visible: NO_BINS, count: 0 };
+  return {
+    total: entry.total,
+    visible: entry.visible,
+    count: entry.total.reduce((a, b) => a + b, 0),
+  };
 }
 
 // ── Score info affordance ─────────────────────────────────────────────────────
@@ -178,8 +188,8 @@ interface PropertyRowProps {
   /** Drives the ⓘ explainer beside the label. */
   propertyKey: string;
   color: string;
-  allValues: number[];
-  visibleValues: number[];
+  allBins: number[];
+  visibleBins: number[];
   normRange: [number, number];
   onSliderChange: (newNorm: [number, number]) => void;
   mode?: "range" | "threshold";
@@ -193,8 +203,8 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
   label,
   propertyKey,
   color,
-  allValues,
-  visibleValues,
+  allBins,
+  visibleBins,
   normRange,
   onSliderChange,
   mode = "threshold",
@@ -255,8 +265,8 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
       </span>
     </div>
     <HistogramSlider
-      values={visibleValues}
-      totalValues={allValues}
+      binCounts={visibleBins}
+      totalBinCounts={allBins}
       min={min}
       max={max}
       mode={mode}
@@ -272,8 +282,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
-  enrichedPlotPoints,
-  filtered,
+  data,
   allowedProperties,
   visibilityMode,
   alFilters,
@@ -325,12 +334,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMulti]);
 
-  // Visible points (pass ALL active filters).
-  const visiblePoints = useMemo(
-    () => filtered.filter((f) => f.visible).map((f) => f.p),
-    [filtered],
-  );
-  const visibleCount = visiblePoints.length;
+  const visibleCount = data?.visibleCount ?? 0;
+  const totalCount = data?.totalCount ?? 0;
 
   // ── P3.1 handlers ────────────────────────────────────────────────────────
   const handleSingleTabChange = useCallback(
@@ -373,13 +378,9 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   );
 
   // ── Derived data ─────────────────────────────────────────────────────────
-  const singleAllValues = useMemo(
-    () => extractValues(enrichedPlotPoints, singleActiveKey),
-    [enrichedPlotPoints, singleActiveKey],
-  );
-  const singleVisibleValues = useMemo(
-    () => extractValues(visiblePoints, singleActiveKey),
-    [visiblePoints, singleActiveKey],
+  const singleBins = useMemo(
+    () => binsFor(data, singleActiveKey),
+    [data, singleActiveKey],
   );
   const singleDomain = useMemo(
     () => domainFor(singleActiveKey),
@@ -406,12 +407,14 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
       .filter((key) => multiActiveKeys.includes(key))
       .map((key) => {
         const [min, max] = domainFor(key);
+        const bins = binsFor(data, key);
         return {
           key,
           label: getPropertyByKey(key)?.label ?? key,
           color: propertyColor(key),
-          allValues: extractValues(enrichedPlotPoints, key),
-          visibleValues: extractValues(visiblePoints, key),
+          allBins: bins.total,
+          visibleBins: bins.visible,
+          scoredCount: bins.count,
           normRange: (alFilters.visibility.ranges?.[key] ?? [0, 1]) as [
             number,
             number,
@@ -423,8 +426,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   }, [
     allowedProperties,
     multiActiveKeys,
-    enrichedPlotPoints,
-    visiblePoints,
+    data,
     alFilters.visibility.ranges,
     domains,
   ]);
@@ -459,7 +461,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               </strong>
               {" / "}
               <strong className="text-gray-700">
-                {enrichedPlotPoints.length.toLocaleString()}
+                {totalCount.toLocaleString()}
               </strong>
               {" visible"}
             </span>
@@ -473,7 +475,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 {visibleCount.toLocaleString()}
               </strong>
               {" / "}
-              {enrichedPlotPoints.length.toLocaleString()}
+              {totalCount.toLocaleString()}
               {" visible"}
             </span>
             {onReset && (
@@ -522,15 +524,15 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
             </div>
           )}
 
-          {singleAllValues.length > 0 ? (
+          {singleBins.count > 0 ? (
             <PropertyRow
               label={
                 getPropertyByKey(singleActiveKey)?.label ?? singleActiveKey
               }
               propertyKey={singleActiveKey}
               color={propertyColor(singleActiveKey)}
-              allValues={singleAllValues}
-              visibleValues={singleVisibleValues}
+              allBins={singleBins.total}
+              visibleBins={singleBins.visible}
               normRange={singleNormRange}
               onSliderChange={handleSingleSlider}
               mode={sliderMode}
@@ -645,15 +647,15 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 
                 {isActive &&
                   row &&
-                  (row.allValues.length === 0 ? (
+                  (row.scoredCount === 0 ? (
                     <p className="mt-1 text-[11px] text-gray-300 font-ibm-sans">
                       No score data for this property
                     </p>
                   ) : (
                     <div className="mt-1">
                       <HistogramSlider
-                        values={row.visibleValues}
-                        totalValues={row.allValues}
+                        binCounts={row.visibleBins}
+                        totalBinCounts={row.allBins}
                         min={row.min}
                         max={row.max}
                         mode={sliderMode}
@@ -722,8 +724,8 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     label={row.label}
                     propertyKey={row.key}
                     color={row.color}
-                    allValues={row.allValues}
-                    visibleValues={row.visibleValues}
+                    allBins={row.allBins}
+                    visibleBins={row.visibleBins}
                     normRange={row.normRange}
                     onSliderChange={(newNorm) =>
                       handleMultiSlider(

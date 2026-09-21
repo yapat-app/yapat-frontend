@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Tooltip, Button } from "antd";
 import { SoundOutlined, AudioOutlined } from "@ant-design/icons";
 import { useAppSelector } from "../../hooks";
-import { recordingApi } from "../../services/api";
+import { recordingApi, snippetApi } from "../../services/api";
 
 interface SnippetHeaderProps {
   onFindSimilar?: (snippetId: number) => void;
@@ -17,10 +17,41 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
 
   const snippetId = selectedSnippetIds[0] ?? null;
   const prediction = predictions.find((p) => p.snippet_id === snippetId);
+
+  // The in-memory predictions are only a small top-K now (the feed is paged
+  // from /api/explore), so a selection outside them resolves its recording
+  // from the snippet itself.
+  const [fetchedSnippet, setFetchedSnippet] = useState<{
+    snippetId: number;
+    recordingId: number | null;
+  } | null>(null);
+  useEffect(() => {
+    if (snippetId === null || prediction) return;
+    let cancelled = false;
+    void snippetApi
+      .getById(snippetId)
+      .then((snippet) => {
+        if (cancelled) return;
+        setFetchedSnippet({
+          snippetId,
+          recordingId:
+            typeof snippet.recording_id === "number" ? snippet.recording_id : null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedSnippet({ snippetId, recordingId: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [snippetId, prediction]);
+  const fetchedForSelection =
+    fetchedSnippet && fetchedSnippet.snippetId === snippetId ? fetchedSnippet : null;
+
   const recordingId =
     typeof prediction?.recording_id === "number"
       ? prediction.recording_id
-      : null;
+      : (fetchedForSelection?.recordingId ?? null);
 
   // Fetched independently per selection rather than reusing PredictionFeed's
   // windowed recordingNameById cache — one lightweight GET-by-id is cheap and
@@ -55,9 +86,9 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
   }, [recordingId]);
 
   if (snippetId === null) return null;
-  // No matching prediction (e.g. no feed generated yet) — the feed body
-  // below will show its own empty state, so stay in sync and render nothing.
-  if (!prediction) return null;
+  // No feed generated yet (nothing in memory for this dataset) — the feed body
+  // below shows its own empty state, so stay in sync and render nothing.
+  if (!prediction && predictions.length === 0) return null;
   const hasFeedback = !!feedbacks[snippetId];
 
   return (
