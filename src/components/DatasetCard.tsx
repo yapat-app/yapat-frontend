@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import type { Dataset, QuickLabel } from "../types";
+import { useCallback, useEffect, useState } from "react";
+import type { Dataset, EmbeddingJobProgress, QuickLabel } from "../types";
 import { ExportAnnotationButton } from "./ExportAnnotation";
 import { GenerateFeedModal } from "./GenerateFeed";
-import { useAppSelector } from "../hooks";
+import { useAppDispatch, useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
-import { Button, Tag, Tooltip } from "antd";
+import { EmbeddingProgressPanel } from "./EmbeddingProgressPanel";
+import { useEmbeddingJobStatus } from "../hooks/useEmbeddingJobStatus";
+import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import { Button, Tag, Tooltip, message } from "antd";
 import { ThunderboltOutlined, TableOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
@@ -22,7 +25,34 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
     (state: any) => state.annotation,
   );
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+
+  // Embedding job tracking. The running job comes from GET /datasets
+  // (`active_embedding_job`), which is how a refresh rediscovers it;
+  // `startedJobId` covers the gap between creating a job and that refetch.
+  const [startedJobId, setStartedJobId] = useState<number | null>(null);
+  const activeJobId = dataset.is_ready_for_feed
+    ? null
+    : (dataset.active_embedding_job?.id ?? startedJobId);
+  const onJobFinished = useCallback(
+    (p: EmbeddingJobProgress) => {
+      setStartedJobId(null);
+      if (p.status === "completed") {
+        message.success(`Embeddings ready for ${dataset.name}`);
+      } else {
+        message.error(
+          `Embedding generation failed for ${dataset.name}${p.error_message ? `: ${p.error_message}` : ""}`,
+        );
+      }
+      dispatch(fetchAllDatasets());
+    },
+    [dataset.name, dispatch],
+  );
+  const { progress: embeddingProgress, etaSeconds } = useEmbeddingJobStatus(
+    activeJobId,
+    onJobFinished,
+  );
 
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
@@ -134,7 +164,11 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             >
               Metadata
             </Button>
-            <GenerateEmbeddings dataset={dataset} />
+            <GenerateEmbeddings
+              dataset={dataset}
+              running={activeJobId != null}
+              onStarted={setStartedJobId}
+            />
             <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
             <Button
               icon={<ThunderboltOutlined />}
@@ -152,6 +186,16 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             </Button>
           </div>
         </div>
+
+        {activeJobId != null && (
+          <div className="mb-3">
+            <EmbeddingProgressPanel
+              progress={embeddingProgress}
+              etaSeconds={etaSeconds}
+              recordingCount={dataset.recording_count}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
           <div className="rounded-md bg-gray-50 px-3 py-2">
