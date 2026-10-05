@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Dataset } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { Select, Modal, Button, Form, message, Tooltip, Tag } from "antd";
+import { LoadingOutlined } from "@ant-design/icons";
 import {
   getAllEmbeddingMethods,
   createEmbedding,
@@ -13,24 +14,26 @@ import {
   selectDataset,
 } from "../redux/features/datasetSlice";
 import type { EmbeddingMethod } from "../types";
-import { embeddingApi } from "../services/api";
 const { Option } = Select;
 
 type DatasetEmbeddingProps = {
   dataset: Dataset;
+  /** An embedding job is in flight (progress is shown by the card's panel). */
+  running?: boolean;
+  /** Called with the new job id right after a job is created. */
+  onStarted?: (jobId: number) => void;
 };
 
 export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   dataset,
+  running = false,
+  onStarted,
 }) => {
   const dispatch = useAppDispatch();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hasExistingEmbeddings, setHasExistingEmbeddings] = useState(false);
-  const [embeddingStatusLoading, setEmbeddingStatusLoading] = useState(false);
   const {
     embeddingMethods,
     selectedEmbeddedMethodId,
-    embeddingCreated,
     embeddingLoading,
   } = useAppSelector((state) => state.embedding);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
@@ -49,60 +52,37 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
     setIsModalOpen(false);
   };
 
-  useEffect(() => {
-    if (embeddingCreated && dataset.id === selectedDatasetId) {
-      message.info(
-        `Generating embeddings for dataset ${selectedDatasetId}`,
-        undefined, // Optional: duration (defaults to 1.5s if omitted)
-        () => {
-          dispatch(clearEmbedding());
-          dispatch(fetchAllDatasets());
-        },
-      );
+  const handleGenerate = async () => {
+    if (!selectedEmbeddedMethodId) return;
+    try {
+      const created = await dispatch(
+        createEmbedding({
+          datasetId: selectedDatasetId,
+          body: {
+            embedding_model_id: selectedEmbeddedMethodId,
+            window_size: 0,
+            step_size: 0,
+            overlap: 0,
+          },
+        }),
+      ).unwrap();
+      onStarted?.(created.embedding_job_id);
+      message.info(`Generating embeddings for ${dataset.name}`);
+      dispatch(clearEmbedding());
+      // Picks up `active_embedding_job`, so the progress survives a refresh.
+      dispatch(fetchAllDatasets());
       handleCancel();
+    } catch (err) {
+      message.error(
+        typeof err === "string" ? err : "Could not start embedding generation",
+      );
     }
-  }, [embeddingCreated]);
+  };
 
   // "Ready for embeddings" is different from "ready for feed":
   // - embeddings are the step that creates snippet_sets/snippets (and later makes is_ready_for_feed true)
   // - so here we only require that dataset processing/discovery has produced recordings
   const isDatasetReady = Boolean((dataset.recording_count ?? 0) > 0);
-
-  useEffect(() => {
-    if (!isDatasetReady) {
-      setHasExistingEmbeddings(false);
-      setEmbeddingStatusLoading(false);
-      return;
-    }
-    if (!Number.isFinite(datasetIdNumber)) return;
-
-    const abortController = new AbortController();
-    setEmbeddingStatusLoading(true);
-
-    (async () => {
-      try {
-        const jobs = await embeddingApi.allDatasetEmbeddingList(datasetIdNumber);
-        const exists = (jobs ?? []).some((job) => {
-          const status = (job.status ?? "").toString().toUpperCase();
-          return (
-            Boolean(job.completed_at) ||
-            status === "SUCCESS" ||
-            status === "COMPLETED" ||
-            status === "DONE" ||
-            status === "READY"
-          );
-        });
-        if (!abortController.signal.aborted) setHasExistingEmbeddings(exists);
-      } catch {
-        // If we can't fetch status (auth/network), fall back to showing the action.
-        if (!abortController.signal.aborted) setHasExistingEmbeddings(false);
-      } finally {
-        if (!abortController.signal.aborted) setEmbeddingStatusLoading(false);
-      }
-    })();
-
-    return () => abortController.abort();
-  }, [isDatasetReady, datasetIdNumber]);
 
   return (
     <div>
@@ -115,11 +95,11 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
         >
           Processing dataset…
         </Button>
-      ) : embeddingStatusLoading ? (
-        <Button color="default" variant="filled" disabled>
-          Checking embeddings…
+      ) : running ? (
+        <Button color="default" variant="filled" disabled icon={<LoadingOutlined />}>
+          Generating embeddings…
         </Button>
-      ) : hasExistingEmbeddings ? (
+      ) : dataset.is_ready_for_feed ? (
         <Button color="default" variant="filled" disabled>
           Embeddings ready
         </Button>
@@ -168,29 +148,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
                       <Button
                         loading={embeddingLoading}
                         type="primary"
-                        onClick={() =>
-                          // console.log({
-                          //   datasetId: selectedDatasetId,
-                          //   body: {
-                          //     embedding_model_id: selectedEmbeddedMethodId,
-                          //     window_size: 0,
-                          //     step_size: 0,
-                          //     overlap: 0,
-                          //   },
-                          // })
-                          selectedEmbeddedMethodId &&
-                          dispatch(
-                            createEmbedding({
-                              datasetId: selectedDatasetId,
-                              body: {
-                                embedding_model_id: selectedEmbeddedMethodId,
-                                window_size: 0,
-                                step_size: 0,
-                                overlap: 0,
-                              },
-                            }),
-                          )
-                        }
+                        onClick={() => void handleGenerate()}
                         className="w-full!"
                       >
                         {embeddingLoading

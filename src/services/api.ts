@@ -26,6 +26,7 @@ import type {
   TaskStatus,
   Embedding,
   EmbeddingJob,
+  EmbeddingJobProgress,
   CreateEmbedding,
   EmbeddingMethod,
   Feed,
@@ -237,6 +238,14 @@ export const embeddingApi = {
     datasetId: number | null,
   ): Promise<EmbeddingJob[]> => {
     const response = await api.get(`api/datasets/${datasetId}/embeddings`);
+    return response.data;
+  },
+
+  /**
+   * Live progress of an embedding job (cheap: two Redis reads server-side).
+   */
+  getJobProgress: async (jobId: number): Promise<EmbeddingJobProgress> => {
+    const response = await api.get(`api/embeddings/${jobId}/progress`);
     return response.data;
   },
 

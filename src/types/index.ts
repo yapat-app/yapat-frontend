@@ -469,6 +469,29 @@ export interface Dataset {
    * excludes these from GET /api/datasets/ unless include_reference=true.
    */
   is_reference?: boolean;
+  /** Newest pending/running embedding job (null when none is in flight). */
+  active_embedding_job?: ActiveEmbeddingJob | null;
+}
+
+export interface ActiveEmbeddingJob {
+  id: number;
+  status: string;
+  snippet_set_id: number;
+  started_at?: string | null;
+}
+
+/** GET /api/embeddings/{job_id}/progress (Redis counter on the backend). */
+export interface EmbeddingJobProgress {
+  embedding_job_id: number;
+  dataset_id: number;
+  status: "pending" | "running" | "completed" | "failed";
+  stage: "pending" | "segmenting" | "embedding" | "completed" | "failed";
+  done: number | null;
+  total: number | null;
+  percent: number | null;
+  stalled: boolean;
+  last_update: number | null;
+  error_message: string | null;
 }
 
 export interface DatasetUpdate {
