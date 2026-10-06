@@ -70,6 +70,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const handleThumbnailData = useCallback((data: ProjectionThumbnailData) => {
     setThumbData(data);
   }, []);
+  // UMAP/t-SNE disappear when the server can't produce them (over their point caps);
+  // a selection of one of those falls back to PCA, which is always available.
+  const effectiveProjMethod: ProjectionMethod = thumbData?.unavailableMethods.has(
+    projMethod,
+  )
+    ? "pca"
+    : projMethod;
   const handleMethodChange = useCallback(
     (m: ProjectionMethod) => {
       if (m !== projMethod)
@@ -228,8 +235,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             data-tour="projection-methods"
             className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto"
           >
-            {PROJECTION_METHODS.map((m) => {
-              const isActive = m.key === projMethod;
+            {PROJECTION_METHODS.filter(
+              (m) => !thumbData?.unavailableMethods.has(m.key),
+            ).map((m) => {
+              const isActive = m.key === effectiveProjMethod;
               const hasProj = Boolean(
                 thumbData?.fpvCoordsBySnippetForMethod?.[m.key],
               );
@@ -282,7 +291,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
           <div className="flex-1 overflow-hidden">
             <ProjectionView
-              projectionMethod={projMethod}
+              projectionMethod={effectiveProjMethod}
               onProjectionMethodChange={setProjMethod}
               onThumbnailData={handleThumbnailData}
               exploreFilters={exploreFilters}

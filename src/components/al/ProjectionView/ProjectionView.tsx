@@ -159,6 +159,11 @@ export interface ProjectionThumbnailData {
   > | null;
   allActualLabels: string[];
   loadingMethods: Set<ProjectionMethod>;
+  /**
+   * Methods the server reported as unavailable for this dataset (e.g. UMAP/t-SNE
+   * over their point caps). PCA is never included. Selectors hide these.
+   */
+  unavailableMethods: Set<ProjectionMethod>;
   fpvLoading: boolean;
 }
 
@@ -236,7 +241,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   } = useAppSelector((state) => state.al);
 
   const [internalMethod, setInternalMethod] = useState<ProjectionMethod>("pca");
-  const method = externalMethod ?? internalMethod;
+  const requestedMethod = externalMethod ?? internalMethod;
   const setMethod = (m: ProjectionMethod) => {
     setInternalMethod(m);
     onProjectionMethodChange?.(m);
@@ -258,7 +263,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   const histogramStyle = phase.ui.histogramStyle ?? "embedded";
   const enabled = visMode !== "hidden";
 
-  const dimRedMethods: Array<{ key: ProjectionMethod; label: string }> = [
+  const allDimRedMethods: Array<{ key: ProjectionMethod; label: string }> = [
     { key: "tsne", label: "t‑SNE" },
     { key: "umap", label: "UMAP" },
     { key: "pca", label: "PCA" },
@@ -307,7 +312,6 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     [feedbacks, revision],
   );
 
-  const current = useExploreProjectionPoints(scope, method, enabled);
   const thumbPca = useExploreProjectionPoints(scope, "pca", enabled);
   const thumbUmap = useExploreProjectionPoints(scope, "umap", enabled);
   const thumbTsne = useExploreProjectionPoints(scope, "tsne", enabled);
@@ -315,6 +319,19 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     () => ({ pca: thumbPca, umap: thumbUmap, tsne: thumbTsne }),
     [thumbPca, thumbUmap, thumbTsne],
   );
+  // UMAP/t-SNE are skipped server-side above their point caps; hide them once the
+  // server says so (kept while still loading). PCA is always offered.
+  const unavailableMethods = useMemo(() => {
+    const set = new Set<ProjectionMethod>();
+    if (thumbUmap.points?.available === false) set.add("umap");
+    if (thumbTsne.points?.available === false) set.add("tsne");
+    return set;
+  }, [thumbUmap.points, thumbTsne.points]);
+  // A selected method that turns out to be unavailable falls back to PCA.
+  const method: ProjectionMethod = unavailableMethods.has(requestedMethod)
+    ? "pca"
+    : requestedMethod;
+  const current = useExploreProjectionPoints(scope, method, enabled);
   const points = current.points;
 
   const stateQuery = useExploreProjectionState({
@@ -809,6 +826,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       selectedCoordByMethod,
       allActualLabels: labelVocab,
       loadingMethods,
+      unavailableMethods,
       fpvLoading: current.loading,
     });
   }, [
@@ -819,6 +837,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     selectedCoordByMethod,
     labelVocab,
     loadingMethods,
+    unavailableMethods,
     current.loading,
   ]);
 
@@ -1086,7 +1105,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         {phase.ui.showProjectionMethodSelector && !externalMethod && (
           <ProjectionMethodPanel
             method={method}
-            dimRedMethods={dimRedMethods}
+            dimRedMethods={allDimRedMethods.filter((m) => !unavailableMethods.has(m.key))}
             fpvLoading={current.loading}
             loadingMethods={loadingMethods}
             fpvCoordsBySnippetForMethod={fpvCoordsBySnippetForMethod}
