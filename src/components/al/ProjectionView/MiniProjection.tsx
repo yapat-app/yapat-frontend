@@ -26,7 +26,7 @@ const MiniProjection: React.FC<{
     const base = useMemo(() => {
       if (!coordsBySnippet) return null;
 
-      const pts: Array<{ x: number; y: number; id: number; color: string; r: number }> = [];
+      const pts: Array<{ x: number; y: number; id: number; color: string; r: number; visible: boolean }> = [];
       let minX = Infinity,
         maxX = -Infinity,
         minY = Infinity,
@@ -49,14 +49,21 @@ const MiniProjection: React.FC<{
           x,
           y,
           id,
-          color: isLabeled
-            ? resolveColor({ actual_label: actual } as any, "actual_label", allActualLabels)
-            : "#9ca3af",
-          r: isLabeled ? 2.0 : 1.7,
+          // Filtered-out points stay as a faint backdrop so the shape is always
+          // visible; points passing the filters are drawn on top.
+          color: !it.visible
+            ? "#e5e7eb"
+            : isLabeled
+              ? resolveColor({ actual_label: actual } as any, "actual_label", allActualLabels)
+              : "#9ca3af",
+          r: !it.visible ? 1.4 : isLabeled ? 2.0 : 1.7,
+          visible: it.visible,
         });
       }
 
       if (pts.length === 0 || !Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+      // Draw hidden (faint) points first so visible ones sit on top.
+      pts.sort((a, b) => Number(a.visible) - Number(b.visible));
 
       const spanX = maxX - minX || 1;
       const spanY = maxY - minY || 1;

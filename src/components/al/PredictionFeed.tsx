@@ -1363,8 +1363,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           <div
             className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3 laptop:px-3!"
             style={{
-              minHeight: "min(30%, 280px)",
-              maxHeight: "clamp(230px, 42%, 320px)",
+              minHeight: "min(24%, 220px)",
+              maxHeight: "clamp(200px, 34%, 290px)",
             }}
           >
             <FeedbackButtons

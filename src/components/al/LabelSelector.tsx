@@ -15,13 +15,11 @@ import {
   GlobalOutlined,
   CloseOutlined,
   PlusOutlined,
-  HistoryOutlined,
   DownOutlined,
 } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
 import { getSpeciesScientificName } from "../../constants/speciesLabels";
 import { usePersonalQuickLabels } from "../../hooks/usePersonalQuickLabels";
-import { useRecentLabels } from "../../hooks/useRecentLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -121,7 +119,6 @@ export const LabelSelector: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
   const [gbifLoading, setGbifLoading] = useState(false);
-  const { recent, markUsed } = useRecentLabels();
 
   // Compact mode: when the quick labels don't fit, the chip area stays
   // non-scrolling with a "+N more" pill (so it's obvious labels are hidden);
@@ -267,7 +264,6 @@ export const LabelSelector: React.FC<Props> = ({
       op: exists ? "remove" : "add",
       labelsAfter: next,
     });
-    if (!exists) markUsed(label);
     onChange(next);
   };
 
@@ -281,7 +277,6 @@ export const LabelSelector: React.FC<Props> = ({
       op: "add",
       labelsAfter: [...normalized, trimmed],
     });
-    markUsed(trimmed);
     onChange([...normalized, trimmed]);
   };
 
@@ -323,7 +318,7 @@ export const LabelSelector: React.FC<Props> = ({
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [compact, labelsExpanded, searchQuery, pamOptions, recent, value]);
+  }, [compact, labelsExpanded, searchQuery, pamOptions, value]);
 
   const pickSearchOption = (opt: PickOption) => {
     addLabel(opt.value);
@@ -351,13 +346,6 @@ export const LabelSelector: React.FC<Props> = ({
     // and the pill below reports how many chips are out of view.
     const chipsScrollable = labelsExpanded || Boolean(trimmedQuery);
     const showMorePill = !chipsScrollable && hiddenChipCount > 0;
-    // Recently used labels that are still offered as quick labels (no query only).
-    const pamByKey = new Map(pamOptions.map((o) => [o.value.toLowerCase(), o]));
-    const recentOptions = trimmedQuery
-      ? []
-      : recent
-          .map((r) => pamByKey.get(r.toLowerCase()))
-          .filter((o): o is (typeof pamOptions)[number] => o != null);
 
     const applyQuery = () => {
       if (!trimmedQuery) return;
@@ -548,17 +536,7 @@ export const LabelSelector: React.FC<Props> = ({
             </p>
           ) : (
             <>
-              {recentOptions.length > 0 && (
-                <div>
-                  {sectionTitle(<HistoryOutlined />, "Recently used")}
-                  <div className="flex flex-wrap gap-1.5">
-                    {recentOptions.map((opt) => renderQuickChip(opt, "recent"))}
-                  </div>
-                </div>
-              )}
-
               <div>
-                {recentOptions.length > 0 && sectionTitle(null, "All quick labels")}
                 {quickMatches.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {quickMatches.map((opt) => renderQuickChip(opt, "pam"))}
