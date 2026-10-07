@@ -352,7 +352,7 @@ export const AnnotationHub: React.FC = () => {
       <NavigationBar />
 
       {/* ── Simplified toolbar ── */}
-      <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-200 bg-white shrink-0 flex-wrap">
+      <div className="flex items-center gap-3 px-5 py-1.5 border-b border-gray-200 bg-white shrink-0 flex-wrap">
         {/* Dataset selector */}
         <div data-tour="dataset-selector" className="flex items-center gap-2">
           <DatabaseOutlined className="text-gray-400 text-sm" />
@@ -405,7 +405,7 @@ export const AnnotationHub: React.FC = () => {
                   <CheckCircleOutlined className="text-green-500" />
                   {al.feedbackCountDisplay.shown}/{al.retrainThreshold}
                   {al.feedbackCountDisplay.pending && (
-                    <Tag color="gold" className="ml-1 text-[10px]">
+                    <Tag color="gold" className="ml-1 text-fs-10">
                       Training…
                     </Tag>
                   )}
@@ -504,7 +504,7 @@ export const AnnotationHub: React.FC = () => {
               minLeftPanelPx={220}
               maxLeftRatio={0.2}
               collapsed={sidebarCollapsed}
-              onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+              collapsedPx={44}
               left={
                 <AnnotationHubSidebar
                   mode={mode}
@@ -545,6 +545,8 @@ export const AnnotationHub: React.FC = () => {
                   showModelScores={phase.sidebar.modelScores}
                   showFindSimilar={phase.sidebar.findSimilar}
                   showLabelScope={phase.sidebar.labelScope}
+                  collapsed={sidebarCollapsed}
+                  onCollapsedChange={setSidebarCollapsed}
                   onResetFilters={() => {
                     setFilterAnnotationStatus("any");
                     setFilterLocations([]);
