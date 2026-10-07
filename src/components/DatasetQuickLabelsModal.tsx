@@ -143,7 +143,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--text-fs-11)",
                 color: "#888",
                 marginBottom: 8,
                 fontWeight: 600,
@@ -162,7 +162,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
               }}
             >
               {labels.length === 0 && (
-                <span style={{ color: "#bbb", fontSize: 12 }}>
+                <span style={{ color: "#bbb", fontSize: "var(--text-fs-12)" }}>
                   No labels yet. Add from the right panel.
                 </span>
               )}
@@ -179,10 +179,10 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                   }}
                 >
                   <Tooltip title={l.taxon_id}>
-                    <span style={{ fontSize: 13 }}>{l.display_name}</span>
+                    <span style={{ fontSize: "var(--text-fs-13)" }}>{l.display_name}</span>
                   </Tooltip>
                   <CloseOutlined
-                    style={{ color: "#ff4d4f", cursor: "pointer", fontSize: 11 }}
+                    style={{ color: "#ff4d4f", cursor: "pointer", fontSize: "var(--text-fs-11)" }}
                     onClick={() => removeLabel(l.taxon_id)}
                   />
                 </div>
@@ -194,7 +194,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
           <div style={{ flex: 1 }}>
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--text-fs-11)",
                 color: "#888",
                 marginBottom: 8,
                 fontWeight: 600,
@@ -219,7 +219,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                     borderRadius: 4,
                     border: "1px solid",
                     cursor: "pointer",
-                    fontSize: 12,
+                    fontSize: "var(--text-fs-12)",
                     background: source === p.key ? "#1890ff" : "#f0f0f0",
                     color: source === p.key ? "#fff" : "#555",
                     borderColor: source === p.key ? "#1890ff" : "#d9d9d9",
@@ -272,12 +272,12 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                         alignItems: "center",
                         padding: "4px 0",
                         borderBottom: "1px solid #f5f5f5",
-                        fontSize: 12,
+                        fontSize: "var(--text-fs-12)",
                       }}
                     >
                       <div>
                         <span>{r.display_name}</span>
-                        <span style={{ color: "#bbb", fontSize: 11, marginLeft: 6 }}>
+                        <span style={{ color: "#bbb", fontSize: "var(--text-fs-11)", marginLeft: 6 }}>
                           {r.taxon_id}
                         </span>
                       </div>
@@ -293,7 +293,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                     </div>
                   ))}
                   {!searching && query.trim() && results.length === 0 && (
-                    <div style={{ color: "#bbb", fontSize: 12, padding: "8px 0" }}>
+                    <div style={{ color: "#bbb", fontSize: "var(--text-fs-12)", padding: "8px 0" }}>
                       No results found.
                     </div>
                   )}

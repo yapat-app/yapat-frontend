@@ -215,7 +215,7 @@ const PropertyRow: React.FC<PropertyRowProps> = ({
 }) => (
   <div className="flex flex-col gap-0.5">
     <div
-      className={`flex items-center text-[11px] font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}
+      className={`flex items-center text-fs-11 font-ibm-sans ${hideLabel ? "justify-end" : "justify-between"}`}
     >
       {!hideLabel && (
         <span className="flex items-center gap-1.5">
@@ -450,12 +450,12 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
               <button
                 type="button"
                 onClick={onReset}
-                className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
+                className="text-fs-11 text-blue-500 hover:text-blue-700 font-ibm-sans underline"
               >
                 Reset
               </button>
             )}
-            <span className="text-[11px] text-gray-500 font-ibm-sans">
+            <span className="text-fs-11 text-gray-500 font-ibm-sans">
               <strong className="text-gray-700">
                 {visibleCount.toLocaleString()}
               </strong>
@@ -469,7 +469,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         </div>
       ) : (
         isFiltered && (
-          <div className="flex items-center justify-between text-[11px] font-ibm-sans">
+          <div className="flex items-center justify-between text-fs-11 font-ibm-sans">
             <span className="text-gray-500">
               <strong className="text-gray-700">
                 {visibleCount.toLocaleString()}
@@ -587,7 +587,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 >
                   <span
                     className={[
-                      "flex items-center gap-1.5 text-[11px] font-ibm-sans font-semibold",
+                      "flex items-center gap-1.5 text-fs-11 font-ibm-sans font-semibold",
                       isActive ? "text-gray-800" : "text-gray-400",
                     ].join(" ")}
                   >
@@ -599,7 +599,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                     <ScoreInfo propertyKey={prop} />
                   </span>
                   {isActive && row ? (
-                    <span className="text-[11px] font-ibm-sans text-gray-400">
+                    <span className="text-fs-11 font-ibm-sans text-gray-400">
                       {sliderMode === "range" ? (
                         <>
                           <HandleReadout
@@ -635,7 +635,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                       )}
                     </span>
                   ) : (
-                    <span className="text-[11px] font-ibm-sans text-gray-300">
+                    <span className="text-fs-11 font-ibm-sans text-gray-300">
                       +
                     </span>
                   )}
@@ -648,7 +648,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 {isActive &&
                   row &&
                   (row.scoredCount === 0 ? (
-                    <p className="mt-1 text-[11px] text-gray-300 font-ibm-sans">
+                    <p className="mt-1 text-fs-11 text-gray-300 font-ibm-sans">
                       No score data for this property
                     </p>
                   ) : (
@@ -751,7 +751,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
 };
 
 const EmptyState: React.FC = () => (
-  <div className="text-[12px] text-gray-400 font-ibm-sans py-4 text-center">
+  <div className="text-fs-12 text-gray-400 font-ibm-sans py-4 text-center">
     Run inference to see score distributions
   </div>
 );

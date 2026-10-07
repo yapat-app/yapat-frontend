@@ -56,7 +56,7 @@ export const ScoreExplainer: React.FC<ScoreExplainerProps> = ({
     // read without touching antd's own CSS.
     <div className={isPopover ? "w-[320px] font-ibm-sans" : "w-[360px] font-ibm-sans"}>
       {isPopover && (
-        <p className="mb-0.5 text-[13px] font-semibold text-gray-800">{copy.title}</p>
+        <p className="mb-0.5 text-fs-13 font-semibold text-gray-800">{copy.title}</p>
       )}
       <p className="mb-2 text-[12.5px] leading-relaxed text-gray-600">{copy.definition}</p>
       {renderScene(scoreKey, active)}

@@ -110,7 +110,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             >
               <span
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--text-fs-11)",
                   color: "#888",
                   fontWeight: 600,
                   textTransform: "uppercase",
@@ -120,7 +120,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 ⚡ Quick Labels
               </span>
               {quickLabels.slice(0, 5).map((l) => (
-                <Tag key={l.taxon_id} style={{ fontSize: 11, margin: 0 }}>
+                <Tag key={l.taxon_id} style={{ fontSize: "var(--text-fs-11)", margin: 0 }}>
                   {l.display_name}
                 </Tag>
               ))}
@@ -131,14 +131,14 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                     .map((l) => l.display_name)
                     .join(", ")}
                 >
-                  <Tag style={{ fontSize: 11, margin: 0, color: "#888" }}>
+                  <Tag style={{ fontSize: "var(--text-fs-11)", margin: 0, color: "#888" }}>
                     +{quickLabels.length - 5} more
                   </Tag>
                 </Tooltip>
               )}
               <Tag
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--text-fs-11)",
                   margin: 0,
                   cursor: "pointer",
                   color: "#1890ff",

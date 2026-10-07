@@ -308,7 +308,7 @@ export const ALFilterPanel: React.FC<ALFilterPanelProps> = ({
                 <button
                   type="button"
                   onClick={onResetVisibility}
-                  className="text-[11px] text-blue-500 hover:text-blue-700 font-ibm-sans underline"
+                  className="text-fs-11 text-blue-500 hover:text-blue-700 font-ibm-sans underline"
                 >
                   Reset
                 </button>
@@ -490,8 +490,8 @@ const MultiVisibilityControls: React.FC<MultiVisibilityControlsProps> = ({
           return (
             <div key={key} className="px-1">
               <div className="flex justify-between mb-0.5">
-                <span className="text-[10px] text-gray-500 font-ibm-mono">{prop.label}</span>
-                <span className="text-[10px] text-gray-400 font-ibm-mono">
+                <span className="text-fs-10 text-gray-500 font-ibm-mono">{prop.label}</span>
+                <span className="text-fs-10 text-gray-400 font-ibm-mono">
                   {domainLo.toFixed(2)} – {domainHi.toFixed(2)}
                 </span>
               </div>
@@ -534,8 +534,8 @@ const ContinuousLegendBar: React.FC<{ minLabel: string; maxLabel: string }> = ({
       style={{ background: GRADIENT_BAR }}
     />
     <div className="flex justify-between mt-0.5">
-      <span className="text-[10px] text-gray-400 font-ibm-mono">{minLabel}</span>
-      <span className="text-[10px] text-gray-400 font-ibm-mono">{maxLabel}</span>
+      <span className="text-fs-10 text-gray-400 font-ibm-mono">{minLabel}</span>
+      <span className="text-fs-10 text-gray-400 font-ibm-mono">{maxLabel}</span>
     </div>
   </div>
 );
@@ -554,7 +554,7 @@ const DiscreteLegendChips: React.FC<{ entries: LegendEntry[] }> = ({ entries }) 
             backgroundColor: e.color,
             color: "#fff",
             borderColor: "transparent",
-            fontSize: 10,
+            fontSize: "var(--text-fs-10)",
             padding: "0 6px",
             lineHeight: "18px",
             fontFamily: "IBM Plex Mono, monospace",

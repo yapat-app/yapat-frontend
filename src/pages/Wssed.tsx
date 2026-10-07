@@ -201,7 +201,7 @@ export const Wssed = () => {
                     <h4 className="mb-2 text-sm font-medium text-gray-800">
                       Weakly Supervised Learning
                     </h4>
-                    <p className="text-[12px] text-gray-500">
+                    <p className="text-fs-12 text-gray-500">
                       Please upload or select a dataset panel to start training
                       the model.
                     </p>

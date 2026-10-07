@@ -102,7 +102,7 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
 
   return (
     <div className={disabled ? "opacity-50" : undefined}>
-      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-gray-500 font-ibm-sans">
+      <p className="mb-1.5 flex items-center gap-1.5 text-fs-11 font-medium text-gray-500 font-ibm-sans">
         {icon} {title}
         {range && !disabled && (
           <Tooltip title={`Reset ${title.toLowerCase()}`}>
@@ -112,7 +112,7 @@ export const DateTimeRangeFilter: React.FC<DateTimeRangeFilterProps> = ({
               aria-label={`Reset ${title}`}
               className="ml-auto flex h-4 w-4 items-center justify-center text-gray-400 transition-colors hover:text-red-500"
             >
-              <ReloadOutlined className="text-[10px]" />
+              <ReloadOutlined className="text-fs-10" />
             </button>
           </Tooltip>
         )}

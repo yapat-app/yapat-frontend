@@ -90,7 +90,7 @@ const MiniProjection: React.FC<{
     }
     if (!coordsBySnippet) {
       return (
-        <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
+        <div className="w-full h-full flex items-center justify-center text-fs-10 text-gray-400">
           N/A
         </div>
       );

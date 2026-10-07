@@ -415,7 +415,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                     marginBottom: 12,
                   }}
                 >
-                  <Text strong style={{ fontSize: 14, color: "#666" }}>
+                  <Text strong style={{ fontSize: "var(--text-fs-14)", color: "#666" }}>
                     Suggested Taxonomies ({taxonomies.length}):
                   </Text>
                   <Button
@@ -454,14 +454,14 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                         <Text strong style={{ fontSize: 15 }}>
                           {item.name}
                         </Text>
-                        <Text type="secondary" style={{ fontSize: 13 }}>
+                        <Text type="secondary" style={{ fontSize: "var(--text-fs-13)" }}>
                           {item.scientific_name}
                         </Text>
                         <Space size={4} wrap>
-                          <Tag color="blue" style={{ fontSize: 11 }}>
+                          <Tag color="blue" style={{ fontSize: "var(--text-fs-11)" }}>
                             {item.id}
                           </Tag>
-                          <Tag color="green" style={{ fontSize: 11 }}>
+                          <Tag color="green" style={{ fontSize: "var(--text-fs-11)" }}>
                               {item.metadata?.source ?? "unknown"}
                           </Tag>
                         </Space>
@@ -635,7 +635,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                     Start a conversation to get taxonomy suggestions for your
                     annotations.
                   </Paragraph>
-                  <Paragraph type="secondary" style={{ fontSize: 14 }}>
+                  <Paragraph type="secondary" style={{ fontSize: "var(--text-fs-14)" }}>
                     Example: "suggest me taxonomies to annotate birds"
                   </Paragraph>
                 </div>
@@ -721,7 +721,7 @@ const TaxonomyAssistant: React.FC<AIAssistantTaxonomyProps> = ({
                       style={{
                         marginBottom: 4,
                         padding: "4px 10px",
-                        fontSize: 13,
+                        fontSize: "var(--text-fs-13)",
                       }}
                     >
                       {item.name} ({item.taxon_id})

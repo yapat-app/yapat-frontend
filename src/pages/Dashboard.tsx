@@ -219,7 +219,7 @@ export const Dashboard: React.FC = () => {
             >
               {/* Badge */}
               {card.badge && (
-                <span className="absolute top-4 right-4 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                <span className="absolute top-4 right-4 text-fs-10 font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                   {card.badge}
                 </span>
               )}
@@ -243,7 +243,7 @@ export const Dashboard: React.FC = () => {
               <div
                 className={`flex items-center gap-1 mt-4 text-xs font-medium ${card.color} opacity-0 group-hover:opacity-100 transition-opacity`}
               >
-                Open <ArrowRightOutlined className="text-[10px]" />
+                Open <ArrowRightOutlined className="text-fs-10" />
               </div>
             </div>
           ))}

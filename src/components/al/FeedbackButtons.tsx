@@ -347,7 +347,7 @@ export const FeedbackButtons: React.FC<Props> = ({
     <div className="flex flex-col gap-1.5 flex-1 min-h-0">
       {!isClassicFeed && !hasCheckpoint && (
         <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
-          <span className="shrink-0 text-[11px] text-amber-500 cursor-help w-fit">
+          <span className="shrink-0 text-fs-11 text-amber-500 cursor-help w-fit">
             No model checkpoint — feedback disabled
           </span>
         </Tooltip>
@@ -375,11 +375,11 @@ export const FeedbackButtons: React.FC<Props> = ({
         // spectrogram on every label change.
         statusSlot={
           saveState === "saving" ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-400 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1.5 text-fs-11 text-gray-400 whitespace-nowrap">
               <Spin size="small" /> Saving…
             </span>
           ) : saveState === "error" ? (
-            <span className="text-[11px] font-semibold text-red-500 whitespace-nowrap">
+            <span className="text-fs-11 font-semibold text-red-500 whitespace-nowrap">
               Save failed — try again
             </span>
           ) : null

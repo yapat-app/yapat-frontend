@@ -75,7 +75,7 @@ export const Taxonomies = () => {
                   showSearch
                   optionFilterProp="label"
                 />
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <Typography.Text type="secondary" style={{ fontSize: "var(--text-fs-12)" }}>
                   This team will own the frozen label space taxonomy.
                 </Typography.Text>
               </Space>
