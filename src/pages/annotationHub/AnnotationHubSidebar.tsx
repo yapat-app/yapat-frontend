@@ -38,7 +38,6 @@ import { DateTimeRangeFilter } from "./DateTimeRangeFilter";
 import { DateRangeCalendarPicker } from "./DateRangeCalendarPicker";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { TbFilter, TbLayoutSidebarLeftCollapse } from "react-icons/tb";
-import { studyLogger } from "../../studyLogging";
 import {
   SCORE_VISIBILITY_MODE,
   SCORE_SLIDER_STYLE,
@@ -466,7 +465,6 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     ) : null;
 
   const setCollapsed = (next: boolean) => {
-    studyLogger.log("sidebar_toggle", { collapsed: next, activeFilterCount });
     onCollapsedChange?.(next);
   };
 
