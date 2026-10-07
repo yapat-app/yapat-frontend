@@ -68,11 +68,16 @@ const FEED_HYDRATION_DEBOUNCE_MS = 250;
 const EMPTY_LABELS: string[] = [];
 
 /** Client-side sort for the legacy (non-server) feed — model scores only. */
-function getSortValue(prediction: PAMPrediction, property: SortField["property"]): number {
+function getSortValue(
+  prediction: PAMPrediction,
+  property: SortField["property"],
+): number {
   if (property === "confidence")
     return prediction.confidence ?? prediction.scores?.confidence ?? -Infinity;
   if (property === "composite")
-    return prediction.composite_score ?? prediction.scores?.composite ?? -Infinity;
+    return (
+      prediction.composite_score ?? prediction.scores?.composite ?? -Infinity
+    );
   const key = property as keyof SampleScores;
   const v = prediction.scores?.[key];
   return typeof v === "number" ? v : -Infinity;
@@ -143,7 +148,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
   // ── Data source ─────────────────────────────────────────────────────────
   const { scope, revision } = useExploreScope();
-  const serverMode = Boolean(exploreFilters) && scope !== null && !isClassicFeed;
+  const serverMode =
+    Boolean(exploreFilters) && scope !== null && !isClassicFeed;
   const exploreSort = useMemo(() => buildExploreSort(sortFields), [sortFields]);
   const EMPTY_FILTERS = useMemo<ExploreFilters>(
     () => ({
@@ -169,11 +175,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   });
 
   // Stable callbacks (the controller object itself is rebuilt every render).
-  const {
-    rowAt: feedRowAt,
-    indexOf: feedIndexOf,
-    rowById: feedRowById,
-  } = feed;
+  const { rowAt: feedRowAt, indexOf: feedIndexOf, rowById: feedRowById } = feed;
 
   const legacyRows = useMemo(
     () => (serverMode ? [] : applySortFields(predictions, sortFields)),
@@ -181,7 +183,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   );
 
   const feedTotal = serverMode ? (feed.total ?? 0) : legacyRows.length;
-  const rowCount = serverMode ? Math.min(feedTotal, MAX_VIRTUAL_ROWS) : legacyRows.length;
+  const rowCount = serverMode
+    ? Math.min(feedTotal, MAX_VIRTUAL_ROWS)
+    : legacyRows.length;
   const rowAt = useCallback(
     (index: number): PAMPrediction | undefined =>
       serverMode ? feedRowAt(index) : legacyRows[index],
@@ -286,7 +290,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         .join("|"),
     [sortFields],
   );
-  const feedViewKey = serverMode ? `explore:${feed.viewKey}` : `legacy:${legacySortKey}`;
+  const feedViewKey = serverMode
+    ? `explore:${feed.viewKey}`
+    : `legacy:${legacySortKey}`;
 
   // Reset legacy pagination whenever the list changes, following React's
   // "adjust state during render" pattern.
@@ -346,7 +352,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     if (!el) return;
     const first = Math.floor(el.scrollTop / blindSlotSize);
     const last = Math.ceil((el.scrollTop + el.clientHeight) / blindSlotSize);
-    const start = Math.max(0, Math.min(rowCount, first - BLIND_WINDOW_OVERSCAN));
+    const start = Math.max(
+      0,
+      Math.min(rowCount, first - BLIND_WINDOW_OVERSCAN),
+    );
     const end = Math.min(rowCount, last + BLIND_WINDOW_OVERSCAN);
     // Only re-render when the window boundaries actually change — cards are
     // hundreds of px tall, so this fires roughly once per card of scroll.
@@ -377,7 +386,13 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useLayoutEffect(() => {
     if (!isBlind) return;
     recomputeBlindWindow();
-  }, [isBlind, rowCount, blindSnapCardHeight, scrollRoot, recomputeBlindWindow]);
+  }, [
+    isBlind,
+    rowCount,
+    blindSnapCardHeight,
+    scrollRoot,
+    recomputeBlindWindow,
+  ]);
 
   // Load the pages around the window (one page of look-ahead each way).
   const { ensureRange } = feed;
@@ -466,14 +481,18 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       const el = scrollContainerRef.current;
       if (!el) return;
       el.scrollTo({
-        top: Math.max(0, index * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2),
+        top: Math.max(
+          0,
+          index * blindSlotSize - (el.clientHeight - blindSnapCardHeight) / 2,
+        ),
         behavior,
       });
     },
     [blindSlotSize, blindSnapCardHeight],
   );
 
-  const selectedIdx = selectedSnippetId === null ? -1 : indexOf(selectedSnippetId);
+  const selectedIdx =
+    selectedSnippetId === null ? -1 : indexOf(selectedSnippetId);
 
   // `useALSync` can only scroll to a mounted card. In blind mode the feed
   // renders a small virtualized window, so jump the scroll container directly
@@ -554,7 +573,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [serverMode, feedResumeRequest, listSettled, locate, dispatch, scrollToIndex]);
+  }, [
+    serverMode,
+    feedResumeRequest,
+    listSettled,
+    locate,
+    dispatch,
+    scrollToIndex,
+  ]);
 
   // Auto-scroll-to-selection is disabled in blind mode: a projection click
   // shows the chosen snippet via the on-demand overlay below, and manual
@@ -1066,7 +1092,11 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     );
   }
 
-  if (serverMode ? feed.loading && feed.total === null : inferenceLoading && predictions.length === 0) {
+  if (
+    serverMode
+      ? feed.loading && feed.total === null
+      : inferenceLoading && predictions.length === 0
+  ) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Spin size="large" />
@@ -1328,11 +1358,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
 
         {/* Sticky label bar — one shared instance for the whole feed, targeting
             the current snippet. Capped so large quick-label sets scroll inside
-            it instead of squashing the spectrograms. */}
+            it instead of squashing the spectrograms.*/}
         {stickyLabelPrediction && (
           <div
-            className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3"
-            style={{ maxHeight: "min(34%, 300px)" }}
+            className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3 laptop:px-3!"
+            style={{
+              minHeight: "min(30%, 280px)",
+              maxHeight: "clamp(230px, 42%, 320px)",
+            }}
           >
             <FeedbackButtons
               prediction={stickyLabelPrediction}
@@ -1411,7 +1444,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                   aria-label="Model updated"
                 >
                   <div className="flex-1 h-px bg-blue-100" />
-                  <span className="text-[11px] text-blue-400 font-ibm-sans whitespace-nowrap select-none">
+                  <span className="text-fs-11 text-blue-400 font-ibm-sans whitespace-nowrap select-none">
                     ↻ Model updated · New suggestions below
                   </span>
                   <div className="flex-1 h-px bg-blue-100" />

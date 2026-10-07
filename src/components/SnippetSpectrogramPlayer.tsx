@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
+import { SpectrogramAudioControls } from "./SpectrogramAudioControls";
 import { useAudioInstrumentation } from "../studyLogging";
 import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
@@ -61,6 +62,8 @@ export const SnippetSpectrogramPlayer: React.FC<
 }) => {
   // Instrument the library's internal <audio> element (play/pause/seek/volume).
   useAudioInstrumentation();
+  // Ancestor of the (hidden) <audio> element our controller drives.
+  const audioRootRef = useRef<HTMLDivElement | null>(null);
 
   const { plotHeight, blockHeight } = useMemo(
     () => spectrogramLayoutHeights(specHeight, showAxisInfo),
@@ -139,7 +142,8 @@ export const SnippetSpectrogramPlayer: React.FC<
    */
   return (
     <div
-      className="shrink-0 mx-auto"
+      ref={audioRootRef}
+      className="snippet-spectrogram shrink-0 mx-auto"
       style={{ width, maxWidth: "100%", minHeight: blockHeight }}
     >
       <div
@@ -148,8 +152,10 @@ export const SnippetSpectrogramPlayer: React.FC<
       >
         {/* Frequency (Hz) axis */}
         <div
-          className="shrink-0 flex flex-col justify-between text-[10px] text-gray-500 font-ibm-mono pr-1 select-none"
-          style={{ width: Y_AXIS_WIDTH, minHeight: plotHeight }}
+          // Exactly the mel image's height (self-start): stretching with the row
+          // spread the ticks over the audio controls below the image.
+          className="shrink-0 self-start flex flex-col justify-between text-fs-10 text-gray-500 font-ibm-mono pr-1 select-none"
+          style={{ width: Y_AXIS_WIDTH, height: plotHeight }}
           aria-hidden
         >
           {freqTicks.map((hz) => (
@@ -163,11 +169,11 @@ export const SnippetSpectrogramPlayer: React.FC<
           <div className="w-full min-w-0 overflow-x-hidden">
             {tooShortForSpectrogram ? (
               <div
-                className="flex flex-col items-center justify-center gap-1 rounded bg-gray-50 text-[11px] text-gray-500 font-ibm-sans"
+                className="flex flex-col items-center justify-center gap-1 rounded bg-gray-50 text-fs-11 text-gray-500 font-ibm-sans"
                 style={{ height: plotHeight }}
               >
                 <span>Clip too short for a spectrogram</span>
-                <audio src={src} controls className="max-w-full" />
+                <audio src={src} preload="metadata" />
               </div>
             ) : (
               <SpectrogramPlayer
@@ -191,7 +197,7 @@ export const SnippetSpectrogramPlayer: React.FC<
 
           {/* Time axis */}
           <div
-            className="flex justify-between text-[10px] text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100 shrink-0"
+            className="flex justify-between text-fs-10 text-gray-500 font-ibm-mono pl-0.5 pr-1 select-none border-t border-gray-100 shrink-0"
             style={{ height: SPECTROGRAM_TIME_AXIS_HEIGHT, marginTop: 2 }}
             aria-hidden
           >
@@ -205,11 +211,17 @@ export const SnippetSpectrogramPlayer: React.FC<
               <span className="text-gray-400 italic">Time</span>
             )}
           </div>
+
+          <SpectrogramAudioControls
+            rootRef={audioRootRef}
+            resetKey={playerKey}
+            fallbackDuration={resolvedDuration}
+          />
         </div>
       </div>
 
       {showAxisInfo && (
-        <p className="mt-1 text-[10px] text-gray-400 font-ibm-sans text-center shrink-0">
+        <p className="mt-1 text-fs-10 text-gray-400 font-ibm-sans text-center shrink-0">
           Mel spectrogram · {formatSpectrogramHz(fMin)}–
           {formatSpectrogramHz(fMax)} · {Math.round(sampleRate / 1000)} kHz
           sample rate

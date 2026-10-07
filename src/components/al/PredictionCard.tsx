@@ -150,8 +150,11 @@ const PredictionCardImpl: React.FC<Props> = ({
   // Card fills the scroll-snap viewport. Spectrogram takes the upper portion;
   // the label area below is fixed at LABEL_AREA_H px so the search + chips fit.
   const HEADER_H = 49;
-  const BODY_PAD_Y = 24; // py-3 top + py-3 bottom
-  const LABEL_AREA_H = 248; // reserved height for search input + chip rows (larger chips need more)
+  const BODY_PAD_Y = 40;
+  const LABEL_AREA_H =
+    typeof cardHeightPx === "number"
+      ? Math.round(Math.min(320, Math.max(230, cardHeightPx * 0.46)))
+      : 248;
   const SPEC_WIDTH = "min(100%, 1200px)";
 
   const [blindSpecHeight, setBlindSpecHeight] = useState<number>(300);
@@ -177,7 +180,8 @@ const PredictionCardImpl: React.FC<Props> = ({
       (hideLabels ? 0 : LABEL_AREA_H) -
       8;
     const melBudget = available - spectrogramChromeHeight();
-    const cap = hideLabels ? 900 : 600;
+
+    const cap = hideLabels ? 560 : 600;
     setBlindSpecHeight(Math.max(120, Math.min(cap, melBudget)));
   };
 
@@ -347,7 +351,7 @@ const PredictionCardImpl: React.FC<Props> = ({
               </Tooltip>
             )}
             {hasFeedback && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-fs-10 font-medium bg-green-50 text-green-700 border border-green-200">
                 Labeled
               </span>
             )}
@@ -358,7 +362,7 @@ const PredictionCardImpl: React.FC<Props> = ({
       {/* ── Spectrogram ── */}
       <div
         data-tour="spectrogram"
-        className="shrink-0 px-5 pt-3 pb-2"
+        className="shrink-0 px-2.5 pt-2 pb-2"
         onClick={(e) => e.stopPropagation()}
       >
         {!audioBlobUrl && !audioError && shouldLoadAudio && (
@@ -403,7 +407,7 @@ const PredictionCardImpl: React.FC<Props> = ({
         )}
         {audioBlobUrl && loadedAudioSnippetId === prediction.snippet_id && (
           <div
-            className="mx-auto shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm pb-1 overflow-x-hidden"
+            className="mx-auto shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm px-3 pt-3 pb-2.5 overflow-x-hidden"
             style={{ width: SPEC_WIDTH, maxWidth: "100%" }}
           >
             <SnippetSpectrogramPlayer
