@@ -1,11 +1,62 @@
 @import "tailwindcss";
 
 @theme {
+  --text-fs-8: 8px;
+  --text-fs-9: 9px;
+  --text-fs-10: 10px;
+  --text-fs-11: 11px;
+  --text-fs-12: 12px;
+  --text-fs-13: 13px;
+  --text-fs-14: 14px;
   --font-ibm-mono: "IBM Plex Mono", sans-serif;
   --font-ibm-sans: "IBM Plex Sans", sans-serif;
   --color-primary: #1e40af;
   --color-secondary: #facc15;
 }
+/* Laptop-sized viewports (13–14" MacBooks are ~1440–1512 × 780–900 CSS px).
+   Used as `laptop:` in class names; keep in sync with useLaptopViewport(). */
+@custom-variant laptop {
+  @media (max-width: 1600px), (max-height: 920px) {
+    @slot;
+  }
+}
+
+html {
+  font-size: 15px;
+}
+@media (max-width: 1600px), (max-height: 920px) {
+  html {
+    font-size: 14px;
+  }
+}
+@media (min-width: 2400px) and (min-height: 1300px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1600px), (max-height: 920px) {
+  :root {
+    --text-fs-9: 8.5px;
+    --text-fs-10: 9.5px;
+    --text-fs-11: 10px;
+    --text-fs-12: 11px;
+    --text-fs-13: 12px;
+    --text-fs-14: 13px;
+  }
+}
+@media (min-width: 2400px) and (min-height: 1300px) {
+  :root {
+    --text-fs-8: 8.5px;
+    --text-fs-9: 9.5px;
+    --text-fs-10: 10.5px;
+    --text-fs-11: 11.5px;
+    --text-fs-12: 12.5px;
+    --text-fs-13: 13.5px;
+    --text-fs-14: 15px;
+  }
+}
+
 body {
   margin: 0;
   height: 100%;
@@ -25,4 +76,51 @@ body {
      selected chip was white text on near-white, app-wide. Tailwind's preflight
      already resets buttons to a transparent background; anything that wants a
      fill sets it with a utility. */
+}
+
+.snippet-spectrogram audio {
+  display: none;
+}
+
+/* Seek slider: thin track, near-black fill up to the playhead, small round thumb. */
+.snippet-audio-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #1f2937 0%,
+    #1f2937 var(--seek-pct, 0%),
+    #d1d5db var(--seek-pct, 0%),
+    #d1d5db 100%
+  );
+  outline: none;
+}
+.snippet-audio-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #1f2937;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+  transition: transform 120ms ease;
+}
+.snippet-audio-seek:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.snippet-audio-seek::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #1f2937;
+}
+.snippet-audio-seek:focus-visible {
+  box-shadow: 0 0 0 3px rgb(156 163 175 / 0.6);
+}
+.snippet-audio-seek:disabled {
+  opacity: 0.5;
 }
