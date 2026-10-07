@@ -34,7 +34,7 @@ export const ProjectionMethodPanel: React.FC<ProjectionMethodPanelProps> = ({
     <div data-tour="projection-method" className="w-[168px] shrink-0 border-r border-gray-100 bg-white">
       <div className="px-3 py-2 border-b border-gray-100">
         <div className="text-xs font-ibm-mono font-semibold text-gray-700">Projection</div>
-        <div className="text-[11px] text-gray-400">Pick a method</div>
+        <div className="text-fs-11 text-gray-400">Pick a method</div>
       </div>
       <div className="p-3 flex flex-col gap-2 overflow-auto" style={{ maxHeight: "100%" }}>
         {dimRedMethods.map((m) => {
@@ -70,7 +70,7 @@ export const ProjectionMethodPanel: React.FC<ProjectionMethodPanelProps> = ({
                   loading={isLoadingThumb}
                 />
               </div>
-              <div className="mt-1 text-[11px] text-gray-600 font-ibm-sans">{m.label}</div>
+              <div className="mt-1 text-fs-11 text-gray-600 font-ibm-sans">{m.label}</div>
             </button>
           );
         })}

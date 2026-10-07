@@ -84,26 +84,26 @@ export const ALLabelSpacePanel: React.FC = () => {
         {labelSpace.length > 0 && (
           <Tag
             color="purple"
-            style={{ fontSize: 10, padding: "0 5px", lineHeight: "16px", marginLeft: 2 }}
+            style={{ fontSize: "var(--text-fs-10)", padding: "0 5px", lineHeight: "16px", marginLeft: 2 }}
           >
             {labelSpace.length}
           </Tag>
         )}
         {selectedSnippetId === null && (
-          <span className="text-[10px] text-gray-400 font-ibm-sans italic ml-1">
+          <span className="text-fs-10 text-gray-400 font-ibm-sans italic ml-1">
             select a point to annotate
           </span>
         )}
         {alreadyFeedback && (
-          <span className="text-[10px] text-gray-400 font-ibm-sans italic ml-1">
+          <span className="text-fs-10 text-gray-400 font-ibm-sans italic ml-1">
             already reviewed
           </span>
         )}
       </div>
       {open ? (
-        <DownOutlined className="text-gray-400 text-[10px]" />
+        <DownOutlined className="text-gray-400 text-fs-10" />
       ) : (
-        <RightOutlined className="text-gray-400 text-[10px]" />
+        <RightOutlined className="text-gray-400 text-fs-10" />
       )}
     </button>
   );
@@ -207,7 +207,7 @@ export const ALLabelSpacePanel: React.FC = () => {
                           : "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed",
                       ].join(" ")}
                     >
-                      <CheckOutlined style={{ fontSize: 10 }} />
+                      <CheckOutlined style={{ fontSize: "var(--text-fs-10)" }} />
                       Annotate
                     </button>
                   </Tooltip>
@@ -226,7 +226,7 @@ export const ALLabelSpacePanel: React.FC = () => {
           </span>
           <div className="inline-flex flex-wrap gap-1 mt-0.5">
             {uniqueRanks.map((rank) => (
-              <Tag key={rank} color="green" variant="outlined" style={{ fontSize: 10, padding: "0 5px", lineHeight: "18px" }}>
+              <Tag key={rank} color="green" variant="outlined" style={{ fontSize: "var(--text-fs-10)", padding: "0 5px", lineHeight: "18px" }}>
                 {rank}
               </Tag>
             ))}

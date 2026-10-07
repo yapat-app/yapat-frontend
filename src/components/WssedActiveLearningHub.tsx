@@ -153,7 +153,7 @@ export const WssedActiveLearningHub = ({
         {done ? <CheckCircleOutlined /> : stepNumber}
       </div>
       <span
-        className={`text-[11px] font-medium leading-tight ${
+        className={`text-fs-11 font-medium leading-tight ${
           done || active ? "text-slate-800" : "text-slate-400"
         }`}
       >
@@ -262,7 +262,7 @@ export const WssedActiveLearningHub = ({
               review suggestions.
             </p>
             {lastJob.model_path && (
-              <p className="mt-3 max-w-lg truncate font-mono text-[11px] text-slate-400">
+              <p className="mt-3 max-w-lg truncate font-mono text-fs-11 text-slate-400">
                 {lastJob.model_path}
               </p>
             )}
@@ -295,7 +295,7 @@ export const WssedActiveLearningHub = ({
             <strong>{selectedSpecies}</strong>.
           </p>
           {lastJob.model_path && (
-            <p className="mt-3 max-w-lg truncate font-mono text-[11px] text-slate-400">
+            <p className="mt-3 max-w-lg truncate font-mono text-fs-11 text-slate-400">
               {lastJob.model_path}
             </p>
           )}

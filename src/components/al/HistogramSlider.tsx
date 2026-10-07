@@ -269,7 +269,7 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
                 return (
                   <span
                     key={t}
-                    className={`absolute text-[10px] text-gray-400 font-ibm-sans ${translateClass}`}
+                    className={`absolute text-fs-10 text-gray-400 font-ibm-sans ${translateClass}`}
                     style={{ left: `${t * 100}%` }}
                   >
                     {formatValue(val)}
@@ -281,7 +281,7 @@ export const HistogramSlider: React.FC<HistogramSliderProps> = ({
 
           {/* Label row */}
           {label && (
-            <div className="mt-1 text-center text-[11px] text-gray-500 font-ibm-sans">
+            <div className="mt-1 text-center text-fs-11 text-gray-500 font-ibm-sans">
               {label}
             </div>
           )}

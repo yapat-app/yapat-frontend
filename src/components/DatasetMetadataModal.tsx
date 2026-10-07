@@ -386,7 +386,7 @@ export const DatasetMetadataModal: React.FC<Props> = ({
               {preview.unique_locations.length}
             </span>
           </div>
-          <Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 13 }}>
+          <Paragraph type="secondary" style={{ marginBottom: 8, fontSize: "var(--text-fs-13)" }}>
             These are the locations detected in your file. Press the edit icon to
             change how a location is stored, or leave it as-is.
           </Paragraph>

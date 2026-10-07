@@ -1,4 +1,7 @@
 /** Mel-spectrogram settings aligned with `react-audio-spectrogram-player` defaults. */
+
+import { LAPTOP_MEDIA_QUERY } from "../hooks/useLaptopViewport";
+
 export const SPECTROGRAM_N_FFT = 1024;
 export const SPECTROGRAM_HOP_LENGTH = 160;
 export const SPECTROGRAM_WIN_LENGTH = 400;
@@ -122,7 +125,9 @@ export function spectrogramParamsForSampleRate(
  * the cost of being wrong is an uncatchable WASM trap rather than a bad-looking
  * plot, so the invariant is re-imposed at the boundary.
  */
-export function clampSpectrogramParams(p: SpectrogramParams): SpectrogramParams {
+export function clampSpectrogramParams(
+  p: SpectrogramParams,
+): SpectrogramParams {
   const win_length = Math.min(p.n_fft, p.win_length);
   return {
     n_fft: p.n_fft,
@@ -156,14 +161,23 @@ export function minDurationForSpectrogram(sampleRate: number): number {
 /** Reserved below the mel canvas (time axis row + optional caption). */
 export const SPECTROGRAM_TIME_AXIS_HEIGHT = 22;
 export const SPECTROGRAM_INFO_LINE_HEIGHT = 18;
-/** `<audio controls>` row rendered by `react-audio-spectrogram-player` below the mel SVG. */
-export const SPECTROGRAM_AUDIO_CONTROLS_HEIGHT = 72;
+export const SPECTROGRAM_AUDIO_CONTROLS_HEIGHT = 40;
+export const SPECTROGRAM_AUDIO_CONTROLS_HEIGHT_LAPTOP = 32;
+
+function audioControlsHeight(): number {
+  const laptop =
+    typeof window !== "undefined" &&
+    window.matchMedia?.(LAPTOP_MEDIA_QUERY).matches;
+  return laptop
+    ? SPECTROGRAM_AUDIO_CONTROLS_HEIGHT_LAPTOP
+    : SPECTROGRAM_AUDIO_CONTROLS_HEIGHT;
+}
 
 /** Vertical space used by UI outside the library mel canvas. */
 export function spectrogramChromeHeight(showAxisInfo = true): number {
   return (
     SPECTROGRAM_TIME_AXIS_HEIGHT +
-    SPECTROGRAM_AUDIO_CONTROLS_HEIGHT +
+    audioControlsHeight() +
     (showAxisInfo ? SPECTROGRAM_INFO_LINE_HEIGHT : 0)
   );
 }
@@ -201,10 +215,16 @@ export function resolveSpectrogramDisplayRange(
   let fMin = SPECTROGRAM_F_MIN;
   let fMax = nyquist;
 
-  if (dataset?.spectrogram_f_min_hz != null && dataset.spectrogram_f_min_hz > 0) {
+  if (
+    dataset?.spectrogram_f_min_hz != null &&
+    dataset.spectrogram_f_min_hz > 0
+  ) {
     fMin = Math.min(dataset.spectrogram_f_min_hz, nyquist);
   }
-  if (dataset?.spectrogram_f_max_hz != null && dataset.spectrogram_f_max_hz > 0) {
+  if (
+    dataset?.spectrogram_f_max_hz != null &&
+    dataset.spectrogram_f_max_hz > 0
+  ) {
     fMax = Math.min(dataset.spectrogram_f_max_hz, nyquist);
   }
   if (fMax <= fMin) {
@@ -235,7 +255,11 @@ export function melToHz(mel: number): number {
  *
  * Returns Hz values in descending order (top → bottom of the Y-axis).
  */
-export function buildMelTicks(fMin: number, fMax: number, count: number): number[] {
+export function buildMelTicks(
+  fMin: number,
+  fMax: number,
+  count: number,
+): number[] {
   if (count <= 1 || fMax <= fMin) return [fMax];
   const melMin = hzToMel(Math.max(0, fMin));
   const melMax = hzToMel(fMax);
@@ -277,8 +301,18 @@ export async function parseWavSampleRate(blob: Blob): Promise<number | null> {
   const buf = await blob.slice(0, 44).arrayBuffer();
   const view = new DataView(buf);
   if (buf.byteLength < 28) return null;
-  const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-  const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+  const riff = String.fromCharCode(
+    view.getUint8(0),
+    view.getUint8(1),
+    view.getUint8(2),
+    view.getUint8(3),
+  );
+  const wave = String.fromCharCode(
+    view.getUint8(8),
+    view.getUint8(9),
+    view.getUint8(10),
+    view.getUint8(11),
+  );
   if (riff !== "RIFF" || wave !== "WAVE") return null;
   const rate = view.getUint32(24, true);
   return Number.isFinite(rate) && rate > 0 ? rate : null;

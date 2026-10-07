@@ -159,7 +159,7 @@ export const DatasetPathPicker: React.FC<DatasetPathPickerProps> = ({
                       title={`Open ${entry.name}`}
                     >
                       Open
-                      <RightOutlined className="text-[10px]" />
+                      <RightOutlined className="text-fs-10" />
                     </button>
                   ) : null}
                   <Button
@@ -180,7 +180,7 @@ export const DatasetPathPicker: React.FC<DatasetPathPickerProps> = ({
       </div>
 
       {availablePaths?.data_root ? (
-        <p className="border-t border-gray-100 px-3 py-1.5 text-[10px] text-gray-400">
+        <p className="border-t border-gray-100 px-3 py-1.5 text-fs-10 text-gray-400">
           Mount: {availablePaths.data_root}
         </p>
       ) : null}

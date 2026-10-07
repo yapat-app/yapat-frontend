@@ -1132,14 +1132,14 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           )}
 
           {summary.data && !summary.data.has_model && visibilityMode !== "disabled" && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-ibm-sans shadow-sm pointer-events-none">
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-fs-11 font-ibm-sans shadow-sm pointer-events-none">
               <ExperimentOutlined className="text-blue-400" />
               Filter scores are missing — backend scores not yet available
             </div>
           )}
 
           {points?.sampled && !isFpvPlotLoading && (
-            <div className="absolute bottom-2 left-2 z-10 px-2 py-0.5 rounded bg-white/85 border border-gray-200 text-[10px] text-gray-500 font-ibm-sans pointer-events-none">
+            <div className="absolute bottom-2 left-2 z-10 px-2 py-0.5 rounded bg-white/85 border border-gray-200 text-fs-10 text-gray-500 font-ibm-sans pointer-events-none">
               {viewport
                 ? viewport.complete
                   ? `All ${viewport.count.toLocaleString()} points in view`
@@ -1195,7 +1195,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                     </button>
                   </Tooltip>
                 </div>
-                <span className="text-[10px] text-gray-400 font-ibm-sans pointer-events-none">
+                <span className="text-fs-10 text-gray-400 font-ibm-sans pointer-events-none">
                   Double-click plot to reset zoom
                 </span>
               </div>

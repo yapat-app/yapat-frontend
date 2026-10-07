@@ -99,7 +99,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
 
         {actualLabelLegend.total > 0 && (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[11px] text-gray-400 font-ibm-sans whitespace-nowrap">
+            <span className="text-fs-11 text-gray-400 font-ibm-sans whitespace-nowrap">
               Legend:
             </span>
             <div className="relative min-w-0 max-w-[min(52vw,720px)]">
@@ -127,7 +127,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                       "rounded-full",
                       "border border-gray-200",
                       "bg-white/90",
-                      "text-[11px] text-gray-700",
+                      "text-fs-11 text-gray-700",
                       "shadow-[0_1px_0_rgba(0,0,0,0.02)]",
                       "max-w-[160px]",
                     ].join(" ")}
@@ -148,7 +148,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                 ))}
                 {actualLabelLegend.remaining > 0 &&
                   actualLabelLegend.total > actualLabelLegend.shown.length && (
-                    <span className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">
+                    <span className="text-fs-11 text-gray-400 whitespace-nowrap shrink-0">
                       +{actualLabelLegend.remaining}
                     </span>
                   )}

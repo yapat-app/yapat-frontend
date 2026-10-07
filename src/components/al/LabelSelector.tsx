@@ -8,20 +8,20 @@
  * Form or can be used standalone.
  */
 
-import React, {
-  useState,
-  useMemo,
-  useRef,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-} from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
-import { SearchOutlined, GlobalOutlined, CloseOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  GlobalOutlined,
+  CloseOutlined,
+  PlusOutlined,
+  HistoryOutlined,
+  DownOutlined,
+} from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
 import { getSpeciesScientificName } from "../../constants/speciesLabels";
 import { usePersonalQuickLabels } from "../../hooks/usePersonalQuickLabels";
+import { useRecentLabels } from "../../hooks/useRecentLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -33,6 +33,30 @@ interface GBIFSuggestion {
   canonicalName?: string;
   rank?: string;
   status?: string;
+}
+
+/** Something the compact search can apply: a quick label or a GBIF suggestion. */
+interface PickOption {
+  value: string;
+  source: "pam" | "gbif";
+  rank?: string;
+  taxonKey?: number;
+}
+
+/** Bold-highlight the first case-insensitive occurrence of `query` in `text`. */
+function highlight(text: string, query: string): React.ReactNode {
+  if (!query) return text;
+  const i = text.toLowerCase().indexOf(query.toLowerCase());
+  if (i < 0) return text;
+  return (
+    <>
+      {text.slice(0, i)}
+      <mark className="bg-yellow-100 text-inherit rounded-sm px-0">
+        {text.slice(i, i + query.length)}
+      </mark>
+      {text.slice(i + query.length)}
+    </>
+  );
 }
 
 interface Props {
@@ -97,13 +121,14 @@ export const LabelSelector: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [gbifResults, setGbifResults] = useState<GBIFSuggestion[]>([]);
   const [gbifLoading, setGbifLoading] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const { recent, markUsed } = useRecentLabels();
 
-  // Anchor the search dropdown to the input via a portal so it can grow and
-  // scroll freely instead of being clipped by the bounded label panel it lives
-  // inside. We track the input's viewport rect and position the dropdown fixed.
-  const searchAnchorRef = useRef<HTMLDivElement | null>(null);
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  // Compact mode: when the quick labels don't fit, the chip area stays
+  // non-scrolling with a "+N more" pill (so it's obvious labels are hidden);
+  // the pill expands it into a scrollable list showing all of them.
+  const chipAreaRef = useRef<HTMLDivElement | null>(null);
+  const [labelsExpanded, setLabelsExpanded] = useState(false);
+  const [hiddenChipCount, setHiddenChipCount] = useState(0);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -205,33 +230,23 @@ export const LabelSelector: React.FC<Props> = ({
     [pamOptions, searchQuery, searchQueryLower],
   );
 
-  // Search dropdown options: PAM matches, plus GBIF suggestions once the user
-  // has typed 2+ characters. Capped so the dropdown stays snappy.
-  const compactSearchOptions = useMemo(() => {
-    if (searchQuery.trim().length < 2) return filteredPamOptions;
-    return [...filteredPamOptions, ...gbifOptions].slice(0, 20);
-  }, [searchQuery, filteredPamOptions, gbifOptions]);
-
-  const searchDropdownOpen =
-    searchFocused &&
-    searchQuery.trim().length >= 1 &&
-    (gbifLoading || compactSearchOptions.length > 0 || searchQuery.trim().length >= 2);
-
-  // Keep the portalled dropdown pinned to the input as the page scrolls/resizes.
-  useLayoutEffect(() => {
-    if (!searchDropdownOpen) return;
-    const update = () => {
-      const el = searchAnchorRef.current;
-      if (el) setAnchorRect(el.getBoundingClientRect());
-    };
-    update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [searchDropdownOpen]);
+  // Compact mode: quick labels matching the query (name or scientific name),
+  // names that start with the query first so the likeliest hit is at the front.
+  const trimmedQuery = searchQuery.trim();
+  const quickMatches = useMemo(() => {
+    if (!trimmedQuery) return pamOptions;
+    const q = trimmedQuery.toLowerCase();
+    const hits = pamOptions.filter(
+      (o) =>
+        o.value.toLowerCase().includes(q) ||
+        (getSpeciesScientificName(o.value) ?? "").toLowerCase().includes(q),
+    );
+    return hits.sort(
+      (a, b) =>
+        Number(!a.value.toLowerCase().startsWith(q)) -
+        Number(!b.value.toLowerCase().startsWith(q)),
+    );
+  }, [pamOptions, trimmedQuery]);
 
   const combinedList = useMemo(
     () => filteredPamOptions.slice(0, MAX_VISIBLE_LABELS),
@@ -252,6 +267,7 @@ export const LabelSelector: React.FC<Props> = ({
       op: exists ? "remove" : "add",
       labelsAfter: next,
     });
+    if (!exists) markUsed(label);
     onChange(next);
   };
 
@@ -265,6 +281,7 @@ export const LabelSelector: React.FC<Props> = ({
       op: "add",
       labelsAfter: [...normalized, trimmed],
     });
+    markUsed(trimmed);
     onChange([...normalized, trimmed]);
   };
 
@@ -280,7 +297,35 @@ export const LabelSelector: React.FC<Props> = ({
    * no second search. Pinning is fire-and-forget: it must never delay or block
    * the label itself.
    */
-  const pickSearchOption = (opt: (typeof compactSearchOptions)[number]) => {
+  // Count quick-label chips cut off by the clipped (non-expanded) chip area.
+  // Chips under the bottom fade count as hidden too, since the pill covers them.
+  useEffect(() => {
+    if (!compact) return;
+    const el = chipAreaRef.current;
+    if (!el) return;
+    const FADE_PX = 36;
+    const measure = () => {
+      if (el.scrollHeight <= el.clientHeight + 1) {
+        setHiddenChipCount(0);
+        return;
+      }
+      const limit = el.getBoundingClientRect().bottom - FADE_PX;
+      let hidden = 0;
+      el.querySelectorAll<HTMLElement>('[data-qchip="pam"]').forEach((chip) => {
+        if (chip.getBoundingClientRect().bottom > limit) hidden += 1;
+      });
+      setHiddenChipCount(hidden);
+    };
+    const raf = requestAnimationFrame(measure);
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [compact, labelsExpanded, searchQuery, pamOptions, recent, value]);
+
+  const pickSearchOption = (opt: PickOption) => {
     addLabel(opt.value);
     if (opt.source === "gbif" && opt.taxonKey != null) {
       personal.promote({
@@ -296,6 +341,108 @@ export const LabelSelector: React.FC<Props> = ({
 
   // ── Compact inline mode ───────────────────────────────────────────────────
   if (compact) {
+    const clearSearch = () => {
+      setSearchQuery("");
+      setGbifResults([]);
+    };
+    const chipsDisabled = disabled || labelsLoading;
+    const gbifActive = trimmedQuery.length >= 2;
+    // Searching (or after "+N more") the list scrolls; otherwise it's clipped
+    // and the pill below reports how many chips are out of view.
+    const chipsScrollable = labelsExpanded || Boolean(trimmedQuery);
+    const showMorePill = !chipsScrollable && hiddenChipCount > 0;
+    // Recently used labels that are still offered as quick labels (no query only).
+    const pamByKey = new Map(pamOptions.map((o) => [o.value.toLowerCase(), o]));
+    const recentOptions = trimmedQuery
+      ? []
+      : recent
+          .map((r) => pamByKey.get(r.toLowerCase()))
+          .filter((o): o is (typeof pamOptions)[number] => o != null);
+
+    const applyQuery = () => {
+      if (!trimmedQuery) return;
+      const q = trimmedQuery.toLowerCase();
+      const exactQuick = quickMatches.find((o) => o.value.toLowerCase() === q);
+      const exactGbif = gbifOptions.find((o) => o.value.toLowerCase() === q);
+      const pick: PickOption | undefined =
+        exactQuick ?? exactGbif ?? quickMatches[0] ?? gbifOptions[0];
+      if (pick) {
+        pickSearchOption(pick);
+      } else {
+        // Free text with no match: label the snippet, but don't pin it, since
+        // it isn't a resolved taxon.
+        addLabel(trimmedQuery);
+        clearSearch();
+      }
+    };
+
+    const renderQuickChip = (
+      opt: (typeof pamOptions)[number],
+      keyPrefix: string,
+    ) => {
+      const isSelected = selectedSet.has(opt.value.toLowerCase());
+      const scientificName = getSpeciesScientificName(opt.value);
+      const chip = (
+        // Wrapper so the remove control is a sibling of the chip button rather
+        // than a nested (invalid) button.
+        <span key={`${keyPrefix}:${opt.value}`} data-qchip={keyPrefix} className="group/chip relative inline-flex">
+          <button
+            type="button"
+            disabled={chipsDisabled}
+            onClick={() => {
+              toggle(opt.value);
+              if (trimmedQuery && !isSelected) clearSearch();
+            }}
+            aria-pressed={isSelected}
+            title={scientificName ? undefined : isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`}
+            className={[
+              "inline-flex items-center px-2.5 py-1 rounded-md border text-xs font-medium transition-colors duration-100 select-none",
+              isSelected
+                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                : "bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
+              // Labels the participant pinned from GBIF carry a green edge.
+              opt.removable && !isSelected ? "border-l-[3px] border-l-green-500" : "",
+              chipsDisabled
+                ? "opacity-40 cursor-not-allowed"
+                : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
+            ].join(" ")}
+          >
+            <span className="truncate max-w-40">
+              {isSelected ? opt.value : highlight(opt.value, trimmedQuery)}
+            </span>
+          </button>
+          {opt.removable && !chipsDisabled && (
+            <button
+              type="button"
+              aria-label={`Remove "${opt.value}" from quick labels`}
+              title="Remove from quick labels"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (opt.taxonId) personal.remove(opt.taxonId);
+              }}
+              className="absolute -top-1.5 -right-1.5 hidden group-hover/chip:flex items-center justify-center h-4 w-4 rounded-full bg-gray-600 text-white text-fs-8 shadow hover:bg-red-500"
+            >
+              <CloseOutlined />
+            </button>
+          )}
+        </span>
+      );
+      return scientificName ? (
+        <Tooltip key={`${keyPrefix}:${opt.value}`} title={scientificName}>
+          {chip}
+        </Tooltip>
+      ) : (
+        chip
+      );
+    };
+
+    const sectionTitle = (icon: React.ReactNode, text: React.ReactNode) => (
+      <div className="flex items-center gap-1.5 mb-1.5 text-fs-10 font-semibold uppercase tracking-wider text-gray-400 font-ibm-sans">
+        {icon}
+        {text}
+      </div>
+    );
+
     return (
       <div data-tour="labeling" className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
 
@@ -303,14 +450,14 @@ export const LabelSelector: React.FC<Props> = ({
         {value.length > 0 && (
           <div className="shrink-0">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
+              <span className="text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-500 uppercase tracking-wider font-ibm-sans">
                 Labels
               </span>
               <button
                 type="button"
                 onClick={clearAll}
                 disabled={disabled}
-                className="text-[11px] text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
+                className="text-fs-11 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40"
               >
                 Clear all
               </button>
@@ -335,181 +482,155 @@ export const LabelSelector: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ── Search — plain input (always typable); GBIF + label list in a
-            portalled dropdown so it escapes the bounded panel's clipping ── */}
-        <div ref={searchAnchorRef} className="shrink-0">
+        {/* ── Search: filters the quick labels below in place, and from 2+
+            letters also looks the name up in GBIF (shown as its own section) ── */}
+        <div className="shrink-0">
           <Input
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => window.setTimeout(() => setSearchFocused(false), 150)}
             onKeyDown={(e) => {
               e.stopPropagation();
-              if (e.key === "Enter" && searchQuery.trim()) {
+              if (e.key === "Enter") {
                 e.preventDefault();
-                const q = searchQuery.trim();
-                const match =
-                  compactSearchOptions.find(
-                    (o) => o.value.toLowerCase() === q.toLowerCase(),
-                  ) ?? compactSearchOptions[0];
-                if (match) {
-                  pickSearchOption(match);
-                } else {
-                  // Free text with no match: label the snippet, but don't pin —
-                  // it isn't a resolved taxon.
-                  addLabel(q);
-                  setSearchQuery("");
-                  setGbifResults([]);
-                }
+                applyQuery();
+              } else if (e.key === "Escape") {
+                clearSearch();
               }
             }}
             disabled={disabled}
-            placeholder={labelsLoading ? "Loading labels…" : "Search species (GBIF)…"}
-            suffix={labelsLoading ? <Spin size="small" /> : <SearchOutlined />}
+            placeholder={labelsLoading ? "Loading labels…" : "Find a label, or search GBIF…"}
+            prefix={<SearchOutlined className="text-gray-400" />}
+            suffix={labelsLoading ? <Spin size="small" /> : null}
             allowClear
           />
         </div>
-        {searchDropdownOpen &&
-          anchorRect &&
-          (() => {
-            const GAP = 4;
-            const spaceBelow = window.innerHeight - anchorRect.bottom - GAP;
-            const spaceAbove = anchorRect.top - GAP;
-            // Flip above only when there's clearly more room up top.
-            const placeAbove = spaceBelow < 180 && spaceAbove > spaceBelow;
-            const maxHeight = Math.max(
-              120,
-              Math.min(320, (placeAbove ? spaceAbove : spaceBelow) - 8),
-            );
-            const positionStyle: React.CSSProperties = placeAbove
-              ? { bottom: window.innerHeight - anchorRect.top + GAP }
-              : { top: anchorRect.bottom + GAP };
-            return createPortal(
-              <ul
-                className="fixed z-[1100] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg py-1 text-sm"
-                style={{
-                  ...positionStyle,
-                  left: anchorRect.left,
-                  width: anchorRect.width,
-                  maxHeight,
-                }}
-                // Keep the input focused (dropdown open) while interacting.
-                onMouseDown={(e) => e.preventDefault()}
-              >
-              {gbifLoading && (
-                <li className="px-3 py-2 text-xs text-gray-500 flex items-center gap-2">
-                  <Spin size="small" /> Searching GBIF…
-                </li>
-              )}
-              {!gbifLoading &&
-                compactSearchOptions.map((opt) => (
-                  <li key={`${opt.source}:${opt.value}`}>
-                    <button
-                      type="button"
-                      className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between gap-2"
-                      onClick={() => pickSearchOption(opt)}
-                    >
-                      <span>
-                        {selectedSet.has(opt.value.toLowerCase()) ? "✓ " : ""}
-                        {opt.label}
-                      </span>
-                      {opt.source === "gbif" && (
-                        <GlobalOutlined className="text-green-500 text-xs shrink-0" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              {!gbifLoading &&
-                searchQuery.trim().length >= 2 &&
-                compactSearchOptions.length === 0 && (
-                  <li className="px-3 py-2 text-xs text-gray-400 italic">
-                    No results — press Enter to use &quot;{searchQuery.trim()}&quot;
-                  </li>
-                )}
-              </ul>,
-              document.body,
-            );
-          })()}
 
-        {/* ── Quick label chips ── */}
+        {/* ── Header: count + transient status (fixed row, no layout shift) ── */}
         <div className="shrink-0 flex items-center justify-between gap-2 min-h-5">
-          <span className="flex items-center">
-            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
-              Quick labels
-            </span>
+          <span className="text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
+            {trimmedQuery
+              ? `${quickMatches.length} of ${pamOptions.length} quick labels`
+              : `Quick labels${pamOptions.length ? ` · ${pamOptions.length}` : ""}`}
             {labelsLoading && <Spin size="small" className="ml-2" />}
+            {labelsExpanded && !trimmedQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLabelsExpanded(false);
+                  chipAreaRef.current?.scrollTo({ top: 0 });
+                }}
+                className="ml-2 normal-case tracking-normal font-medium text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline cursor-pointer"
+              >
+                Show less
+              </button>
+            )}
           </span>
-          {statusSlot}
+          {statusSlot ??
+            (trimmedQuery ? (
+              <span className="text-fs-10 text-gray-400 whitespace-nowrap">
+                Enter adds the first match · Esc clears
+              </span>
+            ) : null)}
         </div>
 
+        <div className={["relative", fillHeight ? "flex-1 min-h-0" : ""].join(" ")}>
         <div
+          ref={chipAreaRef}
           className={[
-            fillHeight ? "flex-1 min-h-0 overflow-y-auto" : "max-h-40 overflow-y-auto",
-            "pr-0.5",
+            fillHeight ? "h-full" : "max-h-40",
+            chipsScrollable ? "overflow-y-auto" : "overflow-hidden",
+            "pr-0.5 flex flex-col gap-3",
           ].join(" ")}
         >
-          {pamOptions.length === 0 && !labelsLoading ? (
+          {pamOptions.length === 0 && !labelsLoading && !trimmedQuery ? (
             <p className="text-xs text-gray-400 italic">
-              No labels available. Run Active Learning inference once to load labels.json for this dataset.
+              No quick labels yet. Search above to find a species in GBIF; it is pinned here once used.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {pamOptions.map((opt) => {
-                const isSelected = selectedSet.has(opt.value.toLowerCase());
-                const scientificName = getSpeciesScientificName(opt.value);
-                const actionLabel = isSelected ? `Remove "${opt.value}"` : `Add "${opt.value}"`;
-                const chip = (
-                  // Wrapper so the remove control is a sibling of the chip
-                  // button rather than a nested (invalid) button.
-                  <span
-                    key={`pam:${opt.value}`}
-                    className="group/chip relative inline-flex"
-                  >
-                    <button
-                      type="button"
-                      disabled={disabled || labelsLoading}
-                      onClick={() => toggle(opt.value)}
-                      title={scientificName ? undefined : actionLabel}
-                      className={[
-                        "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-sm font-semibold transition-all duration-150 select-none",
-                        isSelected
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700",
-                        // Labels the participant pinned themselves carry a
-                        // green edge, matching the GBIF marker in the dropdown.
-                        opt.removable && !isSelected
-                          ? "border-l-4 border-l-green-500"
-                          : "",
-                        disabled || labelsLoading
-                          ? "opacity-40 cursor-not-allowed"
-                          : "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300",
-                      ].join(" ")}
-                    >
-                      <span className="truncate max-w-45">{opt.value}</span>
-                    </button>
-                    {opt.removable && !disabled && !labelsLoading && (
+            <>
+              {recentOptions.length > 0 && (
+                <div>
+                  {sectionTitle(<HistoryOutlined />, "Recently used")}
+                  <div className="flex flex-wrap gap-1.5">
+                    {recentOptions.map((opt) => renderQuickChip(opt, "recent"))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                {recentOptions.length > 0 && sectionTitle(null, "All quick labels")}
+                {quickMatches.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {quickMatches.map((opt) => renderQuickChip(opt, "pam"))}
+                  </div>
+                ) : trimmedQuery ? (
+                  <p className="text-xs text-gray-400">
+                    No quick label matches &quot;{trimmedQuery}&quot;.
+                  </p>
+                ) : null}
+              </div>
+            </>
+          )}
+
+          {trimmedQuery.length === 1 && (
+            <p className="text-fs-11 text-gray-400">Type one more letter to also search GBIF.</p>
+          )}
+
+          {gbifActive && (
+            <div className="rounded-md border border-dashed border-green-300 bg-green-50/40 px-2 py-1.5">
+              {sectionTitle(
+                <GlobalOutlined className="text-green-600" />,
+                <span className="text-green-700">More species from GBIF (online)</span>,
+              )}
+              {gbifLoading ? (
+                <span className="inline-flex items-center gap-2 text-xs text-gray-500">
+                  <Spin size="small" /> Searching GBIF…
+                </span>
+              ) : gbifOptions.length > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {gbifOptions.map((opt) => (
                       <button
+                        key={`gbif:${opt.taxonKey}:${opt.value}`}
                         type="button"
-                        aria-label={`Remove "${opt.value}" from quick labels`}
-                        title="Remove from quick labels"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (opt.taxonId) personal.remove(opt.taxonId);
-                        }}
-                        className="absolute -top-1.5 -right-1.5 hidden group-hover/chip:flex items-center justify-center h-4 w-4 rounded-full bg-gray-600 text-white text-[8px] shadow hover:bg-red-500"
+                        disabled={chipsDisabled}
+                        onClick={() => pickSearchOption(opt)}
+                        title={`Add "${opt.value}" and pin it to your quick labels`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-green-300 bg-white text-xs text-gray-700 hover:border-green-500 hover:bg-green-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
-                        <CloseOutlined />
+                        <PlusOutlined className="text-fs-10 text-green-600" />
+                        <span className="truncate max-w-40">{highlight(opt.value, trimmedQuery)}</span>
+                        {opt.rank && (
+                          <span className="text-fs-9 uppercase tracking-wide text-gray-400">
+                            {opt.rank.toLowerCase()}
+                          </span>
+                        )}
                       </button>
-                    )}
-                  </span>
-                );
-                if (!scientificName) return chip;
-                return (
-                  <Tooltip key={`pam:${opt.value}`} title={scientificName}>
-                    {chip}
-                  </Tooltip>
-                );
-              })}
+                    ))}
+                  </div>
+                  <p className="mt-1 text-fs-10 text-gray-400">
+                    Adding one also pins it to your quick labels.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  No GBIF results. Press Enter to use &quot;{trimmedQuery}&quot; as written.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+          {showMorePill && (
+            // Fade over the cut-off row + pill; clicking expands to a scrollable list.
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-10 items-end justify-center bg-linear-to-t from-white via-white/90 to-transparent pb-1">
+              <button
+                type="button"
+                onClick={() => setLabelsExpanded(true)}
+                className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-gray-300 bg-white px-3 py-0.5 text-fs-11 font-medium text-gray-700 shadow-sm hover:border-gray-400 hover:text-gray-900 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+              >
+                +{hiddenChipCount} more
+                <DownOutlined className="text-[9px]" />
+              </button>
             </div>
           )}
         </div>
@@ -592,12 +713,12 @@ export const LabelSelector: React.FC<Props> = ({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs font-ibm-mono font-semibold text-gray-700">Available labels</div>
-                <div className="text-[11px] text-gray-400 mt-0.5">
+                <div className="text-fs-11 text-gray-400 mt-0.5">
                   Click to add/remove. Search filters the label list.
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] text-gray-500">
+                <span className="text-fs-11 text-gray-500">
                   {searchQuery.trim()
                     ? `${combinedList.length} match${combinedList.length === 1 ? "" : "es"}`
                     : `${Math.min(pamOptions.length, MAX_VISIBLE_LABELS)} labels`}
@@ -608,7 +729,7 @@ export const LabelSelector: React.FC<Props> = ({
                     type="text"
                     onClick={clearAll}
                     disabled={disabled || labelsLoading}
-                    className="text-[11px]"
+                    className="text-fs-11"
                   >
                     Clear
                   </Button>
@@ -636,7 +757,7 @@ export const LabelSelector: React.FC<Props> = ({
               <div className="flex flex-col gap-3">
                 <div>
                   {searchQuery.trim() && (
-                    <div className="px-1 mb-2 text-[11px] text-gray-400 text-right">
+                    <div className="px-1 mb-2 text-fs-11 text-gray-400 text-right">
                       {filteredPamOptions.length} match{filteredPamOptions.length === 1 ? "" : "es"}
                     </div>
                   )}

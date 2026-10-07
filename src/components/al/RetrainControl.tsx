@@ -51,7 +51,7 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
       FAILED: "error",
     } as const;
     return (
-      <Tag color={colorMap[lastRetrainJob.status]} className={variant === "compact" ? "text-[10px] px-2" : undefined}>
+      <Tag color={colorMap[lastRetrainJob.status]} className={variant === "compact" ? "text-fs-10 px-2" : undefined}>
         {lastRetrainJob.status === "RUNNING" && (
           <Spin size="small" className="mr-1" />
         )}

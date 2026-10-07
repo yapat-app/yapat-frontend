@@ -206,7 +206,7 @@ export const DatasetFolderStructure: React.FC = () => {
                 <div className="mt-1 text-xs leading-5 text-slate-500">
                   The selected dataset did not expose species folders or root-level audio files.
                 </div>
-                <div className="mt-1 truncate text-[11px] text-slate-400">
+                <div className="mt-1 truncate text-fs-11 text-slate-400">
                   {datasetDirectories.source_uri}
                 </div>
               </div>

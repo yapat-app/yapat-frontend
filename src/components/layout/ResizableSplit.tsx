@@ -44,6 +44,7 @@ export interface ResizableSplitProps {
    */
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  collapsedPx?: number;
 
   className?: string;
 }
@@ -78,6 +79,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
   maxLeftRatio,
   collapsed = false,
   onToggleCollapse,
+  collapsedPx = 0,
   className,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -252,8 +254,17 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
     onToggleCollapse,
   ]);
 
-  const effectiveRightPx = mode === "right_px" && collapsed ? 0 : rightPx;
-  const effectiveLeftPx = mode === "left_px" && collapsed ? 0 : leftPx;
+  const effectiveRightPx =
+    mode === "right_px" && collapsed ? collapsedPx : rightPx;
+  const effectiveLeftPx =
+    mode === "left_px" && collapsed ? collapsedPx : leftPx;
+
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() =>
+      window.dispatchEvent(new Event("resize")),
+    );
+    return () => window.cancelAnimationFrame(raf);
+  }, [collapsed]);
 
   const leftStyle: React.CSSProperties =
     mode === "ratio"
@@ -283,57 +294,62 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
         {left}
       </div>
 
-      {(() => {
-        const handle = (
-          <div
-            data-rs-handle="1"
-            onPointerDown={startDrag}
-            className={[
-              "cursor-col-resize shrink-0 relative group",
-              collapsed && showChevron ? "w-6" : "w-2",
-              "bg-linear-to-r from-gray-50 to-gray-100",
-              "hover:from-gray-100 hover:to-gray-200",
-            ].join(" ")}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={
-              onToggleCollapse
-                ? collapsed
-                  ? "Expand panel"
-                  : "Resize panel — click to collapse"
-                : "Resize panels"
-            }
-            tabIndex={0}
-          >
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-300/70 group-hover:bg-gray-400" />
-            {showChevron && (
-              <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
-                <div
-                  className={[
-                    "flex items-center justify-center rounded-full border shadow-sm transition-opacity",
-                    collapsed
-                      ? "h-9 w-5 border-blue-200 bg-blue-50 text-blue-500 opacity-100"
-                      : "h-8 w-2 border-gray-200 bg-white/90 text-gray-400 opacity-0 group-hover:opacity-100",
-                  ].join(" ")}
-                >
-                  {pointsRight ? (
-                    <DoubleRightOutlined className="text-[8px]" />
-                  ) : (
-                    <DoubleLeftOutlined className="text-[8px]" />
-                  )}
-                </div>
+      {collapsed && !onToggleCollapse
+        ? null
+        : (() => {
+            const handle = (
+              <div
+                data-rs-handle="1"
+                onPointerDown={startDrag}
+                className={[
+                  "cursor-col-resize shrink-0 relative group",
+                  collapsed && showChevron ? "w-6" : "w-2",
+                  "bg-linear-to-r from-gray-50 to-gray-100",
+                  "hover:from-gray-100 hover:to-gray-200",
+                ].join(" ")}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={
+                  onToggleCollapse
+                    ? collapsed
+                      ? "Expand panel"
+                      : "Resize panel — click to collapse"
+                    : "Resize panels"
+                }
+                tabIndex={0}
+              >
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-300/70 group-hover:bg-gray-400" />
+                {showChevron && (
+                  <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
+                    <div
+                      className={[
+                        "flex items-center justify-center rounded-full border shadow-sm transition-opacity",
+                        collapsed
+                          ? "h-9 w-5 border-blue-200 bg-blue-50 text-blue-500 opacity-100"
+                          : "h-8 w-2 border-gray-200 bg-white/90 text-gray-400 opacity-0 group-hover:opacity-100",
+                      ].join(" ")}
+                    >
+                      {pointsRight ? (
+                        <DoubleRightOutlined className="text-fs-8" />
+                      ) : (
+                        <DoubleLeftOutlined className="text-fs-8" />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        );
-        return showChevron ? (
-          <Tooltip title={collapsed ? "Expand" : "Collapse"} placement="right">
-            {handle}
-          </Tooltip>
-        ) : (
-          handle
-        );
-      })()}
+            );
+            return showChevron ? (
+              <Tooltip
+                title={collapsed ? "Expand" : "Collapse"}
+                placement="right"
+              >
+                {handle}
+              </Tooltip>
+            ) : (
+              handle
+            );
+          })()}
 
       <div className="min-w-0 h-full overflow-hidden" style={rightStyle}>
         {right}

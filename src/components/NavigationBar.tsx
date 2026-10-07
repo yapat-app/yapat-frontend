@@ -39,7 +39,7 @@ export const NavigationBar = () => {
   const allLinks = NAV_LINKS;
 
   return (
-    <div className="flex w-full items-center justify-between py-2 px-8 border-b border-[#E5E8EB] bg-[#FFFFFF]">
+    <div className="flex w-full items-center justify-between py-1.5 px-6 border-b border-[#E5E8EB] bg-[#FFFFFF]">
       {/* Brand */}
       <h2
         className="text-lg font-bold font-ibm-mono cursor-pointer select-none hover:opacity-70 transition-opacity"

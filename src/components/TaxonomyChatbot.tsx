@@ -384,19 +384,19 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
         key: "1",
         label: (
           <Space size={4}>
-            <InfoCircleOutlined style={{ fontSize: 12 }} />
-            <span style={{ fontSize: 12 }}>Details</span>
+            <InfoCircleOutlined style={{ fontSize: "var(--text-fs-12)" }} />
+            <span style={{ fontSize: "var(--text-fs-12)" }}>Details</span>
           </Space>
         ),
         children: (
           <Space direction="vertical" size={8} style={{ width: "100%" }}>
             {item.metadata.description && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: "var(--text-fs-11)" }}>
                   Description:
                 </Text>
                 <Paragraph
-                  style={{ marginTop: 4, marginBottom: 0, fontSize: 12 }}
+                  style={{ marginTop: 4, marginBottom: 0, fontSize: "var(--text-fs-12)" }}
                   ellipsis={{ rows: 3, expandable: true, symbol: "more" }}
                 >
                   {item.metadata.description}
@@ -405,7 +405,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             )}
             {item.metadata.iri && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: "var(--text-fs-11)" }}>
                   Reference:
                 </Text>
                 <div style={{ marginTop: 4 }}>
@@ -413,7 +413,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                     href={item.metadata.iri}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ fontSize: 11, wordBreak: "break-all" }}
+                    style={{ fontSize: "var(--text-fs-11)", wordBreak: "break-all" }}
                   >
                     <LinkOutlined /> {item.metadata.iri}
                   </a>
@@ -422,20 +422,20 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             )}
             {item.id && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: "var(--text-fs-11)" }}>
                   ID:{" "}
                 </Text>
-                <Text code style={{ fontSize: 11 }}>
+                <Text code style={{ fontSize: "var(--text-fs-11)" }}>
                   {item.id}
                 </Text>
               </div>
             )}
             {item.metadata.score && (
               <div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: "var(--text-fs-11)" }}>
                   Confidence:{" "}
                 </Text>
-                <Tag color="blue" style={{ fontSize: 11 }}>
+                <Tag color="blue" style={{ fontSize: "var(--text-fs-11)" }}>
                   {(item.metadata.score * 100).toFixed(0)}%
                 </Tag>
               </div>
@@ -473,13 +473,13 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 count={getSourceIcon(item.metadata.source)}
                 style={{
                   backgroundColor: getSourceColor(item.metadata.source),
-                  fontSize: 10,
+                  fontSize: "var(--text-fs-10)",
                 }}
               />
             </div>
 
             {item.scientific_name && item.scientific_name !== item.name && (
-              <Text italic type="secondary" style={{ fontSize: 13 }}>
+              <Text italic type="secondary" style={{ fontSize: "var(--text-fs-13)" }}>
                 {item.scientific_name}
               </Text>
             )}
@@ -487,12 +487,12 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             <Space size={4} wrap style={{ marginTop: 4 }}>
               <Tag
                 color={getSourceColor(item.metadata.source)}
-                style={{ fontSize: 11, margin: 0 }}
+                style={{ fontSize: "var(--text-fs-11)", margin: 0 }}
               >
                 {item.metadata.source.toUpperCase()}
               </Tag>
               {item.rank && (
-                <Tag color="default" style={{ fontSize: 11, margin: 0 }}>
+                <Tag color="default" style={{ fontSize: "var(--text-fs-11)", margin: 0 }}>
                   {item.rank}
                 </Tag>
               )}
@@ -592,7 +592,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             <Space direction="vertical" size={4} style={{ width: "100%" }}>
               <Text style={{ fontSize: 15, lineHeight: 1.6 }}>{summary}</Text>
               {taxonomies.length > 0 && (
-                <Text type="secondary" style={{ fontSize: 13 }}>
+                <Text type="secondary" style={{ fontSize: "var(--text-fs-13)" }}>
                   Found {taxonomies.length} relevant candidates
                 </Text>
               )}
@@ -610,7 +610,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                   }}
                 >
                   <Space>
-                    <Text strong style={{ fontSize: 14, color: "#262626" }}>
+                    <Text strong style={{ fontSize: "var(--text-fs-14)", color: "#262626" }}>
                       Suggested Concepts
                     </Text>
                     <Badge
@@ -712,7 +712,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
             <Text
               strong
               className="font-ibm-sans!"
-              style={{ color: "#4A709C", fontSize: 14 }}
+              style={{ color: "#4A709C", fontSize: "var(--text-fs-14)" }}
             >
               Taxonomy Assistant
             </Text>
@@ -762,7 +762,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 <Text
                   className="font-ibm-sans!"
                   style={{
-                    fontSize: 14,
+                    fontSize: "var(--text-fs-14)",
                     color: "#4A709C",
                     whiteSpace: "pre-line",
                   }}
@@ -772,7 +772,7 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 <Paragraph
                   className="font-ibm-sans!"
                   type="secondary"
-                  style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
+                  style={{ marginTop: 8, marginBottom: 0, fontSize: "var(--text-fs-12)" }}
                 >
                   Describe what you want to annotate below.
                 </Paragraph>
@@ -793,11 +793,11 @@ const TaxonomyChatbot: React.FC<TaxonomyChatbotProps> = ({ teamId }) => {
                 <MessageOutlined
                   style={{ fontSize: 64, marginBottom: 24, opacity: 0.3 }}
                 />
-                <Paragraph type="secondary" style={{ fontSize: 12 }}>
+                <Paragraph type="secondary" style={{ fontSize: "var(--text-fs-12)" }}>
                   Start a conversation to get taxonomy suggestions for your
                   annotations.
                 </Paragraph>
-                <Paragraph type="secondary" style={{ fontSize: 11 }}>
+                <Paragraph type="secondary" style={{ fontSize: "var(--text-fs-11)" }}>
                   Example: "I want to annotate Panthera leo"
                 </Paragraph>
               </div>

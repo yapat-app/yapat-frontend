@@ -7,8 +7,8 @@
 }
 
 .nav_logo_dfki {
-  width: 5rem;
-  height: 3.75rem;
+  width: 4.25rem;
+  height: 2.75rem;
   object-fit: contain;
   display: block;
 }
@@ -31,7 +31,7 @@
 
 .sub_head_text {
   font-family: "IBM Plex Mono", sans-serif;
-  font-size: 14px;
+  font-size: var(--text-fs-14);
   font-weight: 700;
   line-height: 24px;
   letter-spacing: 0em;
@@ -41,7 +41,7 @@
 .sub_base_text {
   font-family: "IBM Plex Sans", sans-serif;
   color: #4a709c;
-  font-size: 14px;
+  font-size: var(--text-fs-14);
   font-weight: 450;
   line-height: 24px;
   letter-spacing: 0em;

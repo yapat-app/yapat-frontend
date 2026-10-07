@@ -233,7 +233,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
 
           <div
             data-tour="projection-methods"
-            className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-white overflow-x-auto"
+            className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 bg-white overflow-x-auto"
           >
             {PROJECTION_METHODS.filter(
               (m) => !thumbData?.unavailableMethods.has(m.key),
@@ -260,7 +260,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                       : "",
                   ].join(" ")}
                 >
-                  <div className="w-22.5 h-13 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
+                  <div className="w-18 h-9 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
                     <MiniProjection
                       points={thumbData?.thumbnailPoints ?? []}
                       coordsBySnippet={
@@ -276,7 +276,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                   </div>
                   <div
                     className={[
-                      "mt-1 text-center text-[11px] font-ibm-sans",
+                      "mt-1 text-center text-fs-11 font-ibm-sans",
                       isActive
                         ? "text-blue-700 font-semibold"
                         : "text-gray-600",
