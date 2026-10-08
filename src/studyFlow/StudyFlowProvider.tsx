@@ -180,8 +180,7 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       // logger session itself is already running — see the mount effect).
       setStage(phaseId, { stage: "running", startedAt: Date.now() });
       setNowTs(Date.now());
-      const content = getPhaseContent(phaseId);
-      message.success(`${content.title} — annotation session has started!`, 3);
+      message.success("You're all set — happy annotating!", 3);
       return;
     }
     setStage(phaseId, { stage: "tour" });
@@ -207,8 +206,7 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     setNowTs(Date.now());
     // phase_timer_start is emitted by the stage-watching effect above once
     // the state update lands — no direct call here.
-    const content = getPhaseContent(phaseId);
-    message.success(`${content.title} — annotation session has started!`, 3);
+    message.success("You're all set — happy annotating!", 3);
   }, [phaseId, pendingTourSteps, update]);
 
   // ── Manual phase switch (toolbar dropdown) ────────────────────────────────

@@ -51,9 +51,12 @@ export const PhaseInstructionsModal: React.FC = () => {
       title={
         <div className="flex items-center justify-between gap-3">
           <span className="font-ibm-mono">{content.title}</span>
-          <span className="text-xs font-normal text-gray-400 font-ibm-sans">
-            Phase {sequenceIndex + 1} of {sequenceLength}
-          </span>
+          {/* A single pinned phase isn't a sequence; "Phase 1 of 1" would only confuse. */}
+          {sequenceLength > 1 && (
+            <span className="text-xs font-normal text-gray-400 font-ibm-sans">
+              Phase {sequenceIndex + 1} of {sequenceLength}
+            </span>
+          )}
         </div>
       }
     >

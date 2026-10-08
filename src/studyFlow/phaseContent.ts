@@ -1,18 +1,16 @@
 /**
- * Authored study content — what each phase tells the participant (the "Welcome"
+ * Authored onboarding content — what each phase tells the user (the "Welcome"
  * instructions modal) and which controls its guided tour highlights.
  *
  * Each tour step carries a `featureKey`. Steps whose key was already shown in an
- * earlier phase are skipped (see StudyFlowProvider `seenTourKeys`). Each phase
- * therefore lists ONLY the cards it introduces: P1 covers the clip / label /
- * scroll / tip basics, and each later phase adds just its new capability
- * (projection, metadata filters, model scores, clickable points). Moving
- * forward through the phases, a participant never sees the same card twice.
-
+ * earlier phase are skipped (see StudyFlowProvider `seenTourKeys`). P1–P4 list
+ * only the cards they introduce, so moving forward through them a user never
+ * sees the same card twice. P5 is the full workspace that deployments now pin
+ * users to directly, so its tour covers every feature on its own — anyone who
+ * already saw a card in an earlier phase still skips it via the dedup.
  */
 
 import type { PhaseContent, TourStepSpec } from "./types";
-import { SPECIES_LABELS } from "../constants/speciesLabels";
 import {
   EXPLAINER_COPY,
   isExplainerKey,
@@ -31,7 +29,7 @@ const LABEL_DESC =
 const TIP_DESC =
   "If you're not confident about a snippet, skip it.";
 
-const SCROLL_DESC_P1 =
+const SCROLL_DESC =
   "Once you've labeled a snippet, scroll down to load the next snippet. A machine learning model picks and sorts samples it thinks are most useful for it to learn from.";
 
 const PROJECTION_DESC =
@@ -60,9 +58,8 @@ const MODEL_SCORES_INTRO =
   "Click the ⓘ beside any score to see these explanations again while you annotate.";
 
 // ── Reusable cards ──────────────────────────────────────────────────────────
-// Each phase lists only the cards it INTRODUCES; keys are shared so the flow's
-// `seenTourKeys` dedup guarantees a card is never shown twice as the
-// participant moves forward through the phases.
+// Keys are shared across phases so the flow's `seenTourKeys` dedup guarantees
+// a card is never shown twice to the same user.
 
 const clipStep = (): TourStepSpec => ({
   featureKey: "clip",
@@ -132,8 +129,8 @@ const metadataStep = (): TourStepSpec => ({
 // uncertainty while the panel showed confidence first; deriving it means
 // reordering scoreFilterConfig reorders the cards with it, and the cards walk
 // the panel top to bottom by construction. Composite is deliberately excluded —
-// it's a blend of the others and stays popover-only rather than spending a card
-// in a timed phase.
+// it's a blend of the others and stays popover-only rather than adding a card
+// that repeats the ones before it.
 const TOUR_SCORE_KEYS = SCORE_ALLOWED_PROPERTIES.filter(
   (key): key is ExplainerKey => isExplainerKey(key) && key !== "composite",
 );
@@ -157,26 +154,6 @@ const sortStep = (): TourStepSpec => ({
   placement: "left",
 });
 
-const TASK_DESC = [
-  "Your task will be to annotate as many POSITIVE samples as possible in the given time for the following species:",
-  "",
-  ...Object.entries(SPECIES_LABELS).map(([code, scientificName]) => `• ${scientificName} = ${code}`),
-  "",
-  "If you come across other species, you can annotate those too.",
-].join("\n");
-
-// Shown as the final card of every phase's tour. Each phase uses its own
-// featureKey (task-p1..task-p5) so the tour's cross-phase dedup doesn't
-// suppress it after the first phase — unlike the other cards, this reminder
-// is meant to repeat every time.
-const taskStep = (featureKey: string): TourStepSpec => ({
-  featureKey,
-  target: "task-reminder",
-  title: "Task",
-  description: TASK_DESC,
-  placement: "center",
-});
-
 // ── Per-phase intro copy ───────────────────────────────────────────────────
 
 const INTRO_FEED_ONLY =
@@ -191,49 +168,58 @@ const INTRO_P3_FILTERS =
 const INTRO_P4_MODEL_TOOLS =
   "**New in this phase: model-derived filters and feed sorting.** Filter samples by how useful the model expects them to be, or sort the feed by one or more properties.";
 
-const INTRO_P5_CLICK_CALLOUT =
-  "**New in this phase: click any point in the feature projection to open that sample in the feed and label it** — exploring the map by clicking is the main focus of Phase 5.";
+const INTRO_WORKSPACE_TOOLS =
+  "On the left, a 2D feature projection shows where all samples sit relative to each other — **click any point to open that sample in the feed and label it**. You can also filter samples by metadata or by model scores, and sort the feed.";
 
 const INTRO_GUIDE_LINE =
-  "You'll have 15 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
-
-const INTRO_GUIDE_LINE_P5 =
-  "You'll have 40 minutes to annotate in this phase. The guide cards will walk you through each part of the screen.";
+  "The guide cards will walk you through each part of the screen.";
 
 export const PHASE_CONTENT: Record<string, PhaseContent> = {
   // ── Phase 1 — Feed only ─────────────────────────────────────────────────
   P1: {
     title: "Welcome to Phase 1",
     body: [INTRO_FEED_ONLY, INTRO_GUIDE_LINE],
-    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC_P1), tipStep(), taskStep("task-p1")],
+    tour: [clipStep(), labelStep(), scrollStep(SCROLL_DESC), tipStep()],
   },
 
   // ── Phase 2 — NEW: feature projection ───────────────────────────────────
   P2: {
     title: "Welcome to Phase 2",
     body: [INTRO_P2_PROJECTION, INTRO_GUIDE_LINE],
-    tour: [projectionStep(PROJECTION_DESC), zoomStep(), taskStep("task-p2")],
+    tour: [projectionStep(PROJECTION_DESC), zoomStep()],
   },
 
   // ── Phase 3 — NEW: metadata filters ─────────────────────────────────────
   P3: {
     title: "Welcome to Phase 3",
     body: [INTRO_P3_FILTERS, INTRO_GUIDE_LINE],
-    tour: [metadataStep(), taskStep("task-p3")],
+    tour: [metadataStep()],
   },
 
   // ── Phase 4 — NEW: model-derived score filters + feed sorting ───────────
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [...modelScoreSteps(), sortStep(), taskStep("task-p4")],
+    tour: [...modelScoreSteps(), sortStep()],
   },
 
-  // ── Phase 5 — NEW: clickable projection points ──────────────────────────
+  // ── Phase 5 — full workspace, standalone onboarding ─────────────────────
+  // Users land here directly, so the tour covers every feature in screen
+  // order rather than only what is new relative to P4.
   P5: {
-    title: "Welcome to Phase 5",
-    body: [INTRO_P5_CLICK_CALLOUT, INTRO_GUIDE_LINE_P5],
-    tour: [projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click"), taskStep("task-p5")],
+    title: "Welcome to the annotation workspace",
+    body: [INTRO_FEED_ONLY, INTRO_WORKSPACE_TOOLS, INTRO_GUIDE_LINE],
+    tour: [
+      clipStep(),
+      labelStep(),
+      scrollStep(SCROLL_DESC),
+      tipStep(),
+      projectionStep(PROJECTION_DESC_CLICKABLE, "projection-click"),
+      zoomStep(),
+      metadataStep(),
+      ...modelScoreSteps(),
+      sortStep(),
+    ],
   },
 };
 
