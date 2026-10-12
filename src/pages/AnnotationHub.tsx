@@ -330,6 +330,45 @@ export const AnnotationHub: React.FC = () => {
     setMode("similarity");
   }, [setMode]);
 
+  // ── Logged sidebar handlers ────────────────────────────────────────────────
+  const handleAnnotationStatusChange = (
+    status: typeof filterAnnotationStatus,
+  ) => {
+    if (status !== filterAnnotationStatus) {
+      studyLogger.log("annotation_status_filter_change", { status });
+    }
+    setFilterAnnotationStatus(status);
+  };
+  const handleAnnotatedSpeciesChange = (species: string[]) => {
+    studyLogger.log("annotated_species_filter_change", { species });
+    setAnnotatedSpeciesScope(species);
+  };
+  const handleFocusSpeciesChange = (species: string[]) => {
+    studyLogger.log("focus_species_change", { species });
+    setPredictedSpeciesScope(species);
+  };
+  const handleLocationsChange = (locations: string[]) => {
+    studyLogger.log("location_filter_change", { locations });
+    setFilterLocations(locations);
+  };
+  const handleMonthsChangeLogged = (months: number[]) => {
+    studyLogger.log("month_filter_change", { months });
+    handleFilterMonthsChange(months);
+  };
+  const handleLabelScopeChange = (labels: string[]) => {
+    const before = al.localLabelScope;
+    const op =
+      labels.length === 0
+        ? "clear"
+        : labels.length > before.length
+          ? "add"
+          : labels.length < before.length
+            ? "remove"
+            : "set";
+    studyLogger.log("label_scope_change", { labels, op });
+    al.setLocalLabelScope(labels);
+  };
+
   if (awaitingHubDatasetBootstrap) {
     return (
       <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
@@ -359,7 +398,15 @@ export const AnnotationHub: React.FC = () => {
           <Select
             placeholder="Select dataset"
             value={al.selectedDatasetId ?? undefined}
-            onChange={al.handleDatasetChange}
+            onChange={(id: number) => {
+              if (id !== al.selectedDatasetId) {
+                studyLogger.log("dataset_change", {
+                  from: al.selectedDatasetId ?? null,
+                  to: id ?? null,
+                });
+              }
+              al.handleDatasetChange(id);
+            }}
             style={{ width: 200 }}
             size="middle"
             showSearch
@@ -513,9 +560,9 @@ export const AnnotationHub: React.FC = () => {
                   exploreFacets={facets.data}
                   exploreFacetsLoading={facets.loading && !facets.data}
                   filterAnnotationStatus={filterAnnotationStatus}
-                  onFilterAnnotationStatusChange={setFilterAnnotationStatus}
+                  onFilterAnnotationStatusChange={handleAnnotationStatusChange}
                   filterLocations={filterLocations}
-                  onFilterLocationsChange={setFilterLocations}
+                  onFilterLocationsChange={handleLocationsChange}
                   recordingLocations={visibleRecordingLocations}
                   locationsLoading={false}
                   filterDateRange={filterDateRange}
@@ -523,11 +570,11 @@ export const AnnotationHub: React.FC = () => {
                   dateZoomDomain={dateZoomDomain}
                   onCalendarDateRangeChange={handleCalendarDateRangeChange}
                   filterMonths={filterMonths}
-                  onFilterMonthsChange={handleFilterMonthsChange}
+                  onFilterMonthsChange={handleMonthsChangeLogged}
                   filterTimeRange={filterTimeRange}
                   onFilterTimeRangeChange={setFilterTimeRange}
                   localLabelScope={al.localLabelScope}
-                  setLocalLabelScope={al.setLocalLabelScope}
+                  setLocalLabelScope={handleLabelScopeChange}
                   localMinConfidence={al.localMinConfidence}
                   setLocalMinConfidence={al.setLocalMinConfidence}
                   labelScopeOptions={al.labelScopeOptions}
@@ -535,11 +582,11 @@ export const AnnotationHub: React.FC = () => {
                   annotatedSpeciesOptions={annotatedSpecies.options}
                   annotatedSpeciesLoading={annotatedSpecies.loading}
                   annotatedSpeciesScope={annotatedSpeciesScope}
-                  setAnnotatedSpeciesScope={setAnnotatedSpeciesScope}
+                  setAnnotatedSpeciesScope={handleAnnotatedSpeciesChange}
                   predictedSpeciesOptions={al.labelScopeOptions}
                   predictedSpeciesLoading={al.labelScopeLoading}
                   predictedSpeciesScope={predictedSpeciesScope}
-                  setPredictedSpeciesScope={setPredictedSpeciesScope}
+                  setPredictedSpeciesScope={handleFocusSpeciesChange}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}

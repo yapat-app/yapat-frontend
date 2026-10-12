@@ -9,10 +9,11 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import type { TableProps } from "antd";
-import { DownloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, ReloadOutlined } from "@ant-design/icons";
 import { NavigationBar } from "../../components/NavigationBar";
 import { studyLogsApi } from "../../services/api";
 import type { StudyLogEventRow } from "../../types/studyLogs";
@@ -73,6 +74,22 @@ const ALL_EVENT_TYPES = [
   "retrain_manual_click",
   "retrain_complete",
   "audio_interaction",
+  // Hub filters / navigation
+  "dataset_change",
+  "annotation_status_filter_change",
+  "annotated_species_filter_change",
+  "focus_species_change",
+  "label_scope_change",
+  "location_filter_change",
+  "month_filter_change",
+  "label_search",
+  // Projection view
+  "projection_view_change",
+  "projection_drag_mode_change",
+  // Study flow
+  "phase_instructions_shown",
+  "phase_tour_start",
+  "phase_tour_complete",
 ];
 
 export const StudyLogsSession: React.FC = () => {
@@ -98,6 +115,7 @@ export const StudyLogsSession: React.FC = () => {
   const fetchEvents = useCallback(() => {
     if (!sessionId) return;
     setLoading(true);
+    setError(null);
     studyLogsApi
       .getSessionEvents(sessionId, {
         event_type: filterType,
@@ -177,6 +195,7 @@ export const StudyLogsSession: React.FC = () => {
       title: "Type",
       dataIndex: "event_type",
       key: "event_type",
+      width: 280,
       render: (type: string) => (
         <Tag color={eventTypeColor(type)} className="font-mono text-xs">
           {type}
@@ -187,6 +206,7 @@ export const StudyLogsSession: React.FC = () => {
       title: "Phase",
       dataIndex: "phase_id",
       key: "phase_id",
+      width: 70,
       render: (phase: string | null) =>
         phase ? (
           <span className="font-mono text-xs">{phase}</span>
@@ -198,6 +218,7 @@ export const StudyLogsSession: React.FC = () => {
       title: "Snippet",
       dataIndex: "snippet_id",
       key: "snippet_id",
+      width: 90,
       align: "right",
       render: (id: number | null) =>
         id != null ? id : <Text type="secondary">—</Text>,
@@ -206,6 +227,7 @@ export const StudyLogsSession: React.FC = () => {
       title: "Duration (ms)",
       dataIndex: "duration_ms",
       key: "duration_ms",
+      width: 120,
       align: "right",
       render: (ms: number | null) =>
         ms != null ? ms : <Text type="secondary">—</Text>,
@@ -218,10 +240,12 @@ export const StudyLogsSession: React.FC = () => {
       render: (_: Record<string, unknown> | null, row) => {
         const payload = displayPayload(row);
         if (!payload) return <Text type="secondary">—</Text>;
+        // Payload takes the remaining width; the column's ellipsis trims it
+        // to fit (full JSON on hover and in the expanded row).
         const str = JSON.stringify(payload);
         return (
-          <span className="font-mono text-xs text-gray-500">
-            {str.length > 60 ? str.slice(0, 60) + "…" : str}
+          <span className="font-mono text-xs text-gray-500" title={str}>
+            {str}
           </span>
         );
       },
@@ -269,13 +293,23 @@ export const StudyLogsSession: React.FC = () => {
               </Text>
             </div>
           </div>
-          <Button
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-            loading={exporting}
-          >
-            Export CSV
-          </Button>
+          <Space size="small">
+            <Tooltip title="Refresh events">
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={fetchEvents}
+                loading={loading}
+                aria-label="Refresh events"
+              />
+            </Tooltip>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleExport}
+              loading={exporting}
+            >
+              Export CSV
+            </Button>
+          </Space>
         </div>
 
         {/* Filters */}

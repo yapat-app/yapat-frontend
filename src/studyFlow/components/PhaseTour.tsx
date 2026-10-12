@@ -52,7 +52,7 @@ function renderStepBody(step: TourStepSpec): React.ReactNode {
 }
 
 export const PhaseTour: React.FC = () => {
-  const { enabled, stage, pendingTourSteps, finishTour } = useStudyFlow();
+  const { enabled, stage, phaseId, pendingTourSteps, finishTour } = useStudyFlow();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const { log } = useStudyLogger();
 
@@ -82,6 +82,27 @@ export const PhaseTour: React.FC = () => {
     },
     [pendingTourSteps],
   );
+
+  // Study log: tour start (once per phase) and how far the participant got.
+  const tourStepRef = useRef(0);
+  const loggedTourStartRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isTour || !hasSteps || loggedTourStartRef.current === phaseId) return;
+    loggedTourStartRef.current = phaseId;
+    tourStepRef.current = 0;
+    log("phase_tour_start", {
+      phase: phaseId,
+      stepKeys: pendingTourSteps.map((s) => s.featureKey),
+    });
+  }, [isTour, hasSteps, phaseId, pendingTourSteps, log]);
+  const closeTour = useCallback(() => {
+    log("phase_tour_complete", {
+      phase: phaseId,
+      // Closed on the last step ("Finish") vs. dismissed early.
+      completed: tourStepRef.current >= pendingTourSteps.length - 1,
+    });
+    finishTour();
+  }, [log, phaseId, pendingTourSteps.length, finishTour]);
 
   // antd Tour opens on step 0 without firing onChange, so arm the first step here.
   useEffect(() => {
@@ -140,7 +161,7 @@ export const PhaseTour: React.FC = () => {
       target: () =>
         document.querySelector('[data-tour="dataset-selector"]') as HTMLElement,
     };
-    return <Tour open mask={false} steps={[gateStep]} onClose={finishTour} />;
+    return <Tour open mask={false} steps={[gateStep]} onClose={closeTour} />;
   }
 
   const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
@@ -155,12 +176,13 @@ export const PhaseTour: React.FC = () => {
 
   const handleChange = (index: number) => {
     flushView();
+    tourStepRef.current = index;
     enterStep(index);
   };
 
   const handleClose = () => {
     flushView();
-    finishTour();
+    closeTour();
   };
 
   return <Tour open steps={steps} onChange={handleChange} onClose={handleClose} />;
