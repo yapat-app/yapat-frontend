@@ -8,10 +8,17 @@
  * for the zoomed-in viewport. The browser never receives the whole dataset.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Plot from "react-plotly.js";
 import { Spin, Tooltip } from "antd";
 import {
+  DragOutlined,
   ExperimentOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
@@ -44,7 +51,11 @@ import {
 } from "./fpvHelpers";
 import { ProjectionToolbar } from "./ProjectionToolbar";
 import { ProjectionMethodPanel } from "./ProjectionMethodPanel";
-import { bitAt, type ExploreFilters, type ExploreProjectionPoints } from "../../../types/explore";
+import {
+  bitAt,
+  type ExploreFilters,
+  type ExploreProjectionPoints,
+} from "../../../types/explore";
 import type { SampleScores } from "../../../types/al";
 import { useExploreScope } from "../../../explore/useExploreScope";
 import { useExploreSummary } from "../../../explore/useExploreSummary";
@@ -306,7 +317,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     () =>
       `${revision}|` +
       Object.entries(feedbacks)
-        .map(([id, fb]) => `${id}:${fb.action}:${(fb.final_labels ?? []).join(",")}`)
+        .map(
+          ([id, fb]) =>
+            `${id}:${fb.action}:${(fb.final_labels ?? []).join(",")}`,
+        )
         .sort()
         .join("|"),
     [feedbacks, revision],
@@ -352,7 +366,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       ? stateQuery.data
       : null;
 
-  const summary = useExploreSummary(scope, exploreFilters, labelRefreshKey, enabled);
+  const summary = useExploreSummary(
+    scope,
+    exploreFilters,
+    labelRefreshKey,
+    enabled,
+  );
 
   // A stale projection version means projections were regenerated — reload.
   const { reload: reloadPoints } = current;
@@ -369,12 +388,33 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   // ── Zoom / viewport detail ──────────────────────────────────────────────────
 
+  // Drag behaviour on the plot: box-zoom (Plotly default) or pan. The plot's
+  // own mode bar is hidden, so this is the only way to pan.
+  const [dragMode, setDragMode] = useState<"zoom" | "pan">("zoom");
+  const changeDragMode = (mode: "zoom" | "pan") => {
+    if (mode === dragMode) return;
+    setDragMode(mode);
+    studyLogger.log("projection_drag_mode_change", {
+      mode,
+      projectionMethod: method,
+    });
+  };
+
   const [axisRange, setAxisRange] = useState<{
     x: [number, number];
     y: [number, number];
   } | null>(null);
-  const lastRangeRef = useRef<{ x: [number, number]; y: [number, number] } | null>(null);
-  const [viewBox, setViewBox] = useState<[number, number, number, number] | null>(null);
+  const lastRangeRef = useRef<{
+    x: [number, number];
+    y: [number, number];
+  } | null>(null);
+  // The Plotly graph div, so relayout handling can read the axes' actual ranges.
+  const plotDivRef = useRef<HTMLElement | null>(null);
+  // When the zoom buttons last set the range (see logViewChange below).
+  const programmaticRangeAtRef = useRef(0);
+  const [viewBox, setViewBox] = useState<
+    [number, number, number, number] | null
+  >(null);
 
   // Different method → different coordinate space; forget the zoom.
   const [viewMethod, setViewMethod] = useState(method);
@@ -424,14 +464,17 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (!scope || missingSelectionIds.length === 0) return;
     const controller = new AbortController();
     exploreApi
-      .projectionCoords(scope, method, missingSelectionIds, { signal: controller.signal })
+      .projectionCoords(scope, method, missingSelectionIds, {
+        signal: controller.signal,
+      })
       .then((resp) => {
         const coords = new Map<number, [number, number]>();
         resp.ids.forEach((id, i) => coords.set(id, [resp.x[i], resp.y[i]]));
         setExtraCoords({ key: missingKey, coords });
       })
       .catch((error: unknown) => {
-        if (!isAbortError(error)) console.error("Failed to load selection coordinates", error);
+        if (!isAbortError(error))
+          console.error("Failed to load selection coordinates", error);
       });
     return () => controller.abort();
     // missingKey captures scope-independent changes of the id list.
@@ -495,12 +538,20 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   const visibleCount = projState?.visiblePoints ?? points?.totalPoints ?? 0;
   const totalCount = projState?.totalPoints ?? points?.totalPoints ?? 0;
 
-  useModelScoreFilterLogging(alFilters.visibility.ranges, visibleCount, totalCount);
+  useModelScoreFilterLogging(
+    alFilters.visibility.ranges,
+    visibleCount,
+    totalCount,
+  );
 
   const labelColors = useMemo(
     () =>
       labelVocab.map((label) =>
-        resolveColor({ actual_label: label } as SampleScores, "actual_label", labelVocab),
+        resolveColor(
+          { actual_label: label } as SampleScores,
+          "actual_label",
+          labelVocab,
+        ),
       ),
     [labelVocab],
   );
@@ -563,8 +614,14 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       const [bx0, bx1, by0, by1] = density.bounds;
       const cw = (bx1 - bx0) / density.nx || 1;
       const ch = (by1 - by0) / density.ny || 1;
-      const xs = Array.from({ length: density.nx }, (_, i) => bx0 + (i + 0.5) * cw);
-      const ys = Array.from({ length: density.ny }, (_, j) => by0 + (j + 0.5) * ch);
+      const xs = Array.from(
+        { length: density.nx },
+        (_, i) => bx0 + (i + 0.5) * cw,
+      );
+      const ys = Array.from(
+        { length: density.ny },
+        (_, j) => by0 + (j + 0.5) * ch,
+      );
       const z: (number | null)[][] = [];
       for (let j = 0; j < density.ny; j++) {
         const row: (number | null)[] = new Array(density.nx);
@@ -598,7 +655,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         x: hiddenX,
         y: hiddenY,
         customdata: hiddenIds,
-        marker: { color: HIDDEN_COLOR, size: 4, opacity: 0.25, line: { width: 0 } },
+        marker: {
+          color: HIDDEN_COLOR,
+          size: 4,
+          opacity: 0.25,
+          line: { width: 0 },
+        },
         hoverinfo: "skip" as const,
       });
     }
@@ -644,20 +706,36 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     const bounds =
       Number.isFinite(xMin) && Number.isFinite(yMin)
         ? {
-            x: [xMin - ((xMax - xMin) * 0.05 || 1), xMax + ((xMax - xMin) * 0.05 || 1)] as [number, number],
-            y: [yMin - ((yMax - yMin) * 0.05 || 1), yMax + ((yMax - yMin) * 0.05 || 1)] as [number, number],
+            x: [
+              xMin - ((xMax - xMin) * 0.05 || 1),
+              xMax + ((xMax - xMin) * 0.05 || 1),
+            ] as [number, number],
+            y: [
+              yMin - ((yMax - yMin) * 0.05 || 1),
+              yMax + ((yMax - yMin) * 0.05 || 1),
+            ] as [number, number],
           }
         : null;
-    return { baseTraces: traces, visibleLabelIdx: seenLabels, dataBounds: bounds };
+    return {
+      baseTraces: traces,
+      visibleLabelIdx: seenLabels,
+      dataBounds: bounds,
+    };
   }, [displaySets, labelVocab, labelColors, projState, viewport]);
 
   // Visibility / label lookup for a snippet in the displayed data.
   const lookupDisplayed = useCallback(
-    (snippetId: number): { coord: [number, number]; visible: boolean; label: number } | null => {
+    (
+      snippetId: number,
+    ): { coord: [number, number]; visible: boolean; label: number } | null => {
       for (const set of displaySets) {
         const i = idIndex(set.ids).get(snippetId);
         if (i !== undefined) {
-          return { coord: [set.x[i], set.y[i]], visible: set.visible(i), label: set.label(i) };
+          return {
+            coord: [set.x[i], set.y[i]],
+            visible: set.visible(i),
+            label: set.label(i),
+          };
         }
       }
       return null;
@@ -673,8 +751,18 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         : selectedSnippetIds[0];
     const extras = extraCoords.key === missingKey ? extraCoords.coords : null;
 
-    const active = { x: [] as number[], y: [] as number[], ids: [] as number[], labels: [] as string[] };
-    const queue = { x: [] as number[], y: [] as number[], ids: [] as number[], labels: [] as string[] };
+    const active = {
+      x: [] as number[],
+      y: [] as number[],
+      ids: [] as number[],
+      labels: [] as string[],
+    };
+    const queue = {
+      x: [] as number[],
+      y: [] as number[],
+      ids: [] as number[],
+      labels: [] as string[],
+    };
     for (const id of selectedSnippetIds) {
       const shown = lookupDisplayed(id);
       // Only highlight points that pass the active filters.
@@ -702,7 +790,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         hoverinfo: "skip" as const,
         x: queue.x,
         y: queue.y,
-        marker: { color: "rgba(0,0,0,0)", size: 18, opacity: 0.7, line: { width: 2, color: "#60a5fa" } },
+        marker: {
+          color: "rgba(0,0,0,0)",
+          size: 18,
+          opacity: 0.7,
+          line: { width: 2, color: "#60a5fa" },
+        },
       });
       traces.push({
         type: "scattergl" as const,
@@ -713,7 +806,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         y: queue.y,
         customdata: queue.ids,
         text: queue.labels,
-        marker: { color: "#93c5fd", size: 9, opacity: 0.85, line: { width: 1.5, color: "#3b82f6" } },
+        marker: {
+          color: "#93c5fd",
+          size: 9,
+          opacity: 0.85,
+          line: { width: 1.5, color: "#3b82f6" },
+        },
         hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata} (queued)<extra></extra>`,
       });
     }
@@ -726,7 +824,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         hoverinfo: "skip" as const,
         x: active.x,
         y: active.y,
-        marker: { color: "rgba(0,0,0,0)", size: 22, opacity: 1, line: { width: 2.5, color: SELECTED_COLOR } },
+        marker: {
+          color: "rgba(0,0,0,0)",
+          size: 22,
+          opacity: 1,
+          line: { width: 2.5, color: SELECTED_COLOR },
+        },
       });
       traces.push({
         type: "scattergl" as const,
@@ -737,14 +840,29 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         y: active.y,
         customdata: active.ids,
         text: active.labels,
-        marker: { color: SELECTED_COLOR, size: 12, opacity: 1, line: { width: 2, color: LABELED_BORDER_COLOR } },
+        marker: {
+          color: SELECTED_COLOR,
+          size: 12,
+          opacity: 1,
+          line: { width: 2, color: LABELED_BORDER_COLOR },
+        },
         hovertemplate: `<b>%{text}</b><br>Snippet #%{customdata}<extra></extra>`,
       });
     }
     return traces;
-  }, [selectedSnippetIds, activeSnippetId, lookupDisplayed, extraCoords, missingKey, labelVocab]);
+  }, [
+    selectedSnippetIds,
+    activeSnippetId,
+    lookupDisplayed,
+    extraCoords,
+    missingKey,
+    labelVocab,
+  ]);
 
-  const traces = useMemo(() => [...baseTraces, ...selectionTraces], [baseTraces, selectionTraces]);
+  const traces = useMemo(
+    () => [...baseTraces, ...selectionTraces],
+    [baseTraces, selectionTraces],
+  );
   // Bump datarevision whenever the trace data changes so Plotly re-reads the
   // arrays and repaints the selection overlay.
   const plotRevision = useMemo(() => Date.now() + traces.length, [traces]);
@@ -752,7 +870,11 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   const actualLabelLegend = useMemo(() => {
     const labels = [...visibleLabelIdx].map((i) => labelVocab[i]).sort();
     const shown = labels.slice(0, MAX_LEGEND_PILLS);
-    return { shown, remaining: Math.max(0, labels.length - shown.length), total: labels.length };
+    return {
+      shown,
+      remaining: Math.max(0, labels.length - shown.length),
+      total: labels.length,
+    };
   }, [visibleLabelIdx, labelVocab]);
 
   // ── Thumbnails for the parent's method selector ─────────────────────────────
@@ -761,7 +883,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const thumbnailPoints = useMemo(() => {
     if (!points || !points.available) return [];
-    const stride = Math.max(1, Math.ceil(points.pointCount / THUMBNAIL_MAX_POINTS));
+    const stride = Math.max(
+      1,
+      Math.ceil(points.pointCount / THUMBNAIL_MAX_POINTS),
+    );
     const out: ProjectionThumbnailData["thumbnailPoints"] = [];
     for (let i = 0; i < points.pointCount; i += stride) {
       const visible = projState ? bitAt(projState.visible, i) : true;
@@ -784,7 +909,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const fpvCoordsBySnippetForMethod = useMemo(() => {
     if (thumbnailPoints.length === 0) return null;
-    const maps: Partial<Record<ProjectionMethod, Record<number, [number, number]>>> = {};
+    const maps: Partial<
+      Record<ProjectionMethod, Record<number, [number, number]>>
+    > = {};
     for (const m of THUMBNAIL_METHODS) {
       const mp = pointsByMethod[m as "pca" | "umap" | "tsne"].points;
       if (!mp || !mp.available) continue;
@@ -803,7 +930,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (selectedSnippetId === null) return null;
     const out: Partial<Record<ProjectionMethod, [number, number]>> = {};
     for (const m of THUMBNAIL_METHODS) {
-      const coord = coordOf(pointsByMethod[m as "pca" | "umap" | "tsne"].points, selectedSnippetId);
+      const coord = coordOf(
+        pointsByMethod[m as "pca" | "umap" | "tsne"].points,
+        selectedSnippetId,
+      );
       if (coord) out[m] = coord;
     }
     return out;
@@ -883,8 +1013,13 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     setGenerateError(null);
     try {
       const sets = await embeddingApi.allSnippetSets(selectedDatasetId);
-      const embeddingModelId = sets.find((s) => s.id === scope.snippet_set_id)?.embedding_model_id;
-      if (!embeddingModelId) throw new Error("Could not resolve the embedding model for this snippet set.");
+      const embeddingModelId = sets.find(
+        (s) => s.id === scope.snippet_set_id,
+      )?.embedding_model_id;
+      if (!embeddingModelId)
+        throw new Error(
+          "Could not resolve the embedding model for this snippet set.",
+        );
       await visualisationsApi.generateFPVDataset({
         dataset_id: selectedDatasetId,
         embedding_model_id: embeddingModelId,
@@ -900,7 +1035,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
           await exploreApi.projection({ ...scope, checkpoint_id: null }, "pca");
           break;
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           if (!isProjectionNotReadyMessage(message)) throw error;
           if (Date.now() - started > GENERATE_MAX_WAIT_MS) throw error;
         }
@@ -910,7 +1046,11 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       reloadPoints();
     } catch (error) {
       if (!cancelled) {
-        setGenerateError(error instanceof Error ? error.message : "Failed to generate projection.");
+        setGenerateError(
+          error instanceof Error
+            ? error.message
+            : "Failed to generate projection.",
+        );
       }
     } finally {
       if (!cancelled) setGenerating(false);
@@ -929,7 +1069,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     enabled &&
     scope !== null &&
     !fpvError &&
-    (generating || current.loading || (points?.available === true && !projState && stateQuery.loading));
+    (generating ||
+      current.loading ||
+      (points?.available === true && !projState && stateQuery.loading));
   const showStandaloneHistogram =
     visibilityMode !== "disabled" && histogramStyle === "standalone";
 
@@ -978,6 +1120,19 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     }
   };
 
+  const logViewChange = (
+    action: "zoom_in" | "zoom_out" | "box_zoom" | "pan" | "reset",
+    range: { x: [number, number]; y: [number, number] } | null,
+  ) => {
+    const r3 = (v: number) => Math.round(v * 1000) / 1000;
+    studyLogger.log("projection_view_change", {
+      action,
+      projectionMethod: method,
+      xRange: range ? [r3(range.x[0]), r3(range.x[1])] : null,
+      yRange: range ? [r3(range.y[0]), r3(range.y[1])] : null,
+    });
+  };
+
   const zoomBy = (factor: number) => {
     const currentRange = lastRangeRef.current ?? dataBounds;
     if (!currentRange) return;
@@ -990,8 +1145,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       y: [cy - (cy - y0) * factor, cy + (y1 - cy) * factor] as [number, number],
     };
     lastRangeRef.current = next;
+    programmaticRangeAtRef.current = performance.now();
     setAxisRange(next);
     setViewBox([next.x[0], next.x[1], next.y[0], next.y[1]]);
+    logViewChange(factor < 1 ? "zoom_in" : "zoom_out", next);
   };
   const handleZoomIn = () => zoomBy(0.7);
   const handleZoomOut = () => zoomBy(1 / 0.7);
@@ -1000,12 +1157,33 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (event["xaxis.autorange"] || event["yaxis.autorange"]) {
       lastRangeRef.current = null;
       setViewBox(null);
+      // Plotly's double-click reset (logged here, not in onDoubleClick, so it
+      // counts once).
+      logViewChange("reset", null);
       return;
     }
-    const x0 = event["xaxis.range[0]"];
-    const x1 = event["xaxis.range[1]"];
-    const y0 = event["yaxis.range[0]"];
-    const y1 = event["yaxis.range[1]"];
+    // A participant drag reports axis-range keys; autosize/resize events don't.
+    const isRangeChange = Object.keys(event).some(
+      (k) => k.startsWith("xaxis.range") || k.startsWith("yaxis.range"),
+    );
+    // Read the ranges Plotly actually applied rather than parsing the event:
+    // box zoom reports "xaxis.range[0]"-style keys, but pan/scroll can report
+    // "xaxis.range" arrays or only the axis that changed. Missing those left
+    // lastRangeRef stale, so the zoom buttons zoomed around an old view.
+    const full = (
+      plotDivRef.current as unknown as {
+        _fullLayout?: {
+          xaxis?: { range?: unknown[] };
+          yaxis?: { range?: unknown[] };
+        };
+      } | null
+    )?._fullLayout;
+    const xr = full?.xaxis?.range;
+    const yr = full?.yaxis?.range;
+    const x0 = xr?.[0],
+      x1 = xr?.[1],
+      y0 = yr?.[0],
+      y1 = yr?.[1];
     if (
       typeof x0 === "number" &&
       typeof x1 === "number" &&
@@ -1014,6 +1192,15 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     ) {
       lastRangeRef.current = { x: [x0, x1], y: [y0, y1] };
       setViewBox([x0, x1, y0, y1]);
+      if (
+        isRangeChange &&
+        performance.now() - programmaticRangeAtRef.current > 400
+      ) {
+        logViewChange(dragMode === "pan" ? "pan" : "box_zoom", {
+          x: [x0, x1],
+          y: [y0, y1],
+        });
+      }
     }
   };
   const handlePlotDoubleClick = () => {
@@ -1105,7 +1292,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         {phase.ui.showProjectionMethodSelector && !externalMethod && (
           <ProjectionMethodPanel
             method={method}
-            dimRedMethods={allDimRedMethods.filter((m) => !unavailableMethods.has(m.key))}
+            dimRedMethods={allDimRedMethods.filter(
+              (m) => !unavailableMethods.has(m.key),
+            )}
             fpvLoading={current.loading}
             loadingMethods={loadingMethods}
             fpvCoordsBySnippetForMethod={fpvCoordsBySnippetForMethod}
@@ -1131,12 +1320,14 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
             </div>
           )}
 
-          {summary.data && !summary.data.has_model && visibilityMode !== "disabled" && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-fs-11 font-ibm-sans shadow-sm pointer-events-none">
-              <ExperimentOutlined className="text-blue-400" />
-              Filter scores are missing — backend scores not yet available
-            </div>
-          )}
+          {summary.data &&
+            !summary.data.has_model &&
+            visibilityMode !== "disabled" && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-fs-11 font-ibm-sans shadow-sm pointer-events-none">
+                <ExperimentOutlined className="text-blue-400" />
+                Filter scores are missing — backend scores not yet available
+              </div>
+            )}
 
           {points?.sampled && !isFpvPlotLoading && (
             <div className="absolute bottom-2 left-2 z-10 px-2 py-0.5 rounded bg-white/85 border border-gray-200 text-fs-10 text-gray-500 font-ibm-sans pointer-events-none">
@@ -1174,6 +1365,30 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                 className="absolute top-2 right-2 z-10 flex flex-col items-end  gap-1 pointer-events-none"
               >
                 <div className="flex  items-center gap-1 pointer-events-auto">
+                  <Tooltip
+                    title={
+                      dragMode === "pan"
+                        ? "Pan on: drag to move the view (click to go back to box zoom)"
+                        : "Pan: drag to move the view instead of box-zooming"
+                    }
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={dragMode === "pan"}
+                      aria-label="Pan"
+                      onClick={() =>
+                        changeDragMode(dragMode === "pan" ? "zoom" : "pan")
+                      }
+                      className={[
+                        "flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition-colors",
+                        dragMode === "pan"
+                          ? "border-blue-400 bg-blue-50 text-blue-600"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-600",
+                      ].join(" ")}
+                    >
+                      <DragOutlined className="text-xs" />
+                    </button>
+                  </Tooltip>
                   <Tooltip title="Zoom out">
                     <button
                       type="button"
@@ -1196,7 +1411,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   </Tooltip>
                 </div>
                 <span className="text-fs-10 text-gray-400 font-ibm-sans pointer-events-none">
-                  Double-click plot to reset zoom
+                  {dragMode === "pan" ? "Drag to pan · " : ""}Double-click plot
+                  to reset zoom
                 </span>
               </div>
               <Plot
@@ -1223,6 +1439,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   paper_bgcolor: "#f7fafc",
                   plot_bgcolor: "#f7fafc",
                   hovermode: "closest",
+                  dragmode: dragMode,
                 }}
                 style={{ width: "100%", height: "100%" }}
                 useResizeHandler
@@ -1231,6 +1448,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                 onUnhover={handlePlotUnhover}
                 onRelayout={handlePlotRelayout}
                 onDoubleClick={handlePlotDoubleClick}
+                onInitialized={(_fig, div) => {
+                  plotDivRef.current = div;
+                }}
+                onUpdate={(_fig, div) => {
+                  plotDivRef.current = div;
+                }}
                 config={{ displayModeBar: false, responsive: true }}
               />
             </>

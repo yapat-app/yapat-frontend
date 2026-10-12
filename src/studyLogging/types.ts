@@ -89,6 +89,10 @@ export type StudyLogEvent =
     }
   | { eventType: "label_clear"; payload: { labelsBefore: string[] } }
   | {
+      eventType: "label_search";
+      payload: { query: string; quickMatches: number; gbifResults: number };
+    }
+  | {
       // A GBIF search result was pinned into the participant's quick labels,
       // so the next snippet needs no second search.
       eventType: "quick_label_promoted";
@@ -116,9 +120,51 @@ export type StudyLogEvent =
       eventType: "projection_method_change";
       payload: { from: string; to: string };
     }
+  | {
+      eventType: "projection_drag_mode_change";
+      payload: { mode: "zoom" | "pan"; projectionMethod: string };
+    }
+  | {
+      /** Zoom/pan/reset of the projection view (once per action, on release). */
+      eventType: "projection_view_change";
+      payload: {
+        action: "zoom_in" | "zoom_out" | "box_zoom" | "pan" | "reset";
+        projectionMethod: string;
+        xRange: [number, number] | null;
+        yRange: [number, number] | null;
+      };
+    }
   | { eventType: "sampling_method_change"; payload: { method: string } }
 
   // ── Filters ─────────────────────────────────────────────────────────
+  | {
+      eventType: "dataset_change";
+      payload: { from: number | null; to: number | null };
+    }
+  | {
+      eventType: "annotation_status_filter_change";
+      payload: { status: string };
+    }
+  | {
+      eventType: "annotated_species_filter_change";
+      payload: { species: string[] };
+    }
+  | {
+      eventType: "focus_species_change";
+      payload: { species: string[] };
+    }
+  | {
+      eventType: "label_scope_change";
+      payload: { labels: string[]; op: "add" | "remove" | "clear" | "set" };
+    }
+  | {
+      eventType: "location_filter_change";
+      payload: { locations: string[] };
+    }
+  | {
+      eventType: "month_filter_change";
+      payload: { months: number[] };
+    }
   | {
       eventType: "visibility_threshold_change";
       payload: { property: string; value: number };
