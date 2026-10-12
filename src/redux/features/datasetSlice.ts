@@ -7,12 +7,20 @@ import type {
   ExportAnnotation,
   DatasetResponse,
   AvailableDatasetPathsResponse,
+  ReferenceLink,
 } from "../../types";
-import { datasetApi, teamApi } from "../../services/api";
+import { datasetApi, referenceLinkApi, teamApi } from "../../services/api";
 import { getErrorMessage } from "../../services/api";
 
 export interface DatasetState {
   allDatasets: Dataset[] | [];
+  /**
+   * Admin-only: reference pools, kept apart from `allDatasets` so they never
+   * reach annotation views (which read `allDatasets`).
+   */
+  referenceDatasets: Dataset[];
+  /** Admin-only: every reference link, loaded once and shared by all cards. */
+  referenceLinks: ReferenceLink[];
   datasetDirectories: DatasetResponse | null;
   availablePaths: AvailableDatasetPathsResponse | null;
   availablePathsLoading: boolean;
@@ -27,6 +35,8 @@ interface AnnotationState {
 
 const initialState: DatasetState = {
   allDatasets: [],
+  referenceDatasets: [],
+  referenceLinks: [],
   datasetDirectories: null,
   availablePaths: null,
   availablePathsLoading: false,
@@ -49,6 +59,21 @@ export const fetchAllDatasets = createAsyncThunk(
     });
     return response.data;
   },
+);
+
+/** Admin only. The backend has no "reference only" filter, so filter here. */
+export const fetchReferenceDatasets = createAsyncThunk(
+  "dataset/fetchReferenceDatasets",
+  async () => {
+    const all = await datasetApi.getAll({ limit: 1000, include_reference: true });
+    return all.filter((d) => d.is_reference);
+  },
+);
+
+/** Admin only. */
+export const fetchReferenceLinks = createAsyncThunk(
+  "dataset/fetchReferenceLinks",
+  async () => referenceLinkApi.list(),
 );
 
 export const fetchAllTeamDatasets = createAsyncThunk(
@@ -135,6 +160,12 @@ export const datasetSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(fetchAllDatasets.fulfilled, (state, action) => {
       state.allDatasets = action.payload;
+    });
+    builder.addCase(fetchReferenceDatasets.fulfilled, (state, action) => {
+      state.referenceDatasets = action.payload;
+    });
+    builder.addCase(fetchReferenceLinks.fulfilled, (state, action) => {
+      state.referenceLinks = action.payload;
     });
     builder.addCase(exportAllAnnotations.pending, (state) => {
       state.loading = true;

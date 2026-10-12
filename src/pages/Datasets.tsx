@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import {
+  fetchAllDatasets,
+  fetchReferenceDatasets,
+  fetchReferenceLinks,
+} from "../redux/features/datasetSlice";
 import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { DatasetCard } from "../components/DatasetCard";
@@ -11,7 +15,7 @@ import type { Dataset, DatasetAnnotationStats, Team } from "../types";
 
 type SortKey = "name" | "newest" | "snippets" | "annotated";
 type TeamFilter = "all" | "none" | string;
-type TypeFilter = "all" | "PAM" | "FOCAL_RECORDINGS";
+type TypeFilter = "all" | "PAM" | "FOCAL_RECORDINGS" | "REFERENCE";
 
 const SORT_LABELS: Record<SortKey, string> = {
   name: "Name (A–Z)",
@@ -27,7 +31,7 @@ const controlClass =
 export const Datasets = () => {
   const dispatch = useAppDispatch();
   const { snippets } = useAppSelector((state: any) => state.snippet);
-  const { allDatasets } = useAppSelector((state) => state.dataset);
+  const { allDatasets, referenceDatasets } = useAppSelector((state) => state.dataset);
   const { user } = useAppSelector((state) => state.auth);
   const { embeddingCreated } = useAppSelector((state) => state.embedding);
   const { allTeams } = useAppSelector((state) => state.team);
@@ -39,6 +43,7 @@ export const Datasets = () => {
   const [sortBy, setSortBy] = useState<SortKey>("name");
 
   const canManage = user?.role === "admin" || user?.role === "team_owner";
+  const isAdmin = user?.role === "admin";
 
   //clear embeddings and snippets flags
   useEffect(() => {
@@ -55,6 +60,11 @@ export const Datasets = () => {
       user.role === "team_owner"
     ) {
       dispatch(fetchAllDatasets());
+    }
+    // Reference pools and their links are admin-only (the endpoints reject others).
+    if (user.role === "admin") {
+      dispatch(fetchReferenceDatasets());
+      dispatch(fetchReferenceLinks());
     }
     dispatch(getAllDatasetAnnotationStats());
   }, [user, embeddingCreated, dispatch]);
@@ -80,6 +90,14 @@ export const Datasets = () => {
   const filtersActive =
     search.trim() !== "" || teamFilter !== "all" || typeFilter !== "all";
 
+  // Admins see reference pools alongside regular datasets; everyone else never
+  // receives them. They come from a separate list so annotation views, which
+  // read `allDatasets`, can never offer them.
+  const listedDatasets = useMemo(
+    () => [...(allDatasets ?? []), ...(isAdmin ? referenceDatasets : [])],
+    [allDatasets, referenceDatasets, isAdmin],
+  );
+
   const visibleDatasets = useMemo(() => {
     const needle = search.trim().toLowerCase();
 
@@ -95,11 +113,15 @@ export const Datasets = () => {
       } else if (teamFilter !== "all") {
         if (Number(d.team_id) !== Number(teamFilter)) return false;
       }
-      if (typeFilter !== "all" && d.dataset_type !== typeFilter) return false;
+      if (typeFilter === "REFERENCE") {
+        if (!d.is_reference) return false;
+      } else if (typeFilter !== "all" && d.dataset_type !== typeFilter) {
+        return false;
+      }
       return true;
     };
 
-    const result = (allDatasets ?? []).filter(matches);
+    const result = listedDatasets.filter(matches);
 
     const statOf = (d: Dataset) =>
       statsById.get(Number(d.id)) ?? { total: 0, annotated: 0 };
@@ -117,7 +139,7 @@ export const Datasets = () => {
           return (a.name ?? "").localeCompare(b.name ?? "");
       }
     });
-  }, [allDatasets, search, teamFilter, typeFilter, sortBy, statsById]);
+  }, [listedDatasets, search, teamFilter, typeFilter, sortBy, statsById]);
 
   const clearFilters = () => {
     setSearch("");
@@ -125,7 +147,7 @@ export const Datasets = () => {
     setTypeFilter("all");
   };
 
-  const totalCount = allDatasets?.length ?? 0;
+  const totalCount = listedDatasets.length;
   const hasAnyDatasets = totalCount > 0;
 
   const toolbar = (
@@ -164,6 +186,7 @@ export const Datasets = () => {
           <option value="all">All types</option>
           <option value="PAM">PAM</option>
           <option value="FOCAL_RECORDINGS">Focal recordings</option>
+          {isAdmin && <option value="REFERENCE">Reference pools</option>}
         </select>
 
         <select

@@ -1,20 +1,25 @@
-import { Modal, Button, Form, Input, InputNumber, Select, message } from "antd";
+import { Modal, Button, Form, Input, InputNumber, Radio, Select, message } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   createDataset,
   fetchAllDatasets,
+  fetchReferenceDatasets,
+  fetchReferenceLinks,
 } from "../redux/features/datasetSlice";
 import { fetchAllteams } from "../redux/features/teamSlice";
 import { DatasetPathPicker } from "./DatasetPathPicker";
 import type { DatasetCreate, DatasetType } from "../types";
 import { getErrorMessage } from "../services/api";
+import { syncDatasetReferenceLinks } from "../utils/referenceLinks";
 
 const DATASET_TYPE_OPTIONS: { value: DatasetType; label: string }[] = [
   { value: "PAM", label: "PAM" },
   { value: "FOCAL_RECORDINGS", label: "Focal recordings" },
 ];
+
+type DatasetKind = "regular" | "reference";
 
 type AddDatasetModalProps = {
   onCreated?: () => void;
@@ -23,15 +28,27 @@ type AddDatasetModalProps = {
 const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
   const dispatch = useAppDispatch();
   const { allTeams } = useAppSelector((state) => state.team);
+  const { referenceDatasets } = useAppSelector((state) => state.dataset);
+  const { user } = useAppSelector((state) => state.auth);
+  // Reference pools are admin-managed; the backend rejects these fields otherwise.
+  const isAdmin = user?.role === "admin";
 
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
+  const kind: DatasetKind = Form.useWatch("kind", form) ?? "regular";
+  const sourceUri: string | undefined = Form.useWatch("source_uri", form);
 
   useEffect(() => {
     if (!open) return;
     dispatch(fetchAllteams());
-  }, [open, dispatch]);
+    if (isAdmin) dispatch(fetchReferenceDatasets());
+  }, [open, isAdmin, dispatch]);
+
+  const referenceOptions = useMemo(
+    () => referenceDatasets.map((d) => ({ value: Number(d.id), label: d.name })),
+    [referenceDatasets],
+  );
 
   const teamOptions = useMemo(
     () =>
@@ -47,25 +64,48 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
       const values = await form.validateFields();
       setSubmitting(true);
 
+      const isReference = isAdmin && values.kind === "reference";
       const payload: DatasetCreate = {
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         source_uri: values.source_uri,
         dataset_type: values.dataset_type,
+        // Reference pools are shared across teams, so they never get one.
         team_id:
-          values.team_id != null && values.team_id !== ""
+          !isReference && values.team_id != null && values.team_id !== ""
             ? Number(values.team_id)
             : undefined,
         spectrogram_f_max_hz:
           values.f_max_khz != null ? Math.round(values.f_max_khz * 1000) : undefined,
+        ...(isReference && {
+          is_reference: true,
+          reference_metadata_path: values.reference_metadata_path?.trim() || undefined,
+        }),
       };
 
-      await dispatch(createDataset(payload)).unwrap();
+      const created = await dispatch(createDataset(payload)).unwrap();
       message.success("Dataset created. Scanning recordings in the background.");
+
+      // Links are created after the dataset exists. A failure here leaves the
+      // dataset in place; the admin can retry from the card's Reference pools row.
+      const poolIds: number[] = !isReference ? values.reference_pool_ids ?? [] : [];
+      if (poolIds.length > 0) {
+        const { failed } = await syncDatasetReferenceLinks(
+          Number(created.dataset.id),
+          poolIds,
+          [],
+        );
+        if (failed.length > 0) {
+          message.warning(
+            "Some reference pools could not be linked. Edit them on the dataset card.",
+          );
+        }
+      }
 
       form.resetFields();
       setOpen(false);
-      dispatch(fetchAllDatasets());
+      dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
+      if (isAdmin) dispatch(fetchReferenceLinks());
       onCreated?.();
     } catch (err: unknown) {
       const msg =
@@ -95,7 +135,28 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
         afterClose={() => form.resetFields()}
         width={560}
       >
-        <Form layout="vertical" form={form} initialValues={{ dataset_type: "PAM" }}>
+        <Form
+          layout="vertical"
+          form={form}
+          initialValues={{ dataset_type: "PAM", kind: "regular" }}
+        >
+          {isAdmin && (
+            <Form.Item
+              label="What kind of dataset?"
+              name="kind"
+              extra={
+                kind === "reference"
+                  ? "Labelled training data for other datasets. It is never annotated directly and only admins can see it."
+                  : "Audio that users annotate."
+              }
+            >
+              <Radio.Group optionType="button" buttonStyle="solid">
+                <Radio.Button value="regular">Regular dataset</Radio.Button>
+                <Radio.Button value="reference">Reference dataset</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
+          )}
+
           <Form.Item
             label="Dataset name"
             name="name"
@@ -136,24 +197,61 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
             <InputNumber min={0.1} max={200} step={0.5} className="w-full" placeholder="Auto" />
           </Form.Item>
 
-          <Form.Item
-            label="Team (optional)"
-            name="team_id"
-            extra="Leave empty to create an unassigned dataset for later team assignment."
-          >
-            <Select
-              allowClear
-              showSearch
-              placeholder="No team"
-              options={teamOptions}
-              filterOption={(input, option) =>
-                (option?.label ?? "")
-                  .toString()
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
+          {kind === "reference" ? (
+            <Form.Item
+              label="Label file (optional)"
+              name="reference_metadata_path"
+              extra={
+                <>
+                  CSV with one row per labelled event (fname, onset, offset, species).
+                  Leave empty to use{" "}
+                  <code>{`${sourceUri || "<path>"}/pam_metadata.csv`}</code>. A path
+                  with “/” is read from the data volume root.
+                </>
               }
-            />
-          </Form.Item>
+            >
+              <Input placeholder="pam_metadata.csv" />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item
+                label="Team (optional)"
+                name="team_id"
+                extra="Leave empty to create an unassigned dataset for later team assignment."
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  placeholder="No team"
+                  options={teamOptions}
+                  filterOption={(input, option) =>
+                    (option?.label ?? "")
+                      .toString()
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+
+              {isAdmin && (
+                <Form.Item
+                  label="Reference pools to use (optional)"
+                  name="reference_pool_ids"
+                  extra="Labelled data from these reference datasets is mixed into this dataset's model training. You can change this later on the dataset card."
+                >
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    placeholder={
+                      referenceOptions.length ? "None" : "No reference datasets yet"
+                    }
+                    options={referenceOptions}
+                    optionFilterProp="label"
+                  />
+                </Form.Item>
+              )}
+            </>
+          )}
         </Form>
       </Modal>
     </>
