@@ -368,6 +368,14 @@ export const taxonomyApi = {
     return response.data;
   },
 
+  /** Resolve several taxon IDs in one request; unresolvable IDs map to null. */
+  resolveBatch: async (
+    taxonIds: string[],
+  ): Promise<Record<string, TaxonDetails | null>> => {
+    const response = await api.post("/api/taxonomy/resolve", { taxon_ids: taxonIds });
+    return response.data.results ?? {};
+  },
+
   /**
    * Fuzzy match a species name to find best matching taxon
    * Returns null if no match found
