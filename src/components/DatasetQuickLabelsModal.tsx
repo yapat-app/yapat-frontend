@@ -3,6 +3,7 @@ import { Button, Input, Modal, Spin, Tooltip, message } from "antd";
 import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
+import { invalidateQuickLabelScientificNames } from "../hooks/useQuickLabelScientificNames";
 
 type Source = "gbif" | "envo" | "local";
 
@@ -96,6 +97,8 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
     setSaving(true);
     try {
       const saved = await datasetApi.putQuickLabels(Number(dataset.id), labels);
+      // Tooltips cache scientific names per dataset; refresh them on next use.
+      invalidateQuickLabelScientificNames(Number(dataset.id));
       onSaved(saved);
       message.success("Quick labels saved");
       onClose();

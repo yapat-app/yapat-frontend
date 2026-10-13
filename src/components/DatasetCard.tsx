@@ -6,7 +6,11 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "./EmbeddingProgressPanel";
 import { useEmbeddingJobStatus } from "../hooks/useEmbeddingJobStatus";
-import { fetchAllDatasets } from "../redux/features/datasetSlice";
+import {
+  fetchAllDatasets,
+  fetchReferenceDatasets,
+} from "../redux/features/datasetSlice";
+import { DatasetReferencePools } from "./DatasetReferencePools";
 import { Button, Tag, Tooltip, message } from "antd";
 import { ThunderboltOutlined, TableOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +31,10 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
+  const { user } = useAppSelector((state) => state.auth);
+  const isAdmin = user?.role === "admin";
+  // Reference pools are training data only: no annotation entry points.
+  const isReference = !!dataset.is_reference;
 
   // Embedding job tracking. The running job comes from GET /datasets
   // (`active_embedding_job`), which is how a refresh rediscovers it;
@@ -45,9 +53,10 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
           `Embedding generation failed for ${dataset.name}${p.error_message ? `: ${p.error_message}` : ""}`,
         );
       }
-      dispatch(fetchAllDatasets());
+      // Reference datasets live in their own list, so refresh the one this card is in.
+      dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
     },
-    [dataset.name, dispatch],
+    [dataset.name, dispatch, isReference],
   );
   const { progress: embeddingProgress, etaSeconds } = useEmbeddingJobStatus(
     activeJobId,
@@ -90,6 +99,13 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                 {datasetTypeLabel}
               </span>
+              {isReference && (
+                <Tooltip title="Reference pool: labelled training data for linked datasets. Not annotated directly.">
+                  <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                    Reference
+                  </span>
+                </Tooltip>
+              )}
             </div>
             <p className="sub_base_text">
               {dataset.description?.trim() ? dataset.description : "—"}
@@ -98,92 +114,114 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
               <DatasetSpectrogramSettings dataset={dataset} />
             </div>
 
+            {isReference && (
+              <p className="mt-2 text-xs text-gray-500">
+                Label file:{" "}
+                <code className="text-gray-700">
+                  {dataset.reference_metadata_path ||
+                    `${dataset.source_uri}/pam_metadata.csv`}
+                </code>
+              </p>
+            )}
+
             {/* Quick Labels strip */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 4,
-                marginTop: 8,
-              }}
-            >
-              <span
+            {!isReference && (
+              <div
                 style={{
-                  fontSize: "var(--text-fs-11)",
-                  color: "#888",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  marginRight: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 4,
+                  marginTop: 8,
                 }}
               >
-                ⚡ Quick Labels
-              </span>
-              {quickLabels.slice(0, 5).map((l) => (
-                <Tag key={l.taxon_id} style={{ fontSize: "var(--text-fs-11)", margin: 0 }}>
-                  {l.display_name}
-                </Tag>
-              ))}
-              {quickLabels.length > 5 && (
-                <Tooltip
-                  title={quickLabels
-                    .slice(5)
-                    .map((l) => l.display_name)
-                    .join(", ")}
+                <span
+                  style={{
+                    fontSize: "var(--text-fs-11)",
+                    color: "#888",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    marginRight: 4,
+                  }}
                 >
-                  <Tag style={{ fontSize: "var(--text-fs-11)", margin: 0, color: "#888" }}>
-                    +{quickLabels.length - 5} more
+                  ⚡ Quick Labels
+                </span>
+                {quickLabels.slice(0, 5).map((l) => (
+                  <Tag key={l.taxon_id} style={{ fontSize: "var(--text-fs-11)", margin: 0 }}>
+                    {l.display_name}
                   </Tag>
-                </Tooltip>
-              )}
-              <Tag
-                style={{
-                  fontSize: "var(--text-fs-11)",
-                  margin: 0,
-                  cursor: "pointer",
-                  color: "#1890ff",
-                  borderColor: "#1890ff",
-                  borderStyle: "dashed",
-                }}
-                onClick={() => setManagingLabels(true)}
-              >
-                Manage
-              </Tag>
-            </div>
+                ))}
+                {quickLabels.length > 5 && (
+                  <Tooltip
+                    title={quickLabels
+                      .slice(5)
+                      .map((l) => l.display_name)
+                      .join(", ")}
+                  >
+                    <Tag style={{ fontSize: "var(--text-fs-11)", margin: 0, color: "#888" }}>
+                      +{quickLabels.length - 5} more
+                    </Tag>
+                  </Tooltip>
+                )}
+                <Tag
+                  style={{
+                    fontSize: "var(--text-fs-11)",
+                    margin: 0,
+                    cursor: "pointer",
+                    color: "#1890ff",
+                    borderColor: "#1890ff",
+                    borderStyle: "dashed",
+                  }}
+                  onClick={() => setManagingLabels(true)}
+                >
+                  Manage
+                </Tag>
+              </div>
+            )}
+
+            {!isReference && isAdmin && <DatasetReferencePools dataset={dataset} />}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-1">
-            <ExportAnnotationButton
-              datasetId={dataset.id}
-              disabled={!statsReady || stats.annotated_snippets < 1}
-            />
-            <Button
-              icon={<TableOutlined />}
-              onClick={() => setManagingMetadata(true)}
-              title="Download the metadata template or upload metadata for this dataset's recordings"
-            >
-              Metadata
-            </Button>
+            {!isReference && (
+              <>
+                <ExportAnnotationButton
+                  datasetId={dataset.id}
+                  disabled={!statsReady || stats.annotated_snippets < 1}
+                />
+                <Button
+                  icon={<TableOutlined />}
+                  onClick={() => setManagingMetadata(true)}
+                  title="Download the metadata template or upload metadata for this dataset's recordings"
+                >
+                  Metadata
+                </Button>
+              </>
+            )}
             <GenerateEmbeddings
               dataset={dataset}
               running={activeJobId != null}
               onStarted={setStartedJobId}
             />
-            <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
-            <Button
-              icon={<ThunderboltOutlined />}
-              size="small"
-              type="primary"
-              style={{
-                backgroundColor: "#1e40af",
-                borderColor: "#1e40af",
-                color: "#fff",
-              }}
-              onClick={handleStartAL}
-              title="Start PAM Active Learning"
-            >
-              Active Learning
-            </Button>
+            {!isReference && (
+              <>
+                <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  size="small"
+                  type="primary"
+                  style={{
+                    backgroundColor: "#1e40af",
+                    borderColor: "#1e40af",
+                    color: "#fff",
+                  }}
+                  onClick={handleStartAL}
+                  title="Start PAM Active Learning"
+                >
+                  Active Learning
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

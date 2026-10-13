@@ -74,6 +74,7 @@ type PlotlyPointEvent = {
 const MODEL_SCORE_FILTER_LOG_DELAY_MS = 1200;
 const MODEL_SCORE_FULL_RANGE_EPSILON = 1e-9;
 const THUMBNAIL_MAX_POINTS = 2500;
+const THUMBNAIL_MAX_EXTRA_VISIBLE = 500;
 const MAX_LEGEND_PILLS = 30;
 /** Zooming into less than this fraction of the full extent loads full detail. */
 const VIEWPORT_DETAIL_AREA_FRACTION = 0.6;
@@ -888,9 +889,14 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       Math.ceil(points.pointCount / THUMBNAIL_MAX_POINTS),
     );
     const out: ProjectionThumbnailData["thumbnailPoints"] = [];
-    for (let i = 0; i < points.pointCount; i += stride) {
+    let extraVisible = 0;
+    for (let i = 0; i < points.pointCount; i++) {
       const visible = projState ? bitAt(projState.visible, i) : true;
-      if (!visible) continue;
+      const onStride = i % stride === 0;
+      if (!onStride) {
+        if (!visible || extraVisible >= THUMBNAIL_MAX_EXTRA_VISIBLE) continue;
+        extraVisible++;
+      }
       const labelIdx = projState ? projState.labelIdx[i] : -1;
       out.push({
         p: {

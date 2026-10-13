@@ -368,6 +368,14 @@ export const taxonomyApi = {
     return response.data;
   },
 
+  /** Resolve several taxon IDs in one request; unresolvable IDs map to null. */
+  resolveBatch: async (
+    taxonIds: string[],
+  ): Promise<Record<string, TaxonDetails | null>> => {
+    const response = await api.post("/api/taxonomy/resolve", { taxon_ids: taxonIds });
+    return response.data.results ?? {};
+  },
+
   /**
    * Fuzzy match a species name to find best matching taxon
    * Returns null if no match found
@@ -551,6 +559,8 @@ export const datasetApi = {
   getAll: async (params?: {
     skip?: number;
     limit?: number;
+    /** Admin only: also return reference datasets (hidden by default). */
+    include_reference?: boolean;
   }): Promise<Dataset[]> => {
     const response = await api.get("/api/datasets/", { params });
     return response.data;
@@ -682,6 +692,36 @@ export const datasetApi = {
       { headers: { "Content-Type": "multipart/form-data" } },
     );
     return response.data;
+  },
+};
+
+// ============================================================================
+// Reference link API (admin only)
+// ============================================================================
+
+export const referenceLinkApi = {
+  /** All links when called without filters. */
+  list: async (params?: {
+    dataset_id?: number;
+    team_id?: number;
+    reference_dataset_id?: number;
+  }): Promise<import("../types").ReferenceLink[]> => {
+    const response = await api.get("/api/reference-links/", { params });
+    return response.data;
+  },
+
+  /** Idempotent: returns the existing link if the same one already exists. */
+  create: async (body: {
+    reference_dataset_id: number;
+    dataset_id?: number;
+    team_id?: number;
+  }): Promise<import("../types").ReferenceLink> => {
+    const response = await api.post("/api/reference-links/", body);
+    return response.data;
+  },
+
+  remove: async (linkId: number): Promise<void> => {
+    await api.delete(`/api/reference-links/${linkId}`);
   },
 };
 

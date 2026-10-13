@@ -18,7 +18,7 @@ import {
   DownOutlined,
 } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
-import { getSpeciesScientificName } from "../../constants/speciesLabels";
+import { useQuickLabelScientificNames } from "../../hooks/useQuickLabelScientificNames";
 import { usePersonalQuickLabels } from "../../hooks/usePersonalQuickLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
@@ -163,6 +163,8 @@ export const LabelSelector: React.FC<Props> = ({
 
   // Labels this participant pinned from GBIF, plus any dataset-wide entries.
   const personal = usePersonalQuickLabels();
+  // Scientific names behind code-style quick labels, for tooltips and search.
+  const scientificNames = useQuickLabelScientificNames();
 
   // Chip list: the participant's own pinned labels first (server returns them
   // newest-first, hand-picked ahead of bulk imports), then the checkpoint /
@@ -241,14 +243,14 @@ export const LabelSelector: React.FC<Props> = ({
     const hits = pamOptions.filter(
       (o) =>
         o.value.toLowerCase().includes(q) ||
-        (getSpeciesScientificName(o.value) ?? "").toLowerCase().includes(q),
+        (scientificNames.get(o.value.toLowerCase()) ?? "").toLowerCase().includes(q),
     );
     return hits.sort(
       (a, b) =>
         Number(!a.value.toLowerCase().startsWith(q)) -
         Number(!b.value.toLowerCase().startsWith(q)),
     );
-  }, [pamOptions, trimmedQuery]);
+  }, [pamOptions, trimmedQuery, scientificNames]);
 
   const combinedList = useMemo(
     () => filteredPamOptions.slice(0, MAX_VISIBLE_LABELS),
@@ -388,7 +390,7 @@ export const LabelSelector: React.FC<Props> = ({
       keyPrefix: string,
     ) => {
       const isSelected = selectedSet.has(opt.value.toLowerCase());
-      const scientificName = getSpeciesScientificName(opt.value);
+      const scientificName = scientificNames.get(opt.value.toLowerCase());
       const chip = (
         // Wrapper so the remove control is a sibling of the chip button rather
         // than a nested (invalid) button.

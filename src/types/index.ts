@@ -469,6 +469,11 @@ export interface Dataset {
    * excludes these from GET /api/datasets/ unless include_reference=true.
    */
   is_reference?: boolean;
+  /**
+   * Where a reference dataset's label CSV lives, relative to the data volume.
+   * Null means the default `{source_uri}/pam_metadata.csv`.
+   */
+  reference_metadata_path?: string | null;
   /** Newest pending/running embedding job (null when none is in flight). */
   active_embedding_job?: ActiveEmbeddingJob | null;
 }
@@ -511,6 +516,23 @@ export interface DatasetCreate {
   dataset_type?: DatasetType;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  /** Admin only: register as a reference pool instead of an annotatable dataset. */
+  is_reference?: boolean;
+  /** Admin only: label CSV location; omit for `{source_uri}/pam_metadata.csv`. */
+  reference_metadata_path?: string;
+}
+
+/**
+ * Link that mixes a reference dataset's labelled data into another dataset's
+ * training. Exactly one of `dataset_id` / `team_id` is set; a team link applies
+ * to every dataset in that team.
+ */
+export interface ReferenceLink {
+  id: number;
+  reference_dataset_id: number;
+  dataset_id: number | null;
+  team_id: number | null;
+  created_at: string;
 }
 
 export interface AvailableDatasetPath {
