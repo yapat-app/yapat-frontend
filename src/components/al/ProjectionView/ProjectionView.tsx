@@ -18,6 +18,7 @@ import React, {
 import Plot from "react-plotly.js";
 import { Spin, Tooltip } from "antd";
 import {
+  DragOutlined,
   ExperimentOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
@@ -388,6 +389,18 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   // ── Zoom / viewport detail ──────────────────────────────────────────────────
 
+  // Drag behaviour on the plot: box-zoom (Plotly default) or pan. The plot's
+  // own mode bar is hidden, so this is the only way to pan.
+  const [dragMode, setDragMode] = useState<"zoom" | "pan">("zoom");
+  const changeDragMode = (mode: "zoom" | "pan") => {
+    if (mode === dragMode) return;
+    setDragMode(mode);
+    studyLogger.log("projection_drag_mode_change", {
+      mode,
+      projectionMethod: method,
+    });
+  };
+
   const [axisRange, setAxisRange] = useState<{
     x: [number, number];
     y: [number, number];
@@ -396,6 +409,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     x: [number, number];
     y: [number, number];
   } | null>(null);
+  // The Plotly graph div, so relayout handling can read the axes' actual ranges.
+  const plotDivRef = useRef<HTMLElement | null>(null);
+  // When the zoom buttons last set the range (see logViewChange below).
+  const programmaticRangeAtRef = useRef(0);
   const [viewBox, setViewBox] = useState<
     [number, number, number, number] | null
   >(null);
@@ -867,11 +884,6 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
 
   const thumbnailPoints = useMemo(() => {
     if (!points || !points.available) return [];
-    // Every stride-th point gives the overall shape (filtered-out ones are drawn
-    // faint), plus every *visible* point up to the cap. Keeping only visible
-    // stride points emptied the list under narrow filters (e.g. 2 visible of
-    // 65k with stride 27), which turned every thumbnail into "N/A".
-    // At most THUMBNAIL_MAX_POINTS + THUMBNAIL_MAX_EXTRA_VISIBLE points.
     const stride = Math.max(
       1,
       Math.ceil(points.pointCount / THUMBNAIL_MAX_POINTS),
@@ -1114,6 +1126,19 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     }
   };
 
+  const logViewChange = (
+    action: "zoom_in" | "zoom_out" | "box_zoom" | "pan" | "reset",
+    range: { x: [number, number]; y: [number, number] } | null,
+  ) => {
+    const r3 = (v: number) => Math.round(v * 1000) / 1000;
+    studyLogger.log("projection_view_change", {
+      action,
+      projectionMethod: method,
+      xRange: range ? [r3(range.x[0]), r3(range.x[1])] : null,
+      yRange: range ? [r3(range.y[0]), r3(range.y[1])] : null,
+    });
+  };
+
   const zoomBy = (factor: number) => {
     const currentRange = lastRangeRef.current ?? dataBounds;
     if (!currentRange) return;
@@ -1126,8 +1151,10 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       y: [cy - (cy - y0) * factor, cy + (y1 - cy) * factor] as [number, number],
     };
     lastRangeRef.current = next;
+    programmaticRangeAtRef.current = performance.now();
     setAxisRange(next);
     setViewBox([next.x[0], next.x[1], next.y[0], next.y[1]]);
+    logViewChange(factor < 1 ? "zoom_in" : "zoom_out", next);
   };
   const handleZoomIn = () => zoomBy(0.7);
   const handleZoomOut = () => zoomBy(1 / 0.7);
@@ -1136,12 +1163,33 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     if (event["xaxis.autorange"] || event["yaxis.autorange"]) {
       lastRangeRef.current = null;
       setViewBox(null);
+      // Plotly's double-click reset (logged here, not in onDoubleClick, so it
+      // counts once).
+      logViewChange("reset", null);
       return;
     }
-    const x0 = event["xaxis.range[0]"];
-    const x1 = event["xaxis.range[1]"];
-    const y0 = event["yaxis.range[0]"];
-    const y1 = event["yaxis.range[1]"];
+    // A participant drag reports axis-range keys; autosize/resize events don't.
+    const isRangeChange = Object.keys(event).some(
+      (k) => k.startsWith("xaxis.range") || k.startsWith("yaxis.range"),
+    );
+    // Read the ranges Plotly actually applied rather than parsing the event:
+    // box zoom reports "xaxis.range[0]"-style keys, but pan/scroll can report
+    // "xaxis.range" arrays or only the axis that changed. Missing those left
+    // lastRangeRef stale, so the zoom buttons zoomed around an old view.
+    const full = (
+      plotDivRef.current as unknown as {
+        _fullLayout?: {
+          xaxis?: { range?: unknown[] };
+          yaxis?: { range?: unknown[] };
+        };
+      } | null
+    )?._fullLayout;
+    const xr = full?.xaxis?.range;
+    const yr = full?.yaxis?.range;
+    const x0 = xr?.[0],
+      x1 = xr?.[1],
+      y0 = yr?.[0],
+      y1 = yr?.[1];
     if (
       typeof x0 === "number" &&
       typeof x1 === "number" &&
@@ -1150,6 +1198,15 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     ) {
       lastRangeRef.current = { x: [x0, x1], y: [y0, y1] };
       setViewBox([x0, x1, y0, y1]);
+      if (
+        isRangeChange &&
+        performance.now() - programmaticRangeAtRef.current > 400
+      ) {
+        logViewChange(dragMode === "pan" ? "pan" : "box_zoom", {
+          x: [x0, x1],
+          y: [y0, y1],
+        });
+      }
     }
   };
   const handlePlotDoubleClick = () => {
@@ -1314,6 +1371,30 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                 className="absolute top-2 right-2 z-10 flex flex-col items-end  gap-1 pointer-events-none"
               >
                 <div className="flex  items-center gap-1 pointer-events-auto">
+                  <Tooltip
+                    title={
+                      dragMode === "pan"
+                        ? "Pan on: drag to move the view (click to go back to box zoom)"
+                        : "Pan: drag to move the view instead of box-zooming"
+                    }
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={dragMode === "pan"}
+                      aria-label="Pan"
+                      onClick={() =>
+                        changeDragMode(dragMode === "pan" ? "zoom" : "pan")
+                      }
+                      className={[
+                        "flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition-colors",
+                        dragMode === "pan"
+                          ? "border-blue-400 bg-blue-50 text-blue-600"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-blue-300 hover:text-blue-600",
+                      ].join(" ")}
+                    >
+                      <DragOutlined className="text-xs" />
+                    </button>
+                  </Tooltip>
                   <Tooltip title="Zoom out">
                     <button
                       type="button"
@@ -1336,7 +1417,8 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   </Tooltip>
                 </div>
                 <span className="text-fs-10 text-gray-400 font-ibm-sans pointer-events-none">
-                  Double-click plot to reset zoom
+                  {dragMode === "pan" ? "Drag to pan · " : ""}Double-click plot
+                  to reset zoom
                 </span>
               </div>
               <Plot
@@ -1363,6 +1445,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                   paper_bgcolor: "#f7fafc",
                   plot_bgcolor: "#f7fafc",
                   hovermode: "closest",
+                  dragmode: dragMode,
                 }}
                 style={{ width: "100%", height: "100%" }}
                 useResizeHandler
@@ -1371,6 +1454,12 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
                 onUnhover={handlePlotUnhover}
                 onRelayout={handlePlotRelayout}
                 onDoubleClick={handlePlotDoubleClick}
+                onInitialized={(_fig, div) => {
+                  plotDivRef.current = div;
+                }}
+                onUpdate={(_fig, div) => {
+                  plotDivRef.current = div;
+                }}
                 config={{ displayModeBar: false, responsive: true }}
               />
             </>

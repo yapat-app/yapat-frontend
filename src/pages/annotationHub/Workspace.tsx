@@ -72,21 +72,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   }, []);
   // UMAP/t-SNE disappear when the server can't produce them (over their point caps);
   // a selection of one of those falls back to PCA, which is always available.
-  const effectiveProjMethod: ProjectionMethod = thumbData?.unavailableMethods.has(
-    projMethod,
-  )
-    ? "pca"
-    : projMethod;
+  const effectiveProjMethod: ProjectionMethod =
+    thumbData?.unavailableMethods.has(projMethod) ? "pca" : projMethod;
   const handleMethodChange = useCallback(
     (m: ProjectionMethod) => {
-      if (m !== projMethod)
+      if (m !== effectiveProjMethod)
         studyLogger.log("projection_method_change", {
-          from: projMethod,
+          from: effectiveProjMethod,
           to: m,
         });
       setProjMethod(m);
     },
-    [projMethod],
+    [effectiveProjMethod],
   );
 
   const [sortFields, setSortFields] = useState<SortField[]>(() =>

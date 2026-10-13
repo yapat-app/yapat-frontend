@@ -2,9 +2,10 @@
  * PhaseInstructionsModal — the intro shown before each phase begins.
  */
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Modal, Button } from "antd";
 import { useStudyFlow } from "../useStudyFlow";
+import { studyLogger } from "../../studyLogging";
 import { getPhaseContent } from "../phaseContent";
 
 /**
@@ -34,7 +35,16 @@ export const PhaseInstructionsModal: React.FC = () => {
     pendingTourSteps,
   } = useStudyFlow();
 
-  if (!enabled || stage !== "instructions") return null;
+  // Study log: instructions shown, once per phase.
+  const loggedPhaseRef = useRef<string | null>(null);
+  const showing = enabled && stage === "instructions";
+  useEffect(() => {
+    if (!showing || loggedPhaseRef.current === phaseId) return;
+    loggedPhaseRef.current = phaseId;
+    studyLogger.log("phase_instructions_shown", { phase: phaseId });
+  }, [showing, phaseId]);
+
+  if (!showing) return null;
 
   const content = getPhaseContent(phaseId);
   const hasTour = pendingTourSteps.length > 0;

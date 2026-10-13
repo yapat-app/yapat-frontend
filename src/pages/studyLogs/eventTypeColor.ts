@@ -24,7 +24,24 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   label_toggle: "orange",
   label_clear: "orange",
 
+  // Hub filters / navigation
+  dataset_change: "geekblue",
+  annotation_status_filter_change: "geekblue",
+  annotated_species_filter_change: "geekblue",
+  focus_species_change: "geekblue",
+  label_scope_change: "geekblue",
+  location_filter_change: "geekblue",
+  month_filter_change: "geekblue",
+  label_search: "orange",
+
+  // Study flow
+  phase_instructions_shown: "blue",
+  phase_tour_start: "blue",
+  phase_tour_complete: "blue",
+
   // Visualisation
+  projection_view_change: "cyan",
+  projection_drag_mode_change: "cyan",
   vis_point_click: "cyan",
   vis_point_hover: "cyan",
   projection_method_change: "cyan",

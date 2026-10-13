@@ -137,11 +137,16 @@ export const LabelSelector: React.FC<Props> = ({
     };
   }, []);
 
+  // Query whose GBIF lookup is in flight / last completed (for the search log).
+  const gbifQueryRef = useRef("");
+  const lastLoggedSearchRef = useRef("");
+
   const searchGBIF = useCallback((query: string) => {
     if (!query || query.trim().length < 2) {
       setGbifResults([]);
       return;
     }
+    gbifQueryRef.current = query.trim();
     setGbifLoading(true);
     fetch(`${GBIF_SUGGEST_URL}?q=${encodeURIComponent(query.trim())}&limit=10`)
       .then((r) => r.json())
@@ -251,6 +256,20 @@ export const LabelSelector: React.FC<Props> = ({
     () => filteredPamOptions.slice(0, MAX_VISIBLE_LABELS),
     [filteredPamOptions],
   );
+
+  // Study log: one `label_search` per settled query, once its GBIF lookup has
+  // returned (so quick-label and GBIF counts describe the same query).
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2 || gbifLoading || q !== gbifQueryRef.current) return;
+    if (lastLoggedSearchRef.current === q.toLowerCase()) return;
+    lastLoggedSearchRef.current = q.toLowerCase();
+    studyLogger.log("label_search", {
+      query: q,
+      quickMatches: quickMatches.length,
+      gbifResults: gbifOptions.length,
+    });
+  }, [searchQuery, gbifLoading, gbifResults, quickMatches.length, gbifOptions.length]);
 
   const selectedSet = useMemo(() => new Set((value ?? []).map((v) => v.toLowerCase())), [value]);
 
