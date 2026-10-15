@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAppSelector } from "../hooks";
 import type { ExploreScope } from "../types/explore";
+import { useDatasetDataEpoch } from "./datasetRefresh";
 
 export interface ExploreScopeState {
   /** Null until an AL session (dataset + snippet set + inference) exists. */
@@ -9,7 +10,8 @@ export interface ExploreScopeState {
   /**
    * Changes whenever an inference request resolves. A forced re-inference on
    * the same checkpoint rewrites its scores without changing the scope, so
-   * consumers include this in their request keys to refetch.
+   * consumers include this in their request keys to refetch. It also changes
+   * when the dataset's snippets change (recordings added; see datasetRefresh.ts).
    */
   revision: string;
 }
@@ -27,6 +29,9 @@ export function useExploreScope(): ExploreScopeState {
   const usedCheckpointId = useAppSelector((s) => s.al.usedCheckpointId);
   const feedSource = useAppSelector((s) => s.al.feedSource);
   const lastInferenceAt = useAppSelector((s) => s.al.lastInferenceAt);
+  const dataEpoch = useDatasetDataEpoch(
+    selectedDatasetId !== null ? Number(selectedDatasetId) : null,
+  );
 
   return useMemo(() => {
     const ready =
@@ -42,6 +47,8 @@ export function useExploreScope(): ExploreScopeState {
       // The backend resolves the embedding model from the snippet set.
       embedding_model_id: null,
     };
-    return { scope, scopeKey: JSON.stringify(scope), revision: lastInferenceAt ?? "" };
-  }, [selectedDatasetId, snippetSetId, usedCheckpointId, feedSource, lastInferenceAt]);
+    // Unchanged from before while nothing was added (epoch 0).
+    const revision = (lastInferenceAt ?? "") + (dataEpoch ? `|data${dataEpoch}` : "");
+    return { scope, scopeKey: JSON.stringify(scope), revision };
+  }, [selectedDatasetId, snippetSetId, usedCheckpointId, feedSource, lastInferenceAt, dataEpoch]);
 }
