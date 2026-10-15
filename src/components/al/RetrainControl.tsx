@@ -4,9 +4,9 @@
 
 import React from "react";
 import { Button, Progress, Tag, Tooltip, Spin, Alert } from "antd";
-import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { ClockCircleOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
-import { triggerRetrain } from "../../redux/features/alSlice";
+import { selectRetrainWaitingForIngest, triggerRetrain } from "../../redux/features/alSlice";
 import { studyLogger } from "../../studyLogging";
 import { useStudyFlow } from "../../studyFlow";
 
@@ -26,6 +26,10 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
     lastRetrainFailed,
     selectedDatasetId,
   } = useAppSelector((state) => state.al);
+  // Held by the backend until an add-recordings run on this dataset ends.
+  const waitingForIngest = useAppSelector(selectRetrainWaitingForIngest) !== null;
+  const waitingHint =
+    "Your labels are saved. Retraining starts automatically when the new recordings finish being added.";
 
   const progressPercent = Math.min(
     Math.round((feedbackCount / retrainThreshold) * 100),
@@ -43,6 +47,15 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
   };
 
   const statusTag = () => {
+    if (waitingForIngest) {
+      return (
+        <Tooltip title={waitingHint}>
+          <Tag icon={<ClockCircleOutlined />} className={variant === "compact" ? "text-fs-10 px-2" : undefined}>
+            Waiting for new recordings
+          </Tag>
+        </Tooltip>
+      );
+    }
     if (!lastRetrainJob) return null;
     const colorMap = {
       PENDING: "default",
@@ -74,11 +87,11 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
             />
           </div>
         </Tooltip>
-        <Tooltip title="Manual retrain">
+        <Tooltip title={waitingForIngest ? waitingHint : "Manual retrain"}>
           <Button
             icon={<ReloadOutlined />}
             size="small"
-            loading={retrainLoading}
+            loading={retrainLoading && !waitingForIngest}
             disabled={isTourActive || retrainLoading || selectedDatasetId === null || modelFamilyName === null}
             onClick={handleManualRetrain}
           >
@@ -121,16 +134,18 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
           className="mb-2 text-xs py-1"
         />
       )}
-      <Button
-        icon={<ReloadOutlined />}
-        size="small"
-        loading={retrainLoading}
-        disabled={retrainLoading || selectedDatasetId === null || modelFamilyName === null}
-        onClick={handleManualRetrain}
-        className="w-full"
-      >
-        Retrain Now
-      </Button>
+      <Tooltip title={waitingForIngest ? waitingHint : undefined}>
+        <Button
+          icon={<ReloadOutlined />}
+          size="small"
+          loading={retrainLoading && !waitingForIngest}
+          disabled={retrainLoading || selectedDatasetId === null || modelFamilyName === null}
+          onClick={handleManualRetrain}
+          className="w-full"
+        >
+          {waitingForIngest ? "Retrain queued" : "Retrain Now"}
+        </Button>
+      </Tooltip>
       {lastRetrainJob?.result_metrics?.accuracy !== undefined && (
         <p className="text-xs text-gray-400 mt-2 text-center">
           Last accuracy:{" "}

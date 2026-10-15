@@ -18,13 +18,15 @@ import {
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { clearSavedFeed } from "../redux/features/alSlice";
+import { clearSavedFeed, selectRetrainWaitingForIngest } from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubALSession } from "./annotationHub/useHubALSession";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
+import { useDatasetActivity } from "./annotationHub/useDatasetActivity";
+import { HubDatasetActivityPanel, HubIngestBanner } from "./annotationHub/HubDatasetActivity";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
 import { useStudyFlow, phaseSequence, StudyFlowOverlays } from "../studyFlow";
@@ -113,6 +115,14 @@ export const AnnotationHub: React.FC = () => {
     searchParams,
     setSearchParams,
     user,
+  );
+  const isManager = user?.role === "admin" || user?.role === "team_owner";
+  const activityDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  // A retrain the backend holds until an add-recordings run on this dataset ends.
+  const retrainWaitingForIngest = useAppSelector(selectRetrainWaitingForIngest);
+  const datasetActivity = useDatasetActivity(
+    activityDatasetId === null ? null : Number(activityDatasetId),
+    retrainWaitingForIngest,
   );
 
   const [mode, setMode] = useState<AnnotateMode>(() => {
@@ -383,9 +393,6 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
-  const feedActionLabel =
-    al.predictions.length > 0 ? "Edit Feed" : "Generate Feed";
-
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
       <NavigationBar />
@@ -513,21 +520,40 @@ export const AnnotationHub: React.FC = () => {
                   {mode === "validate" ? "Validate" : "Active Learning"}
                 </p>
                 <p className="text-sm font-ibm-sans">
-                  Then click "Generate Feed" to load predictions.
+                  Predictions load automatically once it has a trained model.
                 </p>
               </div>
             )}
 
-            {(al.selectedDatasetId || al.isRestoredFeed) && (
+            {/* Background work on this dataset, shown to every user. Scanning or
+                embedding replaces the workspace (no feed yet); adding recordings
+                only shows a strip, since the dataset stays usable. */}
+            {al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking && (
+              <HubDatasetActivityPanel activity={datasetActivity} isManager={isManager} />
+            )}
+
+            {al.selectedDatasetId && datasetActivity.kind === "ingesting" && (
+              <HubIngestBanner
+                activity={datasetActivity}
+                isManager={isManager}
+                retrainWaiting={retrainWaitingForIngest !== null}
+              />
+            )}
+
+            {(al.selectedDatasetId || al.isRestoredFeed) &&
+              !(al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking) && (
               <Workspace
                 onFindSimilar={
                   phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
                 }
                 exploreFilters={exploreFilters}
-                feedActionLabel={feedActionLabel}
-                feedActionLoading={al.inferenceLoading}
-                feedActionDisabled={!al.selectedDatasetId}
-                onFeedAction={al.openInferenceModal}
+                // Generate/Edit Feed button hidden for now: inference starts on its
+                // own once a dataset has a model. Pass these again to bring it back
+                // (it is also the only entry to "train from scratch").
+                // feedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
+                // feedActionLoading={al.inferenceLoading}
+                // feedActionDisabled={!al.selectedDatasetId}
+                // onFeedAction={al.openInferenceModal}
                 quickLabels={quickLabelList.labels}
                 quickLabelsLoading={quickLabelList.loading}
               />

@@ -19,6 +19,7 @@ import {
   requestFeedResume,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
+import { useDatasetDataEpoch } from "../../explore/datasetRefresh";
 import { alApi } from "../../services/alApi";
 import { studyLogger } from "../../studyLogging";
 import type { PAMCheckpoint } from "../../types/al";
@@ -81,6 +82,9 @@ export function useHubALSession(
     lastRetrainDispatch,
     usedCheckpointId,
   } = useAppSelector((s) => s.al);
+  const dataEpoch = useDatasetDataEpoch(
+    selectedDatasetId === null ? null : Number(selectedDatasetId),
+  );
 
   const feedbackCountDisplay = useMemo(() => {
     if (!Number.isFinite(retrainThreshold) || retrainThreshold <= 0) {
@@ -278,7 +282,9 @@ export function useHubALSession(
     return () => {
       cancelled = true;
     };
-  }, [selectedDatasetId]);
+    // dataEpoch: embeddings finished or recordings were added while the hub was
+    // open (datasetRefresh.ts) — a ready snippet set may exist now.
+  }, [selectedDatasetId, dataEpoch]);
 
   const resolvedSnippetSetId = useMemo(() => {
     if (localSS !== null) return localSS;
@@ -787,7 +793,9 @@ export function useHubALSession(
         }
         return;
       }
-      timer = window.setTimeout(tick, 2000);
+      // A retrain held for an add-recordings run can wait up to an hour; poll
+      // slowly until the backend releases it (the field turns null).
+      timer = window.setTimeout(tick, r.payload.waiting_for_ingest_job_id ? 15000 : 2000);
     }
     void tick();
     return () => {
