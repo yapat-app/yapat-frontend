@@ -35,6 +35,8 @@ type Props = {
   dataset: Dataset;
   open: boolean;
   onClose: () => void;
+  /** After a successful import (e.g. to refetch the dataset's metadata coverage). */
+  onImported?: () => void;
 };
 
 type Step = "select" | "preview" | "done";
@@ -81,6 +83,7 @@ export const DatasetMetadataModal: React.FC<Props> = ({
   dataset,
   open,
   onClose,
+  onImported,
 }) => {
   const [step, setStep] = useState<Step>("select");
   const [file, setFile] = useState<File | null>(null);
@@ -199,6 +202,7 @@ export const DatasetMetadataModal: React.FC<Props> = ({
       // The location / date-time filters read a cached recordings scan; drop it
       // so they pick up the freshly-imported extra_metadata without a reload.
       invalidateRecordingMetadataCache(Number(dataset.id));
+      onImported?.();
       setResult(res);
       setStep("done");
       message.success("Metadata imported");

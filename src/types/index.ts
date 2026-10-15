@@ -465,6 +465,12 @@ export interface Dataset {
   is_ready_for_feed?: boolean;
   recording_count?: number;
   /**
+   * Recordings with all of location, recorded_date and recorded_time (from the
+   * file name or a CSV import). Null where the backend doesn't compute it
+   * (e.g. the create-dataset response).
+   */
+  recordings_with_metadata?: number | null;
+  /**
    * Reference-only training data — never surfaced for annotation. The backend
    * excludes these from GET /api/datasets/ unless include_reference=true.
    */
@@ -476,6 +482,10 @@ export interface Dataset {
   reference_metadata_path?: string | null;
   /** Newest pending/running embedding job (null when none is in flight). */
   active_embedding_job?: ActiveEmbeddingJob | null;
+  /** Running "add recordings" job (null when none is in flight). */
+  active_ingest_job?: ActiveIngestJob | null;
+  /** Current (non-dismissed) recordings left with unembedded snippets. */
+  embedding_failures?: EmbeddingFailureCounts | null;
 }
 
 export interface ActiveEmbeddingJob {
@@ -483,6 +493,114 @@ export interface ActiveEmbeddingJob {
   status: string;
   snippet_set_id: number;
   started_at?: string | null;
+}
+
+// ----------------------------------------------------------------------------
+// Add recordings to an existing dataset
+// ----------------------------------------------------------------------------
+
+export type IngestJobStatus = "pending" | "running" | "completed" | "failed";
+
+export type IngestJobStage =
+  | "pending"
+  | "scanning"
+  | "segmenting"
+  | "embedding"
+  | "finalizing"
+  | "scoring"
+  | "completed"
+  | "failed";
+
+/** "scan": normal run; "retry_failed": re-embeds only failed recordings (no scan). */
+export type IngestJobMode = "scan" | "retry_failed";
+
+export interface EmbeddingFailureCounts {
+  recordings: number;
+  snippets: number;
+}
+
+/** One recording left with unembedded snippets (GET …/embedding-failures). */
+export interface EmbeddingFailure {
+  recording_id: number;
+  file_name: string;
+  file_path: string;
+  snippets_missing: number;
+  /** The error, or "BirdNET returned no embedding for <n> of <m> snippets". */
+  reason: string;
+  last_attempt_at: string;
+  last_job_id: number | null;
+  dismissed: boolean;
+}
+
+export interface EmbeddingFailuresPage {
+  /** Current (non-dismissed) totals. */
+  recordings: number;
+  snippets: number;
+  dismissed_recordings: number;
+  /** Current failures first, then by file path. */
+  items: EmbeddingFailure[];
+}
+
+/** `Dataset.active_ingest_job`, how a page refresh rediscovers a running job. */
+export interface ActiveIngestJob {
+  id: number;
+  mode?: IngestJobMode;
+  status: IngestJobStatus;
+  stage: IngestJobStage;
+  started_at?: string | null;
+}
+
+/** Filled in as stages finish; zeros until then. */
+export interface IngestJobSummary {
+  files_found: number;
+  recordings_new: number;
+  /** Already known to the dataset. */
+  files_skipped: number;
+  files_unreadable: number;
+  snippets_new: number;
+  snippets_embedded: number;
+  /** Left without an embedding; the job still completes. */
+  snippets_failed: number;
+  /** Recordings this run left with unembedded snippets (missing on older jobs). */
+  embedding_failures?: EmbeddingFailureCounts;
+  /** 0 when the dataset has no active model. */
+  snippets_scored: number;
+  /** "no_active_checkpoint" (no model) or "scoring_failed" (`error` says why;
+   *  the job still completes). */
+  scoring_skipped_reason: string | null;
+  /** New recordings whose file name gave location + date + time.
+   *  Missing on jobs that ran before the field existed: treat as unknown. */
+  recordings_with_metadata?: number;
+  /** New recordings lacking any of location/date/time: only these need a
+   *  metadata upload. Missing on older jobs: treat as unknown, not 0. */
+  recordings_missing_metadata?: number;
+}
+
+/**
+ * POST /api/datasets/{id}/add-recordings (202) and
+ * GET /api/datasets/{id}/add-recordings/{job_id}.
+ */
+export interface IngestJob {
+  job_id: number;
+  dataset_id: number;
+  /** Missing on jobs from before retries existed: treat as "scan". */
+  mode?: IngestJobMode;
+  status: IngestJobStatus;
+  stage: IngestJobStage;
+  /** Units depend on the stage: files (scanning), recordings (segmenting),
+   *  snippets (embedding, scoring); 0/0 when the stage has no count. */
+  done: number;
+  total: number;
+  /** Of the current stage, 0–100; null when total is 0. */
+  percent: number | null;
+  /** True after 10 min without progress. */
+  stalled: boolean;
+  /** Human-readable message when status is "failed". */
+  error: string | null;
+  summary: IngestJobSummary;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 /** GET /api/embeddings/{job_id}/progress (Redis counter on the backend). */
