@@ -43,11 +43,14 @@ type WorkspaceProps = {
   onFindSimilar?: (snippetId: number) => void;
   /** Canonical explore filters shared by the feed, histograms and projection. */
   exploreFilters: ExploreFilters;
-  /** Feed action button ("Generate Feed" / "Edit Feed") — lives on the feed side. */
-  feedActionLabel: string;
-  feedActionLoading: boolean;
-  feedActionDisabled: boolean;
-  onFeedAction: () => void;
+  /**
+   * Feed action button ("Generate Feed" / "Edit Feed", opens the inference
+   * config modal) — lives on the feed side. Hidden when `onFeedAction` is unset.
+   */
+  feedActionLabel?: string;
+  feedActionLoading?: boolean;
+  feedActionDisabled?: boolean;
+  onFeedAction?: () => void;
   quickLabels: string[];
   quickLabelsLoading: boolean;
 };
@@ -166,15 +169,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
           Feed
         </h2>
-        <Button
-          type="primary"
-          size="small"
-          loading={feedActionLoading}
-          disabled={feedActionDisabled}
-          onClick={onFeedAction}
-        >
-          {feedActionLabel}
-        </Button>
+        {onFeedAction && (
+          <Button
+            type="primary"
+            size="small"
+            loading={feedActionLoading}
+            disabled={feedActionDisabled}
+            onClick={onFeedAction}
+          >
+            {feedActionLabel}
+          </Button>
+        )}
       </div>
       <SortPanel
         fields={sortFields}

@@ -5,7 +5,6 @@ import {
   AudioOutlined,
   BarChartOutlined,
   TagsOutlined,
-  HistoryOutlined,
   TeamOutlined,
   ReadOutlined,
   ArrowRightOutlined,
@@ -77,17 +76,6 @@ const CARDS: ServiceCard[] = [
     color: "text-amber-600",
     bgColor: "bg-amber-50",
     borderColor: "border-amber-200 hover:border-amber-400",
-  },
-  {
-    key: "history",
-    icon: <HistoryOutlined className="text-2xl" />,
-    title: "Feed History",
-    description:
-      "Browse previously generated annotation feeds. Review progress, re-open completed sessions, and track coverage.",
-    route: "/history",
-    color: "text-slate-600",
-    bgColor: "bg-slate-50",
-    borderColor: "border-slate-200 hover:border-slate-400",
   },
   {
     key: "teams",

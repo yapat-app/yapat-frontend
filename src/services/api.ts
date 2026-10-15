@@ -693,6 +693,116 @@ export const datasetApi = {
     );
     return response.data;
   },
+
+  /**
+   * Start the "add recordings" pipeline (scan → segment → embed → finalize →
+   * score) for files copied into the dataset's folder. `sourceUri` (relative
+   * to DATA_ROOT) widens the dataset to a parent of its current folder; omit
+   * it to rescan the current folder.
+   *
+   * If a job is already running for this dataset (409 `ingest_job_running`),
+   * this attaches to that job instead of failing: `attached` is then true.
+   * Other errors are rethrown; show them with `addRecordingsErrorMessage`.
+   */
+  startAddRecordings: async (
+    datasetId: number,
+    sourceUri?: string,
+  ): Promise<{ job: import("../types").IngestJob; attached: boolean }> =>
+    datasetApi._startIngest(datasetId, sourceUri ? { source_uri: sourceUri } : {}),
+
+  /**
+   * Re-embed only the recordings left with unembedded snippets (dismissed ones
+   * included); no folder scan. Same job/progress/409 handling as
+   * startAddRecordings, with `mode: "retry_failed"`.
+   */
+  retryFailedRecordings: async (
+    datasetId: number,
+  ): Promise<{ job: import("../types").IngestJob; attached: boolean }> =>
+    datasetApi._startIngest(datasetId, { retry_failed_only: true }),
+
+  _startIngest: async (
+    datasetId: number,
+    body: { source_uri?: string; retry_failed_only?: boolean },
+  ): Promise<{ job: import("../types").IngestJob; attached: boolean }> => {
+    try {
+      const response = await api.post(`/api/datasets/${datasetId}/add-recordings`, body);
+      return { job: response.data, attached: false };
+    } catch (err: any) {
+      const data = err?.response?.data;
+      if (
+        err?.response?.status === 409 &&
+        data?.detail === "ingest_job_running" &&
+        typeof data?.job_id === "number"
+      ) {
+        const job = await datasetApi.getAddRecordingsJob(datasetId, data.job_id);
+        return { job, attached: true };
+      }
+      throw err;
+    }
+  },
+
+  /** Live state of an "add recordings" job (Redis counters; cheap to poll). */
+  getAddRecordingsJob: async (
+    datasetId: number,
+    jobId: number,
+  ): Promise<import("../types").IngestJob> => {
+    const response = await api.get(
+      `/api/datasets/${datasetId}/add-recordings/${jobId}`,
+    );
+    return response.data;
+  },
+
+  /** Recordings left with unembedded snippets, current ones first (limit ≤ 500). */
+  getEmbeddingFailures: async (
+    datasetId: number,
+    params?: { skip?: number; limit?: number; include_dismissed?: boolean },
+  ): Promise<import("../types").EmbeddingFailuresPage> => {
+    const response = await api.get(`/api/datasets/${datasetId}/embedding-failures`, {
+      params,
+    });
+    return response.data;
+  },
+
+  /** "Continue without them": stop counting (and auto-retrying) current failures. */
+  dismissEmbeddingFailures: async (datasetId: number): Promise<{ dismissed: number }> => {
+    const response = await api.post(`/api/datasets/${datasetId}/embedding-failures/dismiss`);
+    return response.data;
+  },
+};
+
+const ADD_RECORDINGS_ERRORS: Record<string, string> = {
+  invalid_source_uri:
+    "That folder can't be used: it must exist under the data root and contain the dataset's current folder.",
+  source_uri_overlaps_other_dataset:
+    "That folder also contains another dataset's folder. Pick a folder closer to this dataset.",
+  no_embeddings_yet:
+    "This dataset has no embeddings yet. Use Generate Embeddings instead.",
+  embeddings_not_ready:
+    "Embeddings for this dataset didn't finish. Run Generate Embeddings again before adding recordings.",
+  reference_metadata_missing:
+    "The reference pool's label file (pam_metadata.csv) wasn't found in that folder.",
+  no_failed_recordings: "There are no failed recordings to retry.",
+  source_uri_not_allowed_with_retry:
+    "A retry re-embeds the failed recordings in place; it can't change the folder.",
+  ingest_job_running: "Recordings are already being added to this dataset.",
+  embedding_job_running:
+    "Embeddings are being generated for this dataset. Try again when that finishes.",
+  retrain_job_running:
+    "The model is retraining on this dataset. Try again when that finishes.",
+};
+
+/** User-facing message for a failed POST /datasets/{id}/add-recordings. */
+export const addRecordingsErrorMessage = (error: any): string => {
+  const status = error?.response?.status;
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string" && ADD_RECORDINGS_ERRORS[detail]) {
+    return ADD_RECORDINGS_ERRORS[detail];
+  }
+  if (status === 403) {
+    return "Only admins and the dataset's team owner can add recordings.";
+  }
+  if (status === 404) return "Dataset not found.";
+  return getErrorMessage(error);
 };
 
 // ============================================================================
