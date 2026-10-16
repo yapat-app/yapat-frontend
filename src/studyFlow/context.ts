@@ -12,6 +12,16 @@ export interface StudyFlowContextValue {
   phaseId: string;
   /** Tour steps to show this phase (already filtered to unseen featureKeys). */
   pendingTourSteps: TourStepSpec[];
+  /** Every guide card of the active phase, in tour order, for the Guide menu. */
+  guideSteps: TourStepSpec[];
+  /** How many of `guideSteps` this browser has never been shown (e.g. new features). */
+  newGuideCount: number;
+  /** Cards being replayed from the Guide menu; null when no replay is running. */
+  replaySteps: TourStepSpec[] | null;
+  /** Replays the given cards over the live UI; marks them as seen. */
+  startGuideReplay: (steps: TourStepSpec[]) => void;
+  /** Closes a running replay. */
+  endGuideReplay: () => void;
   /** Remaining annotation time in ms (0 when not running). */
   remainingMs: number;
   /** Total per-phase budget in ms. */
@@ -35,6 +45,11 @@ export const StudyFlowContext = createContext<StudyFlowContextValue>({
   isTourActive: false,
   phaseId: "",
   pendingTourSteps: [],
+  guideSteps: [],
+  newGuideCount: 0,
+  replaySteps: null,
+  startGuideReplay: () => {},
+  endGuideReplay: () => {},
   remainingMs: 0,
   durationMs: 0,
   sequenceIndex: 0,

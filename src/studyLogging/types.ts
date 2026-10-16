@@ -43,6 +43,15 @@ export type StudyLogEvent =
       payload: { phase: string; completed: boolean };
     }
   | {
+      /** A user reopened guide cards from the navbar Guide menu. */
+      eventType: "guide_replay_start";
+      payload: { phase: string; stepKeys: string[]; mode: "all" | "single" };
+    }
+  | {
+      eventType: "guide_replay_complete";
+      payload: { phase: string; completed: boolean };
+    }
+  | {
       eventType: "phase_timer_start";
       payload: { phase: string; durationSec: number };
     }

@@ -8,4 +8,5 @@ export { useStudyFlow } from "./useStudyFlow";
 export { isFlowEnabled, phaseSequence } from "./flowConfig";
 export { PhaseTimer } from "./components/PhaseTimer";
 export { StudyFlowOverlays } from "./components/StudyFlowOverlays";
+export { GuideMenu } from "./components/GuideMenu";
 export type { FlowStage } from "./types";

@@ -28,7 +28,12 @@ import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig, STUDY_PHASES, isPhaseLocked } from "../studyPhases";
-import { useStudyFlow, phaseSequence, StudyFlowOverlays } from "../studyFlow";
+import {
+  useStudyFlow,
+  phaseSequence,
+  StudyFlowOverlays,
+  GuideMenu,
+} from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
 import { studyLogger } from "../studyLogging";
@@ -411,7 +416,9 @@ export const AnnotationHub: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
-      <NavigationBar />
+      {/* The Guide menu reopens the cards that point at this page's controls,
+          so it is only offered where those controls exist. */}
+      <NavigationBar extra={user ? <GuideMenu /> : null} />
 
       {/* ── Simplified toolbar ── */}
       <div className="flex items-center gap-3 px-5 py-1.5 border-b border-gray-200 bg-white shrink-0 flex-wrap">

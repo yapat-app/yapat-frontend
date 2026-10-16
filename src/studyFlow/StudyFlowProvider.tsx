@@ -32,7 +32,12 @@ import { StudyFlowContext, type StudyFlowContextValue } from "./context";
 import { isFlowEnabled, phaseDurationMs, phaseSequence } from "./flowConfig";
 import { getPhaseContent } from "./phaseContent";
 import { clearFlowState, loadFlowState, saveFlowState } from "./flowStorage";
-import type { FlowStage, PhaseProgress, StudyFlowState } from "./types";
+import type {
+  FlowStage,
+  PhaseProgress,
+  StudyFlowState,
+  TourStepSpec,
+} from "./types";
 
 const TRANSITION_MS = 2500;
 
@@ -152,6 +157,36 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     const seen = new Set(flow.seenTourKeys);
     return getPhaseContent(phaseId).tour.filter((s) => !seen.has(s.featureKey));
   }, [enabled, phaseId, flow.seenTourKeys]);
+
+  // ── Guide menu: replay any card on demand ───────────────────────────────
+  // Independent of the first-run tour above: works in every stage (and when
+  // the flow itself is disabled), never changes the stage, and replays the
+  // full card text rather than only cards the user has not seen.
+  const guideSteps = useMemo(
+    () => getPhaseContent(phaseId).tour,
+    [phaseId],
+  );
+  const newGuideCount = useMemo(() => {
+    const seen = new Set(flow.seenTourKeys);
+    return guideSteps.filter((s) => !seen.has(s.featureKey)).length;
+  }, [guideSteps, flow.seenTourKeys]);
+  const [replaySteps, setReplaySteps] = useState<TourStepSpec[] | null>(null);
+  const startGuideReplay = useCallback(
+    (steps: TourStepSpec[]) => {
+      if (steps.length === 0) return;
+      setReplaySteps(steps);
+      // Opening a card counts as having seen it, so the "new card" dot clears
+      // and the first-run tour of a later phase will not repeat it.
+      update((prev) => ({
+        ...prev,
+        seenTourKeys: [
+          ...new Set([...prev.seenTourKeys, ...steps.map((s) => s.featureKey)]),
+        ],
+      }));
+    },
+    [update],
+  );
+  const endGuideReplay = useCallback(() => setReplaySteps(null), []);
 
   const sequenceIndex = sequence.indexOf(phaseId);
   const nextPhaseId =
@@ -279,6 +314,11 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       isTourActive,
       phaseId,
       pendingTourSteps,
+      guideSteps,
+      newGuideCount,
+      replaySteps,
+      startGuideReplay,
+      endGuideReplay,
       remainingMs,
       durationMs,
       sequenceIndex: sequenceIndex < 0 ? 0 : sequenceIndex,
@@ -294,6 +334,11 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
       isTourActive,
       phaseId,
       pendingTourSteps,
+      guideSteps,
+      newGuideCount,
+      replaySteps,
+      startGuideReplay,
+      endGuideReplay,
       remainingMs,
       durationMs,
       sequenceIndex,
