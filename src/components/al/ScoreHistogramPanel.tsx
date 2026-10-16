@@ -58,6 +58,9 @@ interface ScoreHistogramPanelProps {
   sliderMode?: "range" | "threshold";
   compact?: boolean;
   confidenceExtra?: React.ReactNode;
+  /** Replaces the "Confidence" row label, e.g. while it is rescoped to the
+   * species chosen in "Find species", so the 0–1 range reads as that species. */
+  confidenceLabel?: string;
 }
 
 const SCORE_MIN = 0;
@@ -295,8 +298,16 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   compact = false,
   domains,
   confidenceExtra,
+  confidenceLabel,
 }) => {
   const isMulti = visibilityMode === "multi";
+  const labelFor = useCallback(
+    (key: string): string =>
+      key === "confidence" && confidenceLabel
+        ? confidenceLabel
+        : (getPropertyByKey(key)?.label ?? key),
+    [confidenceLabel],
+  );
 
   // Histogram domain for a property: the data's actual [min,max] when available,
   // else the property's declared range. Keeps the bars, axis labels, and slider
@@ -410,7 +421,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
         const bins = binsFor(data, key);
         return {
           key,
-          label: getPropertyByKey(key)?.label ?? key,
+          label: labelFor(key),
           color: propertyColor(key),
           allBins: bins.total,
           visibleBins: bins.visible,
@@ -429,6 +440,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
     data,
     alFilters.visibility.ranges,
     domains,
+    labelFor,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -551,8 +563,7 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
       {isMulti && compact && (
         <div className="flex flex-col gap-1.5">
           {(allowedProperties as string[]).map((prop) => {
-            const def = getPropertyByKey(prop);
-            const label = def?.label ?? prop;
+            const label = labelFor(prop);
             const color = propertyColor(prop);
             const isActive = multiActiveKeys.includes(prop);
             const isLastActive = isActive && multiActiveKeys.length === 1;

@@ -28,6 +28,12 @@ export interface ProjectionToolbarProps {
   samplingMethod: SamplingMethod;
   onSamplingMethodChange: (v: SamplingMethod) => void;
   onGenerateNow: () => void;
+  /** Species currently chosen in "Find species" (highlighted in the legend). */
+  focusSpecies?: string[];
+  /** Legend labels the model can score; only these chips become clickable. */
+  focusableSpecies?: ReadonlySet<string>;
+  /** Toggles a legend species in "Find species". Omit to keep the legend static. */
+  onLegendSpeciesToggle?: (label: string) => void;
 }
 
 export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
@@ -50,6 +56,9 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
   samplingMethod,
   onSamplingMethodChange,
   onGenerateNow,
+  focusSpecies,
+  focusableSpecies,
+  onLegendSpeciesToggle,
 }) => {
   const legendScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -118,34 +127,64 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
                   "hover:[&::-webkit-scrollbar-thumb]:bg-gray-400",
                 ].join(" ")}
               >
-                {actualLabelLegend.shown.map((lbl) => (
-                  <span
-                    key={lbl}
-                    className={[
-                      "inline-flex items-center gap-1.5 shrink-0",
-                      "px-2 py-0.5",
-                      "rounded-full",
-                      "border border-gray-200",
-                      "bg-white/90",
-                      "text-fs-11 text-gray-700",
-                      "shadow-[0_1px_0_rgba(0,0,0,0.02)]",
-                      "max-w-[160px]",
-                    ].join(" ")}
-                    title={lbl}
-                  >
-                    <span
-                      className="inline-block w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
-                      style={{
-                        backgroundColor: resolveColor(
-                          { actual_label: lbl } as any,
-                          "actual_label",
-                          allActualLabels,
-                        ),
-                      }}
-                    />
-                    <span className="truncate">{lbl}</span>
-                  </span>
-                ))}
+                {actualLabelLegend.shown.map((lbl) => {
+                  // A legend chip doubles as a "Find this species" shortcut when
+                  // the model can score that label. It never assigns labels, so
+                  // a mis-click is harmless (unlike the quick-label buttons).
+                  const clickable =
+                    !!onLegendSpeciesToggle && !!focusableSpecies?.has(lbl);
+                  const focused = !!focusSpecies?.includes(lbl);
+                  const chipClass = [
+                    "inline-flex items-center gap-1.5 shrink-0",
+                    "px-2 py-0.5",
+                    "rounded-full",
+                    "border",
+                    focused
+                      ? "border-blue-400 bg-blue-50 ring-1 ring-blue-200"
+                      : "border-gray-200 bg-white/90",
+                    "text-fs-11 text-gray-700",
+                    "shadow-[0_1px_0_rgba(0,0,0,0.02)]",
+                    "max-w-[160px]",
+                    clickable
+                      ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/60"
+                      : "",
+                  ].join(" ");
+                  const content = (
+                    <>
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full border border-black/10 shrink-0"
+                        style={{
+                          backgroundColor: resolveColor(
+                            { actual_label: lbl } as any,
+                            "actual_label",
+                            allActualLabels,
+                          ),
+                        }}
+                      />
+                      <span className="truncate">{lbl}</span>
+                    </>
+                  );
+                  return clickable ? (
+                    <button
+                      key={lbl}
+                      type="button"
+                      className={chipClass}
+                      aria-pressed={focused}
+                      title={
+                        focused
+                          ? `Stop finding ${lbl}`
+                          : `Find ${lbl}: rank snippets by the model's confidence for it`
+                      }
+                      onClick={() => onLegendSpeciesToggle?.(lbl)}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <span key={lbl} className={chipClass} title={lbl}>
+                      {content}
+                    </span>
+                  );
+                })}
                 {actualLabelLegend.remaining > 0 &&
                   actualLabelLegend.total > actualLabelLegend.shown.length && (
                     <span className="text-fs-11 text-gray-400 whitespace-nowrap shrink-0">

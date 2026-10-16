@@ -187,6 +187,10 @@ interface ProjectionViewProps {
   onThumbnailData?: (data: ProjectionThumbnailData) => void;
   /** Canonical explore filters — points failing them render as hidden (grey). */
   exploreFilters: ExploreFilters;
+  /** "Find species" state, forwarded to the legend so its chips can toggle it. */
+  focusSpecies?: string[];
+  focusableSpecies?: ReadonlySet<string>;
+  onLegendSpeciesToggle?: (label: string) => void;
 }
 
 const THUMBNAIL_METHODS: ProjectionMethod[] = ["tsne", "umap", "pca"];
@@ -216,6 +220,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   onProjectionMethodChange,
   onThumbnailData,
   exploreFilters,
+  focusSpecies,
+  focusableSpecies,
+  onLegendSpeciesToggle,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -1292,6 +1299,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         samplingMethod={samplingMethod}
         onSamplingMethodChange={(v) => dispatch(setSamplingMethod(v))}
         onGenerateNow={handleGenerateNow}
+        focusSpecies={focusSpecies}
+        focusableSpecies={focusableSpecies}
+        onLegendSpeciesToggle={onLegendSpeciesToggle}
       />
 
       <div className="flex-1 relative overflow-hidden flex">

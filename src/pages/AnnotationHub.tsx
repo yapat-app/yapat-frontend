@@ -13,6 +13,7 @@ import { Select, Button, Spin } from "antd";
 import {
   DatabaseOutlined,
   ExperimentOutlined,
+  SearchOutlined,
   HistoryOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
@@ -156,10 +157,6 @@ export const AnnotationHub: React.FC = () => {
   // Narrows the already-labelled feed to snippets whose *ground-truth* labels
   // include one of the selected species.
   const annotatedStatusActive = filterAnnotationStatus === "annotated";
-  // Predicted species now lives under Status = All: with no status narrowing
-  // in play, selecting a species surfaces every matching snippet regardless of
-  // whether it has already been annotated.
-  const allStatusActive = filterAnnotationStatus === "any";
   const [annotatedSpeciesScope, setAnnotatedSpeciesScope] = useState<string[]>(
     [],
   );
@@ -278,9 +275,9 @@ export const AnnotationHub: React.FC = () => {
   const effectiveAnnotatedSpecies = annotatedStatusActive
     ? annotatedSpeciesScope
     : NO_SPECIES;
-  const effectivePredictedSpecies = allStatusActive
-    ? predictedSpeciesScope
-    : NO_SPECIES;
+  // "Find species" combines with every Status filter (e.g. Unlabeled + a species
+  // = unlabeled snippets most likely to contain it), so it is never dropped here.
+  const effectivePredictedSpecies = predictedSpeciesScope;
   // Sticky admissions reset whenever the question changes (not on sort).
   const stickyResetKey = JSON.stringify({
     status: filterAnnotationStatus,
@@ -343,10 +340,33 @@ export const AnnotationHub: React.FC = () => {
     studyLogger.log("annotated_species_filter_change", { species });
     setAnnotatedSpeciesScope(species);
   };
-  const handleFocusSpeciesChange = (species: string[]) => {
-    studyLogger.log("focus_species_change", { species });
-    setPredictedSpeciesScope(species);
-  };
+  // One state behind the toolbar control, the sidebar field and the projection
+  // legend, so they always agree. `source` tells the study log which one changed it.
+  const handleFocusSpeciesChange = useCallback(
+    (species: string[], source: string = "sidebar") => {
+      studyLogger.log("focus_species_change", { species, source });
+      setPredictedSpeciesScope(species);
+    },
+    [],
+  );
+  const handleSidebarFocusSpeciesChange = useCallback(
+    (species: string[]) => handleFocusSpeciesChange(species, "sidebar"),
+    [handleFocusSpeciesChange],
+  );
+  const focusSpeciesOptions = al.labelScopeOptions;
+  const focusableSpecies = React.useMemo(
+    () =>
+      new Set(
+        focusSpeciesOptions.filter((o) => !o.disabled).map((o) => o.value),
+      ),
+    [focusSpeciesOptions],
+  );
+  const confidenceLabel =
+    predictedSpeciesScope.length === 0
+      ? undefined
+      : predictedSpeciesScope.length === 1
+        ? `Confidence for ${predictedSpeciesScope[0]}`
+        : `Confidence for ${predictedSpeciesScope.length} species`;
   const handleLocationsChange = (locations: string[]) => {
     studyLogger.log("location_filter_change", { locations });
     setFilterLocations(locations);
@@ -422,6 +442,43 @@ export const AnnotationHub: React.FC = () => {
             ))}
           </Select>
         </div>
+
+        {/* Find species: the primary entry point for "where is species X?".
+            Same state as the sidebar field and the projection legend; shown
+            only where the phase exposes model scores, since it rescopes them. */}
+        {al.selectedDatasetId !== null && phase.sidebar.modelScores && (
+          <div data-tour="find-species" className="flex items-center gap-2">
+            <SearchOutlined className="text-gray-400 text-sm" />
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              size="middle"
+              placeholder="Find species…"
+              aria-label="Find species"
+              style={{ minWidth: 220, maxWidth: 420 }}
+              loading={al.labelScopeLoading}
+              value={predictedSpeciesScope}
+              onChange={(v) =>
+                handleFocusSpeciesChange(v as string[], "toolbar")
+              }
+              options={focusSpeciesOptions.map((o) => ({
+                value: o.value,
+                label: o.label,
+                disabled: o.disabled,
+              }))}
+              filterOption={(input, option) =>
+                String(option?.label ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              notFoundContent={
+                al.labelScopeLoading ? "Loading…" : "No species in this model"
+              }
+              maxTagCount="responsive"
+            />
+          </div>
+        )}
 
         {/* Phase switch: hidden when the deployment pins the phase
             (VITE_STUDY_PHASE_LOCK), so annotators on the main site cannot
@@ -539,6 +596,9 @@ export const AnnotationHub: React.FC = () => {
                 onFeedAction={al.openInferenceModal}
                 quickLabels={quickLabelList.labels}
                 quickLabelsLoading={quickLabelList.loading}
+                focusSpecies={predictedSpeciesScope}
+                focusableSpecies={focusableSpecies}
+                onFocusSpeciesChange={handleFocusSpeciesChange}
               />
             )}
           </div>
@@ -595,7 +655,8 @@ export const AnnotationHub: React.FC = () => {
                   predictedSpeciesOptions={al.labelScopeOptions}
                   predictedSpeciesLoading={al.labelScopeLoading}
                   predictedSpeciesScope={predictedSpeciesScope}
-                  setPredictedSpeciesScope={handleFocusSpeciesChange}
+                  setPredictedSpeciesScope={handleSidebarFocusSpeciesChange}
+                  confidenceLabel={confidenceLabel}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}

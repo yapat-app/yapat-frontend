@@ -151,7 +151,8 @@ export type StudyLogEvent =
     }
   | {
       eventType: "focus_species_change";
-      payload: { species: string[] };
+      /** source: which control changed it (toolbar, sidebar, projection_legend, feed_chip). */
+      payload: { species: string[]; source?: string };
     }
   | {
       eventType: "label_scope_change";

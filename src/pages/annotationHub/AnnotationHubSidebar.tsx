@@ -100,6 +100,8 @@ export type AnnotationHubSidebarProps = {
   predictedSpeciesLoading: boolean;
   predictedSpeciesScope: string[];
   setPredictedSpeciesScope: (v: string[]) => void;
+  /** Label for the Confidence row while it is rescoped by "Find species". */
+  confidenceLabel?: string;
   showFindSimilar: boolean;
   showLabelScope: boolean;
 };
@@ -228,6 +230,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   predictedSpeciesLoading,
   predictedSpeciesScope,
   setPredictedSpeciesScope,
+  confidenceLabel,
   showFindSimilar,
   showLabelScope,
   exploreFilters,
@@ -429,11 +432,12 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     </div>
   );
 
-  const predictedSpeciesControl =
-    filterAnnotationStatus === "any" ? (
+  // Mirrors the toolbar's "Find species" (same state), kept here next to the
+  // Confidence histogram it rescopes. Available for every Status filter.
+  const predictedSpeciesControl = (
       <div>
         <p className="mb-1 flex items-center gap-1 text-fs-10 font-medium text-gray-400 font-ibm-sans">
-          <TagsOutlined className="text-gray-300" /> Species
+          <TagsOutlined className="text-gray-300" /> Find species
         </p>
         <Select
           mode="multiple"
@@ -441,7 +445,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
           showSearch
           size="small"
           variant="borderless"
-          placeholder="Focus on species…"
+          placeholder="Find species…"
           loading={predictedSpeciesLoading}
           value={predictedSpeciesScope}
           onChange={(v) => setPredictedSpeciesScope(v as string[])}
@@ -462,7 +466,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
           className="w-full rounded-md bg-gray-100 px-1"
         />
       </div>
-    ) : null;
+    );
 
   const setCollapsed = (next: boolean) => {
     onCollapsedChange?.(next);
@@ -823,6 +827,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       sliderMode={SCORE_SLIDER_STYLE}
                       compact
                       confidenceExtra={predictedSpeciesControl}
+                      confidenceLabel={confidenceLabel}
                       onVisibilityKeyChange={(key) =>
                         dispatch(
                           setVisibilityFilter({
