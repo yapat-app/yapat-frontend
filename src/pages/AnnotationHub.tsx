@@ -26,7 +26,7 @@ import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
-import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
+import { usePhaseConfig, STUDY_PHASES, isPhaseLocked } from "../studyPhases";
 import { useStudyFlow, phaseSequence, StudyFlowOverlays } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
@@ -383,8 +383,11 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
-  const feedActionLabel =
-    al.predictions.length > 0 ? "Edit Feed" : "Generate Feed";
+  // Only offer the feed action while a dataset has no feed yet. Re-configuring
+  // an existing feed ("Edit Feed") is not exposed to annotators; the model's
+  // own retrains keep the feed current.
+  const showFeedAction = al.predictions.length === 0;
+  const feedActionLabel = "Generate Feed";
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
@@ -420,22 +423,27 @@ export const AnnotationHub: React.FC = () => {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <ExperimentOutlined className="text-gray-400 text-sm" />
-          <Select
-            placeholder="Select phase"
-            value={phaseId || undefined}
-            onChange={jumpToPhase}
-            style={{ width: 260 }}
-            size="middle"
-          >
-            {phaseOptions.map((id) => (
-              <Option key={id} value={id}>
-                {STUDY_PHASES[id]?.label ?? id}
-              </Option>
-            ))}
-          </Select>
-        </div>
+        {/* Phase switch: hidden when the deployment pins the phase
+            (VITE_STUDY_PHASE_LOCK), so annotators on the main site cannot
+            leave the configured phase. Unlocked study setups keep it. */}
+        {!isPhaseLocked() && (
+          <div className="flex items-center gap-2">
+            <ExperimentOutlined className="text-gray-400 text-sm" />
+            <Select
+              placeholder="Select phase"
+              value={phaseId || undefined}
+              onChange={jumpToPhase}
+              style={{ width: 260 }}
+              size="middle"
+            >
+              {phaseOptions.map((id) => (
+                <Option key={id} value={id}>
+                  {STUDY_PHASES[id]?.label ?? id}
+                </Option>
+              ))}
+            </Select>
+          </div>
+        )}
 
         {/* Status tags */}
         <div className="flex items-center gap-2 ml-auto">
@@ -524,6 +532,7 @@ export const AnnotationHub: React.FC = () => {
                   phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
                 }
                 exploreFilters={exploreFilters}
+                showFeedAction={showFeedAction}
                 feedActionLabel={feedActionLabel}
                 feedActionLoading={al.inferenceLoading}
                 feedActionDisabled={!al.selectedDatasetId}
