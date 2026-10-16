@@ -157,6 +157,10 @@ export const AnnotationHub: React.FC = () => {
   const [filterAnnotationStatus, setFilterAnnotationStatus] = useState<
     "any" | "annotated" | "unannotated"
   >("any");
+  // True while "Find species" has switched Status from All to Unlabeled on the
+  // user's behalf, so clearing the search can switch it back. Any manual
+  // status change hands control back to the user (the flag is dropped).
+  const statusAutoSwitchedRef = useRef(false);
 
   // ── Annotated-species filter (Status = Labeled only) ──────────────────────
   // Narrows the already-labelled feed to snippets whose *ground-truth* labels
@@ -266,6 +270,12 @@ export const AnnotationHub: React.FC = () => {
     setFilterTimeRange(null);
     setAnnotatedSpeciesScope([]);
     setPredictedSpeciesScope([]);
+    // The species search is dropped here, so undo its automatic switch to
+    // Unlabeled as well; a status the user picked themselves is left alone.
+    if (statusAutoSwitchedRef.current) {
+      statusAutoSwitchedRef.current = false;
+      setFilterAnnotationStatus("any");
+    }
   }, [al.selectedDatasetId]);
 
   const visibleRecordingLocations =
@@ -336,6 +346,7 @@ export const AnnotationHub: React.FC = () => {
   const handleAnnotationStatusChange = (
     status: typeof filterAnnotationStatus,
   ) => {
+    statusAutoSwitchedRef.current = false;
     if (status !== filterAnnotationStatus) {
       studyLogger.log("annotation_status_filter_change", { status });
     }
@@ -347,12 +358,36 @@ export const AnnotationHub: React.FC = () => {
   };
   // One state behind the toolbar control, the sidebar field and the projection
   // legend, so they always agree. `source` tells the study log which one changed it.
+  //
+  // Starting a search from Status = All also switches to Unlabeled: labelled
+  // snippets are the ones the model was trained on, so they would otherwise
+  // crowd the top of a confidence-sorted feed instead of new candidates.
+  // Clearing the search switches back, unless the user changed Status meanwhile.
   const handleFocusSpeciesChange = useCallback(
     (species: string[], source: string = "sidebar") => {
       studyLogger.log("focus_species_change", { species, source });
+      const wasFocused = predictedSpeciesScope.length > 0;
+      const isFocused = species.length > 0;
+      if (!wasFocused && isFocused && filterAnnotationStatus === "any") {
+        statusAutoSwitchedRef.current = true;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "unannotated",
+          source: "find_species_auto",
+        });
+        setFilterAnnotationStatus("unannotated");
+      } else if (wasFocused && !isFocused && statusAutoSwitchedRef.current) {
+        statusAutoSwitchedRef.current = false;
+        if (filterAnnotationStatus === "unannotated") {
+          studyLogger.log("annotation_status_filter_change", {
+            status: "any",
+            source: "find_species_auto",
+          });
+          setFilterAnnotationStatus("any");
+        }
+      }
       setPredictedSpeciesScope(species);
     },
-    [],
+    [predictedSpeciesScope, filterAnnotationStatus],
   );
   const handleSidebarFocusSpeciesChange = useCallback(
     (species: string[]) => handleFocusSpeciesChange(species, "sidebar"),
@@ -659,8 +694,6 @@ export const AnnotationHub: React.FC = () => {
                   annotatedSpeciesLoading={annotatedSpecies.loading}
                   annotatedSpeciesScope={annotatedSpeciesScope}
                   setAnnotatedSpeciesScope={handleAnnotatedSpeciesChange}
-                  predictedSpeciesOptions={al.labelScopeOptions}
-                  predictedSpeciesLoading={al.labelScopeLoading}
                   predictedSpeciesScope={predictedSpeciesScope}
                   setPredictedSpeciesScope={handleSidebarFocusSpeciesChange}
                   confidenceLabel={confidenceLabel}
@@ -672,6 +705,7 @@ export const AnnotationHub: React.FC = () => {
                   collapsed={sidebarCollapsed}
                   onCollapsedChange={setSidebarCollapsed}
                   onResetFilters={() => {
+                    statusAutoSwitchedRef.current = false;
                     setFilterAnnotationStatus("any");
                     setFilterLocations([]);
                     setFilterDateRange(null);

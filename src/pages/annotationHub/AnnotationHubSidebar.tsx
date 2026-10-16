@@ -92,12 +92,9 @@ export type AnnotationHubSidebarProps = {
   dateTimeDisabled?: boolean;
   showModelScores: boolean;
   /**
-   * Model-side species scope, shown with the model scores. Narrows the set to
-   * snippets the model predicts as these species and rescopes Confidence to
-   * them (noisy-OR), so every histogram below describes that population.
+   * Species chosen in the toolbar's "Find species". Confidence is rescoped to
+   * them (noisy-OR); the sidebar only shows a hint and a Clear action.
    */
-  predictedSpeciesOptions: LabelScopeOption[];
-  predictedSpeciesLoading: boolean;
   predictedSpeciesScope: string[];
   setPredictedSpeciesScope: (v: string[]) => void;
   /** Label for the Confidence row while it is rescoped by "Find species". */
@@ -226,8 +223,6 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showSampleProperties,
   dateTimeDisabled = false,
   showModelScores,
-  predictedSpeciesOptions,
-  predictedSpeciesLoading,
   predictedSpeciesScope,
   setPredictedSpeciesScope,
   confidenceLabel,
@@ -432,41 +427,28 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     </div>
   );
 
-  // Mirrors the toolbar's "Find species" (same state), kept here next to the
-  // Confidence histogram it rescopes. Available for every Status filter.
-  const predictedSpeciesControl = (
-      <div>
-        <p className="mb-1 flex items-center gap-1 text-fs-10 font-medium text-gray-400 font-ibm-sans">
-          <TagsOutlined className="text-gray-300" /> Find species
-        </p>
-        <Select
-          mode="multiple"
-          allowClear
-          showSearch
-          size="small"
-          variant="borderless"
-          placeholder="Find species…"
-          loading={predictedSpeciesLoading}
-          value={predictedSpeciesScope}
-          onChange={(v) => setPredictedSpeciesScope(v as string[])}
-          options={predictedSpeciesOptions.map((o) => ({
-            value: o.value,
-            label: o.label,
-            disabled: o.disabled,
-          }))}
-          filterOption={(input, option) =>
-            String(option?.label ?? "")
-              .toLowerCase()
-              .includes(input.toLowerCase())
-          }
-          notFoundContent={predictedSpeciesLoading ? "Loading…" : "No species"}
-          // Collapses into "+N" once the (now narrow, nested-in-row) space
-          // runs out, instead of every tag wrapping onto its own line.
-          maxTagCount="responsive"
-          className="w-full rounded-md bg-gray-100 px-1"
-        />
+  // "Find species" is chosen in the toolbar; the Confidence card only explains
+  // what its numbers currently mean, so there is a single input on the page.
+  const predictedSpeciesControl =
+    predictedSpeciesScope.length > 0 ? (
+      <div className="flex items-start justify-between gap-2 rounded-md bg-blue-50 px-2 py-1 text-fs-10 font-ibm-sans text-blue-800">
+        <span className="min-w-0">
+          <TagsOutlined className="mr-1 text-blue-400" />
+          Scored for{" "}
+          <span className="font-semibold">
+            {predictedSpeciesScope.join(", ")}
+          </span>{" "}
+          — change in the toolbar ↑
+        </span>
+        <button
+          type="button"
+          onClick={() => setPredictedSpeciesScope([])}
+          className="shrink-0 font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Clear
+        </button>
       </div>
-    );
+    ) : null;
 
   const setCollapsed = (next: boolean) => {
     onCollapsedChange?.(next);

@@ -152,7 +152,8 @@ export type StudyLogEvent =
     }
   | {
       eventType: "annotation_status_filter_change";
-      payload: { status: string };
+      /** source: "find_species_auto" when Find species switched it, else omitted. */
+      payload: { status: string; source?: string };
     }
   | {
       eventType: "annotated_species_filter_change";

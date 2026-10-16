@@ -149,6 +149,7 @@ const FIND_SPECIES_DESC = [
   "Looking for a particular species? Pick it here (you can pick several).",
   "",
   "• The feed re-sorts so the snippets the model thinks most likely contain it come first",
+  "• Status switches to Unlabeled, so you see new candidates rather than snippets already labelled (switch back to All any time)",
   "• The Confidence slider on the left becomes \"Confidence for <species>\" — drag it (e.g. 0.7–1.0) to keep only the likeliest snippets",
   "• Works with the Status filter too, e.g. Unlabeled + a species",
   "• Shortcut: click a species in the projection legend",
