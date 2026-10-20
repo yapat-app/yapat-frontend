@@ -5,6 +5,7 @@ import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { openDocs } from "../constants/docs";
 
 const NAV_LINKS = [
   { label: "Dashboard", route: "/dashboard" },
@@ -64,7 +65,9 @@ export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
             return (
               <button
                 key={route}
-                onClick={() => navigate(route)}
+                onClick={() =>
+                  route === "/documentation" ? openDocs() : navigate(route)
+                }
                 className={`
                   px-3 py-1.5 rounded-md transition-colors duration-150 whitespace-nowrap
                   ${

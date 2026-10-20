@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dataset, EmbeddingJobProgress, QuickLabel } from "../types";
 import { ExportAnnotationButton } from "./ExportAnnotation";
-import { GenerateFeedModal } from "./GenerateFeed";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "./EmbeddingProgressPanel";
@@ -205,7 +204,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             />
             {!isReference && (
               <>
-                <GenerateFeedModal datasetId={dataset.id} dataset={dataset} />
+                {/* Classic "Generate Feed" (GenerateFeedModal) hidden for now. */}
                 <Button
                   icon={<ThunderboltOutlined />}
                   size="small"
