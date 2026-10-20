@@ -5,7 +5,6 @@ import {
   AudioOutlined,
   BarChartOutlined,
   TagsOutlined,
-  HistoryOutlined,
   TeamOutlined,
   ReadOutlined,
   ArrowRightOutlined,
@@ -15,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getLoggedInUser } from "../redux/features/authSlice";
 import { canAccessWssed } from "../utils/wssedAccess";
+import { openDocs } from "../constants/docs";
 
 interface ServiceCard {
   key: string;
@@ -22,6 +22,7 @@ interface ServiceCard {
   title: string;
   description: string;
   route: string;
+  external?: boolean;
   color: string;
   bgColor: string;
   borderColor: string;
@@ -79,17 +80,6 @@ const CARDS: ServiceCard[] = [
     borderColor: "border-amber-200 hover:border-amber-400",
   },
   {
-    key: "history",
-    icon: <HistoryOutlined className="text-2xl" />,
-    title: "Feed History",
-    description:
-      "Browse previously generated annotation feeds. Review progress, re-open completed sessions, and track coverage.",
-    route: "/history",
-    color: "text-slate-600",
-    bgColor: "bg-slate-50",
-    borderColor: "border-slate-200 hover:border-slate-400",
-  },
-  {
     key: "teams",
     icon: <TeamOutlined className="text-2xl" />,
     title: "Team Management",
@@ -121,6 +111,7 @@ const CARDS: ServiceCard[] = [
     description:
       "Step-by-step guides, API references, and best practices for getting the most out of YAPAT.",
     route: "/documentation",
+    external: true,
     color: "text-gray-600",
     bgColor: "bg-gray-50",
     borderColor: "border-gray-200 hover:border-gray-400",
@@ -209,7 +200,9 @@ export const Dashboard: React.FC = () => {
           {visibleCards.map((card) => (
             <div
               key={card.key}
-              onClick={() => navigate(card.route)}
+              onClick={() =>
+                card.external ? openDocs() : navigate(card.route)
+              }
               className={`
                 group relative bg-white rounded-xl border-2 ${card.borderColor}
                 p-6 cursor-pointer

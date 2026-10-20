@@ -11,6 +11,7 @@ import {
   GithubOutlined,
   ReadOutlined,
 } from "@ant-design/icons";
+import { openDocs } from "../constants/docs";
 
 const FEATURES = [
   {
@@ -64,7 +65,7 @@ export const HomePage = () => {
             {/* Tabs (left side of right cluster) */}
             <nav className="flex items-center text-sm font-medium gap-4">
               <button
-                onClick={() => navigate("/documentation")}
+                onClick={openDocs}
                 className="text-gray-500 hover:text-gray-900 transition-colors"
               >
                 Documentation
@@ -145,7 +146,7 @@ export const HomePage = () => {
             </button>
           )}
           <button
-            onClick={() => navigate("/documentation")}
+            onClick={openDocs}
             className="flex items-center gap-2 px-6 py-3 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:border-gray-400 hover:text-gray-900 transition-colors"
           >
             <ReadOutlined /> Read the docs
@@ -205,7 +206,7 @@ export const HomePage = () => {
 
           <div className="flex items-center gap-4 text-sm text-gray-400">
             <button
-              onClick={() => navigate("/documentation")}
+              onClick={openDocs}
               className="hover:text-gray-700 transition-colors"
             >
               Docs

@@ -4,6 +4,7 @@ import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { Logo } from "./Logo";
+import { openDocs } from "../constants/docs";
 
 // import React from "react";
 
@@ -38,10 +39,7 @@ export const HomeNavbar = () => {
           id="tabs"
           className="flex items-center text-sm font-medium font-ibm-sans gap-4  "
         >
-          <div
-            className="nav_tabs"
-            onClick={() => navigateTab("/documentation")}
-          >
+          <div className="nav_tabs" onClick={openDocs}>
             Documentation
           </div>
         </div>

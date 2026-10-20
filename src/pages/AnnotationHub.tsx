@@ -443,10 +443,9 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
-  // Only offer the feed action while a dataset has no feed yet. Re-configuring
-  // an existing feed ("Edit Feed") is not exposed to annotators; the model's
-  // own retrains keep the feed current.
-  const showFeedAction = al.predictions.length === 0;
+  // Generate/Edit Feed button hidden for now: inference starts on its own once
+  // a dataset has a model.
+  const showFeedAction = false;
   const feedActionLabel = "Generate Feed";
 
   return (
@@ -618,9 +617,6 @@ export const AnnotationHub: React.FC = () => {
                 <p className="text-lg font-ibm-sans">
                   Select a dataset to start{" "}
                   {mode === "validate" ? "Validate" : "Active Learning"}
-                </p>
-                <p className="text-sm font-ibm-sans">
-                  Then click "Generate Feed" to load predictions.
                 </p>
               </div>
             )}
