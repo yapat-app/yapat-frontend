@@ -27,6 +27,7 @@ import type {
   Embedding,
   EmbeddingJob,
   EmbeddingJobProgress,
+  ScanProgress,
   CreateEmbedding,
   EmbeddingMethod,
   Feed,
@@ -554,6 +555,12 @@ export const recordingApi = {
 // ============================================================================
 
 export const datasetApi = {
+  /** Live progress of the dataset's latest scan (one Redis read server-side). */
+  getScanProgress: async (datasetId: number): Promise<ScanProgress> => {
+    const response = await api.get(`api/datasets/${datasetId}/scan-progress`);
+    return response.data;
+  },
+
   //Get all datasets
 
   getAll: async (params?: {
@@ -640,13 +647,6 @@ export const datasetApi = {
     return response.data;
   },
 
-  deleteMyQuickLabel: async (
-    datasetId: number,
-    taxonId: string,
-  ): Promise<void> => {
-    await api.delete(`/api/datasets/${datasetId}/quick-labels/mine`, {
-      params: { taxon_id: taxonId },
-    });
   getRecentLabels: async (
     datasetId: number,
   ): Promise<import("../types").RecentLabel[]> => {
@@ -654,6 +654,13 @@ export const datasetApi = {
     return response.data;
   },
 
+  deleteMyQuickLabel: async (
+    datasetId: number,
+    taxonId: string,
+  ): Promise<void> => {
+    await api.delete(`/api/datasets/${datasetId}/quick-labels/mine`, {
+      params: { taxon_id: taxonId },
+    });
   },
 
   /**

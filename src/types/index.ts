@@ -482,6 +482,36 @@ export interface Dataset {
   reference_metadata_path?: string | null;
   /** Newest pending/running embedding job (null when none is in flight). */
   active_embedding_job?: ActiveEmbeddingJob | null;
+  /**
+   * Queued, running or failed scan (null when none). Lets a refresh find a scan
+   * again, since scans have no database row of their own.
+   */
+  active_scan?: ScanProgress | null;
+}
+
+export type ScanStage =
+  | "idle"
+  | "queued"
+  | "listing"
+  | "reading"
+  | "saving"
+  | "completed"
+  | "failed";
+
+/** GET /api/datasets/{id}/scan-progress (Redis hash on the backend). */
+export interface ScanProgress {
+  dataset_id: number;
+  stage: ScanStage;
+  /** Files processed in the current stage. */
+  done: number | null;
+  /** Files in the current stage (only the new files on a rescan). */
+  total: number | null;
+  /** Overall progress across stages. */
+  percent: number | null;
+  stalled: boolean;
+  last_update: number | null;
+  error_message: string | null;
+  recordings_created: number | null;
 }
 
 export interface ActiveEmbeddingJob {
