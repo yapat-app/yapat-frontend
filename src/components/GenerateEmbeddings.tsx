@@ -22,12 +22,18 @@ type DatasetEmbeddingProps = {
   running?: boolean;
   /** Called with the new job id right after a job is created. */
   onStarted?: (jobId: number) => void;
+  /** A scan is queued or running (progress is shown by the card's panel). */
+  scanning?: boolean;
+  /** The latest scan failed. */
+  scanFailed?: boolean;
 };
 
 export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   dataset,
   running = false,
   onStarted,
+  scanning = false,
+  scanFailed = false,
 }) => {
   const dispatch = useAppDispatch();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -86,7 +92,27 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
 
   return (
     <div>
-      {!isDatasetReady ? (
+      {scanning ? (
+        // Embedding now would miss the files the scan has not saved yet.
+        <Button
+          color="default"
+          variant="filled"
+          disabled
+          icon={<LoadingOutlined />}
+          title="Waiting for the scan to finish"
+        >
+          Scanning files…
+        </Button>
+      ) : scanFailed && !isDatasetReady ? (
+        <Button
+          color="default"
+          variant="filled"
+          disabled
+          title="The scan failed; see the message on this card"
+        >
+          Scan failed
+        </Button>
+      ) : !isDatasetReady ? (
         <Button
           color="default"
           variant="filled"

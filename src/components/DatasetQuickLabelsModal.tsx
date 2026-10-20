@@ -21,6 +21,10 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   onSaved,
 }) => {
   const [labels, setLabels] = useState<QuickLabel[]>([]);
+  // taxon_ids already stored for the dataset. Only rows outside this set may be
+  // renamed: annotations store the label name, so renaming a saved label would
+  // split its existing annotations from the new ones.
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [source, setSource] = useState<Source>("gbif");
@@ -35,8 +39,14 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
     setLoading(true);
     datasetApi
       .getQuickLabels(Number(dataset.id))
-      .then(setLabels)
-      .catch(() => setLabels([]))
+      .then((rows) => {
+        setLabels(rows);
+        setSavedIds(new Set(rows.map((r) => r.taxon_id)));
+      })
+      .catch(() => {
+        setLabels([]);
+        setSavedIds(new Set());
+      })
       .finally(() => setLoading(false));
   }, [open, dataset.id]);
 
@@ -81,6 +91,26 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const removeLabel = (taxon_id: string) =>
     setLabels((prev) => prev.filter((l) => l.taxon_id !== taxon_id));
 
+  // Lets a GBIF/ENVO pick carry a short code (e.g. "ALYALM") while keeping its
+  // taxon_id, so the label stays linked to the taxonomy.
+  const renameLabel = (taxon_id: string, display_name: string) =>
+    setLabels((prev) =>
+      prev.map((l) => (l.taxon_id === taxon_id ? { ...l, display_name } : l)),
+    );
+
+  // Chips and annotations match labels by name, case-insensitively, so two
+  // labels sharing a name would be indistinguishable once saved.
+  const nameCounts = new Map<string, number>();
+  for (const l of labels) {
+    const key = l.display_name.trim().toLowerCase();
+    nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
+  }
+  const isInvalidName = (l: QuickLabel) => {
+    const key = l.display_name.trim().toLowerCase();
+    return !key || (nameCounts.get(key) ?? 0) > 1;
+  };
+  const hasInvalidNames = labels.some(isInvalidName);
+
   const addLocal = () => {
     const display = localInput.trim();
     if (!display) return;
@@ -96,7 +126,10 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const save = async () => {
     setSaving(true);
     try {
-      const saved = await datasetApi.putQuickLabels(Number(dataset.id), labels);
+      const saved = await datasetApi.putQuickLabels(
+        Number(dataset.id),
+        labels.map((l) => ({ ...l, display_name: l.display_name.trim() })),
+      );
       // Tooltips cache scientific names per dataset; refresh them on next use.
       invalidateQuickLabelScientificNames(Number(dataset.id));
       onSaved(saved);
@@ -124,7 +157,13 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
         <Button key="cancel" onClick={onClose}>
           Cancel
         </Button>,
-        <Button key="save" type="primary" loading={saving} onClick={save}>
+        <Button
+          key="save"
+          type="primary"
+          loading={saving}
+          disabled={hasInvalidNames}
+          onClick={save}
+        >
           Save
         </Button>,
       ]}
@@ -181,9 +220,29 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                     padding: "4px 8px",
                   }}
                 >
-                  <Tooltip title={l.taxon_id}>
-                    <span style={{ fontSize: "var(--text-fs-13)" }}>{l.display_name}</span>
-                  </Tooltip>
+                  {savedIds.has(l.taxon_id) ? (
+                    <Tooltip title={l.taxon_id}>
+                      <span
+                        style={{
+                          fontSize: "var(--text-fs-13)",
+                          color: isInvalidName(l) ? "#ff4d4f" : undefined,
+                        }}
+                      >
+                        {l.display_name}
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title={`${l.taxon_id} · New label: rename it before saving, e.g. to a short code`}>
+                      <Input
+                        size="small"
+                        value={l.display_name}
+                        onChange={(e) => renameLabel(l.taxon_id, e.target.value)}
+                        status={isInvalidName(l) ? "error" : undefined}
+                        aria-label={`Name for ${l.taxon_id}`}
+                        style={{ marginRight: 8 }}
+                      />
+                    </Tooltip>
+                  )}
                   <CloseOutlined
                     style={{ color: "#ff4d4f", cursor: "pointer", fontSize: "var(--text-fs-11)" }}
                     onClick={() => removeLabel(l.taxon_id)}
@@ -191,6 +250,11 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                 </div>
               ))}
             </div>
+            {hasInvalidNames && (
+              <div style={{ color: "#ff4d4f", fontSize: "var(--text-fs-12)", marginTop: 8 }}>
+                Each label needs a unique, non-empty name.
+              </div>
+            )}
           </div>
 
           {/* Right: add labels */}

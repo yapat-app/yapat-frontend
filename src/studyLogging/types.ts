@@ -94,7 +94,13 @@ export type StudyLogEvent =
     }
   | {
       eventType: "label_toggle";
-      payload: { label: string; op: "add" | "remove"; labelsAfter: string[] };
+      payload: {
+        label: string;
+        op: "add" | "remove";
+        labelsAfter: string[];
+        /** True when the click came from the "Recent" row. */
+        fromRecent?: boolean;
+      };
     }
   | { eventType: "label_clear"; payload: { labelsBefore: string[] } }
   | {
