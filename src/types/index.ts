@@ -442,6 +442,12 @@ export interface QuickLabelEntry {
   owned: boolean;
 }
 
+/** A label the caller applied in their latest annotations on a dataset. */
+export interface RecentLabel {
+  label: string;
+  last_used_at: string;
+}
+
 export interface QuickLabelEntryCreate {
   taxon_id: string;
   display_name: string;

@@ -647,6 +647,13 @@ export const datasetApi = {
     await api.delete(`/api/datasets/${datasetId}/quick-labels/mine`, {
       params: { taxon_id: taxonId },
     });
+  getRecentLabels: async (
+    datasetId: number,
+  ): Promise<import("../types").RecentLabel[]> => {
+    const response = await api.get(`/api/datasets/${datasetId}/quick-labels/recent`);
+    return response.data;
+  },
+
   },
 
   /**
