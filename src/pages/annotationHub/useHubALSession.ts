@@ -107,6 +107,9 @@ export function useHubALSession(
     );
   }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
   const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
+  const [checkpointsDatasetId, setCheckpointsDatasetId] = useState<
+    number | null
+  >(null);
   const [snippetSetsRaw, setSnippetSets] = useState<SnippetSet[]>([]);
   const [snippetSetsDatasetId, setSnippetSetsDatasetId] = useState<
     number | null
@@ -251,7 +254,10 @@ export function useHubALSession(
     alApi
       .getCheckpoints(fetchedForDatasetId)
       .then((data) => {
-        if (!cancelled) setCheckpoints(data);
+        if (!cancelled) {
+          setCheckpoints(data);
+          setCheckpointsDatasetId(fetchedForDatasetId);
+        }
       })
       .catch((e) =>
         console.error(
@@ -939,6 +945,7 @@ export function useHubALSession(
     alConfigOpen,
     setAlConfigOpen,
     checkpoints,
+    checkpointsLoaded: checkpointsDatasetId === selectedDatasetId,
     snippetSets,
     localCkpt,
     localFamily,

@@ -443,9 +443,16 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
-  // Generate/Edit Feed button hidden for now: inference starts on its own once
-  // a dataset has a model.
-  const showFeedAction = false;
+  // Starting a model (cold start or bootstrap) is for admins and team owners;
+  const isManager = user?.role === "admin" || user?.role === "team_owner";
+
+  // Cold start only: offer "Generate Feed" while the dataset has no model
+  // checkpoint (and no feed yet).
+  const showFeedAction =
+    isManager &&
+    al.checkpointsLoaded &&
+    al.checkpoints.length === 0 &&
+    al.predictions.length === 0;
   const feedActionLabel = "Generate Feed";
 
   return (
@@ -727,6 +734,7 @@ export const AnnotationHub: React.FC = () => {
         onCancel={() => al.setAlConfigOpen(false)}
         onOk={al.handleOpenALSession}
         checkpoints={al.checkpoints}
+        canColdStart={isManager}
         embeddingMethods={al.embeddingMethods}
         embeddingMethodsLoading={al.embeddingMethodsLoading}
         localFamily={al.localFamily}
