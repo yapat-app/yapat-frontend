@@ -26,6 +26,8 @@ type DatasetEmbeddingProps = {
   scanning?: boolean;
   /** The latest scan failed. */
   scanFailed?: boolean;
+  /** Size of the "Generate Embeddings" button, so it can match its neighbours. */
+  size?: "small" | "middle" | "large";
 };
 
 export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
@@ -34,6 +36,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   onStarted,
   scanning = false,
   scanFailed = false,
+  size,
 }) => {
   const dispatch = useAppDispatch();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -188,6 +191,7 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
               <Button
                 color="danger"
                 variant="filled"
+                size={size}
                 disabled={dataset.is_ready_for_feed}
                 onClick={showModal}
               >

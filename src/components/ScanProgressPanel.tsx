@@ -5,6 +5,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import type { ScanProgress } from "../types";
+import { scanProgressView } from "../utils/jobProgress";
 
 const fullNumber = new Intl.NumberFormat();
 
@@ -36,11 +37,7 @@ export const ScanProgressPanel: React.FC<Props> = ({
 }) => {
   const failed = progress?.stage === "failed";
   const stalled = Boolean(progress?.stalled);
-  const counting =
-    progress != null &&
-    progress.total != null &&
-    (progress.stage === "reading" || progress.stage === "saving");
-  const percent = progress?.percent ?? 0;
+  const { counting, percent } = scanProgressView(progress);
   const files = isRescan ? "new files" : "files";
 
   const title = failed
@@ -122,10 +119,10 @@ export const ScanProgressPanel: React.FC<Props> = ({
       {!failed && (
         <Progress
           className="mb-0! mt-2"
-          percent={counting ? percent : 100}
+          percent={counting ? percent : 0}
           showInfo={false}
           size="small"
-          strokeColor={counting ? tone.stroke : "#bfdbfe"}
+          strokeColor={tone.stroke}
           status={stalled ? "normal" : "active"}
         />
       )}

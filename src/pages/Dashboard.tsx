@@ -262,36 +262,19 @@ export const Dashboard: React.FC = () => {
                     openCard();
                   }
                 }}
-                style={
-                  isPrimary
-                    ? {
-                        backgroundImage:
-                          "radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), radial-gradient(ellipse at 0% 0%, rgba(20,184,166,0.22), transparent 55%)",
-                        backgroundSize: "16px 16px, 100% 100%",
-                      }
-                    : undefined
-                }
                 className={`
-                  group relative flex flex-col rounded-2xl border p-6 cursor-pointer
+                  group relative flex flex-col rounded-2xl bg-white p-6 cursor-pointer
                   transition-all duration-200
                   hover:shadow-md hover:-translate-y-0.5
                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500
-                  ${
-                    isPrimary
-                      ? "bg-gray-900 border-gray-800 hover:border-emerald-700"
-                      : `bg-white ${card.borderColor}`
-                  }
-                  ${isPrimary ? "sm:col-span-2" : ""}
+                  ${card.borderColor}
+                  border ${isPrimary ? "sm:col-span-2" : ""}
                   ${COL_SPAN[columnSpans[index]] ?? ""}
                 `}
               >
                 {/* Icon */}
                 <div
-                  className={`inline-flex items-center justify-center w-11 h-11 rounded-lg mb-4 self-start ${
-                    isPrimary
-                      ? "bg-emerald-500/15 text-emerald-400"
-                      : `${card.bgColor} ${card.color}`
-                  }`}
+                  className={`inline-flex items-center justify-center w-11 h-11 rounded-lg mb-4 self-start ${card.bgColor} ${card.color}`}
                 >
                   {card.icon}
                 </div>
@@ -300,51 +283,29 @@ export const Dashboard: React.FC = () => {
                 <div className="absolute top-6 right-6 flex items-center gap-2.5">
                   {card.badge && (
                     <span
-                      className={`text-fs-10 font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full ${
-                        isPrimary
-                          ? "bg-emerald-500/15 text-emerald-300"
-                          : "bg-gray-100 text-gray-500"
-                      }`}
+                      className="text-fs-10 font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-gray-100 text-gray-500"
                     >
                       {card.badge}
                     </span>
                   )}
                   <span
                     aria-hidden="true"
-                    className={`inline-flex items-center justify-center w-9 h-9 rounded-full ${
-                      isPrimary
-                        ? "bg-white/10 text-white"
-                        : `border ${card.arrowBorder} ${card.color}`
-                    }`}
+                    className={`inline-flex items-center justify-center w-9 h-9 rounded-full border ${card.arrowBorder} ${card.color}`}
                   >
                     <TbArrowUpRight className="text-base transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </span>
                 </div>
 
                 {/* Content */}
-                <h3
-                  className={`font-semibold font-ibm-mono mb-2 ${
-                    isPrimary
-                      ? "text-xl text-white"
-                      : "text-base text-gray-900"
-                  }`}
-                >
+                <h3 className="font-semibold font-ibm-mono mb-2 text-base text-gray-900">
                   {card.title}
                 </h3>
-                <p
-                  className={`text-sm font-ibm-sans leading-relaxed ${
-                    isPrimary ? "text-gray-300" : "text-gray-500"
-                  }`}
-                >
+                <p className="text-sm font-ibm-sans leading-relaxed text-gray-500">
                   {card.description}
                 </p>
 
                 {card.footnote && (
-                  <p
-                    className={`mt-auto pt-4 text-xs font-ibm-sans ${
-                      isPrimary ? "text-emerald-400" : "text-gray-400"
-                    }`}
-                  >
+                  <p className="mt-auto pt-4 text-xs font-ibm-sans text-gray-400">
                     {card.footnote}
                   </p>
                 )}

@@ -9,6 +9,8 @@
 
 import { useMemo, useState } from "react";
 import { Modal, Select, Tag, Tooltip, message } from "antd";
+import { DatabaseOutlined, EditOutlined } from "@ant-design/icons";
+import { TILE_HEADER_CLASS, TileActionButton } from "./datasets/TileActionButton";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchReferenceLinks } from "../redux/features/datasetSlice";
 import { syncDatasetReferenceLinks } from "../utils/referenceLinks";
@@ -78,37 +80,31 @@ export const DatasetReferencePools: React.FC<Props> = ({ dataset }) => {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-1 mt-2">
-        <span
-          style={{
-            fontSize: "var(--text-fs-11)",
-            color: "#888",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            marginRight: 4,
-          }}
-        >
-          Reference pools
-        </span>
-        {directIds.length === 0 && teamIds.length === 0 && (
-          <span className="text-xs text-gray-400 mr-1">None</span>
-        )}
-        {directIds.map((id) => (
-          <Tag key={`d-${id}`} color="purple" style={tagStyle}>
-            {label(id)}
-          </Tag>
-        ))}
-        {teamIds.map((id) => (
-          <Tooltip key={`t-${id}`} title="Linked to this dataset's team; change it via the team">
-            <Tag style={tagStyle}>{label(id)} (via team)</Tag>
-          </Tooltip>
-        ))}
-        <Tag
-          style={{ ...tagStyle, cursor: "pointer", color: "#1890ff", borderColor: "#1890ff", borderStyle: "dashed" }}
-          onClick={openEditor}
-        >
-          Edit
-        </Tag>
+      <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
+        <div className={TILE_HEADER_CLASS}>
+          <p className="m-0 flex items-center gap-2 whitespace-nowrap text-fs-11 font-semibold uppercase tracking-wider text-slate-600 font-ibm-sans">
+            <DatabaseOutlined className="text-slate-500" />
+            Reference pools
+          </p>
+          <TileActionButton icon={<EditOutlined />} onClick={openEditor}>
+            Edit
+          </TileActionButton>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {directIds.length === 0 && teamIds.length === 0 && (
+            <span className="text-sm text-slate-600">None</span>
+          )}
+          {directIds.map((id) => (
+            <Tag key={`d-${id}`} color="purple" style={tagStyle}>
+              {label(id)}
+            </Tag>
+          ))}
+          {teamIds.map((id) => (
+            <Tooltip key={`t-${id}`} title="Linked to this dataset's team; change it via the team">
+              <Tag style={tagStyle}>{label(id)} (via team)</Tag>
+            </Tooltip>
+          ))}
+        </div>
       </div>
 
       <Modal
