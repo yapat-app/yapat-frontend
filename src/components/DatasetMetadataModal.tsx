@@ -30,6 +30,7 @@ import type {
 import { datasetApi } from "../services/api";
 import { downloadRecordingMetadataTemplate } from "../constants/recordingMetadata";
 import { invalidateRecordingMetadataCache } from "../pages/annotationHub/useRecordingMetadata";
+import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
 
 type Props = {
   dataset: Dataset;
@@ -567,6 +568,7 @@ export const DatasetMetadataModal: React.FC<Props> = ({
 
   return (
     <Modal
+        {...SCROLL_MODAL_PROPS}
       title="Recording metadata"
       open={open}
       onCancel={handleClose}

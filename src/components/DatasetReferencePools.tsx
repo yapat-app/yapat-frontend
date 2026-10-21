@@ -15,6 +15,7 @@ import { useAppDispatch, useAppSelector } from "../hooks";
 import { fetchReferenceLinks } from "../redux/features/datasetSlice";
 import { syncDatasetReferenceLinks } from "../utils/referenceLinks";
 import type { Dataset } from "../types";
+import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
 
 type Props = {
   dataset: Dataset;
@@ -108,6 +109,7 @@ export const DatasetReferencePools: React.FC<Props> = ({ dataset }) => {
       </div>
 
       <Modal
+        {...SCROLL_MODAL_PROPS}
         title={`Reference pools for ${dataset.name}`}
         open={editing}
         onCancel={() => setEditing(false)}

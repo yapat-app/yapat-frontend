@@ -20,12 +20,16 @@ export const TileActionButton = ({
     size="small"
     icon={icon}
     onClick={onClick}
-    className="h-7! rounded-md! border-dashed! border-blue-400! px-2.5! text-xs! font-medium! text-blue-600! hover:bg-blue-50! hover:border-blue-500!"
+    className="h-7! shrink-0! rounded-md! border-dashed! border-blue-400! px-2.5! text-xs! font-medium! text-blue-600! hover:bg-blue-50! hover:border-blue-500!"
   >
     {children}
   </Button>
 );
 
-/** Fixed-height header row shared by the setup tiles so labels line up. */
+/**
+ * Fixed-height header row shared by the setup tiles so labels line up. It
+ * never wraps: the button always shows its name, and the tiles are laid out
+ * (see SETUP_COLS in DatasetDetail) so they are wide enough to hold both.
+ */
 export const TILE_HEADER_CLASS =
-  "flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1";
+  "flex min-h-7 items-center justify-between gap-x-3";

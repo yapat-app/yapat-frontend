@@ -25,6 +25,7 @@ import {
   TILE_HEADER_CLASS,
   TileActionButton,
 } from "./datasets/TileActionButton";
+import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
 
 type Props = {
   dataset: Dataset;
@@ -166,6 +167,7 @@ export const DatasetSpectrogramSettings: React.FC<Props> = ({ dataset }) => {
       </div>
 
       <Modal
+        {...SCROLL_MODAL_PROPS}
         title={
           <span className="font-ibm-sans">
             Spectrogram frequency range

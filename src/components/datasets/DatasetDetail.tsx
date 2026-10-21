@@ -26,12 +26,16 @@ import { useNavigate } from "react-router-dom";
 import type { Dataset, QuickLabel } from "../../types";
 import { useAppSelector } from "../../hooks";
 import { usePhaseConfig } from "../../studyPhases";
-import { datasetApi } from "../../services/api";
 import { GenerateEmbeddings } from "../GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "../EmbeddingProgressPanel";
 import { ScanProgressPanel } from "../ScanProgressPanel";
 import { DatasetSpectrogramSettings } from "../DatasetSpectrogramSettings";
 import { DatasetReferencePools } from "../DatasetReferencePools";
+import {
+  getCachedQuickLabels,
+  loadQuickLabels,
+  setCachedQuickLabels,
+} from "./quickLabelsCache";
 import { DatasetQuickLabelsModal } from "../DatasetQuickLabelsModal";
 import { DatasetMetadataModal } from "../DatasetMetadataModal";
 import { ExportAnnotationPanel } from "../ExportAnnotation";
@@ -136,13 +140,15 @@ const StatTile = ({
 
 /**
  * Columns follow the panel's own width (container queries), not the screen:
- * the panel's width depends on the list beside it. With an odd number of tiles
- * in two columns the last one spans the row.
+ * the panel's width depends on the list beside it. Tiles go side by side only
+ * once each has room for its header (label plus a named action button), so the
+ * button text never has to wrap or shrink to an icon. With an odd number of
+ * tiles in two columns the last one spans the row.
  */
 const SETUP_COLS: Record<number, string> = {
   1: "",
-  2: "@xl:grid-cols-2",
-  3: "@xl:grid-cols-2 @xl:[&>:last-child:nth-child(odd)]:col-span-2 @4xl:grid-cols-3 @4xl:[&>:last-child:nth-child(odd)]:col-span-1",
+  2: "@2xl:grid-cols-2",
+  3: "@2xl:grid-cols-2 @2xl:[&>:last-child:nth-child(odd)]:col-span-2 @5xl:grid-cols-3 @5xl:[&>:last-child:nth-child(odd)]:col-span-1",
 };
 
 export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
@@ -158,15 +164,21 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const status = getDatasetStatus(dataset, jobs);
   const statusMeta = DATASET_STATUS_META[status];
 
-  const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
+  // Starts from the copy the page loaded before it appeared (see above).
+  const [quickLabels, setQuickLabels] = useState<QuickLabel[]>(
+    () => getCachedQuickLabels(Number(dataset.id)) ?? [],
+  );
+  const [quickLabelsLoaded, setQuickLabelsLoaded] = useState(
+    () => getCachedQuickLabels(Number(dataset.id)) !== undefined,
+  );
   const [managingLabels, setManagingLabels] = useState(false);
   const [managingMetadata, setManagingMetadata] = useState(false);
 
   useEffect(() => {
-    datasetApi
-      .getQuickLabels(Number(dataset.id))
-      .then(setQuickLabels)
-      .catch(() => setQuickLabels([]));
+    loadQuickLabels(Number(dataset.id)).then((labels) => {
+      setQuickLabels(labels);
+      setQuickLabelsLoaded(true);
+    });
   }, [dataset.id]);
 
   const handleStartAL = () => {
@@ -183,7 +195,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const statsReady = stats != null;
 
   const statPlaceholder = (
-    <span className="inline-block h-6 w-20 animate-pulse rounded bg-gray-200 align-middle" />
+    <span className="inline-block h-6 w-20 rounded bg-gray-200 align-middle" />
   );
 
   const annotatedPct =
@@ -214,7 +226,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
           <div className="min-w-0 flex-1 basis-72">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <h2 className="m-0 min-w-0 break-all text-2xl font-bold font-ibm-mono text-slate-900">
+              <h2 className="m-0 min-w-0 break-words text-xl font-bold font-ibm-mono text-slate-900 sm:text-2xl">
                 {dataset.name}
               </h2>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
@@ -338,21 +350,25 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             icon={<CheckSquareOutlined />}
             label="Annotated snippets"
             valueClass="text-emerald-700"
+            // The track is always there (the fill only grows once the counts
+            // arrive), so the tile has the same height before and after loading.
             footer={
-              statsReady ? (
+              <div
+                className="mt-1 h-1 w-3/5 overflow-hidden rounded-full bg-slate-200"
+                title={
+                  statsReady
+                    ? formatPercent(stats.annotated_snippets, stats.total_snippets)
+                    : undefined
+                }
+                aria-hidden="true"
+              >
                 <div
-                  className="mt-1 h-1 w-3/5 overflow-hidden rounded-full bg-slate-200"
-                  title={formatPercent(stats.annotated_snippets, stats.total_snippets)}
-                  aria-hidden="true"
-                >
-                  <div
-                    className="h-full rounded-full bg-emerald-600"
-                    style={{
-                      width: `${annotatedPct > 0 ? Math.max(annotatedPct, 1.5) : 0}%`,
-                    }}
-                  />
-                </div>
-              ) : undefined
+                  className="h-full rounded-full bg-emerald-600"
+                  style={{
+                    width: `${annotatedPct > 0 ? Math.max(annotatedPct, 1.5) : 0}%`,
+                  }}
+                />
+              </div>
             }
           >
             {statsReady
@@ -375,7 +391,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
           {!isReference && (
             <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
               <div className={TILE_HEADER_CLASS}>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <TileLabel icon={<ThunderboltOutlined />}>Quick labels</TileLabel>
                   {quickLabels.length > 0 && (
                     <span className="rounded-full bg-slate-100 px-1.5 py-px text-fs-10 font-semibold text-slate-600">
@@ -390,7 +406,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                   Manage
                 </TileActionButton>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <div className="mt-3 flex min-h-[52px] flex-wrap content-start items-start gap-1.5">
                 {chips.map((l) => (
                   <span
                     key={l.taxon_id}
@@ -411,7 +427,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                     </span>
                   </Tooltip>
                 )}
-                {quickLabels.length === 0 && (
+                {quickLabelsLoaded && quickLabels.length === 0 && (
                   <span className="text-xs text-slate-400">
                     No quick labels yet
                   </span>
@@ -464,7 +480,10 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
         dataset={dataset}
         open={managingLabels}
         onClose={() => setManagingLabels(false)}
-        onSaved={(saved) => setQuickLabels(saved)}
+        onSaved={(saved) => {
+          setCachedQuickLabels(Number(dataset.id), saved);
+          setQuickLabels(saved);
+        }}
       />
 
       <DatasetMetadataModal
