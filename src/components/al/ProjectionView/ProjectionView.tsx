@@ -566,7 +566,20 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   );
 
   // While "Find similar" is active the visible points are exactly its matches.
-  const similarTo = exploreFilters.similar_to ?? null;
+  // Read the anchor from the request that produced the displayed mask, not
+  // from the current filters: right after a search starts the previous
+  // (unfiltered) mask is still shown until the new one arrives, and colouring
+  // it as matches would briefly paint every visible point purple.
+  const shownKey = viewport ? viewportQuery.dataKey : stateQuery.dataKey;
+  const similarTo = useMemo<number | null>(() => {
+    if (!shownKey) return null;
+    try {
+      return (JSON.parse(shownKey) as { filters?: ExploreFilters }).filters
+        ?.similar_to ?? null;
+    } catch {
+      return null;
+    }
+  }, [shownKey]);
 
   const { baseTraces, visibleLabelIdx, dataBounds } = useMemo(() => {
     const hiddenX: number[] = [];
