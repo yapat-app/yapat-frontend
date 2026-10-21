@@ -5,6 +5,8 @@ import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { navLinkClass } from "./navLinkStyles";
+import { NavLinkLabel } from "./NavLinkLabel";
 import { openDocs } from "../constants/docs";
 
 const NAV_LINKS = [
@@ -45,18 +47,20 @@ export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
   const allLinks = NAV_LINKS;
 
   return (
-    <div className="flex w-full items-center justify-between py-1.5 px-6 border-b border-[#E5E8EB] bg-[#FFFFFF]">
+    <div className="nav-zoom flex w-full items-center justify-between font-ibm-sans text-gray-900 px-3 max-[359px]:px-2 sm:px-6 border-b border-[#E5E8EB] bg-[#FFFFFF]">
       {/* Brand */}
       <h2
-        className="text-lg font-bold font-ibm-mono cursor-pointer select-none hover:opacity-70 transition-opacity"
+        className="text-lg max-[359px]:text-base font-bold font-ibm-mono cursor-pointer select-none hover:opacity-70 transition-opacity"
         onClick={() => navigate("/")}
       >
         YAPAT
       </h2>
 
-      <div className="flex items-center gap-3 ml-auto">
+      {/* The bar's vertical padding lives here, so the nav links below can reach
+          the bar's bottom edge, where the active / hover line sits. */}
+      <div className="flex items-center gap-1 sm:gap-3 ml-auto py-1.5">
         {/* Nav links */}
-        <nav className="flex items-center text-sm font-medium font-ibm-sans gap-1">
+        <nav className="flex items-center self-stretch -my-1.5 text-sm font-medium font-ibm-sans gap-1">
           {allLinks.map(({ label, route }) => {
             const isActive =
               route === "/dashboard"
@@ -68,16 +72,10 @@ export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
                 onClick={() =>
                   route === "/documentation" ? openDocs() : navigate(route)
                 }
-                className={`
-                  px-3 py-1.5 rounded-md transition-colors duration-150 whitespace-nowrap
-                  ${
-                    isActive
-                      ? "bg-gray-100 text-gray-900 font-semibold"
-                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
-                  }
-                `}
+                aria-current={isActive ? "page" : undefined}
+                className={navLinkClass(isActive)}
               >
-                {label}
+                <NavLinkLabel>{label}</NavLinkLabel>
               </button>
             );
           })}
@@ -86,11 +84,13 @@ export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
         {extra}
 
         {/* Right side: logo + user + logout */}
-        <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
-          <Logo />
+        <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-3 border-l border-gray-200">
+          <span className="hidden sm:block">
+            <Logo />
+          </span>
 
           {user && (
-            <div className="flex flex-col items-start leading-tight">
+            <div className="hidden sm:flex flex-col items-start leading-tight">
               {user.username.length > 10 ? (
                 <Tooltip title={user.username} placement="top">
                   <span className="text-sm font-semibold text-gray-800 capitalize max-w-28 truncate cursor-pointer">
@@ -108,11 +108,14 @@ export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
             </div>
           )}
 
-          <Button
-            onClick={userlogout}
-            className="bg-[#E8EDF5]!"
-            icon={<TbLogout className="h-5 w-5" />}
-          />
+          <Tooltip title="Logout" placement="bottom">
+            <Button
+              aria-label="Logout"
+              onClick={userlogout}
+              className="bg-[#E8EDF5]!"
+              icon={<TbLogout className="h-5 w-5" />}
+            />
+          </Tooltip>
         </div>
       </div>
     </div>

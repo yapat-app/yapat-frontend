@@ -1,0 +1,23 @@
+/* Home page: scale the page body up on very large windows.
+   The layout is built for ~1000-1900 px wide windows. On 2560 px and wider it
+   would sit small in the middle of a lot of empty space, so the body (hero,
+   feature cards, footer) is zoomed in steps. The header is not part of
+   .home-body, so it keeps matching the rest of the app. */
+.home-body {
+  zoom: 1;
+}
+@media (min-width: 2200px) {
+  .home-body {
+    zoom: 1.3;
+  }
+}
+@media (min-width: 2800px) {
+  .home-body {
+    zoom: 1.6;
+  }
+}
+@media (min-width: 3400px) {
+  .home-body {
+    zoom: 1.9;
+  }
+}
