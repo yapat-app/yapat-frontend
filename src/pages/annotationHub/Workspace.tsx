@@ -16,6 +16,7 @@ import React, {
   useRef,
 } from "react";
 import { Tooltip, Button, Tag } from "antd";
+import { AudioOutlined } from "@ant-design/icons";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
   ProjectionView,
@@ -58,6 +59,10 @@ type WorkspaceProps = {
   focusableSpecies?: ReadonlySet<string>;
   /** Updates "Find species"; `source` records which control changed it. */
   onFocusSpeciesChange?: (species: string[], source: string) => void;
+  /** Anchor snippet of the active "Find similar" search, or null. */
+  similarTo?: number | null;
+  /** Ends the "Find similar" search; `source` records which control did it. */
+  onClearSimilar?: (source: string) => void;
 };
 
 const NO_FOCUS: string[] = [];
@@ -75,6 +80,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   focusSpecies = NO_FOCUS,
   focusableSpecies,
   onFocusSpeciesChange,
+  similarTo = null,
+  onClearSimilar,
 }) => {
   const phase = usePhaseConfig();
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
@@ -198,6 +205,36 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     }
   }
 
+  // "Find similar" works the same way: starting a search ranks the feed by
+  // similarity (closest first) and ending it restores the earlier sort. Moving
+  // the anchor to another snippet keeps whatever sort is active. The
+  // Similarity chip only exists during a search, so it is always dropped at
+  // the end, even when there was no earlier sort to restore.
+  const similarityActive = similarTo !== null;
+  const [prevSimilarityActive, setPrevSimilarityActive] =
+    useState(similarityActive);
+  const [sortBeforeSimilar, setSortBeforeSimilar] = useState<
+    SortField[] | null
+  >(null);
+  if (similarityActive !== prevSimilarityActive) {
+    setPrevSimilarityActive(similarityActive);
+    if (similarityActive) {
+      if (!phase.sort.disabled) {
+        setSortBeforeSimilar(sortFields);
+        setSortFields([
+          { id: makeSortFieldId(), property: "similarity", direction: "desc" },
+        ]);
+      }
+    } else {
+      setSortFields(
+        (sortBeforeSimilar ?? sortFields).filter(
+          (f) => f.property !== "similarity",
+        ),
+      );
+      setSortBeforeSimilar(null);
+    }
+  }
+
   const handleLegendSpeciesToggle = useCallback(
     (label: string) => {
       if (!onFocusSpeciesChange) return;
@@ -241,6 +278,22 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               </Tag>
             </Tooltip>
           )}
+          {similarityActive && (
+            <Tooltip title="Showing the 500 snippets that sound most like this one. Your filters still apply.">
+              <Tag
+                color="purple"
+                icon={<AudioOutlined />}
+                closable={!!onClearSimilar}
+                onClose={(e) => {
+                  e.preventDefault();
+                  onClearSimilar?.("feed_chip");
+                }}
+                className="m-0 text-xs"
+              >
+                Similar to #{similarTo}
+              </Tag>
+            </Tooltip>
+          )}
         </div>
         {showFeedAction && (
           <Button
@@ -260,6 +313,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         allowNonModel={phase.sort.nonModel}
         allowModel={phase.sort.model}
         disabled={phase.sort.disabled}
+        similarityActive={similarityActive}
       />
       <SnippetHeader onFindSimilar={onFindSimilar} />
       <div className="flex-1 overflow-hidden">

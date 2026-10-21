@@ -163,6 +163,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       time_range: null,
       score_ranges: {},
       sticky_ids: [],
+      similar_to: null,
     }),
     [],
   );

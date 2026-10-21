@@ -4,7 +4,7 @@
  * - Persistent left sidebar (272px) for Filters + Model-derived-score sliders
  * - Simplified top toolbar: Dataset selector · Generate Feed · Status tags
  * - Projection method as a segmented control at the top of the scatter plot
- * - "Find similar" icon button on every snippet card
+ * - "Find similar": ranks the feed by closeness to the selected snippet
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -19,7 +19,10 @@ import {
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { clearSavedFeed } from "../redux/features/alSlice";
+import {
+  clearSavedFeed,
+  setVisibilityRangeFor,
+} from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubALSession } from "./annotationHub/useHubALSession";
@@ -194,6 +197,11 @@ export const AnnotationHub: React.FC = () => {
     [],
   );
 
+  // ── "Find similar" anchor ─────────────────────────────────────────────────
+  // While set, every view (feed, histograms, projection) is limited to this
+  // snippet's nearest neighbours; the other filters still apply on top.
+  const [similarTo, setSimilarTo] = useState<number | null>(null);
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
   const [recordingLocations, setRecordingLocations] = useState<string[]>([]);
@@ -270,8 +278,11 @@ export const AnnotationHub: React.FC = () => {
     setFilterTimeRange(null);
     setAnnotatedSpeciesScope([]);
     setPredictedSpeciesScope([]);
-    // The species search is dropped here, so undo its automatic switch to
-    // Unlabeled as well; a status the user picked themselves is left alone.
+    // Snippet ids belong to one dataset, so a search cannot carry over.
+    setSimilarTo(null);
+    // The species and similarity searches are dropped here, so undo their
+    // automatic switch to Unlabeled as well; a status the user picked
+    // themselves is left alone.
     if (statusAutoSwitchedRef.current) {
       statusAutoSwitchedRef.current = false;
       setFilterAnnotationStatus("any");
@@ -304,6 +315,7 @@ export const AnnotationHub: React.FC = () => {
     time: filterTimeRange,
     labels: al.localLabelScope,
     scores: alFilters.visibility,
+    similarTo,
     dataset: al.selectedDatasetId,
     snippetSet: al.snippetSetId,
     phase: phase.id,
@@ -322,6 +334,7 @@ export const AnnotationHub: React.FC = () => {
         timeRange: filterTimeRange,
         alFilters,
         stickyIds,
+        similarTo,
       }),
     [
       filterAnnotationStatus,
@@ -334,13 +347,9 @@ export const AnnotationHub: React.FC = () => {
       filterTimeRange,
       alFilters,
       stickyIds,
+      similarTo,
     ],
   );
-
-  // ── Find Similar handler ─────────────────────────────────────────────────
-  const handleFindSimilar = useCallback(() => {
-    setMode("similarity");
-  }, [setMode]);
 
   // ── Logged sidebar handlers ────────────────────────────────────────────────
   const handleAnnotationStatusChange = (
@@ -375,7 +384,12 @@ export const AnnotationHub: React.FC = () => {
           source: "find_species_auto",
         });
         setFilterAnnotationStatus("unannotated");
-      } else if (wasFocused && !isFocused && statusAutoSwitchedRef.current) {
+      } else if (
+        wasFocused &&
+        !isFocused &&
+        statusAutoSwitchedRef.current &&
+        similarTo === null
+      ) {
         statusAutoSwitchedRef.current = false;
         if (filterAnnotationStatus === "unannotated") {
           studyLogger.log("annotation_status_filter_change", {
@@ -387,12 +401,102 @@ export const AnnotationHub: React.FC = () => {
       }
       setPredictedSpeciesScope(species);
     },
-    [predictedSpeciesScope, filterAnnotationStatus],
+    [predictedSpeciesScope, filterAnnotationStatus, similarTo],
   );
+
+  // ── Find similar ──────────────────────────────────────────────────────────
+  // Same Unlabeled auto-switch as "Find species": already-labelled neighbours
+  // are the least useful to see again. The two searches share the flag, so
+  // Status only switches back once neither of them is active.
+  const handleFindSimilar = useCallback(
+    (snippetId: number, source: string = "snippet_header") => {
+      if (snippetId === similarTo) return;
+      studyLogger.log("find_similar_start", {
+        anchorSnippetId: snippetId,
+        previousAnchorSnippetId: similarTo,
+        source,
+      });
+      if (similarTo === null && filterAnnotationStatus === "any") {
+        statusAutoSwitchedRef.current = true;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "unannotated",
+          source: "find_similar_auto",
+        });
+        setFilterAnnotationStatus("unannotated");
+      }
+      // Normalised slider positions mean something different for every
+      // anchor (the domain is its own neighbours' range), so start from all.
+      dispatch(setVisibilityRangeFor({ key: "similarity", range: [0, 1] }));
+      setSimilarTo(snippetId);
+    },
+    [dispatch, similarTo, filterAnnotationStatus],
+  );
+  const handleClearSimilar = useCallback(
+    (source: string = "feed_chip") => {
+      if (similarTo === null) return;
+      studyLogger.log("find_similar_clear", {
+        anchorSnippetId: similarTo,
+        source,
+      });
+      if (
+        statusAutoSwitchedRef.current &&
+        predictedSpeciesScope.length === 0 &&
+        filterAnnotationStatus === "unannotated"
+      ) {
+        statusAutoSwitchedRef.current = false;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "any",
+          source: "find_similar_auto",
+        });
+        setFilterAnnotationStatus("any");
+      }
+      dispatch(setVisibilityRangeFor({ key: "similarity", range: [0, 1] }));
+      setSimilarTo(null);
+    },
+    [dispatch, similarTo, predictedSpeciesScope, filterAnnotationStatus],
+  );
+
   const handleSidebarFocusSpeciesChange = useCallback(
     (species: string[]) => handleFocusSpeciesChange(species, "sidebar"),
     [handleFocusSpeciesChange],
   );
+
+  // Shift+F runs "Find similar" on the selected snippet, next to the ↑/↓ feed
+  // navigation, so a labelling session never needs the mouse.
+  const findSimilarEnabled = phase.ui.showFindSimilarButton;
+  const selectedSnippetId = useAppSelector(
+    (s) => s.al.selectedSnippetIds[0] ?? null,
+  );
+  useEffect(() => {
+    if (!findSimilarEnabled) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "f" ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.repeat
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+          ))
+      ) {
+        return;
+      }
+      if (selectedSnippetId === null) return;
+      event.preventDefault();
+      handleFindSimilar(selectedSnippetId, "keyboard");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [findSimilarEnabled, selectedSnippetId, handleFindSimilar]);
   const focusSpeciesOptions = al.labelScopeOptions;
   const focusableSpecies = React.useMemo(
     () =>
@@ -631,8 +735,10 @@ export const AnnotationHub: React.FC = () => {
             {(al.selectedDatasetId || al.isRestoredFeed) && (
               <Workspace
                 onFindSimilar={
-                  phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
+                  findSimilarEnabled ? handleFindSimilar : undefined
                 }
+                similarTo={similarTo}
+                onClearSimilar={handleClearSimilar}
                 exploreFilters={exploreFilters}
                 showFeedAction={showFeedAction}
                 feedActionLabel={feedActionLabel}
@@ -704,6 +810,7 @@ export const AnnotationHub: React.FC = () => {
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
                   showFindSimilar={phase.sidebar.findSimilar}
+                  similarityActive={similarTo !== null}
                   showLabelScope={phase.sidebar.labelScope}
                   collapsed={sidebarCollapsed}
                   onCollapsedChange={setSidebarCollapsed}
@@ -719,6 +826,13 @@ export const AnnotationHub: React.FC = () => {
                     setPredictedSpeciesScope([]);
                     al.setLocalLabelScope([]);
                     al.setLocalMinConfidence(null);
+                    if (similarTo !== null) {
+                      studyLogger.log("find_similar_clear", {
+                        anchorSnippetId: similarTo,
+                        source: "reset_filters",
+                      });
+                      setSimilarTo(null);
+                    }
                   }}
                 />
               }

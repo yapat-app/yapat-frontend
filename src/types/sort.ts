@@ -33,4 +33,5 @@ export const SORTABLE_PROPERTY_LABELS: Record<SortableProperty, string> = {
   yamnet_label: "YAMNet label",
   time: "Time",
   date: "Date",
+  similarity: "Similarity",
 };

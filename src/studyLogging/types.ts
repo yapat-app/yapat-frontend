@@ -158,7 +158,7 @@ export type StudyLogEvent =
     }
   | {
       eventType: "annotation_status_filter_change";
-      /** source: "find_species_auto" when Find species switched it, else omitted. */
+      /** source: "find_species_auto" / "find_similar_auto" when a search switched it, else omitted. */
       payload: { status: string; source?: string };
     }
   | {
@@ -169,6 +169,20 @@ export type StudyLogEvent =
       eventType: "focus_species_change";
       /** source: which control changed it (toolbar, sidebar, projection_legend, feed_chip). */
       payload: { species: string[]; source?: string };
+    }
+  | {
+      eventType: "find_similar_start";
+      /** source: snippet_header, card, keyboard. previous: anchor it replaced. */
+      payload: {
+        anchorSnippetId: number;
+        previousAnchorSnippetId: number | null;
+        source: string;
+      };
+    }
+  | {
+      eventType: "find_similar_clear";
+      /** source: feed_chip, reset_filters. */
+      payload: { anchorSnippetId: number; source: string };
     }
   | {
       eventType: "label_scope_change";

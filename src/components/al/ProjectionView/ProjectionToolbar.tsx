@@ -34,6 +34,8 @@ export interface ProjectionToolbarProps {
   focusableSpecies?: ReadonlySet<string>;
   /** Toggles a legend species in "Find species". Omit to keep the legend static. */
   onLegendSpeciesToggle?: (label: string) => void;
+  /** Anchor of the active "Find similar" search; explains the purple overlay. */
+  similarTo?: number | null;
 }
 
 export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
@@ -59,6 +61,7 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
   focusSpecies,
   focusableSpecies,
   onLegendSpeciesToggle,
+  similarTo = null,
 }) => {
   const legendScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -99,6 +102,13 @@ export const ProjectionToolbar: React.FC<ProjectionToolbarProps> = ({
         <span className="text-xs text-gray-400 font-ibm-sans">
           <strong>{visibleCount}</strong> / <strong>{totalCount}</strong> visible
         </span>
+
+        {similarTo !== null && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-fs-11 font-medium text-violet-700 font-ibm-sans whitespace-nowrap">
+            <span className="h-2 w-2 rounded-full bg-violet-600" />
+            Matches for #{similarTo}
+          </span>
+        )}
 
         {showLabeledPool && labeledCount > 0 && (
           <Tag color="default" className="text-xs">

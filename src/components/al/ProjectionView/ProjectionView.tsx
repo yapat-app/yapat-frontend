@@ -45,6 +45,7 @@ import {
   HIDDEN_COLOR,
   UNLABELED_COLOR,
   SELECTED_COLOR,
+  SIMILAR_COLOR,
   LABELED_BORDER_COLOR,
   type PlotPoint,
   type ProjectionMethod,
@@ -564,6 +565,9 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     [labelVocab],
   );
 
+  // While "Find similar" is active the visible points are exactly its matches.
+  const similarTo = exploreFilters.similar_to ?? null;
+
   const { baseTraces, visibleLabelIdx, dataBounds } = useMemo(() => {
     const hiddenX: number[] = [];
     const hiddenY: number[] = [];
@@ -683,12 +687,17 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         y: unlabeledY,
         customdata: unlabeledIds,
         marker: {
-          color: UNLABELED_COLOR,
+          // Unlabeled matches take the similarity colour so the cluster
+          // stands out; labelled ones keep their species colour.
+          color: similarTo !== null ? SIMILAR_COLOR : UNLABELED_COLOR,
           size: 6,
-          opacity: 0.9,
+          opacity: similarTo !== null ? 0.75 : 0.9,
           line: { width: 0, color: "rgba(0,0,0,0)" },
         },
-        hovertemplate: "Unlabeled<br>Snippet #%{customdata}<extra></extra>",
+        hovertemplate:
+          similarTo !== null
+            ? "Unlabeled match<br>Snippet #%{customdata}<extra></extra>"
+            : "Unlabeled<br>Snippet #%{customdata}<extra></extra>",
       });
     }
     if (labeledX.length > 0) {
@@ -729,7 +738,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
       visibleLabelIdx: seenLabels,
       dataBounds: bounds,
     };
-  }, [displaySets, labelVocab, labelColors, projState, viewport]);
+  }, [displaySets, labelVocab, labelColors, projState, viewport, similarTo]);
 
   // Visibility / label lookup for a snippet in the displayed data.
   const lookupDisplayed = useCallback(
@@ -1285,6 +1294,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
         labeledCount={summary.data?.counts.labeled ?? 0}
         showLabeledPool={showLabeledPool}
         actualLabelLegend={actualLabelLegend}
+        similarTo={similarTo}
         allActualLabels={labelVocab}
         visMode={visMode}
         fpvLoading={current.loading}

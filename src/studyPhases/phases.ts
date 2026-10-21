@@ -125,7 +125,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       showRetrainControls: false,
       labelingMode: "blind",
       histogramStyle: "none",
-      showFindSimilarButton: false,
+      showFindSimilarButton: true,
     },
     sidebar: {
       showPane: true,
@@ -158,7 +158,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       showRetrainControls: false,
       labelingMode: "blind",
       histogramStyle: "none",
-      showFindSimilarButton: false,
+      showFindSimilarButton: true,
     },
     sidebar: {
       showPane: true,

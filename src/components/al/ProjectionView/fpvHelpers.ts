@@ -48,6 +48,9 @@ export type ProjectionMethod = "pca" | "umap" | "tsne" | "isomap";
 export const SELECTED_COLOR = "#facc15";
 export const HIDDEN_COLOR = "#d1d5db";
 export const UNLABELED_COLOR = "#9ca3af";
+/** "Find similar" matches and anchor; same hue as the Similarity score. */
+export const SIMILAR_COLOR = "#7C3AED";
+
 export const LABELED_BORDER_COLOR = "#111827";
 
 // z-scored blend: mean 0, std <= 1 by construction — see alProperties.ts.

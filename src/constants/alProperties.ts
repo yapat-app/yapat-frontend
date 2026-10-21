@@ -66,6 +66,18 @@ export const AL_PROPERTIES: PropertyDefinition[] = [
       "Probability that at least one label from the label scope is present.",
   },
 
+  {
+    key: "similarity",
+    label: "Similarity",
+    category: "sampler",
+    filterMode: "continuous",
+    range: [0, 1],
+    supportsVisibility: true,
+    supportsColor: false,
+    description:
+      "How close this snippet sounds to the one you searched from (cosine similarity of their embeddings). Only the 500 closest snippets are included; 1.00 is the snippet itself.",
+  },
+
   // ── Metadata ───────────────────────────────────────────────────────────────
   {
     key: "year_cycle",
@@ -158,6 +170,7 @@ const PROPERTY_COLORS: Record<string, string> = {
   density: "#EC619F", // rgb(236, 97, 159)
   uncertainty: "#6ABFA3", // rgb(106, 191, 163)
   composite: "#F7A712", // rgb(247, 167, 18)
+  similarity: "#7C3AED", // rgb(124, 58, 237)
 };
 
 export function propertyColor(key: string): string {

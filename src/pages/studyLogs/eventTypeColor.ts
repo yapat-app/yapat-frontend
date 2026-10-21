@@ -29,6 +29,8 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   annotation_status_filter_change: "geekblue",
   annotated_species_filter_change: "geekblue",
   focus_species_change: "geekblue",
+  find_similar_start: "geekblue",
+  find_similar_clear: "geekblue",
   label_scope_change: "geekblue",
   location_filter_change: "geekblue",
   month_filter_change: "geekblue",

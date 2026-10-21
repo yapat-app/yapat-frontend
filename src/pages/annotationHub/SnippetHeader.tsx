@@ -130,14 +130,15 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
           </span>
         )}
         {onFindSimilar && (
-          <Tooltip title="Find similar snippets">
+          <Tooltip title="Show the snippets that sound most like this one (Shift+F)">
             <Button
-              type="text"
               size="small"
               icon={<AudioOutlined />}
-              className="text-gray-400 hover:text-blue-500 px-1"
+              className="font-ibm-sans text-xs"
               onClick={() => onFindSimilar(snippetId)}
-            />
+            >
+              Find similar
+            </Button>
           </Tooltip>
         )}
       </div>

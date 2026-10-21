@@ -79,6 +79,8 @@ const ALL_EVENT_TYPES = [
   "annotation_status_filter_change",
   "annotated_species_filter_change",
   "focus_species_change",
+  "find_similar_start",
+  "find_similar_clear",
   "label_scope_change",
   "location_filter_change",
   "month_filter_change",

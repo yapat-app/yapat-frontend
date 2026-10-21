@@ -28,6 +28,8 @@ export interface HubFilterInput {
   alFilters: ALFilterState;
   /** Snippets that stay admitted by the status filter (just labelled). */
   stickyIds?: number[];
+  /** "Find similar" anchor snippet id; null when no similarity search is active. */
+  similarTo?: number | null;
 }
 
 const sortedUnique = <T extends string | number>(values: T[]): T[] =>
@@ -40,7 +42,13 @@ const sortedUnique = <T extends string | number>(values: T[]): T[] =>
 export function buildExploreFilters(input: HubFilterInput): ExploreFilters {
   const visibility = input.alFilters.visibility;
   const scoreRanges: ExploreFilters["score_ranges"] = {};
-  for (const key of visibility.propertyKeys ?? []) {
+  const similarTo = input.similarTo ?? null;
+  // The Similarity row is pinned (always active) during a search, so its range
+  // applies whether or not it was ever toggled on; outside a search a leftover
+  // range would only change the request key.
+  const keys = (visibility.propertyKeys ?? []).filter((k) => k !== "similarity");
+  if (similarTo !== null) keys.push("similarity");
+  for (const key of keys) {
     if (!EXPLORE_SCORE_KEYS.includes(key as ExploreScoreKey)) continue;
     const range = visibility.ranges?.[key] ?? [0, 1];
     scoreRanges[key as ExploreScoreKey] = [range[0], range[1]];
@@ -65,6 +73,7 @@ export function buildExploreFilters(input: HubFilterInput): ExploreFilters {
       input.annotationStatus === "any"
         ? []
         : sortedUnique(input.stickyIds ?? []).slice(0, 5000),
+    similar_to: similarTo,
   };
 }
 
@@ -81,6 +90,7 @@ const SORTABLE: ExploreSortFieldName[] = [
   "density",
   "date",
   "time",
+  "similarity",
 ];
 
 export function buildExploreSort(fields: SortField[] | undefined): ExploreSortField[] {

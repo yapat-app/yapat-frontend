@@ -42,6 +42,8 @@ import {
   SCORE_VISIBILITY_MODE,
   SCORE_SLIDER_STYLE,
   SCORE_ALLOWED_PROPERTIES,
+  SCORE_PROPERTIES_WITH_SIMILARITY,
+  SIMILARITY_PINNED,
 } from "./scoreFilterConfig";
 
 const TIME_OF_DAY_DOMAIN: [number, number] = [0, 86400];
@@ -101,6 +103,8 @@ export type AnnotationHubSidebarProps = {
   confidenceLabel?: string;
   showFindSimilar: boolean;
   showLabelScope: boolean;
+  /** True while a "Find similar" search is active (adds the Similarity row). */
+  similarityActive?: boolean;
 };
 
 /** Deterministic varied bar heights (%) so the skeleton reads as a histogram, not a grey block. */
@@ -228,6 +232,7 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   confidenceLabel,
   showFindSimilar,
   showLabelScope,
+  similarityActive = false,
   exploreFilters,
   exploreFacets,
   exploreFacetsLoading,
@@ -802,7 +807,14 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   <SidebarSubsection title="Model derived scores">
                     <ScoreHistogramPanel
                       data={histogramData}
-                      allowedProperties={SCORE_ALLOWED_PROPERTIES}
+                      allowedProperties={
+                        similarityActive
+                          ? SCORE_PROPERTIES_WITH_SIMILARITY
+                          : SCORE_ALLOWED_PROPERTIES
+                      }
+                      pinnedProperties={
+                        similarityActive ? SIMILARITY_PINNED : undefined
+                      }
                       visibilityMode={SCORE_VISIBILITY_MODE}
                       alFilters={alFilters}
                       domains={domains}
