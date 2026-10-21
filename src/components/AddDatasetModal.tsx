@@ -120,7 +120,12 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
 
   return (
     <>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+      <Button
+        type="primary"
+        size="large"
+        icon={<PlusOutlined />}
+        onClick={() => setOpen(true)}
+      >
         Add Dataset
       </Button>
 

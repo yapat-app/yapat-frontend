@@ -21,6 +21,10 @@ import { datasetApi, getErrorMessage } from "../services/api";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { formatSpectrogramHz } from "../utils/spectrogramConfig";
+import {
+  TILE_HEADER_CLASS,
+  TileActionButton,
+} from "./datasets/TileActionButton";
 
 type Props = {
   dataset: Dataset;
@@ -129,45 +133,36 @@ export const DatasetSpectrogramSettings: React.FC<Props> = ({ dataset }) => {
 
   return (
     <>
-      <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 px-3 py-2.5 max-w-xl">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-2.5 min-w-0">
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white border border-slate-200 text-slate-600">
-              <SoundOutlined />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-700 font-ibm-sans m-0">
-                Annotation spectrogram
-              </p>
-              <p className="text-sm font-ibm-mono text-slate-800 m-0 mt-0.5 truncate">
-                {summary.title}
-              </p>
-              <p className="text-xs text-slate-500 font-ibm-sans m-0 mt-0.5">
-                {summary.detail}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Tag color={custom ? "blue" : "default"} className="m-0">
-              {custom ? "Custom range" : "Auto"}
-            </Tag>
-            {canManage ? (
-              <Button
-                type="default"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => setOpen(true)}
-              >
-                Set range
-              </Button>
-            ) : (
-              <Tooltip title="Only admins and team owners can change this">
-                <InfoCircleOutlined className="text-slate-400" />
-              </Tooltip>
-            )}
-          </div>
+      <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
+        <div className={TILE_HEADER_CLASS}>
+          <p className="m-0 flex items-center gap-2 whitespace-nowrap text-fs-11 font-semibold uppercase tracking-wider text-slate-600 font-ibm-sans">
+            <SoundOutlined className="text-slate-500" />
+            Spectrogram
+          </p>
+          {canManage ? (
+            <TileActionButton
+              icon={<EditOutlined />}
+              onClick={() => setOpen(true)}
+            >
+              Set range
+            </TileActionButton>
+          ) : (
+            <Tooltip title="Only admins and team owners can change this">
+              <InfoCircleOutlined className="text-base text-slate-400" />
+            </Tooltip>
+          )}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-base font-ibm-mono font-semibold text-slate-800">
+            {summary.title}
+          </span>
+          <Tag color={custom ? "blue" : "default"} className="m-0">
+            {custom ? "Custom range" : "Auto"}
+          </Tag>
+        </div>
+        <p className="m-0 mt-1.5 text-xs text-blue-600 font-ibm-sans">
+          {summary.detail}
+        </p>
       </div>
 
       <Modal
