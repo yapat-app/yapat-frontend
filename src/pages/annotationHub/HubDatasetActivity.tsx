@@ -24,6 +24,8 @@ type Props = {
   isManager: boolean;
   /** A retrain is held until this run ends (backend defers it). */
   retrainWaiting?: boolean;
+  /** The held job is the first model (cold start), not a retrain. */
+  firstModelWaiting?: boolean;
 };
 
 /**
@@ -134,7 +136,12 @@ export const HubDatasetActivityPanel: React.FC<Props> = ({ activity, isManager }
  * Slim strip above the workspace while recordings are being added. The dataset
  * stays usable, so this only informs; new snippets load on their own at the end.
  */
-export const HubIngestBanner: React.FC<Props> = ({ activity, isManager, retrainWaiting }) => {
+export const HubIngestBanner: React.FC<Props> = ({
+  activity,
+  isManager,
+  retrainWaiting,
+  firstModelWaiting,
+}) => {
   const job = activity.ingestJob;
   const stalled = Boolean(job?.stalled);
   const stages =
@@ -153,7 +160,10 @@ export const HubIngestBanner: React.FC<Props> = ({ activity, isManager, retrainW
         ? "No progress for over 10 minutes; check the Celery workers."
         : "Taking longer than usual."
       : "You can keep annotating; new snippets appear when this finishes.",
-    retrainWaiting && "Your labels are saved. Retraining starts when this finishes.",
+    retrainWaiting &&
+      (firstModelWaiting
+        ? "Training the first model starts when this finishes."
+        : "Your labels are saved. Retraining starts when this finishes."),
   ]
     .filter(Boolean)
     .join(" ");

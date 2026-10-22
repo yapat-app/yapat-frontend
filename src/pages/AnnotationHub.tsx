@@ -753,6 +753,8 @@ export const AnnotationHub: React.FC = () => {
                 activity={datasetActivity}
                 isManager={isManager}
                 retrainWaiting={retrainWaitingForIngest !== null}
+                // Cold start: the dataset has no model yet.
+                firstModelWaiting={al.checkpointsLoaded && al.checkpoints.length === 0}
               />
             )}
 

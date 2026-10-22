@@ -676,6 +676,10 @@ export function useHubALSession(
       message.error("Failed to dispatch training job");
       return;
     }
+    // The backend holds a cold start while recordings are being added.
+    if (result.payload.waiting_for_ingest_job_id != null) {
+      message.info("Training starts when the new recordings finish being added.");
+    }
     setAlConfigOpen(false);
   }, [
     checkpoints.length,
