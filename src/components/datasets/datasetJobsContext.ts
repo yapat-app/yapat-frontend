@@ -4,7 +4,12 @@
  */
 
 import { createContext, useCallback, useContext } from "react";
-import type { Dataset, EmbeddingJobProgress, ScanProgress } from "../../types";
+import type {
+  Dataset,
+  EmbeddingJobProgress,
+  IngestJob,
+  ScanProgress,
+} from "../../types";
 import { getDatasetStatus, type DatasetStatus } from "../../utils/datasetStatus";
 
 export type JobSnapshot = {
@@ -12,6 +17,8 @@ export type JobSnapshot = {
   etaSeconds: number | null;
   polledScan: ScanProgress | null;
   scanEtaSeconds: number | null;
+  /** Latest poll of the running "add recordings" job. */
+  ingestJob: IngestJob | null;
 };
 
 export type JobsContextValue = {
@@ -19,6 +26,15 @@ export type JobsContextValue = {
   started: Record<number, number | null>;
   snapshots: Record<number, JobSnapshot>;
   setStarted: (datasetId: number, jobId: number | null) => void;
+  /** Ingest job id returned by "Add recordings", until the list refetch finds it. */
+  startedIngest: Record<number, number | null>;
+  /**
+   * Last finished ingest job, kept to show its summary or error until
+   * dismissed (the refetch clears `active_ingest_job`).
+   */
+  finishedIngest: Record<number, IngestJob | null>;
+  setStartedIngest: (datasetId: number, jobId: number | null) => void;
+  setFinishedIngest: (datasetId: number, job: IngestJob | null) => void;
   publish: (datasetId: number, snapshot: JobSnapshot) => void;
 };
 
@@ -34,7 +50,16 @@ export type DatasetJobs = {
   scanEtaSeconds: number | null;
   scanning: boolean;
   scanFailed: boolean;
+  /** An "add recordings" job is pending or running. */
+  ingestRunning: boolean;
+  /** The running ingest job looks stuck; starting again replaces it. */
+  ingestStalled: boolean;
+  /** Running job while it runs, else the finished one until dismissed. */
+  shownIngestJob: IngestJob | null;
+  finishedIngestJob: IngestJob | null;
   setStartedJobId: (jobId: number) => void;
+  setStartedIngestJobId: (jobId: number) => void;
+  dismissFinishedIngest: () => void;
 };
 
 /** The running embedding job id: from GET /datasets, else the one just started. */
@@ -47,12 +72,26 @@ export function resolveActiveJobId(
     : (dataset.active_embedding_job?.id ?? startedJobId);
 }
 
+/**
+ * The running ingest job id. A job just started here wins over the dataset's
+ * (possibly stale) active job: starting again over a stalled job makes the
+ * backend replace it.
+ */
+export function resolveActiveIngestJobId(
+  dataset: Dataset,
+  startedJobId: number | null,
+): number | null {
+  return startedJobId ?? dataset.active_ingest_job?.id ?? null;
+}
 
 /** Job / scan state of one dataset, as the old DatasetCard computed it. */
 function deriveJobs(
   ctx: JobsContextValue,
   dataset: Dataset,
-): Omit<DatasetJobs, "setStartedJobId"> {
+): Omit<
+  DatasetJobs,
+  "setStartedJobId" | "setStartedIngestJobId" | "dismissFinishedIngest"
+> {
   const id = Number(dataset.id);
   const activeJobId = resolveActiveJobId(dataset, ctx.started[id] ?? null);
   const snap = ctx.snapshots[id];
@@ -61,6 +100,15 @@ function deriveJobs(
   const scanProgress = snap?.polledScan ?? activeScan;
   const scanFailed = scanProgress?.stage === "failed";
   const scanning = activeScan != null && !scanFailed;
+  const activeIngestJobId = resolveActiveIngestJobId(
+    dataset,
+    ctx.startedIngest[id] ?? null,
+  );
+  const ingestJob = snap?.ingestJob ?? null;
+  const ingestRunning =
+    activeIngestJobId != null &&
+    !(ingestJob && (ingestJob.status === "completed" || ingestJob.status === "failed"));
+  const finishedIngestJob = ctx.finishedIngest[id] ?? null;
   return {
     activeJobId,
     running: activeJobId != null,
@@ -71,6 +119,10 @@ function deriveJobs(
     scanEtaSeconds: snap?.scanEtaSeconds ?? null,
     scanning,
     scanFailed,
+    ingestRunning,
+    ingestStalled: ingestRunning && Boolean(ingestJob?.stalled),
+    shownIngestJob: ingestRunning ? ingestJob : finishedIngestJob,
+    finishedIngestJob,
   };
 }
 
@@ -78,12 +130,28 @@ export function useDatasetJobs(dataset: Dataset): DatasetJobs {
   const ctx = useContext(JobsContext);
   if (!ctx) throw new Error("useDatasetJobs needs a DatasetJobsProvider");
   const id = Number(dataset.id);
-  const { setStarted } = ctx;
+  const { setStarted, setStartedIngest, setFinishedIngest } = ctx;
   const setStartedJobId = useCallback(
     (jobId: number) => setStarted(id, jobId),
     [id, setStarted],
   );
-  return { ...deriveJobs(ctx, dataset), setStartedJobId };
+  const setStartedIngestJobId = useCallback(
+    (jobId: number) => {
+      setFinishedIngest(id, null);
+      setStartedIngest(id, jobId);
+    },
+    [id, setFinishedIngest, setStartedIngest],
+  );
+  const dismissFinishedIngest = useCallback(
+    () => setFinishedIngest(id, null),
+    [id, setFinishedIngest],
+  );
+  return {
+    ...deriveJobs(ctx, dataset),
+    setStartedJobId,
+    setStartedIngestJobId,
+    dismissFinishedIngest,
+  };
 }
 
 /** Status of any dataset, for places that render many (list items, legend). */
