@@ -1,0 +1,146 @@
+/* HeroWorkspace: styles for the home page workspace mockup.
+   Everything is scoped to .hero-svg and its colours are local tokens, so
+   nothing here leaks into the rest of the app. */
+
+.hero-svg {
+  --hw-surface: #ffffff;
+  --hw-surface-soft: #f7fafc;
+  --hw-border: #e5e7eb;
+  --hw-border-strong: rgba(30, 64, 175, 0.3);
+  --hw-text-secondary: #4a5666;
+  --hw-text-muted: #647082;
+  --hw-primary: #3b55c8;
+  --hw-green: #6cc3a8;
+  --hw-yellow: #e8b94a;
+
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  font-family: var(--font-ibm-mono), monospace;
+}
+
+.hero-svg .v-panel { fill: var(--hw-surface); stroke: var(--hw-border); }
+.hero-svg .v-rule,
+.hero-svg .v-axis { stroke: var(--hw-border); stroke-width: 1; }
+.hero-svg .v-plot { fill: var(--hw-surface-soft); stroke: var(--hw-border); }
+.hero-svg .v-dot { fill: var(--hw-border-strong); opacity: 0.6; }
+
+.hero-svg .v-title,
+.hero-svg .v-label { fill: var(--hw-text-muted); font-size: 9.5px; letter-spacing: 0.12em; }
+.hero-svg .v-title { letter-spacing: 0.04em; font-size: 10.5px; }
+
+.hero-svg .c1 { fill: var(--hw-primary); opacity: 0.85; }
+.hero-svg .c2 { fill: var(--hw-green); opacity: 0.85; }
+.hero-svg .c3 { fill: var(--hw-yellow); opacity: 0.85; }
+.hero-svg .c4 { fill: var(--hw-text-muted); opacity: 0.6; }
+
+.hero-svg .h1 { fill: var(--hw-text-muted); opacity: 0.45; }
+.hero-svg .h2 { fill: var(--hw-primary); opacity: 0.75; }
+.hero-svg .hb { transform-box: fill-box; transform-origin: 50% 100%; }
+.hero-svg .hb.hot.h1 { opacity: 0.7; }
+.hero-svg .hb.hot.h2 { opacity: 0.95; }
+
+.hero-svg .halo { fill: none; stroke: var(--hw-primary); stroke-width: 1.2; opacity: 0; }
+.hero-svg[data-state="0"] .hl0 .halo,
+.hero-svg[data-state="1"] .hl1 .halo,
+.hero-svg[data-state="2"] .hl2 .halo { opacity: 1; }
+
+.hero-svg .v-feedmuted { fill: var(--hw-text-muted); font-size: 9.5px; }
+.hero-svg .v-chip { fill: var(--hw-surface); stroke: var(--hw-border); }
+.hero-svg .v-chiptext { fill: var(--hw-text-secondary); font-size: 10.5px; }
+
+/* Audio row: the static state is a paused playhead at ~45% (reduced motion). */
+.hero-svg .v-sig-ring { fill: none; stroke: var(--hw-border); stroke-width: 1; }
+.hero-svg .v-sig-bars {
+  fill: none;
+  stroke: var(--hw-text-muted);
+  stroke-width: 2;
+  stroke-linecap: butt;
+  opacity: 0.6;
+}
+.hero-svg .v-wave,
+.hero-svg .v-wave-on path { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+.hero-svg .v-wave { stroke: var(--hw-text-muted); opacity: 0.5; }
+.hero-svg .v-wave-on path { stroke: var(--hw-primary); }
+.hero-svg .v-playhead {
+  stroke: var(--hw-primary);
+  stroke-width: 1.2;
+  transform: translateX(calc(var(--ph, 0.45) * 328px));
+}
+.hero-svg .v-progress {
+  transform-origin: 52px 0;
+  transform: scaleX(var(--ph, 0.45));
+}
+.hero-svg .v-time-now { fill: var(--hw-text-secondary); }
+
+/* The red playback line over the spectrogram follows the audio playhead's
+   --ph, so the two move together. */
+.hero-svg .v-spec-head {
+  stroke: #b8262f;
+  stroke-width: 1.3;
+  filter: drop-shadow(0 0 1.2px rgba(184, 38, 47, 0.45));
+  transform: translateX(calc(var(--ph, 0.45) * 222px));
+}
+
+/* Points dimmed by the controller. */
+.hero-svg .pt.dim { opacity: 0.45; }
+
+/* Illustrative motion. One controller (useWorkspaceMotion) beats once a
+   second and sets data-state / custom properties / classes; the rules below
+   make each change smooth. Skipped entirely under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  /* The playhead advances one beat per second, linearly, so it reads as
+     continuous. It fades out at the end of a pass and back in on restart. */
+  .hero-svg .v-playhead,
+  .hero-svg .v-progress,
+  .hero-svg .v-spec-head {
+    transition: transform 1s linear, opacity 0.4s ease;
+  }
+  .hero-svg .v-wave-on { transition: opacity 0.4s ease; }
+  .hero-svg.ph-end .v-playhead,
+  .hero-svg.ph-end .v-spec-head { opacity: 0; transition-delay: 0s, 0.6s; }
+  .hero-svg.ph-end .v-wave-on { opacity: 0; transition-delay: 0.6s; }
+  .hero-svg.ph-reset .v-playhead,
+  .hero-svg.ph-reset .v-progress,
+  .hero-svg.ph-reset .v-wave-on,
+  .hero-svg.ph-reset .v-spec-head { transition: none; }
+
+  .hero-svg .halo { transition: opacity 0.8s ease; }
+
+  .hero-svg .v-feed {
+    transform: translateY(var(--feed-y, 0px));
+    transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hero-svg .hb {
+    transform: scaleY(var(--s, 1));
+    transition:
+      transform 0.7s ease-in-out 0.2s,
+      opacity 0.7s ease;
+  }
+
+  .hero-svg .pt {
+    transition: opacity 1.2s ease;
+    animation: hero-drift 6s ease-in-out infinite alternate;
+  }
+
+  .hero-svg .v-pz {
+    transform-origin: 384px 134px;
+    transform: translate(var(--pz-x, 0px), var(--pz-y, 0px)) scale(var(--pz-s, 1));
+    transition: transform 2.4s ease-in-out;
+  }
+
+  @keyframes hero-drift {
+    to { transform: translate(var(--dx), var(--dy)); }
+  }
+}
+
+/* One-screen home page (desktop): the mockup fills the height its column
+   gives it, keeping its aspect ratio, instead of growing past the window. */
+@media (min-width: 1024px) {
+  .hero-svg.hero-fit {
+    height: 100%;
+    max-height: 100%;
+  }
+}

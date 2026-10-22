@@ -13,6 +13,7 @@ import { DatasetPathPicker } from "./DatasetPathPicker";
 import type { DatasetCreate, DatasetType } from "../types";
 import { getErrorMessage } from "../services/api";
 import { syncDatasetReferenceLinks } from "../utils/referenceLinks";
+import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
 
 const DATASET_TYPE_OPTIONS: { value: DatasetType; label: string }[] = [
   { value: "PAM", label: "PAM" },
@@ -130,6 +131,7 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
       </Button>
 
       <Modal
+        {...SCROLL_MODAL_PROPS}
         title="Add New Dataset"
         open={open}
         onCancel={() => setOpen(false)}
@@ -143,6 +145,9 @@ const AddDatasetModal: React.FC<AddDatasetModalProps> = ({ onCreated }) => {
         <Form
           layout="vertical"
           form={form}
+          // Room between fields, so each question and its helper text read as a
+          // group of their own.
+          className="[&_.ant-form-item]:mb-7! [&_.ant-form-item-extra]:mt-1.5 [&_.ant-form-item-label]:pb-2"
           initialValues={{ dataset_type: "PAM", kind: "regular" }}
         >
           {isAdmin && (

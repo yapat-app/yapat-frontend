@@ -9,6 +9,7 @@
  * would strip a button's styling.
  */
 
+import { useEffect, useRef } from "react";
 import { SearchOutlined } from "@ant-design/icons";
 import type { Dataset } from "../../types";
 import { useDatasetJobs, useDatasetStatusLookup } from "./datasetJobsContext";
@@ -30,6 +31,9 @@ type Props = {
   totalCount: number;
   selectedId: number | null;
   onSelect: (id: number) => void;
+  /** Used for ArrowUp/ArrowDown so a surface like the drawer can stay open
+   *  while the selection moves. Falls back to `onSelect`. */
+  onStep?: (id: number) => void;
   statsById: Map<number, DatasetStat>;
   /** Annotators get a search box here; admins and owners use the page toolbar. */
   showSearch: boolean;
@@ -104,15 +108,21 @@ const DatasetListItem = ({
     <div
       role="option"
       aria-selected={selected}
-      tabIndex={0}
-      onClick={onSelect}
+      data-dataset-id={dataset.id}
+      tabIndex={selected ? 0 : -1}
+      onClick={(e) => {
+        // Some browsers do not focus a clicked div, which would leave the arrow
+        // keys with nothing to act on.
+        e.currentTarget.focus({ preventScroll: true });
+        onSelect();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect();
         }
       }}
-      className={`shrink-0 cursor-pointer rounded-lg border px-3.5 py-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-500 ${
+      className={`shrink-0 cursor-pointer rounded-lg border px-3.5 py-3 transition-colors outline-none ${
         selected
           ? "border-blue-500 bg-blue-50/50"
           : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
@@ -153,7 +163,7 @@ const DatasetListItem = ({
                 colour fills in only as real progress arrives. */}
             {jobView?.counting && (
               <div
-                className={`h-full rounded-full ${meta.bar} transition-all duration-500`}
+                className={`h-full rounded-full ${meta.bar}`}
                 style={{ width: `${Math.max(jobView.percent, 1.5)}%` }}
               />
             )}
@@ -187,7 +197,7 @@ const DatasetListItem = ({
                 </span>
               </>
             ) : (
-              <span className="inline-block h-3 w-full animate-pulse rounded bg-gray-200" />
+              <span className="inline-block h-3 w-full rounded bg-gray-200" />
             )}
           </div>
         )
@@ -201,6 +211,7 @@ export const DatasetList = ({
   totalCount,
   selectedId,
   onSelect,
+  onStep,
   statsById,
   showSearch,
   search,
@@ -209,6 +220,61 @@ export const DatasetList = ({
   onClearFilters,
 }: Props) => {
   const statusOf = useDatasetStatusLookup();
+
+  // Keep the selected item on screen when the selection changes from outside
+  // the list (a filter or sort picks a new first item).
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedId == null) return;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-dataset-id="${selectedId}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, datasets]);
+
+  // Id of the dataset `dir` steps away from the selected one (clamped), or the
+  // first one when nothing is selected.
+  const neighbourId = (dir: 1 | -1) => {
+    const current = datasets.findIndex((d) => Number(d.id) === selectedId);
+    const next =
+      current < 0
+        ? 0
+        : Math.min(Math.max(current + dir, 0), datasets.length - 1);
+    return Number(datasets[next].id);
+  };
+
+  // ArrowUp / ArrowDown (and Home / End) move the selection through the list,
+  // like a native select. The new item takes focus and scrolls into view so the
+  // next key press continues from it.
+  const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (datasets.length === 0) return;
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+
+    const id =
+      e.key === "Home"
+        ? Number(datasets[0].id)
+        : e.key === "End"
+          ? Number(datasets[datasets.length - 1].id)
+          : neighbourId(e.key === "ArrowDown" ? 1 : -1);
+    // React clears currentTarget once the handler returns, so keep the list.
+    const list = e.currentTarget;
+    (onStep ?? onSelect)(id);
+    requestAnimationFrame(() => {
+      const el = list.querySelector<HTMLElement>(`[data-dataset-id="${id}"]`);
+      el?.focus();
+      el?.scrollIntoView({ block: "nearest" });
+    });
+  };
+
+  // In the search box the arrows pick cards while the caret stays in the field,
+  // so you can keep refining the search.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (datasets.length === 0) return;
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    (onStep ?? onSelect)(neighbourId(e.key === "ArrowDown" ? 1 : -1));
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -235,6 +301,7 @@ export const DatasetList = ({
               type="search"
               value={search}
               onChange={(e) => onSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Search datasets"
               aria-label="Search datasets"
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
@@ -244,9 +311,16 @@ export const DatasetList = ({
       )}
 
       <div
+        ref={listRef}
         role="listbox"
         aria-label="Available datasets"
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll border-t border-slate-100 p-3 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent"
+        tabIndex={-1}
+        onKeyDown={handleListKeyDown}
+        onMouseDown={(e) => {
+          // A click on the list's own padding / gaps keeps the arrows working.
+          if (e.target === e.currentTarget) e.currentTarget.focus();
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-scroll outline-none border-t border-slate-100 p-3 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent"
       >
         {datasets.length === 0 ? (
           <div className="px-2 py-6 text-center">

@@ -4,6 +4,7 @@ import { CloseOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
 import { invalidateQuickLabelScientificNames } from "../hooks/useQuickLabelScientificNames";
+import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
 
 type Source = "gbif" | "envo" | "local";
 
@@ -150,6 +151,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
 
   return (
     <Modal
+        {...SCROLL_MODAL_PROPS}
       title={`Quick Labels — ${dataset.name}`}
       open={open}
       onCancel={onClose}
