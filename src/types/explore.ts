@@ -10,7 +10,9 @@ export type ExploreScoreKey =
   | "diversity"
   | "density"
   | "composite"
-  | "confidence";
+  | "confidence"
+  /** Cosine similarity to the "Find similar" anchor; only set during a search. */
+  | "similarity";
 
 export const EXPLORE_SCORE_KEYS: ExploreScoreKey[] = [
   "uncertainty",
@@ -18,6 +20,7 @@ export const EXPLORE_SCORE_KEYS: ExploreScoreKey[] = [
   "density",
   "composite",
   "confidence",
+  "similarity",
 ];
 
 export type ExploreSortFieldName =
@@ -27,7 +30,8 @@ export type ExploreSortFieldName =
   | "diversity"
   | "density"
   | "date"
-  | "time";
+  | "time"
+  | "similarity";
 
 export type ExploreProjectionMethod = "pca" | "umap" | "tsne" | "isomap";
 
@@ -50,6 +54,8 @@ export interface ExploreFilters {
   /** Normalised [0,1] fractions of each score's domain. */
   score_ranges: Partial<Record<ExploreScoreKey, [number, number]>>;
   sticky_ids: number[];
+  /** "Find similar" anchor: limits results to this snippet's nearest neighbours. */
+  similar_to: number | null;
 }
 
 export interface ExploreSortField {
@@ -77,7 +83,8 @@ export interface ExploreSummary {
   };
   domains: Partial<Record<ExploreScoreKey, [number, number]>>;
   bins: number;
-  histograms: Record<ExploreScoreKey, { total: number[]; visible: number[] }>;
+  /** "similarity" is present only while a "Find similar" search is active. */
+  histograms: Partial<Record<ExploreScoreKey, { total: number[]; visible: number[] }>>;
 }
 
 export interface ExploreFacets {

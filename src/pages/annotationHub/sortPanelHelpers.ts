@@ -1,7 +1,7 @@
 import type { SortField, SortableProperty } from "../../types/sort";
 import { SORTABLE_PROPERTY_LABELS } from "../../types/sort";
 
-type SortCategory = "nonModel" | "model";
+type SortCategory = "nonModel" | "model" | "similarity";
 
 interface SortOption {
   value: SortableProperty;
@@ -20,6 +20,17 @@ export const SORT_PROPERTY_OPTIONS: SortOption[] = [
   { value: "time", label: SORTABLE_PROPERTY_LABELS.time, category: "nonModel" },
 ];
 
+/**
+ * Only offered while a "Find similar" search is active (there is nothing to
+ * rank by otherwise), and then listed first because it is the search's
+ * natural order.
+ */
+const SIMILARITY_SORT_OPTION: SortOption = {
+  value: "similarity",
+  label: SORTABLE_PROPERTY_LABELS.similarity,
+  category: "similarity",
+};
+
 let nextId = 0;
 function makeId(): string {
   nextId += 1;
@@ -31,10 +42,15 @@ export function makeSortFieldId(): string {
 }
 
 /** Sort options available given which categories the current phase unlocks. */
-export function getAvailableSortOptions(allowNonModel: boolean, allowModel: boolean): SortOption[] {
-  return SORT_PROPERTY_OPTIONS.filter(
+export function getAvailableSortOptions(
+  allowNonModel: boolean,
+  allowModel: boolean,
+  similarityActive = false,
+): SortOption[] {
+  const options = SORT_PROPERTY_OPTIONS.filter(
     (o) => (o.category === "nonModel" && allowNonModel) || (o.category === "model" && allowModel),
   );
+  return similarityActive ? [SIMILARITY_SORT_OPTION, ...options] : options;
 }
 
 /**

@@ -51,6 +51,52 @@ function renderStepBody(step: TourStepSpec): React.ReactNode {
   );
 }
 
+/** antd step for a card; tolerates a target that is not mounted (renders centred). */
+function toTourStep(s: TourStepSpec): NonNullable<TourProps["steps"]>[number] {
+  return {
+    title: s.title,
+    description: renderStepBody(s),
+    placement: s.placement,
+    target: () =>
+      document.querySelector(`[data-tour="${s.target}"]`) as HTMLElement,
+  };
+}
+
+/**
+ * GuideReplayTour — replays cards picked from the navbar Guide menu.
+ *
+ * Separate from the first-run PhaseTour: it does not depend on the flow stage,
+ * does not gate on a selected dataset (missing targets simply render centred),
+ * and closing it never starts or stops anything — it only dismisses the cards.
+ */
+export const GuideReplayTour: React.FC = () => {
+  const { replaySteps, endGuideReplay, phaseId } = useStudyFlow();
+  const { log } = useStudyLogger();
+  const stepRef = useRef(0);
+
+  if (!replaySteps || replaySteps.length === 0) return null;
+
+  const handleClose = () => {
+    log("guide_replay_complete", {
+      phase: phaseId,
+      completed: stepRef.current >= replaySteps.length - 1,
+    });
+    stepRef.current = 0;
+    endGuideReplay();
+  };
+
+  return (
+    <Tour
+      open
+      steps={replaySteps.map(toTourStep)}
+      onChange={(index) => {
+        stepRef.current = index;
+      }}
+      onClose={handleClose}
+    />
+  );
+};
+
 export const PhaseTour: React.FC = () => {
   const { enabled, stage, phaseId, pendingTourSteps, finishTour } = useStudyFlow();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
@@ -164,15 +210,9 @@ export const PhaseTour: React.FC = () => {
     return <Tour open mask={false} steps={[gateStep]} onClose={closeTour} />;
   }
 
-  const steps: TourProps["steps"] = pendingTourSteps.map((s) => ({
-    title: s.title,
-    description: renderStepBody(s),
-    placement: s.placement,
-    // antd renders the step centred when the element isn't found; the cast
-    // satisfies its non-null target signature while we tolerate a missing node.
-    target: () =>
-      document.querySelector(`[data-tour="${s.target}"]`) as HTMLElement,
-  }));
+  // antd renders a step centred when its element isn't found; toTourStep's cast
+  // satisfies the non-null target signature while tolerating a missing node.
+  const steps: TourProps["steps"] = pendingTourSteps.map(toTourStep);
 
   const handleChange = (index: number) => {
     flushView();

@@ -22,3 +22,13 @@ export const SCORE_ALLOWED_PROPERTIES: AllowedProperty[] = [
   "density",
   "composite",
 ];
+
+/**
+ * Rows while a "Find similar" search is active: Similarity leads (it is the
+ * search's own score) and is pinned on, so its slider cannot be hidden.
+ */
+export const SCORE_PROPERTIES_WITH_SIMILARITY: AllowedProperty[] = [
+  "similarity",
+  ...SCORE_ALLOWED_PROPERTIES,
+];
+export const SIMILARITY_PINNED: string[] = ["similarity"];

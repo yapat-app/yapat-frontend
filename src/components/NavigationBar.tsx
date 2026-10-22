@@ -3,15 +3,21 @@ import { TbLogout } from "react-icons/tb";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { getLoggedInUser, logout } from "../redux/features/authSlice";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { openDocs } from "../constants/docs";
 
 const NAV_LINKS = [
   { label: "Dashboard", route: "/dashboard" },
   { label: "Documentation", route: "/documentation" },
 ];
 
-export const NavigationBar = () => {
+interface NavigationBarProps {
+  /** Page-specific controls shown next to the nav links (e.g. the Guide menu). */
+  extra?: ReactNode;
+}
+
+export const NavigationBar = ({ extra }: NavigationBarProps = {}) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const dispatch = useAppDispatch();
@@ -59,7 +65,9 @@ export const NavigationBar = () => {
             return (
               <button
                 key={route}
-                onClick={() => navigate(route)}
+                onClick={() =>
+                  route === "/documentation" ? openDocs() : navigate(route)
+                }
                 className={`
                   px-3 py-1.5 rounded-md transition-colors duration-150 whitespace-nowrap
                   ${
@@ -74,6 +82,8 @@ export const NavigationBar = () => {
             );
           })}
         </nav>
+
+        {extra}
 
         {/* Right side: logo + user + logout */}
         <div className="flex items-center gap-3 pl-3 border-l border-gray-200">

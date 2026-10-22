@@ -23,6 +23,7 @@ export type ALInferenceConfigModalProps = {
   onCancel: () => void;
   onOk: () => void | Promise<void>;
   checkpoints: PAMCheckpoint[];
+  canColdStart?: boolean;
   embeddingMethods: EmbeddingMethod[] | null | undefined;
   embeddingMethodsLoading: boolean;
   localFamily: string | null;
@@ -58,6 +59,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
   onCancel,
   onOk,
   checkpoints,
+  canColdStart = false,
   embeddingMethods,
   embeddingMethodsLoading,
   localFamily,
@@ -136,7 +138,11 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
               type="info"
               showIcon
               message="No model checkpoint found yet"
-              description="Cold-start from ground-truth metadata or bootstrap with random samples."
+              description={
+                canColdStart
+                  ? "Cold-start from ground-truth metadata or bootstrap with random samples."
+                  : "The session starts in bootstrap mode (random samples)."
+              }
               className="mb-3"
             />
             <Form.Item label="Model family name" required>
@@ -146,29 +152,34 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                 onChange={(e) => setLocalFamily(e.target.value)}
               />
             </Form.Item>
-            <Form.Item label="Do you have ground-truth metadata?">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm text-gray-600">
-                  Train from metadata (cold start)
+            {canColdStart && (
+              <Form.Item label="Do you have ground-truth metadata?">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-gray-600">
+                    Train from metadata (cold start)
+                  </div>
+                  <Switch
+                    checked={hasGroundTruthMetadata}
+                    onChange={(v) => {
+                      setHasGroundTruthMetadata(v);
+                      if (v) dispatch(getAllEmbeddingMethods());
+                    }}
+                  />
                 </div>
-                <Switch
-                  checked={hasGroundTruthMetadata}
-                  onChange={(v) => {
-                    setHasGroundTruthMetadata(v);
-                    if (v) dispatch(getAllEmbeddingMethods());
-                  }}
-                />
-              </div>
-              <div className="text-xs text-gray-400 mt-1">
-                If disabled, the session starts in bootstrap mode (random samples).
-              </div>
-            </Form.Item>
-            {hasGroundTruthMetadata && (
+                <div className="text-xs text-gray-400 mt-1">
+                  If disabled, the session starts in bootstrap mode (random
+                  samples).
+                </div>
+              </Form.Item>
+            )}
+            {canColdStart && hasGroundTruthMetadata && (
               <>
                 <Form.Item label="Embedding model" required>
                   <Select
                     placeholder={
-                      embeddingMethodsLoading ? "Loading…" : "Select embedding model"
+                      embeddingMethodsLoading
+                        ? "Loading…"
+                        : "Select embedding model"
                     }
                     loading={embeddingMethodsLoading}
                     value={trainEmbeddingModelId}
@@ -246,7 +257,9 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                 options={labelScopeOptions.map((opt) => ({
                   value: opt.value,
                   label: (
-                    <span className={opt.disabled ? "text-gray-400" : undefined}>
+                    <span
+                      className={opt.disabled ? "text-gray-400" : undefined}
+                    >
                       {opt.label}
                       {opt.tooltip && (
                         <Tooltip title={opt.tooltip}>
@@ -262,16 +275,20 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
               />
               {(() => {
                 const lowSampleCount = labelScopeOptions.filter(
-                  (o) => !o.disabled && o.sampleCount !== null && o.sampleCount < 10
+                  (o) =>
+                    !o.disabled && o.sampleCount !== null && o.sampleCount < 10,
                 ).length;
                 return lowSampleCount > 0 ? (
                   <div className="text-xs text-yellow-600 mt-1">
-                    ⚠ {lowSampleCount} species {lowSampleCount === 1 ? "has" : "have"} fewer than 10 training samples — probabilities may be unreliable.
+                    ⚠ {lowSampleCount} species{" "}
+                    {lowSampleCount === 1 ? "has" : "have"} fewer than 10
+                    training samples — probabilities may be unreliable.
                   </div>
                 ) : null;
               })()}
               <div className="text-xs text-gray-400 mt-1">
-                Leave empty to rank by the model's top prediction regardless of species.
+                Leave empty to rank by the model's top prediction regardless of
+                species.
               </div>
             </Form.Item>
             <Form.Item
@@ -309,7 +326,9 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
         {!isValidateMode && (
           <Form.Item label="Mode">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-gray-600">Return only Top‑K suggestions</div>
+              <div className="text-sm text-gray-600">
+                Return only Top‑K suggestions
+              </div>
               <Switch
                 checked={localTopKOnly}
                 onChange={setLocalTopKOnly}
@@ -317,7 +336,8 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
               />
             </div>
             <div className="text-xs text-gray-400 mt-1">
-              When disabled, returns all predictions for the selected snippet set.
+              When disabled, returns all predictions for the selected snippet
+              set.
             </div>
           </Form.Item>
         )}

@@ -4,7 +4,7 @@
  * - Persistent left sidebar (272px) for Filters + Model-derived-score sliders
  * - Simplified top toolbar: Dataset selector · Generate Feed · Status tags
  * - Projection method as a segmented control at the top of the scatter plot
- * - "Find similar" icon button on every snippet card
+ * - "Find similar": ranks the feed by closeness to the selected snippet
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -13,12 +13,17 @@ import { Select, Button, Spin } from "antd";
 import {
   DatabaseOutlined,
   ExperimentOutlined,
+  SearchOutlined,
   HistoryOutlined,
   DeleteOutlined,
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { clearSavedFeed, selectRetrainWaitingForIngest } from "../redux/features/alSlice";
+import {
+  clearSavedFeed,
+  selectRetrainWaitingForIngest,
+  setVisibilityRangeFor,
+} from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
 import { useHubDatasets } from "./annotationHub/useHubDatasets";
 import { useHubALSession } from "./annotationHub/useHubALSession";
@@ -28,8 +33,13 @@ import { Workspace } from "./annotationHub/Workspace";
 import { useDatasetActivity } from "./annotationHub/useDatasetActivity";
 import { HubDatasetActivityPanel, HubIngestBanner } from "./annotationHub/HubDatasetActivity";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
-import { usePhaseConfig, STUDY_PHASES } from "../studyPhases";
-import { useStudyFlow, phaseSequence, StudyFlowOverlays } from "../studyFlow";
+import { usePhaseConfig, STUDY_PHASES, isPhaseLocked } from "../studyPhases";
+import {
+  useStudyFlow,
+  phaseSequence,
+  StudyFlowOverlays,
+  GuideMenu,
+} from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
 import { studyLogger } from "../studyLogging";
@@ -161,15 +171,15 @@ export const AnnotationHub: React.FC = () => {
   const [filterAnnotationStatus, setFilterAnnotationStatus] = useState<
     "any" | "annotated" | "unannotated"
   >("any");
+  // True while "Find species" has switched Status from All to Unlabeled on the
+  // user's behalf, so clearing the search can switch it back. Any manual
+  // status change hands control back to the user (the flag is dropped).
+  const statusAutoSwitchedRef = useRef(false);
 
   // ── Annotated-species filter (Status = Labeled only) ──────────────────────
   // Narrows the already-labelled feed to snippets whose *ground-truth* labels
   // include one of the selected species.
   const annotatedStatusActive = filterAnnotationStatus === "annotated";
-  // Predicted species now lives under Status = All: with no status narrowing
-  // in play, selecting a species surfaces every matching snippet regardless of
-  // whether it has already been annotated.
-  const allStatusActive = filterAnnotationStatus === "any";
   const [annotatedSpeciesScope, setAnnotatedSpeciesScope] = useState<string[]>(
     [],
   );
@@ -197,6 +207,11 @@ export const AnnotationHub: React.FC = () => {
   const [predictedSpeciesScope, setPredictedSpeciesScope] = useState<string[]>(
     [],
   );
+
+  // ── "Find similar" anchor ─────────────────────────────────────────────────
+  // While set, every view (feed, histograms, projection) is limited to this
+  // snippet's nearest neighbours; the other filters still apply on top.
+  const [similarTo, setSimilarTo] = useState<number | null>(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filterLocations, setFilterLocations] = useState<string[]>([]);
@@ -274,6 +289,15 @@ export const AnnotationHub: React.FC = () => {
     setFilterTimeRange(null);
     setAnnotatedSpeciesScope([]);
     setPredictedSpeciesScope([]);
+    // Snippet ids belong to one dataset, so a search cannot carry over.
+    setSimilarTo(null);
+    // The species and similarity searches are dropped here, so undo their
+    // automatic switch to Unlabeled as well; a status the user picked
+    // themselves is left alone.
+    if (statusAutoSwitchedRef.current) {
+      statusAutoSwitchedRef.current = false;
+      setFilterAnnotationStatus("any");
+    }
   }, [al.selectedDatasetId]);
 
   const visibleRecordingLocations =
@@ -288,9 +312,9 @@ export const AnnotationHub: React.FC = () => {
   const effectiveAnnotatedSpecies = annotatedStatusActive
     ? annotatedSpeciesScope
     : NO_SPECIES;
-  const effectivePredictedSpecies = allStatusActive
-    ? predictedSpeciesScope
-    : NO_SPECIES;
+  // "Find species" combines with every Status filter (e.g. Unlabeled + a species
+  // = unlabeled snippets most likely to contain it), so it is never dropped here.
+  const effectivePredictedSpecies = predictedSpeciesScope;
   // Sticky admissions reset whenever the question changes (not on sort).
   const stickyResetKey = JSON.stringify({
     status: filterAnnotationStatus,
@@ -302,6 +326,7 @@ export const AnnotationHub: React.FC = () => {
     time: filterTimeRange,
     labels: al.localLabelScope,
     scores: alFilters.visibility,
+    similarTo,
     dataset: al.selectedDatasetId,
     snippetSet: al.snippetSetId,
     phase: phase.id,
@@ -320,6 +345,7 @@ export const AnnotationHub: React.FC = () => {
         timeRange: filterTimeRange,
         alFilters,
         stickyIds,
+        similarTo,
       }),
     [
       filterAnnotationStatus,
@@ -332,18 +358,15 @@ export const AnnotationHub: React.FC = () => {
       filterTimeRange,
       alFilters,
       stickyIds,
+      similarTo,
     ],
   );
-
-  // ── Find Similar handler ─────────────────────────────────────────────────
-  const handleFindSimilar = useCallback(() => {
-    setMode("similarity");
-  }, [setMode]);
 
   // ── Logged sidebar handlers ────────────────────────────────────────────────
   const handleAnnotationStatusChange = (
     status: typeof filterAnnotationStatus,
   ) => {
+    statusAutoSwitchedRef.current = false;
     if (status !== filterAnnotationStatus) {
       studyLogger.log("annotation_status_filter_change", { status });
     }
@@ -353,10 +376,152 @@ export const AnnotationHub: React.FC = () => {
     studyLogger.log("annotated_species_filter_change", { species });
     setAnnotatedSpeciesScope(species);
   };
-  const handleFocusSpeciesChange = (species: string[]) => {
-    studyLogger.log("focus_species_change", { species });
-    setPredictedSpeciesScope(species);
-  };
+  // One state behind the toolbar control, the sidebar field and the projection
+  // legend, so they always agree. `source` tells the study log which one changed it.
+  //
+  // Starting a search from Status = All also switches to Unlabeled: labelled
+  // snippets are the ones the model was trained on, so they would otherwise
+  // crowd the top of a confidence-sorted feed instead of new candidates.
+  // Clearing the search switches back, unless the user changed Status meanwhile.
+  const handleFocusSpeciesChange = useCallback(
+    (species: string[], source: string = "sidebar") => {
+      studyLogger.log("focus_species_change", { species, source });
+      const wasFocused = predictedSpeciesScope.length > 0;
+      const isFocused = species.length > 0;
+      if (!wasFocused && isFocused && filterAnnotationStatus === "any") {
+        statusAutoSwitchedRef.current = true;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "unannotated",
+          source: "find_species_auto",
+        });
+        setFilterAnnotationStatus("unannotated");
+      } else if (
+        wasFocused &&
+        !isFocused &&
+        statusAutoSwitchedRef.current &&
+        similarTo === null
+      ) {
+        statusAutoSwitchedRef.current = false;
+        if (filterAnnotationStatus === "unannotated") {
+          studyLogger.log("annotation_status_filter_change", {
+            status: "any",
+            source: "find_species_auto",
+          });
+          setFilterAnnotationStatus("any");
+        }
+      }
+      setPredictedSpeciesScope(species);
+    },
+    [predictedSpeciesScope, filterAnnotationStatus, similarTo],
+  );
+
+  // ── Find similar ──────────────────────────────────────────────────────────
+  // Same Unlabeled auto-switch as "Find species": already-labelled neighbours
+  // are the least useful to see again. The two searches share the flag, so
+  // Status only switches back once neither of them is active.
+  const handleFindSimilar = useCallback(
+    (snippetId: number, source: string = "snippet_header") => {
+      if (snippetId === similarTo) return;
+      studyLogger.log("find_similar_start", {
+        anchorSnippetId: snippetId,
+        previousAnchorSnippetId: similarTo,
+        source,
+      });
+      if (similarTo === null && filterAnnotationStatus === "any") {
+        statusAutoSwitchedRef.current = true;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "unannotated",
+          source: "find_similar_auto",
+        });
+        setFilterAnnotationStatus("unannotated");
+      }
+      // Normalised slider positions mean something different for every
+      // anchor (the domain is its own neighbours' range), so start from all.
+      dispatch(setVisibilityRangeFor({ key: "similarity", range: [0, 1] }));
+      setSimilarTo(snippetId);
+    },
+    [dispatch, similarTo, filterAnnotationStatus],
+  );
+  const handleClearSimilar = useCallback(
+    (source: string = "feed_chip") => {
+      if (similarTo === null) return;
+      studyLogger.log("find_similar_clear", {
+        anchorSnippetId: similarTo,
+        source,
+      });
+      if (
+        statusAutoSwitchedRef.current &&
+        predictedSpeciesScope.length === 0 &&
+        filterAnnotationStatus === "unannotated"
+      ) {
+        statusAutoSwitchedRef.current = false;
+        studyLogger.log("annotation_status_filter_change", {
+          status: "any",
+          source: "find_similar_auto",
+        });
+        setFilterAnnotationStatus("any");
+      }
+      dispatch(setVisibilityRangeFor({ key: "similarity", range: [0, 1] }));
+      setSimilarTo(null);
+    },
+    [dispatch, similarTo, predictedSpeciesScope, filterAnnotationStatus],
+  );
+
+  const handleSidebarFocusSpeciesChange = useCallback(
+    (species: string[]) => handleFocusSpeciesChange(species, "sidebar"),
+    [handleFocusSpeciesChange],
+  );
+
+  // Shift+F runs "Find similar" on the selected snippet, next to the ↑/↓ feed
+  // navigation, so a labelling session never needs the mouse.
+  const findSimilarEnabled = phase.ui.showFindSimilarButton;
+  const selectedSnippetId = useAppSelector(
+    (s) => s.al.selectedSnippetIds[0] ?? null,
+  );
+  useEffect(() => {
+    if (!findSimilarEnabled) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "f" ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.repeat
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+          ))
+      ) {
+        return;
+      }
+      if (selectedSnippetId === null) return;
+      event.preventDefault();
+      handleFindSimilar(selectedSnippetId, "keyboard");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [findSimilarEnabled, selectedSnippetId, handleFindSimilar]);
+  const focusSpeciesOptions = al.labelScopeOptions;
+  const focusableSpecies = React.useMemo(
+    () =>
+      new Set(
+        focusSpeciesOptions.filter((o) => !o.disabled).map((o) => o.value),
+      ),
+    [focusSpeciesOptions],
+  );
+  const confidenceLabel =
+    predictedSpeciesScope.length === 0
+      ? undefined
+      : predictedSpeciesScope.length === 1
+        ? `Confidence for ${predictedSpeciesScope[0]}`
+        : `Confidence for ${predictedSpeciesScope.length} species`;
   const handleLocationsChange = (locations: string[]) => {
     studyLogger.log("location_filter_change", { locations });
     setFilterLocations(locations);
@@ -393,9 +558,21 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
+  // Starting a model (cold start or bootstrap) is for managers (`isManager`).
+  // Cold start only: offer "Generate Feed" while the dataset has no model
+  // checkpoint (and no feed yet).
+  const showFeedAction =
+    isManager &&
+    al.checkpointsLoaded &&
+    al.checkpoints.length === 0 &&
+    al.predictions.length === 0;
+  const feedActionLabel = "Generate Feed";
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#f7fafc]">
-      <NavigationBar />
+      {/* The Guide menu reopens the cards that point at this page's controls,
+          so it is only offered where those controls exist. */}
+      <NavigationBar extra={user ? <GuideMenu /> : null} />
 
       {/* ── Simplified toolbar ── */}
       <div className="flex items-center gap-3 px-5 py-1.5 border-b border-gray-200 bg-white shrink-0 flex-wrap">
@@ -427,22 +604,64 @@ export const AnnotationHub: React.FC = () => {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <ExperimentOutlined className="text-gray-400 text-sm" />
-          <Select
-            placeholder="Select phase"
-            value={phaseId || undefined}
-            onChange={jumpToPhase}
-            style={{ width: 260 }}
-            size="middle"
-          >
-            {phaseOptions.map((id) => (
-              <Option key={id} value={id}>
-                {STUDY_PHASES[id]?.label ?? id}
-              </Option>
-            ))}
-          </Select>
-        </div>
+        {/* Find species: the primary entry point for "where is species X?".
+            Same state as the sidebar field and the projection legend; shown
+            only where the phase exposes model scores, since it rescopes them. */}
+        {al.selectedDatasetId !== null && phase.sidebar.modelScores && (
+          <div data-tour="find-species" className="flex items-center gap-2">
+            <SearchOutlined className="text-gray-400 text-sm" />
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              size="middle"
+              placeholder="Find species…"
+              aria-label="Find species"
+              style={{ minWidth: 220, maxWidth: 420 }}
+              loading={al.labelScopeLoading}
+              value={predictedSpeciesScope}
+              onChange={(v) =>
+                handleFocusSpeciesChange(v as string[], "toolbar")
+              }
+              options={focusSpeciesOptions.map((o) => ({
+                value: o.value,
+                label: o.label,
+                disabled: o.disabled,
+              }))}
+              filterOption={(input, option) =>
+                String(option?.label ?? "")
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              notFoundContent={
+                al.labelScopeLoading ? "Loading…" : "No species in this model"
+              }
+              maxTagCount="responsive"
+            />
+          </div>
+        )}
+
+        {/* Phase switch: hidden when the deployment pins the phase
+            (VITE_STUDY_PHASE_LOCK), so annotators on the main site cannot
+            leave the configured phase. Unlocked study setups keep it. */}
+        {!isPhaseLocked() && (
+          <div className="flex items-center gap-2">
+            <ExperimentOutlined className="text-gray-400 text-sm" />
+            <Select
+              placeholder="Select phase"
+              value={phaseId || undefined}
+              onChange={jumpToPhase}
+              style={{ width: 260 }}
+              size="middle"
+            >
+              {phaseOptions.map((id) => (
+                <Option key={id} value={id}>
+                  {STUDY_PHASES[id]?.label ?? id}
+                </Option>
+              ))}
+            </Select>
+          </div>
+        )}
 
         {/* Status tags */}
         <div className="flex items-center gap-2 ml-auto">
@@ -519,9 +738,6 @@ export const AnnotationHub: React.FC = () => {
                   Select a dataset to start{" "}
                   {mode === "validate" ? "Validate" : "Active Learning"}
                 </p>
-                <p className="text-sm font-ibm-sans">
-                  Predictions load automatically once it has a trained model.
-                </p>
               </div>
             )}
 
@@ -544,18 +760,21 @@ export const AnnotationHub: React.FC = () => {
               !(al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking) && (
               <Workspace
                 onFindSimilar={
-                  phase.ui.showFindSimilarButton ? handleFindSimilar : undefined
+                  findSimilarEnabled ? handleFindSimilar : undefined
                 }
+                similarTo={similarTo}
+                onClearSimilar={handleClearSimilar}
                 exploreFilters={exploreFilters}
-                // Generate/Edit Feed button hidden for now: inference starts on its
-                // own once a dataset has a model. Pass these again to bring it back
-                // (it is also the only entry to "train from scratch").
-                // feedActionLabel={al.predictions.length > 0 ? "Edit Feed" : "Generate Feed"}
-                // feedActionLoading={al.inferenceLoading}
-                // feedActionDisabled={!al.selectedDatasetId}
-                // onFeedAction={al.openInferenceModal}
+                showFeedAction={showFeedAction}
+                feedActionLabel={feedActionLabel}
+                feedActionLoading={al.inferenceLoading}
+                feedActionDisabled={!al.selectedDatasetId}
+                onFeedAction={al.openInferenceModal}
                 quickLabels={quickLabelList.labels}
                 quickLabelsLoading={quickLabelList.loading}
+                focusSpecies={predictedSpeciesScope}
+                focusableSpecies={focusableSpecies}
+                onFocusSpeciesChange={handleFocusSpeciesChange}
               />
             )}
           </div>
@@ -609,18 +828,19 @@ export const AnnotationHub: React.FC = () => {
                   annotatedSpeciesLoading={annotatedSpecies.loading}
                   annotatedSpeciesScope={annotatedSpeciesScope}
                   setAnnotatedSpeciesScope={handleAnnotatedSpeciesChange}
-                  predictedSpeciesOptions={al.labelScopeOptions}
-                  predictedSpeciesLoading={al.labelScopeLoading}
                   predictedSpeciesScope={predictedSpeciesScope}
-                  setPredictedSpeciesScope={handleFocusSpeciesChange}
+                  setPredictedSpeciesScope={handleSidebarFocusSpeciesChange}
+                  confidenceLabel={confidenceLabel}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
                   showModelScores={phase.sidebar.modelScores}
                   showFindSimilar={phase.sidebar.findSimilar}
+                  similarityActive={similarTo !== null}
                   showLabelScope={phase.sidebar.labelScope}
                   collapsed={sidebarCollapsed}
                   onCollapsedChange={setSidebarCollapsed}
                   onResetFilters={() => {
+                    statusAutoSwitchedRef.current = false;
                     setFilterAnnotationStatus("any");
                     setFilterLocations([]);
                     setFilterDateRange(null);
@@ -631,6 +851,13 @@ export const AnnotationHub: React.FC = () => {
                     setPredictedSpeciesScope([]);
                     al.setLocalLabelScope([]);
                     al.setLocalMinConfidence(null);
+                    if (similarTo !== null) {
+                      studyLogger.log("find_similar_clear", {
+                        anchorSnippetId: similarTo,
+                        source: "reset_filters",
+                      });
+                      setSimilarTo(null);
+                    }
                   }}
                 />
               }
@@ -646,6 +873,7 @@ export const AnnotationHub: React.FC = () => {
         onCancel={() => al.setAlConfigOpen(false)}
         onOk={al.handleOpenALSession}
         checkpoints={al.checkpoints}
+        canColdStart={isManager}
         embeddingMethods={al.embeddingMethods}
         embeddingMethodsLoading={al.embeddingMethodsLoading}
         localFamily={al.localFamily}

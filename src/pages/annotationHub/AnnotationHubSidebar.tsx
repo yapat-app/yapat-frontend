@@ -42,6 +42,8 @@ import {
   SCORE_VISIBILITY_MODE,
   SCORE_SLIDER_STYLE,
   SCORE_ALLOWED_PROPERTIES,
+  SCORE_PROPERTIES_WITH_SIMILARITY,
+  SIMILARITY_PINNED,
 } from "./scoreFilterConfig";
 
 const TIME_OF_DAY_DOMAIN: [number, number] = [0, 86400];
@@ -92,16 +94,17 @@ export type AnnotationHubSidebarProps = {
   dateTimeDisabled?: boolean;
   showModelScores: boolean;
   /**
-   * Model-side species scope, shown with the model scores. Narrows the set to
-   * snippets the model predicts as these species and rescopes Confidence to
-   * them (noisy-OR), so every histogram below describes that population.
+   * Species chosen in the toolbar's "Find species". Confidence is rescoped to
+   * them (noisy-OR); the sidebar only shows a hint and a Clear action.
    */
-  predictedSpeciesOptions: LabelScopeOption[];
-  predictedSpeciesLoading: boolean;
   predictedSpeciesScope: string[];
   setPredictedSpeciesScope: (v: string[]) => void;
+  /** Label for the Confidence row while it is rescoped by "Find species". */
+  confidenceLabel?: string;
   showFindSimilar: boolean;
   showLabelScope: boolean;
+  /** True while a "Find similar" search is active (adds the Similarity row). */
+  similarityActive?: boolean;
 };
 
 /** Deterministic varied bar heights (%) so the skeleton reads as a histogram, not a grey block. */
@@ -224,12 +227,12 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showSampleProperties,
   dateTimeDisabled = false,
   showModelScores,
-  predictedSpeciesOptions,
-  predictedSpeciesLoading,
   predictedSpeciesScope,
   setPredictedSpeciesScope,
+  confidenceLabel,
   showFindSimilar,
   showLabelScope,
+  similarityActive = false,
   exploreFilters,
   exploreFacets,
   exploreFacetsLoading,
@@ -429,38 +432,26 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
     </div>
   );
 
+  // "Find species" is chosen in the toolbar; the Confidence card only explains
+  // what its numbers currently mean, so there is a single input on the page.
   const predictedSpeciesControl =
-    filterAnnotationStatus === "any" ? (
-      <div>
-        <p className="mb-1 flex items-center gap-1 text-fs-10 font-medium text-gray-400 font-ibm-sans">
-          <TagsOutlined className="text-gray-300" /> Species
-        </p>
-        <Select
-          mode="multiple"
-          allowClear
-          showSearch
-          size="small"
-          variant="borderless"
-          placeholder="Focus on species…"
-          loading={predictedSpeciesLoading}
-          value={predictedSpeciesScope}
-          onChange={(v) => setPredictedSpeciesScope(v as string[])}
-          options={predictedSpeciesOptions.map((o) => ({
-            value: o.value,
-            label: o.label,
-            disabled: o.disabled,
-          }))}
-          filterOption={(input, option) =>
-            String(option?.label ?? "")
-              .toLowerCase()
-              .includes(input.toLowerCase())
-          }
-          notFoundContent={predictedSpeciesLoading ? "Loading…" : "No species"}
-          // Collapses into "+N" once the (now narrow, nested-in-row) space
-          // runs out, instead of every tag wrapping onto its own line.
-          maxTagCount="responsive"
-          className="w-full rounded-md bg-gray-100 px-1"
-        />
+    predictedSpeciesScope.length > 0 ? (
+      <div className="flex items-start justify-between gap-2 rounded-md bg-blue-50 px-2 py-1 text-fs-10 font-ibm-sans text-blue-800">
+        <span className="min-w-0">
+          <TagsOutlined className="mr-1 text-blue-400" />
+          Scored for{" "}
+          <span className="font-semibold">
+            {predictedSpeciesScope.join(", ")}
+          </span>{" "}
+          — change in the toolbar ↑
+        </span>
+        <button
+          type="button"
+          onClick={() => setPredictedSpeciesScope([])}
+          className="shrink-0 font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Clear
+        </button>
       </div>
     ) : null;
 
@@ -816,13 +807,21 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   <SidebarSubsection title="Model derived scores">
                     <ScoreHistogramPanel
                       data={histogramData}
-                      allowedProperties={SCORE_ALLOWED_PROPERTIES}
+                      allowedProperties={
+                        similarityActive
+                          ? SCORE_PROPERTIES_WITH_SIMILARITY
+                          : SCORE_ALLOWED_PROPERTIES
+                      }
+                      pinnedProperties={
+                        similarityActive ? SIMILARITY_PINNED : undefined
+                      }
                       visibilityMode={SCORE_VISIBILITY_MODE}
                       alFilters={alFilters}
                       domains={domains}
                       sliderMode={SCORE_SLIDER_STYLE}
                       compact
                       confidenceExtra={predictedSpeciesControl}
+                      confidenceLabel={confidenceLabel}
                       onVisibilityKeyChange={(key) =>
                         dispatch(
                           setVisibilityFilter({

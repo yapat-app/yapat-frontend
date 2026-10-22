@@ -58,7 +58,15 @@ interface ScoreHistogramPanelProps {
   sliderMode?: "range" | "threshold";
   compact?: boolean;
   confidenceExtra?: React.ReactNode;
+  /** Replaces the "Confidence" row label, e.g. while it is rescoped to the
+   * species chosen in "Find species", so the 0–1 range reads as that species. */
+  confidenceLabel?: string;
+  /** Rows that are always active and cannot be toggled off (compact multi
+   * mode), e.g. Similarity while a "Find similar" search is running. */
+  pinnedProperties?: string[];
 }
+
+const NO_PINNED: string[] = [];
 
 const SCORE_MIN = 0;
 const SCORE_MAX = 1;
@@ -79,10 +87,12 @@ function domainValue(frac: number, min: number, max: number): number {
 }
 
 /**
- * Confidence keeps its precise numeric readout;
+ * Confidence and similarity keep a precise numeric readout: their values have
+ * a direct meaning (a probability, a cosine similarity). The sampler scores
+ * are relative, so they read as Low / High.
  */
 function usesQualitativeLabel(propertyKey: string): boolean {
-  return propertyKey !== "confidence";
+  return propertyKey !== "confidence" && propertyKey !== "similarity";
 }
 
 const HandleReadout: React.FC<{
@@ -295,8 +305,17 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   compact = false,
   domains,
   confidenceExtra,
+  confidenceLabel,
+  pinnedProperties = NO_PINNED,
 }) => {
   const isMulti = visibilityMode === "multi";
+  const labelFor = useCallback(
+    (key: string): string =>
+      key === "confidence" && confidenceLabel
+        ? confidenceLabel
+        : (getPropertyByKey(key)?.label ?? key),
+    [confidenceLabel],
+  );
 
   // Histogram domain for a property: the data's actual [min,max] when available,
   // else the property's declared range. Keeps the bars, axis labels, and slider
@@ -314,6 +333,11 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   const multiActiveKeys: string[] = useMemo(
     () => alFilters.visibility.propertyKeys ?? [],
     [alFilters.visibility.propertyKeys],
+  );
+  const isRowActive = useCallback(
+    (key: string) =>
+      multiActiveKeys.includes(key) || pinnedProperties.includes(key),
+    [multiActiveKeys, pinnedProperties],
   );
 
   // P3.1: set the first allowed property active in Redux on mount when none set.
@@ -404,13 +428,13 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
   // One entry per active property (preserve allowedProperties ordering).
   const multiData = useMemo(() => {
     return (allowedProperties as string[])
-      .filter((key) => multiActiveKeys.includes(key))
+      .filter(isRowActive)
       .map((key) => {
         const [min, max] = domainFor(key);
         const bins = binsFor(data, key);
         return {
           key,
-          label: getPropertyByKey(key)?.label ?? key,
+          label: labelFor(key),
           color: propertyColor(key),
           allBins: bins.total,
           visibleBins: bins.visible,
@@ -425,10 +449,11 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
       });
   }, [
     allowedProperties,
-    multiActiveKeys,
+    isRowActive,
     data,
     alFilters.visibility.ranges,
     domains,
+    labelFor,
   ]);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -551,11 +576,13 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
       {isMulti && compact && (
         <div className="flex flex-col gap-1.5">
           {(allowedProperties as string[]).map((prop) => {
-            const def = getPropertyByKey(prop);
-            const label = def?.label ?? prop;
+            const label = labelFor(prop);
             const color = propertyColor(prop);
-            const isActive = multiActiveKeys.includes(prop);
-            const isLastActive = isActive && multiActiveKeys.length === 1;
+            const isPinned = pinnedProperties.includes(prop);
+            const isActive = isRowActive(prop);
+            const isLastActive =
+              !isPinned && isActive && multiActiveKeys.length === 1;
+            const isLocked = isPinned || isLastActive;
             const row = multiData.find((r) => r.key === prop);
 
             return (
@@ -574,15 +601,21 @@ export const ScoreHistogramPanel: React.FC<ScoreHistogramPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => handleMultiToggle(prop)}
-                  disabled={isLastActive}
+                  disabled={isLocked}
                   title={
-                    isLastActive
-                      ? "At least one filter must stay active"
-                      : undefined
+                    isPinned
+                      ? undefined
+                      : isLastActive
+                        ? "At least one filter must stay active"
+                        : undefined
                   }
                   className={[
                     "flex w-full items-center justify-between gap-2 text-left",
-                    isLastActive ? "cursor-not-allowed" : "cursor-pointer",
+                    isPinned
+                      ? "cursor-default"
+                      : isLastActive
+                        ? "cursor-not-allowed"
+                        : "cursor-pointer",
                   ].join(" ")}
                 >
                   <span

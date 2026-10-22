@@ -27,6 +27,12 @@ import {
   spectrogramLayoutHeights,
 } from "../../utils/spectrogramConfig";
 
+/**
+ * The anchor of a "Find similar" search scores 1.0 against itself; a small
+ * tolerance absorbs float rounding from the vector index.
+ */
+const SEARCHED_SNIPPET_SIMILARITY = 0.9999;
+
 interface Props {
   prediction: PAMPrediction;
   recordingName?: string;
@@ -312,6 +318,9 @@ const PredictionCardImpl: React.FC<Props> = ({
     audioAttempt,
   ]);
 
+  // Only present on server feed rows during a "Find similar" search.
+  const similarityScore = prediction.scores?.similarity;
+
   // ── Blind-mode card: spectrogram + inline label area ──────────────────────
   return (
     <div
@@ -365,6 +374,18 @@ const PredictionCardImpl: React.FC<Props> = ({
         className="shrink-0 px-2.5 pt-2 pb-2"
         onClick={(e) => e.stopPropagation()}
       >
+        {similarityScore !== undefined && (
+          <div
+            className="mx-auto mb-1 flex items-center justify-end"
+            style={{ width: SPEC_WIDTH, maxWidth: "100%" }}
+          >
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-fs-10 font-medium text-violet-700 font-ibm-sans">
+              {similarityScore >= SEARCHED_SNIPPET_SIMILARITY
+                ? "Searched snippet"
+                : `Similarity ${similarityScore.toFixed(2)}`}
+            </span>
+          </div>
+        )}
         {!audioBlobUrl && !audioError && shouldLoadAudio && (
           <div
             className="mx-auto"

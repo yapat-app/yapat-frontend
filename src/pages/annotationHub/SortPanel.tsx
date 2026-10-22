@@ -16,6 +16,8 @@ interface SortPanelProps {
   allowNonModel: boolean;
   allowModel: boolean;
   disabled?: boolean;
+  /** Offers the Similarity chip (only while a "Find similar" search runs). */
+  similarityActive?: boolean;
 }
 
 /**
@@ -30,12 +32,17 @@ export const SortPanel: React.FC<SortPanelProps> = ({
   allowNonModel,
   allowModel,
   disabled = false,
+  similarityActive = false,
 }) => {
   const [open, setOpen] = useState(true);
 
   if (!allowNonModel && !allowModel) return null;
 
-  const availableOptions = getAvailableSortOptions(allowNonModel, allowModel);
+  const availableOptions = getAvailableSortOptions(
+    allowNonModel,
+    allowModel,
+    similarityActive,
+  );
   const activeCount = disabled ? 0 : fields.filter((f) => !f.disabled).length;
 
   const cycleChip = (property: SortableProperty) => {

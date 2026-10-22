@@ -5,7 +5,7 @@
 
 import React from "react";
 import { PhaseInstructionsModal } from "./PhaseInstructionsModal";
-import { PhaseTour } from "./PhaseTour";
+import { PhaseTour, GuideReplayTour } from "./PhaseTour";
 import { PhaseTransition } from "./PhaseTransition";
 import { StudyCompleteScreen } from "./StudyCompleteScreen";
 
@@ -13,6 +13,7 @@ export const StudyFlowOverlays: React.FC = () => (
   <>
     <PhaseInstructionsModal />
     <PhaseTour />
+    <GuideReplayTour />
     <PhaseTransition />
     <StudyCompleteScreen />
   </>

@@ -145,6 +145,26 @@ const modelScoreSteps = (): TourStepSpec[] =>
     visual: key,
   }));
 
+const FIND_SPECIES_DESC = [
+  "Looking for a particular species? Pick it here (you can pick several).",
+  "",
+  "• The feed re-sorts so the snippets the model thinks most likely contain it come first",
+  "• Status switches to Unlabeled, so you see new candidates rather than snippets already labelled (switch back to All any time)",
+  "• The Confidence slider on the left becomes \"Confidence for <species>\" — drag it (e.g. 0.7–1.0) to keep only the likeliest snippets",
+  "• Works with the Status filter too, e.g. Unlabeled + a species",
+  "• Shortcut: click a species in the projection legend",
+  "",
+  "Clear it with the ✕ on the \"Showing likely\" chip above the feed; the previous sort comes back.",
+].join("\n");
+
+const findSpeciesStep = (): TourStepSpec => ({
+  featureKey: "find-species",
+  target: "find-species",
+  title: "Find a species",
+  description: FIND_SPECIES_DESC,
+  placement: "bottom",
+});
+
 const sortStep = (): TourStepSpec => ({
   featureKey: "sort",
   target: "sort-panel",
@@ -200,7 +220,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [...modelScoreSteps(), sortStep()],
+    tour: [...modelScoreSteps(), findSpeciesStep(), sortStep()],
   },
 
   // ── Phase 5 — full workspace, standalone onboarding ─────────────────────
@@ -218,6 +238,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
       zoomStep(),
       metadataStep(),
       ...modelScoreSteps(),
+      findSpeciesStep(),
       sortStep(),
     ],
   },

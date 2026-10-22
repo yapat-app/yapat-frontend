@@ -36,6 +36,8 @@ export interface SampleScores {
   density?: number;
   composite?: number;
   confidence?: number;
+  /** Cosine similarity to the "Find similar" anchor (server feed rows only). */
+  similarity?: number;
   year_cycle?: number;
   day_cycle?: number; // 0–23  (hour)
   sound_type?: string; // "Bio" | "Anthro" | "Geo"

@@ -43,6 +43,15 @@ export type StudyLogEvent =
       payload: { phase: string; completed: boolean };
     }
   | {
+      /** A user reopened guide cards from the navbar Guide menu. */
+      eventType: "guide_replay_start";
+      payload: { phase: string; stepKeys: string[]; mode: "all" | "single" };
+    }
+  | {
+      eventType: "guide_replay_complete";
+      payload: { phase: string; completed: boolean };
+    }
+  | {
       eventType: "phase_timer_start";
       payload: { phase: string; durationSec: number };
     }
@@ -85,7 +94,13 @@ export type StudyLogEvent =
     }
   | {
       eventType: "label_toggle";
-      payload: { label: string; op: "add" | "remove"; labelsAfter: string[] };
+      payload: {
+        label: string;
+        op: "add" | "remove";
+        labelsAfter: string[];
+        /** True when the click came from the "Recent" row. */
+        fromRecent?: boolean;
+      };
     }
   | { eventType: "label_clear"; payload: { labelsBefore: string[] } }
   | {
@@ -143,7 +158,8 @@ export type StudyLogEvent =
     }
   | {
       eventType: "annotation_status_filter_change";
-      payload: { status: string };
+      /** source: "find_species_auto" / "find_similar_auto" when a search switched it, else omitted. */
+      payload: { status: string; source?: string };
     }
   | {
       eventType: "annotated_species_filter_change";
@@ -151,7 +167,22 @@ export type StudyLogEvent =
     }
   | {
       eventType: "focus_species_change";
-      payload: { species: string[] };
+      /** source: which control changed it (toolbar, sidebar, projection_legend, feed_chip). */
+      payload: { species: string[]; source?: string };
+    }
+  | {
+      eventType: "find_similar_start";
+      /** source: snippet_header, card, keyboard. previous: anchor it replaced. */
+      payload: {
+        anchorSnippetId: number;
+        previousAnchorSnippetId: number | null;
+        source: string;
+      };
+    }
+  | {
+      eventType: "find_similar_clear";
+      /** source: feed_chip, reset_filters. */
+      payload: { anchorSnippetId: number; source: string };
     }
   | {
       eventType: "label_scope_change";

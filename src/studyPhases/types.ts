@@ -42,6 +42,8 @@ export type AllowedProperty =
   | "diversity"
   | "density"
   | "confidence"
+  /** "Find similar" match score; only meaningful while a search is active. */
+  | "similarity"
   | "actual_label"
   | "year_cycle"
   | "day_cycle"

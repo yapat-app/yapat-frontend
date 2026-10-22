@@ -1,4 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { useSearchParams } from "react-router-dom";
+import { Button, Drawer } from "antd";
+import {
+  AppstoreOutlined,
+  DownOutlined,
+  SearchOutlined,
+  SortAscendingOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
@@ -8,10 +23,16 @@ import {
 } from "../redux/features/datasetSlice";
 import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
 import { fetchAllteams } from "../redux/features/teamSlice";
-import { DatasetCard } from "../components/DatasetCard";
+import {
+  ClearFiltersLink,
+  DatasetList,
+} from "../components/datasets/DatasetList";
+import { DatasetDetail } from "../components/datasets/DatasetDetail";
+import { DatasetJobsProvider } from "../components/datasets/DatasetJobsProvider";
 import AddDatasetModal from "../components/AddDatasetModal";
 import { clearSnippets } from "../redux/features/snippetSlice";
 import type { Dataset, DatasetAnnotationStats, Team } from "../types";
+import { formatDatasetCount } from "../utils/datasetStatus";
 
 type SortKey = "name" | "newest" | "snippets" | "annotated";
 type TeamFilter = "all" | "none" | string;
@@ -25,8 +46,33 @@ const SORT_LABELS: Record<SortKey, string> = {
 };
 
 const controlClass =
-  "rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400";
+  "h-10 w-full appearance-none rounded-lg border px-3 text-sm " +
+  "transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30";
+
+/** Idle controls are quiet; a control that is actually filtering is highlighted. */
+const ctl = (active: boolean) =>
+  active
+    ? "border-blue-400 bg-blue-50/60 text-blue-800 hover:border-blue-500"
+    : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 focus:border-blue-400";
+
+/** A <select> with a leading icon and a chevron inset from the right edge. */
+const SelectBox = ({
+  icon,
+  children,
+  className = "",
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) => (
+  <div className={`relative min-w-0 ${className}`}>
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+      {icon}
+    </span>
+    {children}
+    <DownOutlined className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-400" />
+  </div>
+);
 
 export const Datasets = () => {
   const dispatch = useAppDispatch();
@@ -41,6 +87,8 @@ export const Datasets = () => {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("name");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const canManage = user?.role === "admin" || user?.role === "team_owner";
   const isAdmin = user?.role === "admin";
@@ -150,23 +198,69 @@ export const Datasets = () => {
   const totalCount = listedDatasets.length;
   const hasAnyDatasets = totalCount > 0;
 
+  // Selection lives in the URL (?dataset=<id>) so a refresh, the files page's
+  // back button and shared links keep it. It resolves against the full list,
+  // not the filtered one, so a filter that hides the selected dataset does not
+  // lose it. Other query params are left as they are.
+  const selectedParam = searchParams.get("dataset");
+  const selectedFromUrl =
+    selectedParam != null && Number.isFinite(Number(selectedParam))
+      ? Number(selectedParam)
+      : null;
+
+  const selectedDataset = useMemo(() => {
+    if (selectedFromUrl != null) {
+      const found = listedDatasets.find((d) => Number(d.id) === selectedFromUrl);
+      if (found) return found;
+    }
+    return visibleDatasets[0] ?? null;
+  }, [selectedFromUrl, listedDatasets, visibleDatasets]);
+  const selectedId = selectedDataset ? Number(selectedDataset.id) : null;
+
+  const selectDataset = useCallback(
+    (id: number) => {
+      const next = new URLSearchParams(searchParams);
+      next.set("dataset", String(id));
+      setSearchParams(next, { replace: true });
+      setDrawerOpen(false);
+    },
+    [searchParams, setSearchParams],
+  );
+
+  // First visit: pin the default selection into the URL. A param that points
+  // at a dataset not loaded yet (e.g. a reference pool) is left alone.
+  useEffect(() => {
+    if (selectedFromUrl == null && visibleDatasets.length > 0) {
+      const next = new URLSearchParams(searchParams);
+      next.set("dataset", String(visibleDatasets[0].id));
+      setSearchParams(next, { replace: true });
+    }
+  }, [selectedFromUrl, visibleDatasets, searchParams, setSearchParams]);
+
+  // White card as in the design. Below `md` it is a 2-column grid; from `md` a
+  // single row where the search field takes the remaining width, so "Clear
+  // filters" (shown only while a filter is on) takes its room from the search
+  // field and never adds a row or changes the height.
   const toolbar = (
-    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 mb-6">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="mb-5 grid grid-cols-2 gap-2.5 rounded-xl border border-slate-200 bg-white p-3 md:flex md:items-center">
+      <div className="relative col-span-2 min-w-0 md:col-auto md:min-w-[140px] md:flex-1">
+        <SearchOutlined className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or path…"
           aria-label="Search datasets"
-          className={`${controlClass} flex-1 min-w-[220px]`}
+          className={`${controlClass} ${ctl(search.trim() !== "")} pl-9 pr-3`}
         />
+      </div>
 
+      <SelectBox icon={<TeamOutlined />} className="md:w-[130px] lg:w-[180px]">
         <select
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
           aria-label="Filter by team"
-          className={controlClass}
+          className={`${controlClass} ${ctl(teamFilter !== "all")} pl-9 pr-9`}
         >
           <option value="all">All teams</option>
           <option value="none">No team</option>
@@ -176,24 +270,28 @@ export const Datasets = () => {
             </option>
           ))}
         </select>
+      </SelectBox>
 
+      <SelectBox icon={<AppstoreOutlined />} className="md:w-[130px] lg:w-[180px]">
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
           aria-label="Filter by dataset type"
-          className={controlClass}
+          className={`${controlClass} ${ctl(typeFilter !== "all")} pl-9 pr-9`}
         >
           <option value="all">All types</option>
           <option value="PAM">PAM</option>
           <option value="FOCAL_RECORDINGS">Focal recordings</option>
           {isAdmin && <option value="REFERENCE">Reference pools</option>}
         </select>
+      </SelectBox>
 
+      <SelectBox icon={<SortAscendingOutlined />} className="md:w-[140px] lg:w-[190px]">
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
           aria-label="Sort datasets"
-          className={controlClass}
+          className={`${controlClass} ${ctl(false)} pl-9 pr-9`}
         >
           {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
             <option key={k} value={k}>
@@ -201,22 +299,14 @@ export const Datasets = () => {
             </option>
           ))}
         </select>
-      </div>
+      </SelectBox>
 
-      <div className="flex items-center justify-end gap-3 text-sm text-slate-500">
-        <span>
-          Showing {visibleDatasets.length} of {totalCount}
-        </span>
-        {filtersActive && (
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="text-blue-600 hover:text-blue-700 hover:underline"
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
+      {filtersActive && (
+        <ClearFiltersLink
+          onClick={clearFilters}
+          className="shrink-0 self-center px-1 text-center md:text-left"
+        />
+      )}
     </div>
   );
 
@@ -272,29 +362,91 @@ export const Datasets = () => {
       <NavigationBar />
       <div className="w-full   h-full flex justify-center">
         <div className="w-[85%]">
-          <div className="my-6 ">
-            <h1 className="text-2xl font-bold font-ibm-mono">Datasets</h1>
-            <p className="sub_description_text">
-              Below you can view/ edit all datasets
-            </p>
-          </div>
-          <div id="dataset_list">
-            <div className="flex justify-between items-center">
-              <h2 className="card_heading_text">Available Datasets</h2>
-              {canManage && <AddDatasetModal />}
+          <div className="mb-6 mt-10 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold font-ibm-mono">Datasets</h1>
+              <p className="sub_description_text">
+                Below you can view/ edit all datasets
+              </p>
             </div>
-
+            {canManage && <AddDatasetModal />}
+          </div>
+          <div id="dataset_list" className="pb-10">
             {canManage && hasAnyDatasets && toolbar}
 
-            {visibleDatasets.length > 0 ? (
-              <div className="flex flex-col gap-3 my-8">
-                {visibleDatasets.map((dataset) => (
-                  <DatasetCard key={dataset.id} dataset={dataset} />
-                ))}
-              </div>
-            ) : (
-              emptyState
-            )}
+            {/* Watches every dataset's scan / embedding job, on screen or not. */}
+            <DatasetJobsProvider datasets={listedDatasets}>
+              {hasAnyDatasets && selectedDataset ? (
+                <>
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+                    <aside className="relative hidden min-h-[440px] lg:block">
+                      <div className="absolute inset-0">
+                        <DatasetList
+                          datasets={visibleDatasets}
+                          totalCount={totalCount}
+                          selectedId={selectedId}
+                          onSelect={selectDataset}
+                          statsById={statsById}
+                          showSearch={!canManage}
+                          search={search}
+                          onSearch={setSearch}
+                          filtersActive={filtersActive}
+                          onClearFilters={clearFilters}
+                        />
+                      </div>
+                    </aside>
+
+                    <div className="min-w-0">
+                      <div className="mb-3 lg:hidden">
+                        <Button
+                          block
+                          onClick={() => setDrawerOpen(true)}
+                          className="flex! items-center! justify-between!"
+                        >
+                          <span className="truncate">
+                            Datasets: {selectedDataset.name}
+                          </span>
+                          <span className="ml-2 flex shrink-0 items-center gap-2 text-slate-500">
+                            {formatDatasetCount(visibleDatasets.length, totalCount)}
+                            <DownOutlined />
+                          </span>
+                        </Button>
+                      </div>
+                      <DatasetDetail
+                        key={selectedDataset.id}
+                        dataset={selectedDataset}
+                      />
+                    </div>
+                  </div>
+
+                  <Drawer
+                    title="Datasets"
+                    placement="left"
+                    width={340}
+                    open={drawerOpen}
+                    onClose={() => setDrawerOpen(false)}
+                    styles={{ body: { padding: 12 } }}
+                  >
+                    <div className="h-[calc(100dvh-6rem)]">
+                      <DatasetList
+                        datasets={visibleDatasets}
+                        totalCount={totalCount}
+                        selectedId={selectedId}
+                        onSelect={selectDataset}
+                        statsById={statsById}
+                        showSearch={!canManage}
+                        search={search}
+                        onSearch={setSearch}
+                        filtersActive={filtersActive}
+                        onClearFilters={clearFilters}
+                      />
+                    </div>
+                  </Drawer>
+                </>
+              ) : (
+                emptyState
+              )}
+            </DatasetJobsProvider>
           </div>
         </div>
       </div>

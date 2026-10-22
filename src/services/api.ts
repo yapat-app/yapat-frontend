@@ -27,6 +27,7 @@ import type {
   Embedding,
   EmbeddingJob,
   EmbeddingJobProgress,
+  ScanProgress,
   CreateEmbedding,
   EmbeddingMethod,
   Feed,
@@ -554,6 +555,12 @@ export const recordingApi = {
 // ============================================================================
 
 export const datasetApi = {
+  /** Live progress of the dataset's latest scan (one Redis read server-side). */
+  getScanProgress: async (datasetId: number): Promise<ScanProgress> => {
+    const response = await api.get(`api/datasets/${datasetId}/scan-progress`);
+    return response.data;
+  },
+
   //Get all datasets
 
   getAll: async (params?: {
@@ -637,6 +644,13 @@ export const datasetApi = {
     const response = await api.post(`/api/datasets/${datasetId}/quick-labels/mine`, {
       labels,
     });
+    return response.data;
+  },
+
+  getRecentLabels: async (
+    datasetId: number,
+  ): Promise<import("../types").RecentLabel[]> => {
+    const response = await api.get(`/api/datasets/${datasetId}/quick-labels/recent`);
     return response.data;
   },
 

@@ -1,6 +1,7 @@
 import { Progress } from "antd";
 import { LoadingOutlined, WarningOutlined } from "@ant-design/icons";
 import type { EmbeddingJobProgress } from "../types";
+import { embeddingProgressView } from "../utils/jobProgress";
 
 const fullNumber = new Intl.NumberFormat();
 
@@ -30,12 +31,7 @@ export const EmbeddingProgressPanel: React.FC<Props> = ({
   recordingCount,
 }) => {
   const stalled = Boolean(progress?.stalled);
-  const counting =
-    progress != null &&
-    progress.total != null &&
-    (progress.stage === "embedding" || progress.stage === "completed");
-  const percent =
-    progress?.status === "completed" ? 100 : (progress?.percent ?? 0);
+  const { counting, percent } = embeddingProgressView(progress);
 
   const step = !progress
     ? "Checking progress…"
@@ -104,10 +100,10 @@ export const EmbeddingProgressPanel: React.FC<Props> = ({
 
       <Progress
         className="mb-0! mt-2"
-        percent={counting ? percent : 100}
+        percent={counting ? percent : 0}
         showInfo={false}
         size="small"
-        strokeColor={counting ? tone.stroke : "#bfdbfe"}
+        strokeColor={tone.stroke}
         status={stalled ? "normal" : "active"}
       />
 

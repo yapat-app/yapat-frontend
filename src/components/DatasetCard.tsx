@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Dataset, EmbeddingJobProgress, IngestJob, QuickLabel } from "../types";
+import type {
+  Dataset,
+  EmbeddingJobProgress,
+  IngestJob,
+  QuickLabel,
+  ScanProgress,
+} from "../types";
 import { ExportAnnotationButton } from "./ExportAnnotation";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { GenerateEmbeddings } from "./GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "./EmbeddingProgressPanel";
 import { useEmbeddingJobStatus } from "../hooks/useEmbeddingJobStatus";
+import { ScanProgressPanel } from "./ScanProgressPanel";
+import { useScanStatus } from "../hooks/useScanStatus";
 import { useIngestJobStatus } from "../hooks/useIngestJobStatus";
 import { IngestProgressPanel } from "./IngestProgressPanel";
 import { AddRecordingsModal } from "./AddRecordingsModal";
@@ -72,6 +80,38 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
     activeJobId,
     onJobFinished,
   );
+
+  // Scan tracking. `active_scan` (GET /datasets) is set while a scan is queued or
+  // running, and after one failed; it is how a refresh finds the scan again. Only
+  // unfinished scans are polled: a failed one just shows its error.
+  const activeScan = dataset.active_scan ?? null;
+  const scanPollId =
+    activeScan && activeScan.stage !== "failed" ? Number(dataset.id) : null;
+  const onScanFinished = useCallback(
+    (p: ScanProgress) => {
+      if (p.stage === "completed") {
+        const created = p.recordings_created ?? 0;
+        message.success(
+          `Scan finished: ${created.toLocaleString()} recording${created === 1 ? "" : "s"} added to ${dataset.name}`,
+        );
+      } else if (p.stage === "failed") {
+        message.error(
+          `Scan failed for ${dataset.name}${p.error_message ? `: ${p.error_message}` : ""}`,
+        );
+      }
+      // Picks up the new recording count and clears (or keeps, if failed) active_scan.
+      dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
+    },
+    [dataset.name, dispatch, isReference],
+  );
+  const { progress: polledScan, etaSeconds: scanEtaSeconds } = useScanStatus(
+    scanPollId,
+    onScanFinished,
+  );
+  // The list's snapshot fills the gap until the first poll returns.
+  const scanProgress = polledScan ?? activeScan;
+  const scanFailed = scanProgress?.stage === "failed";
+  const scanning = activeScan != null && !scanFailed;
 
   // "Add recordings" job tracking, same pattern as embeddings: the running job
   // comes from `active_ingest_job`; `startedIngestJobId` covers the gap until
@@ -334,7 +374,7 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                 icon={
                   ingestRunning && !ingestStalled ? <LoadingOutlined /> : <FolderAddOutlined />
                 }
-                disabled={(ingestRunning && !ingestStalled) || activeJobId != null}
+                disabled={(ingestRunning && !ingestStalled) || activeJobId != null || scanning}
                 onClick={() => setAddingRecordings(true)}
                 title={
                   ingestStalled
@@ -353,6 +393,8 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
               dataset={dataset}
               running={activeJobId != null}
               onStarted={setStartedJobId}
+              scanning={scanning}
+              scanFailed={scanFailed}
             />
             {!isReference && (
               <>
@@ -375,6 +417,16 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             )}
           </div>
         </div>
+
+        {activeScan != null && (
+          <div className="mb-3">
+            <ScanProgressPanel
+              progress={scanProgress}
+              etaSeconds={scanEtaSeconds}
+              isRescan={(dataset.recording_count ?? 0) > 0}
+            />
+          </div>
+        )}
 
         {activeJobId != null && (
           <div className="mb-3">

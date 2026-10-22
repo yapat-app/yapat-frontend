@@ -20,6 +20,7 @@ import {
 import { studyLogger } from "../../studyLogging";
 import { useQuickLabelScientificNames } from "../../hooks/useQuickLabelScientificNames";
 import { usePersonalQuickLabels } from "../../hooks/usePersonalQuickLabels";
+import { useRecentLabels } from "../../hooks/useRecentLabels";
 
 const GBIF_SUGGEST_URL = "https://api.gbif.org/v1/species/suggest";
 const GBIF_DEBOUNCE_MS = 350;
@@ -163,6 +164,8 @@ export const LabelSelector: React.FC<Props> = ({
 
   // Labels this participant pinned from GBIF, plus any dataset-wide entries.
   const personal = usePersonalQuickLabels();
+  // Labels this participant used last on the dataset, for the "Recent" row.
+  const recent = useRecentLabels();
   // Scientific names behind code-style quick labels, for tooltips and search.
   const scientificNames = useQuickLabelScientificNames();
 
@@ -198,6 +201,23 @@ export const LabelSelector: React.FC<Props> = ({
     }
     return out;
   }, [personal.entries, quickLabels]);
+
+  // Recent row chips. Reuse the quick-label option when one exists so the
+  // tooltip and styling match; labels picked from GBIF or typed freely still
+  // get a plain chip. Never removable here: the row is history, not a palette.
+  const recentOptions = useMemo(() => {
+    const byName = new Map(pamOptions.map((o) => [o.value.toLowerCase(), o]));
+    return recent.labels.map((label) => {
+      const match = byName.get(label.toLowerCase());
+      return {
+        value: match?.value ?? label,
+        label: match?.label ?? label,
+        source: "pam" as const,
+        taxonId: match?.taxonId,
+        removable: false,
+      };
+    });
+  }, [recent.labels, pamOptions]);
 
   // De-duplicate GBIF results against the chip list, so a species that is
   // already pinned stops showing up as a fresh suggestion.
@@ -273,7 +293,7 @@ export const LabelSelector: React.FC<Props> = ({
 
   const selectedSet = useMemo(() => new Set((value ?? []).map((v) => v.toLowerCase())), [value]);
 
-  const toggle = (label: string) => {
+  const toggle = (label: string, fromRecent = false) => {
     if (!onChange) return;
     const normalized = (value ?? []);
     const exists = normalized.some((x) => x.toLowerCase() === label.toLowerCase());
@@ -284,7 +304,10 @@ export const LabelSelector: React.FC<Props> = ({
       label,
       op: exists ? "remove" : "add",
       labelsAfter: next,
+      fromRecent,
     });
+    // Removing a label is often a correction, so only additions count as use.
+    if (!exists) recent.touch(label);
     onChange(next);
   };
 
@@ -298,6 +321,7 @@ export const LabelSelector: React.FC<Props> = ({
       op: "add",
       labelsAfter: [...normalized, trimmed],
     });
+    recent.touch(trimmed);
     onChange([...normalized, trimmed]);
   };
 
@@ -387,7 +411,7 @@ export const LabelSelector: React.FC<Props> = ({
 
     const renderQuickChip = (
       opt: (typeof pamOptions)[number],
-      keyPrefix: string,
+      keyPrefix: "pam" | "recent",
     ) => {
       const isSelected = selectedSet.has(opt.value.toLowerCase());
       const scientificName = scientificNames.get(opt.value.toLowerCase());
@@ -399,7 +423,7 @@ export const LabelSelector: React.FC<Props> = ({
             type="button"
             disabled={chipsDisabled}
             onClick={() => {
-              toggle(opt.value);
+              toggle(opt.value, keyPrefix === "recent");
               if (trimmedQuery && !isSelected) clearSearch();
             }}
             aria-pressed={isSelected}
@@ -512,6 +536,25 @@ export const LabelSelector: React.FC<Props> = ({
             suffix={labelsLoading ? <Spin size="small" /> : null}
             allowClear
           />
+        </div>
+
+        {/* ── Recent: labels this participant used last, newest first. Fixed
+            to one chip-row of height, even when empty, because the label
+            panel's height sizes the spectrogram. Chips that would wrap onto a
+            second line are clipped; they are all in the full list below. ── */}
+        <div className="shrink-0 flex items-start gap-2 h-6.5">
+          <span className="shrink-0 leading-6.5 text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
+            Recent
+          </span>
+          {recentOptions.length > 0 ? (
+            <div className="flex-1 min-w-0 h-full flex flex-wrap gap-1.5 overflow-hidden">
+              {recentOptions.map((opt) => renderQuickChip(opt, "recent"))}
+            </div>
+          ) : (
+            <span className="leading-6.5 text-fs-11 text-gray-400 italic truncate">
+              Labels you use will appear here
+            </span>
+          )}
         </div>
 
         {/* ── Header: count + transient status (fixed row, no layout shift) ── */}

@@ -15,7 +15,8 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { Tooltip, Button } from "antd";
+import { Tooltip, Button, Tag } from "antd";
+import { AudioOutlined } from "@ant-design/icons";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
   ProjectionView,
@@ -26,7 +27,7 @@ import {
 import { PredictionFeed } from "../../components/al/PredictionFeed";
 import { SnippetHeader } from "./SnippetHeader";
 import { SortPanel } from "./SortPanel";
-import { defaultSortFields } from "./sortPanelHelpers";
+import { defaultSortFields, makeSortFieldId } from "./sortPanelHelpers";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import type { SortField } from "../../types/sort";
@@ -43,27 +44,44 @@ type WorkspaceProps = {
   onFindSimilar?: (snippetId: number) => void;
   /** Canonical explore filters shared by the feed, histograms and projection. */
   exploreFilters: ExploreFilters;
-  /**
-   * Feed action button ("Generate Feed" / "Edit Feed", opens the inference
-   * config modal) — lives on the feed side. Hidden when `onFeedAction` is unset.
-   */
-  feedActionLabel?: string;
-  feedActionLoading?: boolean;
-  feedActionDisabled?: boolean;
-  onFeedAction?: () => void;
+  /** Whether to render the feed action button at all (hidden once a feed exists). */
+  showFeedAction?: boolean;
+  /** Feed action button label — lives on the feed side. */
+  feedActionLabel: string;
+  feedActionLoading: boolean;
+  feedActionDisabled: boolean;
+  onFeedAction: () => void;
   quickLabels: string[];
   quickLabelsLoading: boolean;
+  /** Species chosen in "Find species" (shared with the toolbar and sidebar). */
+  focusSpecies?: string[];
+  /** Species the active model can score; gates the legend shortcut. */
+  focusableSpecies?: ReadonlySet<string>;
+  /** Updates "Find species"; `source` records which control changed it. */
+  onFocusSpeciesChange?: (species: string[], source: string) => void;
+  /** Anchor snippet of the active "Find similar" search, or null. */
+  similarTo?: number | null;
+  /** Ends the "Find similar" search; `source` records which control did it. */
+  onClearSimilar?: (source: string) => void;
 };
+
+const NO_FOCUS: string[] = [];
 
 export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
   exploreFilters,
+  showFeedAction = true,
   feedActionLabel,
   feedActionLoading,
   feedActionDisabled,
   onFeedAction,
   quickLabels,
   quickLabelsLoading,
+  focusSpecies = NO_FOCUS,
+  focusableSpecies,
+  onFocusSpeciesChange,
+  similarTo = null,
+  onClearSimilar,
 }) => {
   const phase = usePhaseConfig();
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
@@ -160,16 +178,124 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     setSortFields(defaultSortFields(phase.sort.nonModel, phase.sort.model));
   }
 
+  // "Find species" ranks by the species' confidence: starting a focus switches
+  // the feed to Confidence (high → low) so the likeliest snippets come first,
+  // and clearing it restores the sort the user had before. Changing the chosen
+  // species while focused keeps whatever sort is active (including manual
+  // changes). Same "adjust state during render" pattern as the phase reset.
+  const focusKey = focusSpecies.join("\u0000");
+  const [prevFocusKey, setPrevFocusKey] = useState(focusKey);
+  const [sortBeforeFocus, setSortBeforeFocus] = useState<SortField[] | null>(
+    null,
+  );
+  if (focusKey !== prevFocusKey) {
+    const wasFocused = prevFocusKey !== "";
+    const isFocused = focusKey !== "";
+    setPrevFocusKey(focusKey);
+    if (phase.sort.model && !phase.sort.disabled) {
+      if (!wasFocused && isFocused) {
+        setSortBeforeFocus(sortFields);
+        setSortFields([
+          { id: makeSortFieldId(), property: "confidence", direction: "desc" },
+        ]);
+      } else if (wasFocused && !isFocused && sortBeforeFocus) {
+        setSortFields(sortBeforeFocus);
+        setSortBeforeFocus(null);
+      }
+    }
+  }
+
+  // "Find similar" works the same way: starting a search ranks the feed by
+  // similarity (closest first) and ending it restores the earlier sort. Moving
+  // the anchor to another snippet keeps whatever sort is active. The
+  // Similarity chip only exists during a search, so it is always dropped at
+  // the end, even when there was no earlier sort to restore.
+  const similarityActive = similarTo !== null;
+  const [prevSimilarityActive, setPrevSimilarityActive] =
+    useState(similarityActive);
+  const [sortBeforeSimilar, setSortBeforeSimilar] = useState<
+    SortField[] | null
+  >(null);
+  if (similarityActive !== prevSimilarityActive) {
+    setPrevSimilarityActive(similarityActive);
+    if (similarityActive) {
+      if (!phase.sort.disabled) {
+        setSortBeforeSimilar(sortFields);
+        setSortFields([
+          { id: makeSortFieldId(), property: "similarity", direction: "desc" },
+        ]);
+      }
+    } else {
+      setSortFields(
+        (sortBeforeSimilar ?? sortFields).filter(
+          (f) => f.property !== "similarity",
+        ),
+      );
+      setSortBeforeSimilar(null);
+    }
+  }
+
+  const handleLegendSpeciesToggle = useCallback(
+    (label: string) => {
+      if (!onFocusSpeciesChange) return;
+      onFocusSpeciesChange(
+        focusSpecies.includes(label)
+          ? focusSpecies.filter((s) => s !== label)
+          : [...focusSpecies, label],
+        "projection_legend",
+      );
+    },
+    [focusSpecies, onFocusSpeciesChange],
+  );
+
+  const focusChipLabel =
+    focusSpecies.length === 1
+      ? focusSpecies[0]
+      : `${focusSpecies.length} species`;
+
   const rightPanel = (
     <div
       data-tour="feed"
       className="h-full flex flex-col overflow-hidden bg-[#f7fafc]"
     >
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-100 bg-white">
-        <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
-          Feed
-        </h2>
-        {onFeedAction && (
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
+            Feed
+          </h2>
+          {focusSpecies.length > 0 && (
+            <Tooltip title={focusSpecies.join(", ")}>
+              <Tag
+                color="blue"
+                closable={!!onFocusSpeciesChange}
+                onClose={(e) => {
+                  e.preventDefault();
+                  onFocusSpeciesChange?.([], "feed_chip");
+                }}
+                className="m-0 max-w-[260px] truncate text-xs"
+              >
+                Showing likely: {focusChipLabel}
+              </Tag>
+            </Tooltip>
+          )}
+          {similarityActive && (
+            <Tooltip title="Showing the 500 snippets that sound most like this one. Your filters still apply.">
+              <Tag
+                color="purple"
+                icon={<AudioOutlined />}
+                closable={!!onClearSimilar}
+                onClose={(e) => {
+                  e.preventDefault();
+                  onClearSimilar?.("feed_chip");
+                }}
+                className="m-0 text-xs"
+              >
+                Similar to #{similarTo}
+              </Tag>
+            </Tooltip>
+          )}
+        </div>
+        {showFeedAction && (
           <Button
             type="primary"
             size="small"
@@ -187,6 +313,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         allowNonModel={phase.sort.nonModel}
         allowModel={phase.sort.model}
         disabled={phase.sort.disabled}
+        similarityActive={similarityActive}
       />
       <SnippetHeader onFindSimilar={onFindSimilar} />
       <div className="flex-1 overflow-hidden">
@@ -297,6 +424,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               onProjectionMethodChange={setProjMethod}
               onThumbnailData={handleThumbnailData}
               exploreFilters={exploreFilters}
+              focusSpecies={focusSpecies}
+              focusableSpecies={focusableSpecies}
+              onLegendSpeciesToggle={
+                onFocusSpeciesChange ? handleLegendSpeciesToggle : undefined
+              }
             />
           </div>
         </div>

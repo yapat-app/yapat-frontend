@@ -442,6 +442,12 @@ export interface QuickLabelEntry {
   owned: boolean;
 }
 
+/** A label the caller applied in their latest annotations on a dataset. */
+export interface RecentLabel {
+  label: string;
+  last_used_at: string;
+}
+
 export interface QuickLabelEntryCreate {
   taxon_id: string;
   display_name: string;
@@ -482,10 +488,40 @@ export interface Dataset {
   reference_metadata_path?: string | null;
   /** Newest pending/running embedding job (null when none is in flight). */
   active_embedding_job?: ActiveEmbeddingJob | null;
+  /**
+   * Queued, running or failed scan (null when none). Lets a refresh find a scan
+   * again, since scans have no database row of their own.
+   */
+  active_scan?: ScanProgress | null;
   /** Running "add recordings" job (null when none is in flight). */
   active_ingest_job?: ActiveIngestJob | null;
   /** Current (non-dismissed) recordings left with unembedded snippets. */
   embedding_failures?: EmbeddingFailureCounts | null;
+}
+
+export type ScanStage =
+  | "idle"
+  | "queued"
+  | "listing"
+  | "reading"
+  | "saving"
+  | "completed"
+  | "failed";
+
+/** GET /api/datasets/{id}/scan-progress (Redis hash on the backend). */
+export interface ScanProgress {
+  dataset_id: number;
+  stage: ScanStage;
+  /** Files processed in the current stage. */
+  done: number | null;
+  /** Files in the current stage (only the new files on a rescan). */
+  total: number | null;
+  /** Overall progress across stages. */
+  percent: number | null;
+  stalled: boolean;
+  last_update: number | null;
+  error_message: string | null;
+  recordings_created: number | null;
 }
 
 export interface ActiveEmbeddingJob {
