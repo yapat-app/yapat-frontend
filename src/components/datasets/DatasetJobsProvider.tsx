@@ -1,5 +1,5 @@
 /**
- * DatasetJobsProvider — keeps scan / embedding job polling alive for every
+ * DatasetJobsProvider — keeps scan / embedding / add-recordings job polling alive for every
  * dataset in the list, whether or not it is selected or filtered out.
  *
  * The polling hooks, toasts and refetches are the ones DatasetCard used to run
@@ -23,16 +23,21 @@ import {
   fetchAllDatasets,
   fetchReferenceDatasets,
 } from "../../redux/features/datasetSlice";
+import { getAllDatasetAnnotationStats } from "../../redux/features/annotationSlice";
 import { useEmbeddingJobStatus } from "../../hooks/useEmbeddingJobStatus";
 import { useScanStatus } from "../../hooks/useScanStatus";
+import { useIngestJobStatus } from "../../hooks/useIngestJobStatus";
+import { notifyDatasetDataChanged } from "../../explore/datasetRefresh";
 import {
   JobsContext,
+  resolveActiveIngestJobId,
   resolveActiveJobId,
   type JobSnapshot,
 } from "./datasetJobsContext";
 import type {
   Dataset,
   EmbeddingJobProgress,
+  IngestJob,
   ScanProgress,
 } from "../../types";
 
@@ -43,7 +48,7 @@ const DatasetJobWatcher = ({ dataset }: { dataset: Dataset }) => {
   // Reference datasets live in their own list, so refresh the one this
   // dataset is in.
   const isReference = !!dataset.is_reference;
-  const { setStarted, publish } = ctx;
+  const { setStarted, setStartedIngest, setFinishedIngest, publish } = ctx;
 
   // Embedding job tracking. The running job comes from GET /datasets
   // (`active_embedding_job`), which is how a refresh rediscovers it;
@@ -96,9 +101,54 @@ const DatasetJobWatcher = ({ dataset }: { dataset: Dataset }) => {
     onScanFinished,
   );
 
+  // "Add recordings" job tracking, same pattern as embeddings: the running job
+  // comes from `active_ingest_job`; the started id covers the gap until the
+  // refetch.
+  const activeIngestJobId = resolveActiveIngestJobId(
+    dataset,
+    ctx.startedIngest[id] ?? null,
+  );
+  const onIngestFinished = useCallback(
+    (job: IngestJob) => {
+      setStartedIngest(id, null);
+      setFinishedIngest(id, job);
+      if (job.status === "completed") {
+        if (job.summary.scoring_skipped_reason === "scoring_failed") {
+          message.warning(`Recordings added to ${dataset.name}, but scoring failed`);
+        } else {
+          message.success(`Finished adding recordings to ${dataset.name}`);
+        }
+        // The backend already republished the explore layers: a normal
+        // refetch in any open hub for this dataset (here or in another tab).
+        // A run without new files can still score snippets left from an earlier run.
+        // A retry adds no recordings but puts newly embedded snippets in the hub.
+        if (
+          job.summary.recordings_new > 0 ||
+          job.summary.snippets_embedded > 0 ||
+          job.summary.snippets_scored > 0
+        ) {
+          notifyDatasetDataChanged(id);
+        }
+      } else {
+        message.error(`Adding recordings to ${dataset.name} failed`);
+      }
+      // Recording count lives on the dataset, snippet counts in the stats.
+      dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
+      dispatch(getAllDatasetAnnotationStats());
+    },
+    [dataset.name, dispatch, id, isReference, setFinishedIngest, setStartedIngest],
+  );
+  const ingestJob = useIngestJobStatus(id, activeIngestJobId, onIngestFinished);
+
   useEffect(() => {
-    publish(id, { embeddingProgress, etaSeconds, polledScan, scanEtaSeconds });
-  }, [id, publish, embeddingProgress, etaSeconds, polledScan, scanEtaSeconds]);
+    publish(id, {
+      embeddingProgress,
+      etaSeconds,
+      polledScan,
+      scanEtaSeconds,
+      ingestJob,
+    });
+  }, [id, publish, embeddingProgress, etaSeconds, polledScan, scanEtaSeconds, ingestJob]);
 
   return null;
 };
@@ -113,12 +163,36 @@ export const DatasetJobsProvider = ({
 }) => {
   const [started, setStartedState] = useState<Record<number, number | null>>({});
   const [snapshots, setSnapshots] = useState<Record<number, JobSnapshot>>({});
+  const [startedIngest, setStartedIngestState] = useState<
+    Record<number, number | null>
+  >({});
+  const [finishedIngest, setFinishedIngestState] = useState<
+    Record<number, IngestJob | null>
+  >({});
 
   const setStarted = useCallback((datasetId: number, jobId: number | null) => {
     setStartedState((prev) =>
       prev[datasetId] === jobId ? prev : { ...prev, [datasetId]: jobId },
     );
   }, []);
+
+  const setStartedIngest = useCallback(
+    (datasetId: number, jobId: number | null) => {
+      setStartedIngestState((prev) =>
+        prev[datasetId] === jobId ? prev : { ...prev, [datasetId]: jobId },
+      );
+    },
+    [],
+  );
+
+  const setFinishedIngest = useCallback(
+    (datasetId: number, job: IngestJob | null) => {
+      setFinishedIngestState((prev) =>
+        prev[datasetId] === job ? prev : { ...prev, [datasetId]: job },
+      );
+    },
+    [],
+  );
 
   const publish = useCallback((datasetId: number, next: JobSnapshot) => {
     setSnapshots((prev) => {
@@ -128,7 +202,8 @@ export const DatasetJobsProvider = ({
         cur.embeddingProgress === next.embeddingProgress &&
         cur.etaSeconds === next.etaSeconds &&
         cur.polledScan === next.polledScan &&
-        cur.scanEtaSeconds === next.scanEtaSeconds
+        cur.scanEtaSeconds === next.scanEtaSeconds &&
+        cur.ingestJob === next.ingestJob
       ) {
         return prev;
       }
@@ -137,8 +212,26 @@ export const DatasetJobsProvider = ({
   }, []);
 
   const value = useMemo(
-    () => ({ started, snapshots, setStarted, publish }),
-    [started, snapshots, setStarted, publish],
+    () => ({
+      started,
+      snapshots,
+      setStarted,
+      startedIngest,
+      finishedIngest,
+      setStartedIngest,
+      setFinishedIngest,
+      publish,
+    }),
+    [
+      started,
+      snapshots,
+      setStarted,
+      startedIngest,
+      finishedIngest,
+      setStartedIngest,
+      setFinishedIngest,
+      publish,
+    ],
   );
 
   return (

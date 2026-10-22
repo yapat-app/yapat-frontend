@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { recordingApi } from "../../services/api";
+import { onDatasetDataChanged, useDatasetDataEpoch } from "../../explore/datasetRefresh";
 
 const PAGE_SIZE = 1000;
 // Safety valve against a misbehaving backend — no real dataset has anywhere
@@ -51,6 +52,9 @@ export function invalidateRecordingMetadataCache(datasetId?: number): void {
   if (datasetId === undefined) scanCache.clear();
   else scanCache.delete(datasetId);
 }
+
+// Recordings added to a dataset (add-recordings job) need a fresh scan too.
+onDatasetDataChanged((datasetId) => invalidateRecordingMetadataCache(datasetId));
 
 function scanRecordingMetadata(datasetId: number): Promise<Map<number, RecordingMetadata>> {
   const cached = scanCache.get(datasetId);
@@ -115,6 +119,7 @@ export function useRecordingMetadata(datasetId: number | null): RecordingMetadat
   // on the very first render too — not just on later dataset switches.
   const [resolvedDatasetId, setResolvedDatasetId] = useState<number | null>(null);
   const loading = datasetId !== null && datasetId !== resolvedDatasetId;
+  const dataEpoch = useDatasetDataEpoch(datasetId);
 
   useEffect(() => {
     if (datasetId === null) return;
@@ -158,7 +163,8 @@ export function useRecordingMetadata(datasetId: number | null): RecordingMetadat
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [datasetId]);
+    // dataEpoch: recordings were added; the previous map stays shown until the rescan lands.
+  }, [datasetId, dataEpoch]);
 
   return { byRecordingId, loading };
 }

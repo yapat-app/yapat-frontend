@@ -18,6 +18,7 @@ import type {
   ExploreViewport,
 } from "../types/explore";
 import { useExploreQuery, type ExploreQueryState } from "./useExploreQuery";
+import { onDatasetDataChanged, useDatasetDataEpoch } from "./datasetRefresh";
 
 interface PointsEntry {
   promise: Promise<ExploreProjectionPoints>;
@@ -27,16 +28,22 @@ interface PointsEntry {
 const pointsCache = new Map<string, PointsEntry>();
 const MAX_POINTS_ENTRIES = 12;
 
-function pointsKey(scope: ExploreScope, method: ExploreProjectionMethod): string {
-  return `${scope.dataset_id}:${scope.snippet_set_id}:${method}`;
+// `epoch` (datasetRefresh) changes when snippets are added to the dataset.
+function pointsKey(
+  scope: ExploreScope,
+  method: ExploreProjectionMethod,
+  epoch: number,
+): string {
+  return `${scope.dataset_id}:${scope.snippet_set_id}:${method}:${epoch}`;
 }
 
 function loadPoints(
   scope: ExploreScope,
   method: ExploreProjectionMethod,
+  epoch: number,
   onBuilding?: () => void,
 ): Promise<ExploreProjectionPoints> {
-  const key = pointsKey(scope, method);
+  const key = pointsKey(scope, method, epoch);
   const existing = pointsCache.get(key);
   if (existing) return existing.promise;
   const entry: PointsEntry = {
@@ -62,16 +69,27 @@ function loadPoints(
   return entry.promise;
 }
 
-/** Drop cached points (e.g. after the user regenerates projections). */
-export function invalidateExplorePoints(scope?: ExploreScope | null): void {
+/**
+ * Drop cached points (e.g. after the user regenerates projections). Without a
+ * snippet set, drops every snippet set of the dataset.
+ */
+export function invalidateExplorePoints(
+  scope?: Pick<ExploreScope, "dataset_id"> & Partial<Pick<ExploreScope, "snippet_set_id">> | null,
+): void {
   if (!scope) {
     pointsCache.clear();
     return;
   }
+  const prefix =
+    scope.snippet_set_id != null
+      ? `${scope.dataset_id}:${scope.snippet_set_id}:`
+      : `${scope.dataset_id}:`;
   for (const key of [...pointsCache.keys()]) {
-    if (key.startsWith(`${scope.dataset_id}:${scope.snippet_set_id}:`)) pointsCache.delete(key);
+    if (key.startsWith(prefix)) pointsCache.delete(key);
   }
 }
+
+onDatasetDataChanged((datasetId) => invalidateExplorePoints({ dataset_id: datasetId }));
 
 export interface ProjectionPointsState {
   points: ExploreProjectionPoints | null;
@@ -86,7 +104,8 @@ export function useExploreProjectionPoints(
   method: ExploreProjectionMethod,
   enabled: boolean,
 ): ProjectionPointsState {
-  const key = scope && enabled ? pointsKey(scope, method) : null;
+  const epoch = useDatasetDataEpoch(scope ? scope.dataset_id : null);
+  const key = scope && enabled ? pointsKey(scope, method, epoch) : null;
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<{
     key: string | null;
@@ -103,7 +122,7 @@ export function useExploreProjectionPoints(
       setState({ key, points: cached, building: false, error: null });
       return;
     }
-    loadPoints(scope, method, () => {
+    loadPoints(scope, method, epoch, () => {
       if (!cancelled) setState((prev) => ({ ...prev, key, building: true }));
     })
       .then((points) => {

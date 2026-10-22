@@ -1229,6 +1229,7 @@ const alSlice = createSlice({
             checkpoint_id: fb.auto_retrain_checkpoint_id ?? null,
             status: "PENDING",
             message: `Auto-retrain job ${fb.auto_retrain_job_id} dispatched`,
+            waiting_for_ingest_job_id: fb.retrain_waiting_for_ingest_job_id ?? null,
           };
           state.lastRetrainJob = null;
         } else {
@@ -1395,3 +1396,17 @@ export const {
 
 export { needsServerRestore };
 export default alSlice.reducer;
+
+/**
+ * Add-recordings job the in-flight retrain waits for, or null. The backend
+ * holds a retrain (PENDING) while recordings are being added and starts it
+ * when that run ends; the latest poll wins over the dispatch response.
+ */
+export const selectRetrainWaitingForIngest = (state: { al: ALState }): number | null => {
+  const al = state.al;
+  if (!al.retrainLoading) return null;
+  const waiting = al.lastRetrainJob
+    ? al.lastRetrainJob.waiting_for_ingest_job_id
+    : al.lastRetrainDispatch?.waiting_for_ingest_job_id;
+  return waiting ?? null;
+};

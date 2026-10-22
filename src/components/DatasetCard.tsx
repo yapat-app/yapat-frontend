@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   Dataset,
   EmbeddingJobProgress,
+  IngestJob,
   QuickLabel,
   ScanProgress,
 } from "../types";
@@ -12,13 +13,24 @@ import { EmbeddingProgressPanel } from "./EmbeddingProgressPanel";
 import { useEmbeddingJobStatus } from "../hooks/useEmbeddingJobStatus";
 import { ScanProgressPanel } from "./ScanProgressPanel";
 import { useScanStatus } from "../hooks/useScanStatus";
+import { useIngestJobStatus } from "../hooks/useIngestJobStatus";
+import { IngestProgressPanel } from "./IngestProgressPanel";
+import { AddRecordingsModal } from "./AddRecordingsModal";
+import { EmbeddingFailuresNotice } from "./EmbeddingFailuresNotice";
 import {
   fetchAllDatasets,
   fetchReferenceDatasets,
 } from "../redux/features/datasetSlice";
+import { getAllDatasetAnnotationStats } from "../redux/features/annotationSlice";
+import { notifyDatasetDataChanged } from "../explore/datasetRefresh";
 import { DatasetReferencePools } from "./DatasetReferencePools";
-import { Button, Tag, Tooltip, message } from "antd";
-import { ThunderboltOutlined, TableOutlined } from "@ant-design/icons";
+import { Button, Progress, Tag, Tooltip, message } from "antd";
+import {
+  ThunderboltOutlined,
+  TableOutlined,
+  FolderAddOutlined,
+  LoadingOutlined,
+} from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { usePhaseConfig } from "../studyPhases";
@@ -101,6 +113,73 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   const scanFailed = scanProgress?.stage === "failed";
   const scanning = activeScan != null && !scanFailed;
 
+  // "Add recordings" job tracking, same pattern as embeddings: the running job
+  // comes from `active_ingest_job`; `startedIngestJobId` covers the gap until
+  // the refetch. A finished job is kept to show its summary or error until
+  // dismissed, because the refetch clears `active_ingest_job`.
+  const canManage = isAdmin || user?.role === "team_owner";
+  const [addingRecordings, setAddingRecordings] = useState(false);
+  const [startedIngestJobId, setStartedIngestJobId] = useState<number | null>(null);
+  const [finishedIngestJob, setFinishedIngestJob] = useState<IngestJob | null>(null);
+  // A job just started here wins over the dataset's (possibly stale) active
+  // job: starting again over a stalled job makes the backend replace it.
+  const activeIngestJobId =
+    startedIngestJobId ?? dataset.active_ingest_job?.id ?? null;
+  const onIngestFinished = useCallback(
+    (job: IngestJob) => {
+      setStartedIngestJobId(null);
+      setFinishedIngestJob(job);
+      if (job.status === "completed") {
+        if (job.summary.scoring_skipped_reason === "scoring_failed") {
+          message.warning(`Recordings added to ${dataset.name}, but scoring failed`);
+        } else {
+          message.success(`Finished adding recordings to ${dataset.name}`);
+        }
+        // The backend already republished the explore layers: a normal
+        // refetch in any open hub for this dataset (here or in another tab).
+        // A run without new files can still score snippets left from an earlier run.
+        // A retry adds no recordings but puts newly embedded snippets in the hub.
+        if (
+          job.summary.recordings_new > 0 ||
+          job.summary.snippets_embedded > 0 ||
+          job.summary.snippets_scored > 0
+        ) {
+          notifyDatasetDataChanged(Number(dataset.id));
+        }
+      } else {
+        message.error(`Adding recordings to ${dataset.name} failed`);
+      }
+      // Recording count lives on the dataset, snippet counts in the stats.
+      dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
+      dispatch(getAllDatasetAnnotationStats());
+    },
+    [dataset.id, dataset.name, dispatch, isReference],
+  );
+  const ingestJob = useIngestJobStatus(
+    Number(dataset.id),
+    activeIngestJobId,
+    onIngestFinished,
+  );
+  const ingestRunning =
+    activeIngestJobId != null &&
+    !(ingestJob && (ingestJob.status === "completed" || ingestJob.status === "failed"));
+  const shownIngestJob = ingestRunning ? ingestJob : finishedIngestJob;
+  // The backend replaces a stalled job when a new one is started, so allow it.
+  const ingestStalled = ingestRunning && Boolean(ingestJob?.stalled);
+  const handleIngestStarted = (job: IngestJob, attached: boolean) => {
+    setFinishedIngestJob(null);
+    setStartedIngestJobId(job.job_id);
+    if (attached) {
+      message.info(`A job is already running for ${dataset.name}; showing it`);
+    } else if (job.mode === "retry_failed") {
+      message.info(`Retrying failed recordings for ${dataset.name}`);
+    } else {
+      message.info(`Adding recordings to ${dataset.name}`);
+    }
+    // Picks up `active_ingest_job`, so the progress survives a refresh.
+    dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
+  };
+
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
   const [managingMetadata, setManagingMetadata] = useState(false);
@@ -117,6 +196,23 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
   };
 
   const datasetTypeLabel = (dataset.dataset_type ?? "PAM").replaceAll("_", " ");
+
+  // Recordings with location + date + time: a ring on the Metadata button, numbers on hover. Hidden
+  // when the backend didn't compute it (null) or there are no recordings.
+  const metadataCoverage = (() => {
+    const total = dataset.recording_count ?? 0;
+    const withMeta = dataset.recordings_with_metadata;
+    if (withMeta == null || total <= 0) return null;
+    const complete = withMeta >= total;
+    // Floor so a partial dataset never reads as 100%.
+    const percent = complete ? 100 : Math.floor((withMeta / total) * 100);
+    const fmt = new Intl.NumberFormat();
+    return {
+      complete,
+      percent,
+      label: `${fmt.format(withMeta)} of ${fmt.format(total)}`,
+    };
+  })();
 
   const stats = datasetAnnotations.datasets?.find(
     (d: any) => Number(d.dataset_id) === Number(dataset.id),
@@ -227,14 +323,71 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
                   datasetId={dataset.id}
                   disabled={!statsReady || stats.annotated_snippets < 1}
                 />
-                <Button
-                  icon={<TableOutlined />}
-                  onClick={() => setManagingMetadata(true)}
-                  title="Download the metadata template or upload metadata for this dataset's recordings"
+                <Tooltip
+                  title={
+                    metadataCoverage ? (
+                      <>
+                        <div className="font-medium">
+                          Metadata coverage: {metadataCoverage.percent}%
+                        </div>
+                        <div>
+                          {metadataCoverage.label} recordings have location, date and time.
+                        </div>
+                        <div className="mt-1 opacity-80">
+                          {metadataCoverage.complete
+                            ? "Download the template or re-upload metadata."
+                            : "Upload a metadata CSV to fill in the rest."}
+                        </div>
+                      </>
+                    ) : (
+                      "Download the metadata template or upload metadata for this dataset's recordings"
+                    )
+                  }
                 >
-                  Metadata
-                </Button>
+                  <Button
+                    icon={<TableOutlined />}
+                    onClick={() => setManagingMetadata(true)}
+                    aria-label={
+                      metadataCoverage
+                        ? `Metadata, ${metadataCoverage.percent}% of recordings covered`
+                        : "Metadata"
+                    }
+                  >
+                    Metadata
+                    {metadataCoverage && (
+                      <Progress
+                        type="circle"
+                        size={16}
+                        percent={metadataCoverage.percent}
+                        showInfo={false}
+                        strokeWidth={14}
+                        strokeColor={metadataCoverage.complete ? "#059669" : "#d97706"}
+                        className="ml-0.5"
+                      />
+                    )}
+                  </Button>
+                </Tooltip>
               </>
+            )}
+            {canManage && dataset.is_ready_for_feed && (
+              <Button
+                icon={
+                  ingestRunning && !ingestStalled ? <LoadingOutlined /> : <FolderAddOutlined />
+                }
+                disabled={(ingestRunning && !ingestStalled) || activeJobId != null || scanning}
+                onClick={() => setAddingRecordings(true)}
+                title={
+                  ingestStalled
+                    ? "The current job looks stuck; starting again replaces it"
+                    : "Add new audio files from the server folder to this dataset"
+                }
+              >
+                {ingestStalled
+                  ? "Restart adding recordings"
+                  : ingestRunning
+                    ? "Adding recordings…"
+                    : "Add recordings"}
+              </Button>
             )}
             <GenerateEmbeddings
               dataset={dataset}
@@ -285,6 +438,32 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
           </div>
         )}
 
+        {(ingestRunning || finishedIngestJob) && (
+          <div className="mb-3">
+            <IngestProgressPanel
+              job={shownIngestJob}
+              onUploadMetadata={isReference ? undefined : () => setManagingMetadata(true)}
+              onDismiss={ingestRunning ? undefined : () => setFinishedIngestJob(null)}
+            />
+          </div>
+        )}
+
+        {/* From the dataset itself, so it survives a refresh; hidden while a job runs. */}
+        {!ingestRunning && (dataset.embedding_failures?.recordings ?? 0) > 0 && (
+          <div className="mb-3">
+            <EmbeddingFailuresNotice
+              dataset={dataset}
+              counts={dataset.embedding_failures!}
+              canManage={canManage}
+              busy={ingestRunning}
+              onRetryStarted={handleIngestStarted}
+              onDismissed={() =>
+                dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets())
+              }
+            />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
           <Tooltip title="Tap to view files">
             <div
@@ -325,7 +504,18 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
         dataset={dataset}
         open={managingMetadata}
         onClose={() => setManagingMetadata(false)}
+        // Refreshes `recordings_with_metadata` for the coverage badge.
+        onImported={() => dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets())}
       />
+
+      {canManage && (
+        <AddRecordingsModal
+          dataset={dataset}
+          open={addingRecordings}
+          onClose={() => setAddingRecordings(false)}
+          onStarted={handleIngestStarted}
+        />
+      )}
     </div>
   );
 };

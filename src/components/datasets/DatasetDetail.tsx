@@ -11,10 +11,12 @@
  */
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Button, Tooltip } from "antd";
+import { Button, Tooltip, message } from "antd";
 import {
   CheckSquareOutlined,
+  FolderAddOutlined,
   InfoCircleOutlined,
+  LoadingOutlined,
   RightOutlined,
   ScissorOutlined,
   SettingOutlined,
@@ -23,13 +25,20 @@ import {
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import type { Dataset, QuickLabel } from "../../types";
-import { useAppSelector } from "../../hooks";
+import type { Dataset, IngestJob, QuickLabel } from "../../types";
+import { useAppDispatch, useAppSelector } from "../../hooks";
+import {
+  fetchAllDatasets,
+  fetchReferenceDatasets,
+} from "../../redux/features/datasetSlice";
 import { usePhaseConfig } from "../../studyPhases";
 import { datasetApi } from "../../services/api";
 import { GenerateEmbeddings } from "../GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "../EmbeddingProgressPanel";
 import { ScanProgressPanel } from "../ScanProgressPanel";
+import { IngestProgressPanel } from "../IngestProgressPanel";
+import { EmbeddingFailuresNotice } from "../EmbeddingFailuresNotice";
+import { AddRecordingsModal } from "../AddRecordingsModal";
 import { DatasetSpectrogramSettings } from "../DatasetSpectrogramSettings";
 import { DatasetReferencePools } from "../DatasetReferencePools";
 import { DatasetQuickLabelsModal } from "../DatasetQuickLabelsModal";
@@ -148,6 +157,7 @@ const SETUP_COLS: Record<number, string> = {
 export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const { datasetAnnotations } = useAppSelector((state) => state.annotation);
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
   const { user } = useAppSelector((state) => state.auth);
   const isAdmin = user?.role === "admin";
@@ -161,6 +171,11 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>([]);
   const [managingLabels, setManagingLabels] = useState(false);
   const [managingMetadata, setManagingMetadata] = useState(false);
+  const [addingRecordings, setAddingRecordings] = useState(false);
+
+  // Reference datasets live in their own list, so refresh the one this is in.
+  const refetchDatasets = () =>
+    dispatch(isReference ? fetchReferenceDatasets() : fetchAllDatasets());
 
   useEffect(() => {
     datasetApi
@@ -175,7 +190,31 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
 
   const openFiles = () => navigate(`/datasets/${dataset.id}/files`);
 
+  const handleIngestStarted = (job: IngestJob, attached: boolean) => {
+    jobs.setStartedIngestJobId(job.job_id);
+    if (attached) {
+      message.info(`A job is already running for ${dataset.name}; showing it`);
+    } else if (job.mode === "retry_failed") {
+      message.info(`Retrying failed recordings for ${dataset.name}`);
+    } else {
+      message.info(`Adding recordings to ${dataset.name}`);
+    }
+    // Picks up `active_ingest_job`, so the progress survives a refresh.
+    refetchDatasets();
+  };
+
   const datasetTypeLabel = (dataset.dataset_type ?? "PAM").replaceAll("_", " ");
+
+  // Recordings with location + date + time, shown on the Metadata tile. Null
+  // when the backend didn't compute it or there are no recordings.
+  const metadataCoverage = (() => {
+    const total = dataset.recording_count ?? 0;
+    const withMeta = dataset.recordings_with_metadata;
+    if (withMeta == null || total <= 0) return null;
+    const complete = withMeta >= total;
+    // Floor so a partial dataset never reads as 100%.
+    return { complete, percent: complete ? 100 : Math.floor((withMeta / total) * 100) };
+  })();
 
   const stats = datasetAnnotations?.datasets?.find(
     (d) => Number(d.dataset_id) === Number(dataset.id),
@@ -198,6 +237,11 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
     status === "not_found" && !isAdmin ? missingEmbeddingsNote : statusMeta.hint;
 
   const canManage = isAdmin || user?.role === "team_owner";
+  // Adding recordings needs embeddings: new files are embedded and scored
+  // like the existing ones. Not while another job changes the dataset.
+  const showAddRecordings = canManage && !!dataset.is_ready_for_feed;
+  const addRecordingsBusy =
+    (jobs.ingestRunning && !jobs.ingestStalled) || jobs.running || jobs.scanning;
   const setupHint = canManage
     ? "Settings used when annotating this dataset."
     : "Settings used when annotating this dataset. Only admins and team owners can change the spectrogram range.";
@@ -260,7 +304,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             )}
           </div>
 
-          {(!isReference || (isAdmin && status === "not_found")) && (
+          {(!isReference || (isAdmin && status === "not_found") || showAddRecordings) && (
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2.5 sm:w-auto">
               {/* Generate Embeddings (admin only): only offered while the
                   embeddings are missing; once they are ready it is gone. */}
@@ -273,6 +317,31 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                   scanFailed={jobs.scanFailed}
                   size="large"
                 />
+              )}
+              {showAddRecordings && (
+                <Button
+                  size="large"
+                  icon={
+                    jobs.ingestRunning && !jobs.ingestStalled ? (
+                      <LoadingOutlined />
+                    ) : (
+                      <FolderAddOutlined />
+                    )
+                  }
+                  disabled={addRecordingsBusy}
+                  onClick={() => setAddingRecordings(true)}
+                  title={
+                    jobs.ingestStalled
+                      ? "The current job looks stuck; starting again replaces it"
+                      : "Add new audio files from the server folder to this dataset"
+                  }
+                >
+                  {jobs.ingestStalled
+                    ? "Restart adding recordings"
+                    : jobs.ingestRunning
+                      ? "Adding recordings…"
+                      : "Add recordings"}
+                </Button>
               )}
               {/* Classic "Generate Feed" (GenerateFeedModal) stays hidden. */}
               {!isReference && (
@@ -311,6 +380,30 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               progress={jobs.embeddingProgress}
               etaSeconds={jobs.etaSeconds}
               recordingCount={dataset.recording_count}
+            />
+          </div>
+        )}
+
+        {(jobs.ingestRunning || jobs.finishedIngestJob) && (
+          <div className="mt-4">
+            <IngestProgressPanel
+              job={jobs.shownIngestJob}
+              onUploadMetadata={isReference ? undefined : () => setManagingMetadata(true)}
+              onDismiss={jobs.ingestRunning ? undefined : jobs.dismissFinishedIngest}
+            />
+          </div>
+        )}
+
+        {/* From the dataset itself, so it survives a refresh; hidden while a job runs. */}
+        {!jobs.ingestRunning && (dataset.embedding_failures?.recordings ?? 0) > 0 && (
+          <div className="mt-4">
+            <EmbeddingFailuresNotice
+              dataset={dataset}
+              counts={dataset.embedding_failures!}
+              canManage={canManage}
+              busy={jobs.ingestRunning}
+              onRetryStarted={handleIngestStarted}
+              onDismissed={refetchDatasets}
             />
           </div>
         )}
@@ -452,6 +545,16 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                 <p className="m-0 text-xs text-slate-500 font-ibm-sans">
                   Per-file details for{" "}
                   {(dataset.recording_count ?? 0).toLocaleString()} recordings
+                  {metadataCoverage && (
+                    <span
+                      className={
+                        metadataCoverage.complete ? "text-emerald-700" : "text-amber-700"
+                      }
+                      title="Recordings with location, date and time"
+                    >
+                      {" "}· {metadataCoverage.percent}% complete
+                    </span>
+                  )}
                 </p>
               </div>
               <RightOutlined className="text-slate-400" />
@@ -471,7 +574,18 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
         dataset={dataset}
         open={managingMetadata}
         onClose={() => setManagingMetadata(false)}
+        // Refreshes `recordings_with_metadata` for the coverage note.
+        onImported={refetchDatasets}
       />
+
+      {showAddRecordings && (
+        <AddRecordingsModal
+          dataset={dataset}
+          open={addingRecordings}
+          onClose={() => setAddingRecordings(false)}
+          onStarted={handleIngestStarted}
+        />
+      )}
     </div>
   );
 };

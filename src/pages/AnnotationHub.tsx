@@ -21,6 +21,7 @@ import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import {
   clearSavedFeed,
+  selectRetrainWaitingForIngest,
   setVisibilityRangeFor,
 } from "../redux/features/alSlice";
 import type { AnnotateMode } from "./annotationHub/types";
@@ -29,6 +30,8 @@ import { useHubALSession } from "./annotationHub/useHubALSession";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
+import { useDatasetActivity } from "./annotationHub/useDatasetActivity";
+import { HubDatasetActivityPanel, HubIngestBanner } from "./annotationHub/HubDatasetActivity";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig, STUDY_PHASES, isPhaseLocked } from "../studyPhases";
 import {
@@ -122,6 +125,14 @@ export const AnnotationHub: React.FC = () => {
     searchParams,
     setSearchParams,
     user,
+  );
+  const isManager = user?.role === "admin" || user?.role === "team_owner";
+  const activityDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  // A retrain the backend holds until an add-recordings run on this dataset ends.
+  const retrainWaitingForIngest = useAppSelector(selectRetrainWaitingForIngest);
+  const datasetActivity = useDatasetActivity(
+    activityDatasetId === null ? null : Number(activityDatasetId),
+    retrainWaitingForIngest,
   );
 
   const [mode, setMode] = useState<AnnotateMode>(() => {
@@ -547,9 +558,7 @@ export const AnnotationHub: React.FC = () => {
     );
   }
 
-  // Starting a model (cold start or bootstrap) is for admins and team owners;
-  const isManager = user?.role === "admin" || user?.role === "team_owner";
-
+  // Starting a model (cold start or bootstrap) is for managers (`isManager`).
   // Cold start only: offer "Generate Feed" while the dataset has no model
   // checkpoint (and no feed yet).
   const showFeedAction =
@@ -732,7 +741,25 @@ export const AnnotationHub: React.FC = () => {
               </div>
             )}
 
-            {(al.selectedDatasetId || al.isRestoredFeed) && (
+            {/* Background work on this dataset, shown to every user. Scanning or
+                embedding replaces the workspace (no feed yet); adding recordings
+                only shows a strip, since the dataset stays usable. */}
+            {al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking && (
+              <HubDatasetActivityPanel activity={datasetActivity} isManager={isManager} />
+            )}
+
+            {al.selectedDatasetId && datasetActivity.kind === "ingesting" && (
+              <HubIngestBanner
+                activity={datasetActivity}
+                isManager={isManager}
+                retrainWaiting={retrainWaitingForIngest !== null}
+                // Cold start: the dataset has no model yet.
+                firstModelWaiting={al.checkpointsLoaded && al.checkpoints.length === 0}
+              />
+            )}
+
+            {(al.selectedDatasetId || al.isRestoredFeed) &&
+              !(al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking) && (
               <Workspace
                 onFindSimilar={
                   findSimilarEnabled ? handleFindSimilar : undefined

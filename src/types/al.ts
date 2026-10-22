@@ -183,6 +183,8 @@ export interface FeedbackResponse {
   /** Present when backend auto-retrain was dispatched from /feedback */
   auto_retrain_checkpoint_id?: number | null;
   auto_retrain_job_id?: number | null;
+  /** Set when that retrain waits for an add-recordings run on the dataset to end. */
+  retrain_waiting_for_ingest_job_id?: number | null;
 }
 
 export interface PAMFeedbackCountResponse {
@@ -239,6 +241,8 @@ export interface PAMRetrainJobDispatch {
   checkpoint_id: number | null;
   status: PAMRetrainStatusValue;
   message: string;
+  /** Add-recordings job this retrain waits for (stays PENDING until it ends). */
+  waiting_for_ingest_job_id?: number | null;
 }
 
 /** POST /inference/get-or-create may return this when sync inference fails and a Celery job is enqueued. */
@@ -263,6 +267,9 @@ export interface PAMRetrainJobStatus {
   started_at?: string | null;
   completed_at?: string | null;
   created_at: string;
+  /** Non-null while PENDING because an add-recordings run on the dataset is active;
+   *  becomes null when the run ends and the retrain is dispatched. */
+  waiting_for_ingest_job_id?: number | null;
 }
 
 export interface ALLabeledSnippetsResponse {
