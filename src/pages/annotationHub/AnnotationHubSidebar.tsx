@@ -556,8 +556,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                     className={[
                       "rounded-lg! bg-gray-100! p-0.75!",
                       "[&_.ant-segmented-item]:rounded-md! [&_.ant-segmented-item]:font-ibm-sans",
-                      "[&_.ant-segmented-item-selected]:bg-gray-900! [&_.ant-segmented-item-selected]:text-white! [&_.ant-segmented-item-selected]:shadow-none!",
-                      "[&_.ant-segmented-thumb]:rounded-md! [&_.ant-segmented-thumb]:bg-gray-900!",
+                      "[&_.ant-segmented-item-selected]:bg-gray-900! [&_.ant-segmented-item:has(:checked)]:text-white! [&_.ant-segmented-item]:transition-[color]! [&_.ant-segmented-item]:duration-200! [&_.ant-segmented-item]:delay-100! [&_.ant-segmented-item-selected]:shadow-none!",
+                      "[&_.ant-segmented-thumb]:rounded-md! [&_.ant-segmented-thumb]:bg-gray-900! [&_.ant-segmented-thumb]:shadow-none!",
                     ].join(" ")}
                   />
                 </div>
