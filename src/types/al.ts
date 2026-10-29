@@ -154,6 +154,11 @@ export interface PAMInferenceResult {
   label_scope?: string[] | null;
 }
 
+/** Classifier head the backend trains (`ALModelType` in the backend schema). */
+export type PAMModelType =
+  | "pam_linear_multilabel_classifier"
+  | "pam_mlp_multilabel_classifier";
+
 export interface FeedbackPayload {
   dataset_id: number;
   model_family_name: string;
@@ -164,12 +169,21 @@ export interface FeedbackPayload {
   notes?: string;
   /** If false, backend skips taxonomy resolution + canonical `annotations` writes (faster for study code labels). */
   persist_annotations?: boolean;
+  /**
+   * Bootstrap feedback (no checkpoint yet): the snippet set's embedding model.
+   * Required there; the backend default of 1 is not safe to rely on.
+   */
+  embedding_model_id?: number;
+  /** Bootstrap feedback: head to train for the first model (backend default: linear). */
+  model_type?: PAMModelType;
 }
 
 export interface FeedbackResponse {
   id: number;
   model_family_name: string;
-  model_checkpoint_id: number;
+  /** Null for bootstrap feedback (no checkpoint existed yet). */
+  model_checkpoint_id: number | null;
+  /** Bootstrap: id of the first model when this request trained it. */
   active_checkpoint_id?: number | null;
   snippet_id: number;
   action: FeedbackAction;
@@ -349,6 +363,14 @@ export interface ALState {
   lastRetrainFailed: boolean;
   inferenceLoading: boolean;
   feedbackLoading: boolean;
+  /**
+   * A bootstrap feedback request (no checkpoint yet) is in flight. The one that
+   * reaches the threshold trains the first model synchronously, so no other
+   * label may be sent until it returns.
+   */
+  bootstrapSubmitting: boolean;
+  /** Set when a bootstrap feedback trained the first model; the hub consumes it. */
+  firstModelCheckpointId: number | null;
   retrainLoading: boolean;
   error: string | null;
   lastInferenceAt: string | null; // ISO timestamp of last successful inference

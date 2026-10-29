@@ -62,9 +62,19 @@ export const alApi = {
     return response.data;
   },
 
-  /** POST /api/pam-al/feedback */
-  postFeedback: async (payload: FeedbackPayload): Promise<FeedbackResponse> => {
-    const response = await api.post(`${BASE}/feedback`, payload);
+  /**
+   * POST /api/pam-al/feedback. `timeoutMs` is for bootstrap feedback, whose
+   * threshold-reaching request trains the first model inside the request.
+   */
+  postFeedback: async (
+    payload: FeedbackPayload,
+    timeoutMs?: number,
+  ): Promise<FeedbackResponse> => {
+    const response = await api.post(
+      `${BASE}/feedback`,
+      payload,
+      timeoutMs ? { timeout: timeoutMs } : undefined,
+    );
     return response.data;
   },
 
