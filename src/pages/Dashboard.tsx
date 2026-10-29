@@ -16,6 +16,7 @@ import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { getLoggedInUser } from "../redux/features/authSlice";
 import { canAccessWssed } from "../utils/wssedAccess";
 import { openDocs } from "../constants/docs";
+import { isStudyMode } from "../studyPhases";
 
 interface ServiceCard {
   key: string;
@@ -188,6 +189,10 @@ export const Dashboard: React.FC = () => {
       return false;
     }
     if (card.requiresFocalDatasets && !canAccessWssed(user, allDatasets)) {
+      return false;
+    }
+    // Study logs only exist on study deployments.
+    if (card.key === "study-logs" && !isStudyMode()) {
       return false;
     }
     return true;

@@ -15,7 +15,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { StudyLogsIndex } from "./pages/studyLogs/StudyLogsIndex";
 import { StudyLogsUser } from "./pages/studyLogs/StudyLogsUser";
 import { StudyLogsSession } from "./pages/studyLogs/StudyLogsSession";
-import { StudyPhaseProvider } from "./studyPhases";
+import { StudyPhaseProvider, isStudyMode } from "./studyPhases";
 import { StudyFlowProvider } from "./studyFlow";
 import { LoggerContextBridge } from "./studyLogging";
 import AdminOnlyGuard from "./routes/AdminOnlyGuard";
@@ -80,31 +80,35 @@ function App() {
             }
           />
           <Route path="/documentation" element={<YapatUserManual />} />
-          {/* Admin-only study log viewer */}
-          <Route
-            path="/study-logs"
-            element={
-              <AdminOnlyGuard>
-                <StudyLogsIndex />
-              </AdminOnlyGuard>
-            }
-          />
-          <Route
-            path="/study-logs/:userId"
-            element={
-              <AdminOnlyGuard>
-                <StudyLogsUser />
-              </AdminOnlyGuard>
-            }
-          />
-          <Route
-            path="/study-logs/:userId/:sessionId"
-            element={
-              <AdminOnlyGuard>
-                <StudyLogsSession />
-              </AdminOnlyGuard>
-            }
-          />
+          {/* Admin-only study log viewer; registered only on study deployments. */}
+          {isStudyMode() && (
+            <>
+              <Route
+                path="/study-logs"
+                element={
+                  <AdminOnlyGuard>
+                    <StudyLogsIndex />
+                  </AdminOnlyGuard>
+                }
+              />
+              <Route
+                path="/study-logs/:userId"
+                element={
+                  <AdminOnlyGuard>
+                    <StudyLogsUser />
+                  </AdminOnlyGuard>
+                }
+              />
+              <Route
+                path="/study-logs/:userId/:sessionId"
+                element={
+                  <AdminOnlyGuard>
+                    <StudyLogsSession />
+                  </AdminOnlyGuard>
+                }
+              />
+            </>
+          )}
         </Routes>
       </StudyFlowProvider>
     </StudyPhaseProvider>

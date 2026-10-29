@@ -8,6 +8,8 @@ services:
       - "3000:80"
     environment:
       - VITE_YAPAT_BACKEND_URL=${VITE_YAPAT_BACKEND_URL:-http://localhost:8000}
+      # Public install: study features stay off unless VITE_STUDY_MODE=1.
+      - VITE_STUDY_MODE=${VITE_STUDY_MODE:-0}
       - VITE_STUDY_LOGGING_ENABLED=${VITE_STUDY_LOGGING_ENABLED:-0}
       - VITE_STUDY_PHASE=${VITE_STUDY_PHASE:-}
       - VITE_STUDY_PHASE_LOCK=${VITE_STUDY_PHASE_LOCK:-0}

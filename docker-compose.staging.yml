@@ -10,6 +10,8 @@ services:
       - "3100:80"
     environment:
       - VITE_YAPAT_BACKEND_URL=${VITE_YAPAT_BACKEND_URL:-https://iml-userstudy.ni.dfki.de}
+      # User-study deployment: enables the VITE_STUDY_* settings below.
+      - VITE_STUDY_MODE=${VITE_STUDY_MODE:-1}
       - VITE_STUDY_LOGGING_ENABLED=${VITE_STUDY_LOGGING_ENABLED:-1}
       - VITE_STUDY_PHASE=${VITE_STUDY_PHASE:-P1}
       - VITE_STUDY_PHASE_LOCK=${VITE_STUDY_PHASE_LOCK:-1}

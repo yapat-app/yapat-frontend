@@ -8,6 +8,7 @@
 
 import { STUDY_PHASES, ALL_PHASE_IDS } from "../studyPhases/phases";
 import { isPhaseLocked } from "../studyPhases/PhaseProvider";
+import { isStudyMode } from "../studyPhases/studyMode";
 
 function env(key: string): string | undefined {
   // Runtime override (entrypoint.sh → window.__ENV__) wins over build-time env,
@@ -21,8 +22,12 @@ function parseBool(v: string | undefined): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** Whether the guided study flow runs. Defaults to ON when the phase is locked. */
+/**
+ * Whether the guided study flow runs. Never outside study mode; in study mode
+ * it defaults to ON when the phase is locked.
+ */
 export function isFlowEnabled(): boolean {
+  if (!isStudyMode()) return false;
   const raw = env("VITE_STUDY_FLOW_ENABLED");
   if (raw === undefined || raw === "") return isPhaseLocked();
   return parseBool(raw);
