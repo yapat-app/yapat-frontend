@@ -101,8 +101,12 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const removeLabel = (taxon_id: string) =>
     setLabels((prev) => prev.filter((l) => l.taxon_id !== taxon_id));
 
-  // Lets a GBIF/ENVO pick carry a short code (e.g. "ALYALM") while keeping its
-  // taxon_id, so the label stays linked to the taxonomy.
+  // Lets a local pick carry a short code (e.g. "ALYALM"). GBIF and ENVO names
+  // are strict taxonomy terms and stay as given.
+  const fixedSource = (l: QuickLabel): string | null => {
+    const ns = l.taxon_id.split(":", 1)[0].toLowerCase();
+    return ns === "gbif" ? "GBIF scientific name" : ns === "envo" ? "ENVO term" : null;
+  };
   const renameLabel = (taxon_id: string, display_name: string) =>
     setLabels((prev) =>
       prev.map((l) => (l.taxon_id === taxon_id ? { ...l, display_name } : l)),
@@ -226,8 +230,14 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                     padding: "4px 8px",
                   }}
                 >
-                  {savedIds.has(l.taxon_id) ? (
-                    <Tooltip title={l.taxon_id}>
+                  {savedIds.has(l.taxon_id) || fixedSource(l) ? (
+                    <Tooltip
+                      title={
+                        fixedSource(l) && !savedIds.has(l.taxon_id)
+                          ? `${l.taxon_id} · ${fixedSource(l)}, can't be renamed`
+                          : l.taxon_id
+                      }
+                    >
                       <span
                         style={{
                           fontSize: "var(--text-fs-13)",
