@@ -22,6 +22,7 @@ import type {
 import { postBatch, sendBeaconBatch } from "./loggingApi";
 import { persistBuffer, takeBuffer } from "./queueStorage";
 import { readEnv } from "../utils/runtimeEnv";
+import { isStudyMode } from "../studyPhases/studyMode";
 
 const SESSION_KEY = "yapat_study_session_id";
 
@@ -37,6 +38,8 @@ function parseBool(v: string | undefined): boolean {
 }
 
 function isEnabled(): boolean {
+  // Interaction logging is a study feature; public installs never send events.
+  if (!isStudyMode()) return false;
   // Runtime override (injected by entrypoint.sh into window.__ENV__) takes
   // precedence over the build-time env var so the flag can be toggled without
   // rebuilding the Docker image.

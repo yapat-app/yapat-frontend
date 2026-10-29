@@ -1,7 +1,8 @@
 /**
  * StudyPhaseProvider
  *
- * Resolution priority (highest first):
+ * Outside study mode (see studyMode.ts) the phase is always DEFAULT_PHASE_ID
+ * and cannot be changed. In study mode, resolution priority (highest first):
  *   1. URL query param `?phase=P2.1`        — best for handing participants links
  *   2. localStorage `yapat_study_phase`     — sticky across reloads on the same browser
  *   3. Env var  VITE_STUDY_PHASE             — build-time default per deployment
@@ -16,6 +17,7 @@ import { useSearchParams, useLocation } from "react-router-dom";
 import { DEFAULT_PHASE_ID, STUDY_PHASES, getPhaseConfig } from "./phases";
 import { PhaseContext, type PhaseContextValue } from "./context";
 import { readEnv, parseBoolEnv } from "../utils/runtimeEnv";
+import { isStudyMode } from "./studyMode";
 
 const STORAGE_KEY = "yapat_study_phase";
 
@@ -51,6 +53,8 @@ function getUrlPhaseValue(searchParams: URLSearchParams): string | null {
 }
 
 export function isPhaseLocked(): boolean {
+  // Public installs are always locked, which also hides the phase switcher.
+  if (!isStudyMode()) return true;
   // Runtime override (window.__ENV__) wins over build-time env so the lock can
   // be flipped on the deployed image without a rebuild. See utils/runtimeEnv.
   return parseBoolEnv(readEnv("VITE_STUDY_PHASE_LOCK"));
@@ -66,6 +70,8 @@ function getAllowedPhaseIds(): string[] {
 }
 
 function resolveInitialPhaseId(urlValue: string | null): string {
+  if (!isStudyMode()) return DEFAULT_PHASE_ID;
+
   const envValue = readEnv("VITE_STUDY_PHASE");
   const allowed = getAllowedPhaseIds();
 
@@ -120,7 +126,8 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
   // ?phase= injected into their URLs.
   const isAnnotatePage = pathname === "/annotate";
   useEffect(() => {
-    if (!isPhaseLocked()) return;
+    // Public installs have a single fixed phase, so ?phase= is never written.
+    if (!isStudyMode() || !isPhaseLocked()) return;
     const allowed = getAllowedPhaseIds();
 
     if (
@@ -157,6 +164,7 @@ export const StudyPhaseProvider: React.FC<Props> = ({ children }) => {
   }, [urlValue, phaseId]);
 
   const setPhase = (id: string) => {
+    if (!isStudyMode()) return;
     const locked = isPhaseLocked();
     if (locked) {
       const allowed = getAllowedPhaseIds();

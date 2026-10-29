@@ -6,9 +6,9 @@
 
 import type { PhaseConfig } from "./types";
 
-// Default phase when URL/localStorage/env don't specify one.
-// Note: Deployments may still override this via VITE_STUDY_PHASE.
-export const DEFAULT_PHASE_ID = "P1";
+// The phase public installs always run (see studyMode.ts), and the fallback
+// when a study deployment's URL/localStorage/env don't specify one.
+export const DEFAULT_PHASE_ID = "P5";
 
 const SCORE_ALLOWED_PROPERTIES: PhaseConfig["visualization"]["visibilityFilter"]["allowedProperties"] =
   ["uncertainty", "diversity", "density", "confidence", "composite"];
