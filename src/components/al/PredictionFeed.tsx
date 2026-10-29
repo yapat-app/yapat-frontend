@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks";
 import { recordingApi } from "../../services/api";
 import { PredictionCard } from "./PredictionCard";
 import { FeedbackButtons } from "./FeedbackButtons";
+import { ResizableLabelBar } from "./ResizableLabelBar";
 import { RetrainControl } from "./RetrainControl";
 import { useALSync } from "../../hooks/useALSync";
 import { usePhaseConfig } from "../../studyPhases";
@@ -1358,23 +1359,18 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
         </div>
 
         {/* Sticky label bar — one shared instance for the whole feed, targeting
-            the current snippet. Capped so large quick-label sets scroll inside
-            it instead of squashing the spectrograms.*/}
+            the current snippet. Compact by default so the spectrogram gets most
+            of the height; the handle on its top edge lets the user enlarge it.
+            Large quick-label sets scroll inside it.*/}
         {stickyLabelPrediction && (
-          <div
-            className="shrink-0 flex flex-col overflow-hidden border-t border-gray-100 bg-white px-4 pt-2 pb-3 laptop:px-3!"
-            style={{
-              minHeight: "min(24%, 220px)",
-              maxHeight: "clamp(200px, 34%, 290px)",
-            }}
-          >
+          <ResizableLabelBar className="bg-white">
             <FeedbackButtons
               prediction={stickyLabelPrediction}
               serverLabels={labelsFor(stickyLabelPrediction.snippet_id)}
               quickLabels={quickLabels}
               quickLabelsLoading={quickLabelsLoading}
             />
-          </div>
+          </ResizableLabelBar>
         )}
       </div>
     );
