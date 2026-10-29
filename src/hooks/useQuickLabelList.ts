@@ -16,6 +16,13 @@ import {
 } from "../utils/quickLabelList";
 import { datasetApi } from "../services/api";
 
+// Bumped when a dataset's stored quick labels change (e.g. saved from the
+// hub's Quick Labels dialog) so mounted lists refetch.
+const listeners = new Set<() => void>();
+export function invalidateQuickLabelList() {
+  listeners.forEach((fn) => fn());
+}
+
 export function useQuickLabelList(): { labels: string[]; loading: boolean } {
   const { user } = useAppSelector((s) => s.auth);
   const { usedCheckpointId, selectedDatasetId } = useAppSelector((s) => s.al);
@@ -25,6 +32,14 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
   const [pamSpecies, setPamSpecies] = useState<string[]>([]);
   const [pamLoading, setPamLoading] = useState(true);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const bump = () => setRevision((r) => r + 1);
+    listeners.add(bump);
+    return () => {
+      listeners.delete(bump);
+    };
+  }, []);
 
   const teamId = user?.team_ids?.[0] ?? null;
   useEnsureTeamTaxonomies(teamId, !!user);
@@ -57,7 +72,7 @@ export function useQuickLabelList(): { labels: string[]; loading: boolean } {
 
     void load();
     return () => { cancelled = true; };
-  }, [usedCheckpointId, selectedDatasetId]);
+  }, [usedCheckpointId, selectedDatasetId, revision]);
 
   const taxonomyNames = useMemo(() => {
     const fromNodes = labelNamesFromTaxonomyNodes(

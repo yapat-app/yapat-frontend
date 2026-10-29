@@ -17,6 +17,7 @@ import {
   clearRetrainDispatch,
   resetStaleInferenceBinding,
   requestFeedResume,
+  clearFirstModelCheckpoint,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
 import { useDatasetDataEpoch } from "../../explore/datasetRefresh";
@@ -81,6 +82,8 @@ export function useHubALSession(
     lastInferenceAt,
     lastRetrainDispatch,
     usedCheckpointId,
+    embeddingModelId,
+    firstModelCheckpointId,
   } = useAppSelector((s) => s.al);
   const dataEpoch = useDatasetDataEpoch(
     selectedDatasetId === null ? null : Number(selectedDatasetId),
@@ -897,6 +900,62 @@ export function useHubALSession(
     modelInfo,
     dispatch,
   ]);
+
+  // ── First model from bootstrap feedback ───────────────────────────────────
+  // The feedback request that reached the threshold already trained the model
+  // and ran full inference, so only the payload cache is refreshed
+  // (force_refresh, never force_inference). The new used_checkpoint_id changes
+  // the explore scope, so the feed, histograms and projection switch from the
+  // score-less suggestions view to the model-ranked one.
+  useEffect(() => {
+    if (firstModelCheckpointId === null) return;
+    const newCheckpointId = firstModelCheckpointId;
+    dispatch(clearFirstModelCheckpoint());
+    if (
+      selectedDatasetId === null ||
+      modelFamilyName === null ||
+      snippetSetId === null ||
+      !snippetSets.some((s) => s.id === snippetSetId)
+    ) {
+      return;
+    }
+    const datasetId = selectedDatasetId;
+    // The active-checkpoint sync above must not refresh for it a second time.
+    refreshedForCheckpointRef.current = newCheckpointId;
+    dispatch(
+      setInferenceConfig({
+        modelCheckpointId: newCheckpointId,
+        modelFamilyName,
+        snippetSetId,
+        embeddingModelId:
+          embeddingModelId ??
+          snippetSets.find((s) => s.id === snippetSetId)?.embedding_model_id ??
+          1,
+      }),
+    );
+    dispatch(
+      runInference({
+        model_family_name: modelFamilyName,
+        dataset_id: datasetId,
+        snippet_set_id: snippetSetId,
+        ...buildSuggestionParams(inferenceK, true),
+        force_refresh: true,
+      }),
+    );
+    dispatch(
+      fetchFeedbackCount({ dataset_id: datasetId, model_family_name: modelFamilyName }),
+    );
+    alApi
+      .getCheckpoints(datasetId)
+      .then((updated) => {
+        // Label scope options and the Generate Feed button follow `checkpoints`.
+        setCheckpoints(updated);
+        setCheckpointsDatasetId(datasetId);
+      })
+      .catch(() => {
+        /* the next dataset load refetches them */
+      });
+  }, [firstModelCheckpointId]);
 
   const isRestoredFeed = lastInferenceAt !== null && predictions.length > 0;
   const savedFeedLabel = isRestoredFeed

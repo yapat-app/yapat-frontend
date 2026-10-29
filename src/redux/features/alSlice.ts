@@ -40,6 +40,9 @@ import { EXPLORE_BOOTSTRAP_K } from "../../pages/annotationHub/alInferenceHelper
 
 // Default retrain threshold (kept in sync with backend when available).
 const RETRAIN_THRESHOLD = 10;
+// The bootstrap request that reaches the threshold trains the first model and
+// runs full inference before it returns.
+const BOOTSTRAP_FEEDBACK_TIMEOUT_MS = 60 * 60 * 1000;
 const STORAGE_KEY = "yapat_al_last_feed";
 const MAX_PERSISTED_PREDICTIONS = 5000;
 
@@ -385,6 +388,8 @@ function clearSessionState(state: ALState): void {
   state.lastRetrainDispatch = null;
   state.lastRetrainJob = null;
   state.lastRetrainFailed = false;
+  state.bootstrapSubmitting = false;
+  state.firstModelCheckpointId = null;
   state.selectedSnippetIds = [];
   state.activeSnippetId = null;
   state.modelCheckpointId = null;
@@ -460,6 +465,8 @@ function buildInitialState(): ALState {
     lastRetrainFailed: false,
     inferenceLoading: false,
     feedbackLoading: false,
+    bootstrapSubmitting: false,
+    firstModelCheckpointId: null,
     retrainLoading: false,
     error: null,
     lastInferenceAt: null,
@@ -543,6 +550,33 @@ export const submitFeedback = createAsyncThunk(
     } catch (error: any) {
       return rejectWithValue(getErrorMessage(error));
     }
+  },
+);
+
+/**
+ * Feedback while the dataset has no checkpoint (bootstrap). Always MODIFY with
+ * labels; the request that reaches the threshold trains the first model and
+ * returns `retrain_triggered` + `active_checkpoint_id`. Only one may be in
+ * flight at a time (the condition drops a second one).
+ */
+export const submitBootstrapFeedback = createAsyncThunk(
+  "al/submitBootstrapFeedback",
+  async (
+    payload: FeedbackPayload & { labels: string[]; embedding_model_id: number },
+    { rejectWithValue },
+  ) => {
+    try {
+      return await alApi.postFeedback(
+        { ...payload, action: "MODIFY" },
+        BOOTSTRAP_FEEDBACK_TIMEOUT_MS,
+      );
+    } catch (error: unknown) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+  {
+    condition: (_payload, { getState }) =>
+      !(getState() as { al: ALState }).al.bootstrapSubmitting,
   },
 );
 
@@ -782,6 +816,9 @@ const alSlice = createSlice({
         propertyKeys: [],
         ranges: {},
       };
+    },
+    clearFirstModelCheckpoint: (state) => {
+      state.firstModelCheckpointId = null;
     },
     resetFeedbacks: (state) => {
       state.feedbacks = {};
@@ -1248,6 +1285,30 @@ const alSlice = createSlice({
       // Keep `state.error` reserved for inference/job failures.
     });
 
+    builder.addCase(submitBootstrapFeedback.pending, (state) => {
+      state.bootstrapSubmitting = true;
+    });
+    builder.addCase(
+      submitBootstrapFeedback.fulfilled,
+      (state, action: PayloadAction<FeedbackResponse>) => {
+        state.bootstrapSubmitting = false;
+        const fb = action.payload;
+        state.feedbacks[fb.snippet_id] = fb;
+        if (fb.retrain_triggered && fb.active_checkpoint_id) {
+          // The first model exists and has scored the dataset; the hub
+          // switches to it (useHubALSession). Its own counter starts at 0.
+          state.firstModelCheckpointId = fb.active_checkpoint_id;
+          state.feedbackCount = 0;
+        } else {
+          state.feedbackCount = fb.feedback_count_since_retrain;
+        }
+        saveFeed(state);
+      },
+    );
+    builder.addCase(submitBootstrapFeedback.rejected, (state) => {
+      state.bootstrapSubmitting = false;
+    });
+
     builder.addCase(triggerRetrain.pending, (state) => {
       state.retrainLoading = true;
     });
@@ -1381,6 +1442,7 @@ export const {
   setVisibilityRangeFor,
   resetVisibilityFilter,
   resetFeedbacks,
+  clearFirstModelCheckpoint,
   clearError,
   clearSavedFeed,
   hydrateSavedFeed,

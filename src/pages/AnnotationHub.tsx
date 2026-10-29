@@ -42,6 +42,7 @@ import {
 } from "../studyFlow";
 import { datasetApi } from "../services/api";
 import { useQuickLabelList } from "../hooks/useQuickLabelList";
+import { HubQuickLabelsManager } from "../components/al/HubQuickLabelsManager";
 import { studyLogger } from "../studyLogging";
 import {
   formatDateAxisLabel,
@@ -128,6 +129,9 @@ export const AnnotationHub: React.FC = () => {
   );
   const isManager = user?.role === "admin" || user?.role === "team_owner";
   const activityDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  // The current feed was scored by a trained model. False on a cold start or
+  // bootstrap feed, where there are no per-species scores to search.
+  const feedHasModel = useAppSelector((s) => s.al.usedCheckpointId != null);
   // A retrain the backend holds until an add-recordings run on this dataset ends.
   const retrainWaitingForIngest = useAppSelector(selectRetrainWaitingForIngest);
   const datasetActivity = useDatasetActivity(
@@ -573,6 +577,7 @@ export const AnnotationHub: React.FC = () => {
       {/* The Guide menu reopens the cards that point at this page's controls,
           so it is only offered where those controls exist. */}
       <NavigationBar extra={user ? <GuideMenu /> : null} />
+      <HubQuickLabelsManager />
 
       {/* ── Simplified toolbar ── */}
       <div className="flex items-center gap-3 px-5 py-1.5 border-b border-gray-200 bg-white shrink-0 flex-wrap">
@@ -606,8 +611,9 @@ export const AnnotationHub: React.FC = () => {
 
         {/* Find species: the primary entry point for "where is species X?".
             Same state as the sidebar field and the projection legend; shown
-            only where the phase exposes model scores, since it rescopes them. */}
-        {al.selectedDatasetId !== null && phase.sidebar.modelScores && (
+            only where the phase exposes model scores and the feed has a
+            model, since it rescopes the model's per-species scores. */}
+        {al.selectedDatasetId !== null && phase.sidebar.modelScores && feedHasModel && (
           <div data-tour="find-species" className="flex items-center gap-2">
             <SearchOutlined className="text-gray-400 text-sm" />
             <Select

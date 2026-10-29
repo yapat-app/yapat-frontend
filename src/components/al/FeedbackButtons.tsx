@@ -4,14 +4,20 @@
  * "blind" mode: No predicted labels shown; user selects one or more labels
  *               from the PAM species list / GBIF search and submits them
  *               via a MODIFY action.
+ *
+ * Bootstrap (AL feed, no checkpoint yet): labels go to the same feedback
+ * endpoint as MODIFY with the snippet set's embedding model; the request that
+ * reaches the dataset's threshold trains the first model before it returns.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Spin, message, Tooltip } from "antd";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
+  fetchFeedbackCount,
   runInference,
   setClassicSnippetAnnotations,
+  submitBootstrapFeedback,
   submitFeedback,
 } from "../../redux/features/alSlice";
 import type { PAMPrediction, FeedbackAction } from "../../types/al";
@@ -19,6 +25,7 @@ import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import { useStudyFlow } from "../../studyFlow";
 import { LabelSelector } from "./LabelSelector";
+import { openQuickLabelsManager, useCanManageQuickLabels } from "./quickLabelsManagerEvents";
 import { annotationDisplayLabel } from "../../utils/classicFeedSync";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
@@ -61,14 +68,26 @@ export const FeedbackButtons: React.FC<Props> = ({
     inferenceK,
     samplingMethod,
     feedSource,
+    embeddingModelId,
+    bootstrapSubmitting,
+    feedbackCount,
+    retrainThreshold,
   } = useAppSelector((state) => state.al);
 
   const isClassicFeed = feedSource === "classic";
   const existingFeedback = feedbacks[prediction.snippet_id];
   const hasCheckpoint = usedCheckpointId !== null;
+  // No model yet: labels are bootstrap feedback toward the first model.
+  const isBootstrap = !isClassicFeed && !hasCheckpoint;
+  // The request that reaches the threshold trains the first model.
+  const trainingFirstModel =
+    isBootstrap && bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold;
+  const canManageQuickLabels = useCanManageQuickLabels();
   // During the guided tour, disable all labeling so actions are preview-only.
+  // In bootstrap, one request at a time across all cards: the training one
+  // can take minutes and must not be sent twice.
   const feedbackDisabled =
-    isTourActive || submitting || (!isClassicFeed && !hasCheckpoint);
+    isTourActive || submitting || (isBootstrap && bootstrapSubmitting);
 
   // ── Blind-mode autosave plumbing (must be hooks-safe: always declared) ─────
   const snippetAnnotations =
@@ -155,6 +174,81 @@ export const FeedbackButtons: React.FC<Props> = ({
     }
   };
 
+  const submitBootstrap = async (
+    datasetId: number,
+    family: string,
+    action: FeedbackAction,
+    labels?: string[],
+  ): Promise<boolean> => {
+    const normalized = (labels ?? []).map((l) => l.trim()).filter(Boolean);
+    // Bootstrap feedback is MODIFY with labels only: with no model there is
+    // nothing to accept or reject (the backend answers 400).
+    if (action !== "MODIFY" || normalized.length === 0) {
+      message.info("Pick at least one label: the first model trains on labelled snippets.");
+      return false;
+    }
+    if (embeddingModelId === null) {
+      message.error("This dataset's embedding model is unknown. Reload the feed and try again.");
+      return false;
+    }
+    setSubmitting(true);
+    setSaveState("saving");
+    try {
+      const fb = await dispatch(
+        submitBootstrapFeedback({
+          dataset_id: datasetId,
+          model_family_name: family,
+          snippet_id: prediction.snippet_id,
+          action: "MODIFY",
+          labels: normalized,
+          embedding_model_id: embeddingModelId,
+        }),
+      ).unwrap();
+      studyLogger.log(
+        "feedback_submit",
+        { action: "MODIFY", labels: normalized },
+        { snippetId: prediction.snippet_id },
+      );
+      if (fb.retrain_triggered && fb.active_checkpoint_id) {
+        message.success("First model trained. Loading its predictions…");
+      }
+      setSaveState("saved");
+      window.setTimeout(
+        () => setSaveState((s) => (s === "saved" ? "idle" : s)),
+        1800,
+      );
+      return true;
+    } catch (e: unknown) {
+      const detail = String((e as { message?: string })?.message ?? e ?? "");
+      // The label is stored before training starts, so a failed training run
+      // still counts this snippet. Re-read the counter to tell the two apart.
+      const counted = await dispatch(
+        fetchFeedbackCount({ dataset_id: datasetId, model_family_name: family }),
+      );
+      const reachedThreshold =
+        fetchFeedbackCount.fulfilled.match(counted) &&
+        counted.payload.feedback_count_since_retrain >= counted.payload.retrain_after;
+      if (detail.includes("No labels found in user annotations")) {
+        // Only No biophony / Other biophony so far: saved, but nothing to train on.
+        message.warning(
+          "Label saved. The first model needs at least one species label (No/Other biophony alone can't train it).",
+        );
+        setSaveState("idle");
+        return true;
+      }
+      if (reachedThreshold) {
+        message.error(`Label saved, but training the first model failed: ${detail}`);
+        setSaveState("idle");
+        return true;
+      }
+      message.error(detail || "Failed to submit feedback");
+      setSaveState("error");
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submit = async (
     action: FeedbackAction,
     labels?: string[],
@@ -167,10 +261,7 @@ export const FeedbackButtons: React.FC<Props> = ({
       return false;
     }
     if (!hasCheckpoint) {
-      message.info(
-        "No model checkpoint yet. Train/register a checkpoint before submitting feedback.",
-      );
-      return false;
+      return submitBootstrap(selectedDatasetId, modelFamilyName, action, labels);
     }
     setSubmitting(true);
     setSaveState("saving");
@@ -291,10 +382,20 @@ export const FeedbackButtons: React.FC<Props> = ({
       skipAutoSubmitKeyRef.current = null;
       return;
     }
-    if (!isClassicFeed && !hasCheckpoint) return;
     if (feedbackDisabled) return;
     if (userEditRevRef.current === syncedEditRevRef.current) return;
     if (selectionKey === lastSubmittedKeyRef.current) return;
+    // Bootstrap can't clear a snippet (no REJECT without a model): put the
+    // saved labels back instead of leaving an unsaved empty selection.
+    if (isBootstrap && selectionKey.length === 0) {
+      message.info(
+        "Labels can't be cleared before the first model exists. Pick another label instead.",
+      );
+      syncedEditRevRef.current = userEditRevRef.current;
+      skipAutoSubmitKeyRef.current = lastSubmittedKeyRef.current;
+      setSelectedLabels(submittedLabels);
+      return;
+    }
 
     const doSubmit = () => {
       pendingSubmitRef.current = null;
@@ -337,7 +438,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         pendingSubmitRef.current = null;
       }
     };
-  }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels]);
+  }, [isBlind, selectionKey, hasCheckpoint, feedbackDisabled, selectedLabels, isBootstrap]);
 
   // ── Blind-mode annotation UI ─────────────────────────────────────────────
   return (
@@ -345,13 +446,19 @@ export const FeedbackButtons: React.FC<Props> = ({
     // inline label area and inside the sticky label bar, whose height is
     // capped by a max-height rather than being definite.
     <div className="flex flex-col gap-1.5 flex-1 min-h-0">
-      {!isClassicFeed && !hasCheckpoint && (
-        <Tooltip title="Bootstrap mode: no checkpoint yet. Train a model to enable feedback.">
-          <span className="shrink-0 text-fs-11 text-amber-500 cursor-help w-fit">
-            No model checkpoint — feedback disabled
+      {isBootstrap &&
+        (trainingFirstModel ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 text-fs-11 text-blue-600 w-fit">
+            <Spin size="small" /> Training first model… this can take a few minutes
           </span>
-        </Tooltip>
-      )}
+        ) : (
+          <Tooltip title="No model yet. Once this many snippets are labelled, the first model is trained and the feed is ranked by it. At least one label must be a species.">
+            <span className="shrink-0 text-fs-11 text-amber-600 cursor-help w-fit">
+              The first model trains after you label {retrainThreshold} snippets ·{" "}
+              {Math.min(feedbackCount, retrainThreshold)} / {retrainThreshold} done
+            </span>
+          </Tooltip>
+        ))}
 
       {/* Compact label picker — fills remaining space */}
       <LabelSelector
@@ -369,6 +476,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         disabled={feedbackDisabled}
         quickLabels={quickLabels}
         labelsLoading={quickLabelsLoading}
+        onManageQuickLabels={canManageQuickLabels ? openQuickLabelsManager : undefined}
         // Rendered inside the "Quick labels" header row rather than as its own
         // row: this panel's height feeds the spectrogram sizing, so a status
         // line that appears and disappears on every save would resize the

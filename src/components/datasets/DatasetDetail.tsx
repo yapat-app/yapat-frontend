@@ -61,13 +61,12 @@ type Props = {
 };
 
 /** Keyboard activation for div[role=button] surfaces. */
-const activateOnKey =
-  (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      fn();
-    }
-  };
+const activateOnKey = (fn: () => void) => (e: KeyboardEvent<HTMLElement>) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    fn();
+  }
+};
 
 /**
  * Section heading. An optional `hint` is not printed on the page: it sits
@@ -225,12 +224,25 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
     if (withMeta == null || total <= 0) return null;
     const complete = withMeta >= total;
     // Floor so a partial dataset never reads as 100%.
-    return { complete, percent: complete ? 100 : Math.floor((withMeta / total) * 100) };
+    return {
+      complete,
+      percent: complete ? 100 : Math.floor((withMeta / total) * 100),
+    };
   })();
 
-  const stats = datasetAnnotations?.datasets?.find(
-    (d) => Number(d.dataset_id) === Number(dataset.id),
-  );
+  // Snippets only exist once embeddings are generated, so before that the
+  // counts are 0 rather than loading. The stats list may also predate a new
+  // dataset's scan and not include it at all.
+  const noSnippetsYet =
+    status === "scanning" ||
+    status === "processing" ||
+    status === "scan_failed" ||
+    status === "not_found";
+  const stats =
+    datasetAnnotations?.datasets?.find(
+      (d) => Number(d.dataset_id) === Number(dataset.id),
+    ) ??
+    (noSnippetsYet ? { total_snippets: 0, annotated_snippets: 0 } : undefined);
   const statsReady = stats != null;
 
   const statPlaceholder = (
@@ -246,14 +258,18 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const missingEmbeddingsNote =
     "Please ask Admin / Team owner to generate embeddings for the dataset.";
   const statusTooltip =
-    status === "not_found" && !isAdmin ? missingEmbeddingsNote : statusMeta.hint;
+    status === "not_found" && !isAdmin
+      ? missingEmbeddingsNote
+      : statusMeta.hint;
 
   const canManage = isAdmin || user?.role === "team_owner";
   // Adding recordings needs embeddings: new files are embedded and scored
   // like the existing ones. Not while another job changes the dataset.
   const showAddRecordings = canManage && !!dataset.is_ready_for_feed;
   const addRecordingsBusy =
-    (jobs.ingestRunning && !jobs.ingestStalled) || jobs.running || jobs.scanning;
+    (jobs.ingestRunning && !jobs.ingestStalled) ||
+    jobs.running ||
+    jobs.scanning;
   const setupHint = canManage
     ? "Settings used when annotating this dataset."
     : "Settings used when annotating this dataset. Only admins and team owners can change the spectrogram range.";
@@ -316,7 +332,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             )}
           </div>
 
-          {(!isReference || (isAdmin && status === "not_found") || showAddRecordings) && (
+          {(!isReference ||
+            (isAdmin && status === "not_found") ||
+            showAddRecordings) && (
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2.5 sm:w-auto">
               {/* Generate Embeddings (admin only): only offered while the
                   embeddings are missing; once they are ready it is gone. */}
@@ -358,7 +376,6 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               {/* Classic "Generate Feed" (GenerateFeedModal) stays hidden. */}
               {!isReference && (
                 <Button
-                  icon={<ThunderboltOutlined />}
                   type="primary"
                   size="large"
                   style={{
@@ -367,9 +384,8 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                     color: "#fff",
                   }}
                   onClick={handleStartAL}
-                  title="Start PAM Active Learning"
                 >
-                  Active Learning
+                  Annotate
                 </Button>
               )}
             </div>
@@ -400,25 +416,30 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
           <div className="mt-4">
             <IngestProgressPanel
               job={jobs.shownIngestJob}
-              onUploadMetadata={isReference ? undefined : () => setManagingMetadata(true)}
-              onDismiss={jobs.ingestRunning ? undefined : jobs.dismissFinishedIngest}
+              onUploadMetadata={
+                isReference ? undefined : () => setManagingMetadata(true)
+              }
+              onDismiss={
+                jobs.ingestRunning ? undefined : jobs.dismissFinishedIngest
+              }
             />
           </div>
         )}
 
         {/* From the dataset itself, so it survives a refresh; hidden while a job runs. */}
-        {!jobs.ingestRunning && (dataset.embedding_failures?.recordings ?? 0) > 0 && (
-          <div className="mt-4">
-            <EmbeddingFailuresNotice
-              dataset={dataset}
-              counts={dataset.embedding_failures!}
-              canManage={canManage}
-              busy={jobs.ingestRunning}
-              onRetryStarted={handleIngestStarted}
-              onDismissed={refetchDatasets}
-            />
-          </div>
-        )}
+        {!jobs.ingestRunning &&
+          (dataset.embedding_failures?.recordings ?? 0) > 0 && (
+            <div className="mt-4">
+              <EmbeddingFailuresNotice
+                dataset={dataset}
+                counts={dataset.embedding_failures!}
+                canManage={canManage}
+                busy={jobs.ingestRunning}
+                onRetryStarted={handleIngestStarted}
+                onDismissed={refetchDatasets}
+              />
+            </div>
+          )}
 
         {/* Stats */}
         <div className="mt-5 grid grid-cols-1 gap-3 @lg:grid-cols-2 @lg:[&>:last-child:nth-child(odd)]:col-span-2 @3xl:grid-cols-3 @3xl:[&>:last-child:nth-child(odd)]:col-span-1">
@@ -437,7 +458,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             </div>
           </Tooltip>
           <StatTile icon={<ScissorOutlined />} label="Total snippets">
-            {statsReady ? stats.total_snippets.toLocaleString() : statPlaceholder}
+            {statsReady
+              ? stats.total_snippets.toLocaleString()
+              : statPlaceholder}
           </StatTile>
           <StatTile
             icon={<CheckSquareOutlined />}
@@ -450,7 +473,10 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                 className="mt-1 h-1 w-3/5 overflow-hidden rounded-full bg-slate-200"
                 title={
                   statsReady
-                    ? formatPercent(stats.annotated_snippets, stats.total_snippets)
+                    ? formatPercent(
+                        stats.annotated_snippets,
+                        stats.total_snippets,
+                      )
                     : undefined
                 }
                 aria-hidden="true"
@@ -485,7 +511,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
               <div className={TILE_HEADER_CLASS}>
                 <div className="flex min-w-0 items-center gap-2">
-                  <TileLabel icon={<ThunderboltOutlined />}>Quick labels</TileLabel>
+                  <TileLabel icon={<ThunderboltOutlined />}>
+                    Quick labels
+                  </TileLabel>
                   {quickLabels.length > 0 && (
                     <span className="rounded-full bg-slate-100 px-1.5 py-px text-fs-10 font-semibold text-slate-600">
                       {quickLabels.length}
@@ -529,7 +557,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             </div>
           )}
 
-          {!isReference && isAdmin && <DatasetReferencePools dataset={dataset} />}
+          {!isReference && isAdmin && (
+            <DatasetReferencePools dataset={dataset} />
+          )}
         </div>
       </div>
 
@@ -564,11 +594,14 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                   {metadataCoverage && (
                     <span
                       className={
-                        metadataCoverage.complete ? "text-emerald-700" : "text-amber-700"
+                        metadataCoverage.complete
+                          ? "text-emerald-700"
+                          : "text-amber-700"
                       }
                       title="Recordings with location, date and time"
                     >
-                      {" "}· {metadataCoverage.percent}% complete
+                      {" "}
+                      · {metadataCoverage.percent}% complete
                     </span>
                   )}
                 </p>

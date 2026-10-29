@@ -41,6 +41,12 @@ export interface TourStepSpec {
   title: string;
   description: string;
   /**
+   * The card's control only exists once the current feed has a trained model
+   * (e.g. Find species). It is left out of the tour and the Guide menu on a
+   * cold-start or bootstrap feed, and appears there once a model is trained.
+   */
+  requiresModel?: boolean;
+  /**
    * When set, the step renders the animated ScoreExplainer for this score above
    * its description. Kept as a key rather than a render prop so phaseContent.ts
    * stays declarative data.

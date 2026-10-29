@@ -5,8 +5,10 @@ import type { Dataset, QuickLabel } from "../types";
 import { datasetApi, taxonomyApi } from "../services/api";
 import { invalidateQuickLabelScientificNames } from "../hooks/useQuickLabelScientificNames";
 import { SCROLL_MODAL_PROPS } from "./datasets/modalLayout";
+import { QuickLabelImportPanel } from "./QuickLabelImportPanel";
+import { localLabel } from "../utils/quickLabelImport";
 
-type Source = "gbif" | "envo" | "local";
+type Source = "gbif" | "envo" | "local" | "import";
 
 type Props = {
   dataset: Dataset;
@@ -52,7 +54,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   }, [open, dataset.id]);
 
   useEffect(() => {
-    if (source === "local") {
+    if (source === "local" || source === "import") {
       setResults([]);
       return;
     }
@@ -84,16 +86,27 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
     }, 300);
   }, [query, source]);
 
-  const addLabel = (label: QuickLabel) => {
-    if (labels.some((l) => l.taxon_id === label.taxon_id)) return;
-    setLabels((prev) => [...prev, label]);
+  const addLabel = (label: QuickLabel) =>
+    setLabels((prev) =>
+      prev.some((l) => l.taxon_id === label.taxon_id) ? prev : [...prev, label],
+    );
+
+  const addImported = (rows: QuickLabel[]) => {
+    rows.forEach(addLabel);
+    message.success(
+      `Added ${rows.length} ${rows.length === 1 ? "label" : "labels"} — remember to Save`,
+    );
   };
 
   const removeLabel = (taxon_id: string) =>
     setLabels((prev) => prev.filter((l) => l.taxon_id !== taxon_id));
 
-  // Lets a GBIF/ENVO pick carry a short code (e.g. "ALYALM") while keeping its
-  // taxon_id, so the label stays linked to the taxonomy.
+  // Lets a local pick carry a short code (e.g. "ALYALM"). GBIF and ENVO names
+  // are strict taxonomy terms and stay as given.
+  const fixedSource = (l: QuickLabel): string | null => {
+    const ns = l.taxon_id.split(":", 1)[0].toLowerCase();
+    return ns === "gbif" ? "GBIF scientific name" : ns === "envo" ? "ENVO term" : null;
+  };
   const renameLabel = (taxon_id: string, display_name: string) =>
     setLabels((prev) =>
       prev.map((l) => (l.taxon_id === taxon_id ? { ...l, display_name } : l)),
@@ -113,14 +126,8 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
   const hasInvalidNames = labels.some(isInvalidName);
 
   const addLocal = () => {
-    const display = localInput.trim();
-    if (!display) return;
-    const slug = display
-      .toLowerCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_-]/g, "")
-      .slice(0, 120);
-    addLabel({ taxon_id: `local:${slug || "label"}`, display_name: display });
+    if (!localInput.trim()) return;
+    addLabel(localLabel(localInput));
     setLocalInput("");
   };
 
@@ -147,6 +154,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
     { key: "gbif", label: "🌿 GBIF" },
     { key: "envo", label: "🌍 ENVO" },
     { key: "local", label: "✏️ Local" },
+    { key: "import", label: "📄 Import" },
   ];
 
   return (
@@ -169,7 +177,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
           Save
         </Button>,
       ]}
-      width={700}
+      width={source === "import" ? 860 : 700}
     >
       {loading ? (
         <div style={{ textAlign: "center", padding: 40 }}>
@@ -222,8 +230,14 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
                     padding: "4px 8px",
                   }}
                 >
-                  {savedIds.has(l.taxon_id) ? (
-                    <Tooltip title={l.taxon_id}>
+                  {savedIds.has(l.taxon_id) || fixedSource(l) ? (
+                    <Tooltip
+                      title={
+                        fixedSource(l) && !savedIds.has(l.taxon_id)
+                          ? `${l.taxon_id} · ${fixedSource(l)}, can't be renamed`
+                          : l.taxon_id
+                      }
+                    >
                       <span
                         style={{
                           fontSize: "var(--text-fs-13)",
@@ -260,7 +274,7 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
           </div>
 
           {/* Right: add labels */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: source === "import" ? 1.6 : 1, minWidth: 0 }}>
             <div
               style={{
                 fontSize: "var(--text-fs-11)",
@@ -299,7 +313,13 @@ export const DatasetQuickLabelsModal: React.FC<Props> = ({
               ))}
             </div>
 
-            {source === "local" ? (
+            {source === "import" ? (
+              <QuickLabelImportPanel
+                datasetId={Number(dataset.id)}
+                labels={labels}
+                onAdd={addImported}
+              />
+            ) : source === "local" ? (
               <div style={{ display: "flex", gap: 8 }}>
                 <Input
                   placeholder="e.g. Wind, No biophony, Rain…"

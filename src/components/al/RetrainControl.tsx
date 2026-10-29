@@ -25,7 +25,15 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
     lastRetrainJob,
     lastRetrainFailed,
     selectedDatasetId,
+    usedCheckpointId,
+    feedSource,
+    bootstrapSubmitting,
   } = useAppSelector((state) => state.al);
+  // No model yet: the first one is trained by labelling (bootstrap feedback),
+  // and there is nothing to retrain.
+  const isBootstrap = feedSource !== "classic" && usedCheckpointId === null;
+  const trainingFirstModel =
+    isBootstrap && bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold;
   // Held by the backend until an add-recordings run on this dataset ends.
   const waitingForIngest = useAppSelector(selectRetrainWaitingForIngest) !== null;
   const waitingHint =
@@ -72,6 +80,47 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
       </Tag>
     );
   };
+
+  if (isBootstrap) {
+    const shown = Math.min(feedbackCount, retrainThreshold);
+    return (
+      <div
+        data-tour="retrain"
+        className={
+          variant === "compact"
+            ? "flex items-center gap-2"
+            : "rounded-lg border border-gray-200 bg-white shadow-sm p-4"
+        }
+      >
+        {variant === "full" && (
+          <span className="text-sm font-semibold font-ibm-mono text-gray-700 flex items-center gap-1 mb-2">
+            <ThunderboltOutlined className="text-amber-500" />
+            First model
+          </span>
+        )}
+        {trainingFirstModel ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-blue-600">
+            <Spin size="small" /> Training first model…
+          </span>
+        ) : (
+          <Tooltip title="Label snippets to train the first model. At least one label must be a species.">
+            <div className="flex flex-1 items-center gap-2">
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                {shown}/{retrainThreshold} labels
+              </span>
+              <Progress
+                percent={progressPercent}
+                size="small"
+                status="active"
+                className={variant === "compact" ? "w-[120px]" : "flex-1"}
+                showInfo={false}
+              />
+            </div>
+          </Tooltip>
+        )}
+      </div>
+    );
+  }
 
   if (variant === "compact") {
     return (

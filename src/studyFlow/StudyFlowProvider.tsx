@@ -27,6 +27,7 @@ import React, {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { message } from "antd";
 import { usePhaseContext } from "../studyPhases";
+import { useAppSelector } from "../hooks";
 import { studyLogger } from "../studyLogging/StudyLogger";
 import { StudyFlowContext, type StudyFlowContextValue } from "./context";
 import { isFlowEnabled, phaseDurationMs, phaseSequence } from "./flowConfig";
@@ -151,21 +152,30 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     }
   }, [enabled, stage, phaseId, durationMs]);
 
+  // Cards whose control needs a trained model stay hidden until the feed has
+  // one. They are not marked seen meanwhile, so they surface later as new in
+  // the Guide menu.
+  const feedHasModel = useAppSelector((s) => s.al.usedCheckpointId != null);
+  const availableSteps = useMemo(
+    () =>
+      getPhaseContent(phaseId).tour.filter(
+        (s) => !s.requiresModel || feedHasModel,
+      ),
+    [phaseId, feedHasModel],
+  );
+
   // Steps to show this phase: only featureKeys not seen in an earlier phase.
   const pendingTourSteps = useMemo(() => {
     if (!enabled) return [];
     const seen = new Set(flow.seenTourKeys);
-    return getPhaseContent(phaseId).tour.filter((s) => !seen.has(s.featureKey));
-  }, [enabled, phaseId, flow.seenTourKeys]);
+    return availableSteps.filter((s) => !seen.has(s.featureKey));
+  }, [enabled, availableSteps, flow.seenTourKeys]);
 
   // ── Guide menu: replay any card on demand ───────────────────────────────
   // Independent of the first-run tour above: works in every stage (and when
   // the flow itself is disabled), never changes the stage, and replays the
   // full card text rather than only cards the user has not seen.
-  const guideSteps = useMemo(
-    () => getPhaseContent(phaseId).tour,
-    [phaseId],
-  );
+  const guideSteps = availableSteps;
   const newGuideCount = useMemo(() => {
     const seen = new Set(flow.seenTourKeys);
     return guideSteps.filter((s) => !seen.has(s.featureKey)).length;
