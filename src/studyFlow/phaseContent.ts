@@ -146,7 +146,7 @@ const modelScoreSteps = (): TourStepSpec[] =>
   }));
 
 const FIND_SPECIES_DESC = [
-  "Looking for a particular species? Pick it here (you can pick several).",
+  "Looking for a particular species? Pick it here (you can pick several). The list holds the species the current model was trained on; greyed-out ones had too few labelled examples to be scored.",
   "",
   "• The feed re-sorts so the snippets the model thinks most likely contain it come first",
   "• Status switches to Unlabeled, so you see new candidates rather than snippets already labelled (switch back to All any time)",
@@ -163,6 +163,8 @@ const findSpeciesStep = (): TourStepSpec => ({
   title: "Find a species",
   description: FIND_SPECIES_DESC,
   placement: "bottom",
+  // The dropdown only appears once the feed has a trained model.
+  requiresModel: true,
 });
 
 const sortStep = (): TourStepSpec => ({

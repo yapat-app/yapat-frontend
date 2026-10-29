@@ -25,6 +25,7 @@ import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import { useStudyFlow } from "../../studyFlow";
 import { LabelSelector } from "./LabelSelector";
+import { openQuickLabelsManager, useCanManageQuickLabels } from "./quickLabelsManagerEvents";
 import { annotationDisplayLabel } from "../../utils/classicFeedSync";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
 
@@ -81,6 +82,7 @@ export const FeedbackButtons: React.FC<Props> = ({
   // The request that reaches the threshold trains the first model.
   const trainingFirstModel =
     isBootstrap && bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold;
+  const canManageQuickLabels = useCanManageQuickLabels();
   // During the guided tour, disable all labeling so actions are preview-only.
   // In bootstrap, one request at a time across all cards: the training one
   // can take minutes and must not be sent twice.
@@ -474,6 +476,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         disabled={feedbackDisabled}
         quickLabels={quickLabels}
         labelsLoading={quickLabelsLoading}
+        onManageQuickLabels={canManageQuickLabels ? openQuickLabelsManager : undefined}
         // Rendered inside the "Quick labels" header row rather than as its own
         // row: this panel's height feeds the spectrogram sizing, so a status
         // line that appears and disappears on every save would resize the

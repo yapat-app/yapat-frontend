@@ -16,6 +16,7 @@ import {
   CloseOutlined,
   PlusOutlined,
   DownOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { studyLogger } from "../../studyLogging";
 import { useQuickLabelScientificNames } from "../../hooks/useQuickLabelScientificNames";
@@ -94,6 +95,12 @@ interface Props {
    */
   statusSlot?: React.ReactNode;
   /**
+   * Opens the dataset's Quick Labels dialog. Pass it only for users who may
+   * edit the dataset's labels (admin / team owner); it adds a gear beside the
+   * "Quick labels" header.
+   */
+  onManageQuickLabels?: () => void;
+  /**
    * Compact inline mode — no outer border, no section headers, no source badges.
    * Renders a search input + a flat wrapping row of small label chips.
    * Designed for inline embedding inside a snippet card below the spectrogram.
@@ -115,6 +122,7 @@ export const LabelSelector: React.FC<Props> = ({
   quickLabels,
   labelsLoading,
   statusSlot,
+  onManageQuickLabels,
   compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -257,6 +265,14 @@ export const LabelSelector: React.FC<Props> = ({
   // Compact mode: quick labels matching the query (name or scientific name),
   // names that start with the query first so the likeliest hit is at the front.
   const trimmedQuery = searchQuery.trim();
+  // First labelling on a dataset: no quick labels and nothing to report, so
+  // the Quick labels header and list are left out.
+  const noQuickLabels =
+    pamOptions.length === 0 &&
+    !labelsLoading &&
+    !trimmedQuery &&
+    statusSlot == null &&
+    !onManageQuickLabels;
   const quickMatches = useMemo(() => {
     if (!trimmedQuery) return pamOptions;
     const q = trimmedQuery.toLowerCase();
@@ -539,30 +555,43 @@ export const LabelSelector: React.FC<Props> = ({
         </div>
 
         {/* ── Recent: labels this participant used last, newest first. Fixed
-            to one chip-row of height, even when empty, because the label
-            panel's height sizes the spectrogram. Chips that would wrap onto a
-            second line are clipped; they are all in the full list below. ── */}
-        <div className="shrink-0 flex items-start gap-2 h-6.5">
-          <span className="shrink-0 leading-6.5 text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
-            Recent
-          </span>
-          {recentOptions.length > 0 ? (
+            to one chip-row of height because the label panel's height sizes
+            the spectrogram. Hidden until a label has been used, so a first
+            labelling session isn't shown empty sections. Chips that would
+            wrap onto a second line are clipped; they are all in the full
+            list below. ── */}
+        {recentOptions.length > 0 && (
+          <div className="shrink-0 flex items-start gap-2 h-6.5">
+            <span className="shrink-0 leading-6.5 text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
+              Recent
+            </span>
             <div className="flex-1 min-w-0 h-full flex flex-wrap gap-1.5 overflow-hidden">
               {recentOptions.map((opt) => renderQuickChip(opt, "recent"))}
             </div>
-          ) : (
-            <span className="leading-6.5 text-fs-11 text-gray-400 italic truncate">
-              Labels you use will appear here
-            </span>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Header: count + transient status (fixed row, no layout shift) ── */}
+        {/* ── Header: count + transient status (fixed row, no layout shift).
+            Left out, with the list, while there are no quick labels yet and
+            nothing to report; the search above finds GBIF species. ── */}
+        {!noQuickLabels && (
         <div className="shrink-0 flex items-center justify-between gap-2 min-h-5">
           <span className="text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
             {trimmedQuery
               ? `${quickMatches.length} of ${pamOptions.length} quick labels`
               : `Quick labels${pamOptions.length ? ` · ${pamOptions.length}` : ""}`}
+            {onManageQuickLabels && (
+              <Tooltip title="Manage this dataset's quick labels">
+                <button
+                  type="button"
+                  aria-label="Manage quick labels"
+                  onClick={onManageQuickLabels}
+                  className="ml-1.5 align-middle text-gray-400 hover:text-gray-700 cursor-pointer"
+                >
+                  <SettingOutlined />
+                </button>
+              </Tooltip>
+            )}
             {labelsLoading && <Spin size="small" className="ml-2" />}
             {labelsExpanded && !trimmedQuery && (
               <button
@@ -584,6 +613,7 @@ export const LabelSelector: React.FC<Props> = ({
               </span>
             ) : null)}
         </div>
+        )}
 
         <div className={["relative", fillHeight ? "flex-1 min-h-0" : ""].join(" ")}>
         <div
@@ -595,8 +625,11 @@ export const LabelSelector: React.FC<Props> = ({
           ].join(" ")}
         >
           {pamOptions.length === 0 && !labelsLoading && !trimmedQuery ? (
-            <p className="text-xs text-gray-400 italic">
-              No quick labels yet. Search above to find a species in GBIF; it is pinned here once used.
+            // First labelling on this dataset: point at the search box.
+            <p className="text-xs text-gray-500">
+              To start annotating, type a species name above (e.g.{" "}
+              <i>Turdus merula</i>) to search the GBIF taxonomy, then pick it to
+              label this snippet. Labels you use are pinned here for next time.
             </p>
           ) : (
             <>
