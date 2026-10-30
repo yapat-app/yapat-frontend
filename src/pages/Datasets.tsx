@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -80,6 +81,125 @@ const SelectBox = ({
     <DownOutlined className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-400" />
   </div>
 );
+
+/**
+ * The closed control is the real <select> (look and keyboard unchanged). Its
+ * open list is drawn here instead of by the browser: native popups are OS
+ * menus that turn dark with the browser theme, and this app is light-only.
+ * Styled after the native macOS list: it opens over the control with the
+ * current option aligned to it, in the system font.
+ */
+const OPTION_H = 26;
+const LightSelect = <V extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  className,
+}: {
+  value: V;
+  onChange: (v: V) => void;
+  options: { value: V; label: string }[];
+  label: string;
+  className: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const selectedIdx = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const show = () => {
+    setHover(selectedIdx);
+    setOpen(true);
+  };
+  const choose = (v: V) => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} className="contents">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as V)}
+        aria-label={label}
+        className={className}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.currentTarget.focus();
+          if (open) setOpen(false);
+          else show();
+        }}
+        onKeyDown={(e) => {
+          if (open) {
+            if (e.key === "Escape") setOpen(false);
+            else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const d = e.key === "ArrowDown" ? 1 : -1;
+              setHover((h) => (h + d + options.length) % options.length);
+            } else if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              choose(options[hover].value);
+            } else if (e.key === "Tab") setOpen(false);
+          } else if (e.key === " " || (e.altKey && e.key === "ArrowDown")) {
+            e.preventDefault();
+            show();
+          }
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label={label}
+          style={{
+            top: -(selectedIdx * OPTION_H + 5),
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+          }}
+          className="absolute left-0 z-50 w-max min-w-full max-w-[280px] rounded-[10px] border border-slate-300/70 bg-white p-1 text-[13px] text-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.18)]"
+        >
+          {options.map((o, i) => (
+            <div
+              key={o.value}
+              role="option"
+              aria-selected={o.value === value}
+              onMouseEnter={() => setHover(i)}
+              onClick={() => choose(o.value)}
+              style={{ height: OPTION_H }}
+              className={`flex cursor-default items-center gap-2 rounded-md pl-2 pr-4 ${
+                i === hover ? "bg-blue-500 text-white" : ""
+              }`}
+            >
+              <span className="w-4 shrink-0 text-center text-[12px]">
+                {o.value === value ? "✓" : ""}
+              </span>
+              <span className="truncate">{o.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Datasets = () => {
   const dispatch = useAppDispatch();
@@ -396,49 +516,50 @@ export const Datasets = () => {
       </div>
 
       <SelectBox icon={<TeamOutlined />} className="md:w-[130px] lg:w-[180px]">
-        <select
+        <LightSelect
           value={teamFilter}
-          onChange={(e) => setTeamFilter(e.target.value)}
-          aria-label="Filter by team"
+          onChange={setTeamFilter}
+          label="Filter by team"
           className={`${controlClass} ${ctl(teamFilter !== "all")} pl-9 pr-9`}
-        >
-          <option value="all">All teams</option>
-          <option value="none">No team</option>
-          {(allTeams ?? []).map((t: Team) => (
-            <option key={t.id} value={String(t.id)}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "all", label: "All teams" },
+            { value: "none", label: "No team" },
+            ...(allTeams ?? []).map((t: Team) => ({
+              value: String(t.id),
+              label: t.name,
+            })),
+          ]}
+        />
       </SelectBox>
 
       <SelectBox icon={<AppstoreOutlined />} className="md:w-[130px] lg:w-[180px]">
-        <select
+        <LightSelect
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-          aria-label="Filter by dataset type"
+          onChange={setTypeFilter}
+          label="Filter by dataset type"
           className={`${controlClass} ${ctl(typeFilter !== "all")} pl-9 pr-9`}
-        >
-          <option value="all">All types</option>
-          <option value="PAM">PAM</option>
-          <option value="FOCAL_RECORDINGS">Focal recordings</option>
-          {isAdmin && <option value="REFERENCE">Reference pools</option>}
-        </select>
+          options={[
+            { value: "all", label: "All types" },
+            { value: "PAM", label: "PAM" },
+            { value: "FOCAL_RECORDINGS", label: "Focal recordings" },
+            ...(isAdmin
+              ? [{ value: "REFERENCE" as TypeFilter, label: "Reference pools" }]
+              : []),
+          ]}
+        />
       </SelectBox>
 
       <SelectBox icon={<SortAscendingOutlined />} className="col-span-2 md:col-auto md:w-[140px] lg:w-[190px]">
-        <select
+        <LightSelect
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortKey)}
-          aria-label="Sort datasets"
+          onChange={setSortBy}
+          label="Sort datasets"
           className={`${controlClass} ${ctl(false)} pl-9 pr-9`}
-        >
-          {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-            <option key={k} value={k}>
-              {SORT_LABELS[k]}
-            </option>
-          ))}
-        </select>
+          options={(Object.keys(SORT_LABELS) as SortKey[]).map((k) => ({
+            value: k,
+            label: SORT_LABELS[k],
+          }))}
+        />
       </SelectBox>
 
       {filtersActive && (

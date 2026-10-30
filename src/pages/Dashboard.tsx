@@ -133,32 +133,39 @@ const CARDS: ServiceCard[] = [
 ];
 
 /** Static class names so Tailwind can see them. */
-const COL_SPAN: Record<number, string> = {
-  3: "lg:col-span-3",
-  4: "lg:col-span-4",
-  6: "lg:col-span-6",
-  8: "lg:col-span-8",
-  12: "lg:col-span-12",
+const XL_SPAN: Record<number, string> = {
+  3: "xl:col-span-3",
+  4: "xl:col-span-4",
+  6: "xl:col-span-6",
+  8: "xl:col-span-8",
+  12: "xl:col-span-12",
 };
 
 /**
- * Column spans (of a 12-column grid, large screens) for the visible cards, in
- * order. The Annotate card is always first and gets the widest slot. The
- * layout follows the number of cards the user can see, so it adapts to the
- * existing role / dataset based visibility rules instead of duplicating them.
- *   4 cards (annotator):  8 4 / 6 6
- *   5 cards (team owner): 8 4 / 4 4 4 ... (4 4 4 4)
- *   7 cards (admin):      6 3 3 / 3 3 3 3
+ * Column spans (of a 12-column grid, xl and up) for the visible cards, in
+ * order. Every row sums to 12 and the cards fit in two rows, so hiding or
+ * adding a service (role, dataset or study-mode rules) never leaves a gap.
+ * Annotate is always first and widest. If more cards ever need more than two
+ * rows, the extra ones are split as evenly as possible into rows of up to 4.
+ *   4 (annotator):  8 4 / 6 6
+ *   5 (team owner): 8 4 / 4 4 4
+ *   6 (admin):      6 3 3 / 4 4 4
+ *   7 (admin+logs): 6 3 3 / 3 3 3 3
  */
 function getColumnSpans(count: number): number[] {
   if (count <= 0) return [];
   if (count === 1) return [12];
-  if (count === 2) return [8, 4];
-  if (count === 3) return [8, 4, 12];
-  if (count === 4) return [8, 4, 6, 6];
-  if (count === 5) return [8, 4, 4, 4, 4];
-  if (count === 6) return [8, 4, 4, 4, 6, 6];
-  return [6, 3, 3, ...Array<number>(count - 3).fill(3)];
+  const spans = count <= 5 ? [8, 4] : [6, 3, 3];
+
+  let remaining = count - spans.length;
+  let rows = Math.ceil(remaining / 4);
+  while (rows > 0) {
+    const inRow = Math.ceil(remaining / rows);
+    spans.push(...Array<number>(inRow).fill(12 / inRow));
+    remaining -= inRow;
+    rows -= 1;
+  }
+  return spans;
 }
 
 export const Dashboard: React.FC = () => {
@@ -248,7 +255,7 @@ export const Dashboard: React.FC = () => {
           Services
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-12 auto-rows-fr gap-5">
           {visibleCards.map((card, index) => {
             const isPrimary = card.key === "annotate";
             const openCard = () =>
@@ -273,8 +280,8 @@ export const Dashboard: React.FC = () => {
                   hover:shadow-md hover:-translate-y-0.5
                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500
                   ${card.borderColor}
-                  border ${isPrimary ? "sm:col-span-2" : ""}
-                  ${COL_SPAN[columnSpans[index]] ?? ""}
+                  border ${isPrimary || (index === visibleCards.length - 1 && visibleCards.length % 2 === 0) ? "sm:col-span-2" : ""}
+                  ${XL_SPAN[columnSpans[index]] ?? ""}
                 `}
               >
                 {/* Icon */}
