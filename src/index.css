@@ -66,6 +66,17 @@ html {
   }
 }
 
+/* The app has no dark theme: tell the browser, so native controls (select
+   popups, scrollbars, inputs) stay light when the browser itself is dark. */
+:root {
+  color-scheme: light;
+}
+
+/* Native <select> popups follow the element's own color-scheme. */
+select {
+  color-scheme: light;
+}
+
 body {
   margin: 0;
   height: 100%;
