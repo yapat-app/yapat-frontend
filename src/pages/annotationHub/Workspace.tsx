@@ -16,7 +16,8 @@ import React, {
   useRef,
 } from "react";
 import { Tooltip, Button, Tag } from "antd";
-import { AudioOutlined } from "@ant-design/icons";
+import { AudioOutlined, ExpandAltOutlined } from "@ant-design/icons";
+import { FullRecordingOverlay } from "../../components/fullRecording/FullRecordingOverlay";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
   ProjectionView,
@@ -235,6 +236,69 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     }
   }
 
+  // Full recording: a listen-only view that takes over the feed area (the feed
+  // stays mounted underneath, so its scroll position and selection survive).
+  // Workspace deliberately does NOT listen to the selected snippet: that would
+  // re-render the whole hub (projection chart included) on every scroll step.
+  // The overlay itself watches the selection while it is open.
+  const [fullRecording, setFullRecording] = useState<{
+    recordingId: number;
+    snippetId: number;
+    similarTo: number | null;
+  } | null>(null);
+  // Also closes when a "Find similar" search starts or ends, so its results
+  // are never hidden behind this view. Same "adjust state during render"
+  // pattern as above.
+  if (fullRecording && similarTo !== fullRecording.similarTo) {
+    setFullRecording(null);
+  }
+  const openFullRecording = useCallback(
+    (recordingId: number, snippetId: number) => {
+      // One thing playing at a time.
+      document.querySelectorAll("audio").forEach((a) => a.pause());
+      setFullRecording({ recordingId, snippetId, similarTo });
+    },
+    [similarTo],
+  );
+  const closeFullRecording = useCallback(() => setFullRecording(null), []);
+  // Written by the snippet header; read by the split while it is dragged.
+  const feedMinWidthRef = useRef(0);
+
+  // While it is open: Esc closes it, and the feed's ↑/↓ and Shift+F (Find
+  // similar) shortcuts are held back: neither applies to a full recording and
+  // ↑/↓ would change the snippet underneath. Capture phase on window runs
+  // before those (bubble-phase) handlers, which stay untouched.
+  const fullRecordingOpen = fullRecording !== null;
+  useEffect(() => {
+    if (!fullRecordingOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input, textarea, select, [contenteditable="true"], [role="textbox"], .ant-popover',
+          ))
+      ) {
+        return;
+      }
+      if (e.key === "Escape") {
+        setFullRecording(null);
+        return;
+      }
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        (e.shiftKey && e.key.toLowerCase() === "f")
+      ) {
+        // Immediate: also holds back listeners registered on window itself.
+        e.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [fullRecordingOpen]);
+
   const handleLegendSpeciesToggle = useCallback(
     (label: string) => {
       if (!onFocusSpeciesChange) return;
@@ -278,7 +342,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               </Tag>
             </Tooltip>
           )}
-          {similarityActive && (
+          {similarityActive && !fullRecordingOpen && (
             <Tooltip title="Showing the 500 snippets that sound most like this one. Your filters still apply.">
               <Tag
                 color="purple"
@@ -294,6 +358,21 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               </Tag>
             </Tooltip>
           )}
+          {fullRecording && (
+            <Tag
+              color="blue"
+              variant="solid"
+              icon={<ExpandAltOutlined />}
+              closable
+              onClose={(e) => {
+                e.preventDefault();
+                closeFullRecording();
+              }}
+              className="m-0 text-xs [&_.ant-tag-close-icon]:text-white! [&_.ant-tag-close-icon]:hover:opacity-75"
+            >
+              Full recording
+            </Tag>
+          )}
         </div>
         {showFeedAction && (
           <Button
@@ -307,15 +386,29 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           </Button>
         )}
       </div>
-      <SortPanel
-        fields={sortFields}
-        onChange={setSortFields}
-        allowNonModel={phase.sort.nonModel}
-        allowModel={phase.sort.model}
-        disabled={phase.sort.disabled}
-        similarityActive={similarityActive}
+      {/* Sorting applies to the feed, not to a full recording: lock it while that is open. */}
+      <div
+        className={fullRecordingOpen ? "opacity-50 select-none" : undefined}
+        {...(fullRecordingOpen
+          ? ({ inert: "" } as Record<string, string>)
+          : {})}
+      >
+        <SortPanel
+          fields={sortFields}
+          onChange={setSortFields}
+          allowNonModel={phase.sort.nonModel}
+          allowModel={phase.sort.model}
+          disabled={phase.sort.disabled}
+          similarityActive={similarityActive}
+        />
+      </div>
+      <SnippetHeader
+        onFindSimilar={onFindSimilar}
+        onOpenFullRecording={openFullRecording}
+        onCloseFullRecording={closeFullRecording}
+        fullRecordingOpen={fullRecordingOpen}
+        minWidthRef={feedMinWidthRef}
       />
-      <SnippetHeader onFindSimilar={onFindSimilar} />
       <div className="flex-1 overflow-hidden">
         <PredictionFeed
           onFindSimilar={onFindSimilar}
@@ -324,6 +417,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           exploreFilters={exploreFilters}
           quickLabels={quickLabels}
           quickLabelsLoading={quickLabelsLoading}
+          labelsLocked={fullRecordingOpen}
+          overlay={
+            fullRecording ? (
+              <FullRecordingOverlay
+                recordingId={fullRecording.recordingId}
+                snippetId={fullRecording.snippetId}
+                onClose={closeFullRecording}
+              />
+            ) : undefined
+          }
         />
       </div>
     </div>
@@ -339,6 +442,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       mode="right_px"
       initialRightRatio={0.45}
       minRightPanelPx={400}
+      // The header reports the narrowest width it fits in (it depends on the
+      // snippet, e.g. whether "Labeled" shows), so the feed stops exactly there.
+      minRightPanelPxRef={feedMinWidthRef}
       maxRightPanelPx={4000}
       maxRightRatio={0.55}
       left={

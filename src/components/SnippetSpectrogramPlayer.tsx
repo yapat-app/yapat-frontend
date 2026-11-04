@@ -9,11 +9,13 @@ import {
   formatSpectrogramHz,
   formatSpectrogramTime,
   minDurationForSpectrogram,
+  minSamplesForSpectrogram,
   resolveSpectrogramDisplayRange,
   spectrogramLayoutHeights,
   spectrogramParamsForSampleRate,
   type DatasetSpectrogramRange,
 } from "../utils/spectrogramConfig";
+import { spectrogramParamsForWindow } from "../utils/spectrogramWindow";
 
 const Y_AXIS_WIDTH = 44;
 
@@ -37,6 +39,10 @@ export interface SnippetSpectrogramPlayerProps {
   dark?: boolean;
   colormap?: string;
   showAxisInfo?: boolean;
+  /** User display setting: dB range below the peak (library default 80 when omitted). */
+  rangeDb?: number;
+  /** User display setting: analysis window in ms (today's framing when omitted). */
+  windowMs?: number;
 }
 
 function buildTicks(min: number, max: number, count: number): number[] {
@@ -59,6 +65,8 @@ export const SnippetSpectrogramPlayer: React.FC<
   dark = false,
   colormap = "viridis",
   showAxisInfo = true,
+  rangeDb,
+  windowMs,
 }) => {
   // Instrument the library's internal <audio> element (play/pause/seek/volume).
   useAudioInstrumentation();
@@ -109,8 +117,11 @@ export const SnippetSpectrogramPlayer: React.FC<
   }, [resolvedDuration]);
 
   const fftParams = useMemo(
-    () => spectrogramParamsForSampleRate(sampleRate),
-    [sampleRate],
+    () =>
+      windowMs === undefined
+        ? spectrogramParamsForSampleRate(sampleRate)
+        : spectrogramParamsForWindow(sampleRate, windowMs),
+    [sampleRate, windowMs],
   );
 
   // The WASM backend traps (as a bare `RuntimeError: unreachable`, which React
@@ -119,14 +130,25 @@ export const SnippetSpectrogramPlayer: React.FC<
   // and treating that as too-short would hide the player on every mount.
   const tooShortForSpectrogram =
     resolvedDuration !== null &&
-    resolvedDuration < minDurationForSpectrogram(sampleRate);
+    resolvedDuration <
+      (windowMs === undefined
+        ? minDurationForSpectrogram(sampleRate)
+        : minSamplesForSpectrogram(fftParams) / sampleRate);
 
   // Only inputs that change the decoded/analysed signal belong here: a new key
   // remounts the player, which re-decodes the audio and recomputes the mel
   // spectrogram (a visible blank gap while it works). Height is deliberately
   // excluded -- it only scales the rendered SVG, and the player accepts it as a
   // plain prop. Including it meant any container resize forced a full re-decode.
-  const playerKey = `${src}|${fMin}|${fMax}|${fftParams.hop_length}`;
+  //
+  // The optional display settings join the key only when they are in use, so
+  // a player without them keeps exactly the key it always had.
+  const settingsKey =
+    (windowMs === undefined
+      ? ""
+      : `|w${fftParams.win_length}:${fftParams.n_fft}`) +
+    (rangeDb === undefined ? "" : `|d${rangeDb}`);
+  const playerKey = `${src}|${fMin}|${fMax}|${fftParams.hop_length}${settingsKey}`;
 
   /**
    * Sizing note: react-audio-spectrogram-player renders the spectrogram as an
@@ -186,6 +208,7 @@ export const SnippetSpectrogramPlayer: React.FC<
                 f_min={fMin}
                 f_max={fMax}
                 n_mels={fftParams.n_mels}
+                top_db={rangeDb}
                 specHeight={plotHeight}
                 navigator={navigator}
                 settings={settings}
