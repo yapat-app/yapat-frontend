@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
-import { useAppSelector } from "../../hooks";
+import { useAppDispatch, useAppSelector } from "../../hooks";
+import { setSelectedSnippet } from "../../redux/features/alSlice";
 import { FullRecordingCard } from "./FullRecordingCard";
 
 interface Props {
@@ -21,6 +22,7 @@ export const FullRecordingOverlay: React.FC<Props> = ({
   snippetId,
   onClose,
 }) => {
+  const dispatch = useAppDispatch();
   const datasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const snippetSetId = useAppSelector((s) => s.al.snippetSetId);
   const selectedSnippetId = useAppSelector(
@@ -44,6 +46,10 @@ export const FullRecordingOverlay: React.FC<Props> = ({
             snippetSetId={snippetSetId}
             recordingId={recordingId}
             snippetId={snippetId}
+            onBack={onClose}
+            // Selecting it is what a click on the projection does; the effect
+            // above then closes this view and the feed shows that snippet.
+            onSelectSnippet={(id) => dispatch(setSelectedSnippet(id))}
           />
         </div>
       </div>

@@ -6,8 +6,9 @@ import React, {
   useState,
 } from "react";
 import SpectrogramPlayer from "react-audio-spectrogram-player";
-import { Skeleton, Tooltip } from "antd";
+import { Button, Skeleton, Tooltip } from "antd";
 import {
+  ArrowLeftOutlined,
   InfoCircleOutlined,
   ZoomInOutlined,
   ZoomOutOutlined,
@@ -46,7 +47,7 @@ const MIN_PLOT_HEIGHT = 120;
 // Same cap the snippet card uses when its label bar is a separate strip.
 const MAX_PLOT_HEIGHT = 560;
 /** Vertical space the card spends on everything except the plot itself. */
-const CARD_CHROME_HEIGHT = 178;
+const CARD_CHROME_HEIGHT = 186;
 /** Same width rule as the snippet card, so the two line up exactly. */
 const CARD_WIDTH = "min(100%, 1200px)";
 const ZOOM_SLIDER_STEPS = 1000;
@@ -56,6 +57,10 @@ const Y_AXIS_WIDTH = 44;
 const TIME_TICK_STEPS_SEC = [1, 2, 5, 10, 15, 30, 60, 120];
 /** Neighbouring snippets get an id label once their slot is at least this wide. */
 const NEIGHBOUR_LABEL_MIN_PX = 44;
+/** From this width a chip shows just its arrow; thinner ones are a plain bar. */
+const NEIGHBOUR_ARROW_MIN_PX = 14;
+/** The current snippet's name tag only fits on its window once this wide. */
+const SNIPPET_TAG_MIN_PX = 110;
 
 type LoadState =
   | { key: string; status: "ready"; audio: FullRecordingAudio }
@@ -72,6 +77,10 @@ interface Props {
   snippetSetId: number | null;
   recordingId: number;
   snippetId: number;
+  /** Closes the view and returns to the feed. */
+  onBack: () => void;
+  /** Jumps to another snippet of this recording in the feed. */
+  onSelectSnippet: (snippetId: number) => void;
 }
 
 export const FullRecordingCard: React.FC<Props> = ({
@@ -79,6 +88,8 @@ export const FullRecordingCard: React.FC<Props> = ({
   snippetSetId,
   recordingId,
   snippetId,
+  onBack,
+  onSelectSnippet,
 }) => {
   const { prefs } = useSpectrogramPrefs();
   const datasetSpectrogram = useDatasetSpectrogramConfig(datasetId);
@@ -308,6 +319,16 @@ export const FullRecordingCard: React.FC<Props> = ({
   };
 
   // ── Not ready: loading / error / too long ───────────────────────────────
+  const backButton = (
+    <Button
+      size="small"
+      icon={<ArrowLeftOutlined />}
+      className="shrink-0 h-5! px-1.5! gap-1! font-ibm-sans text-fs-10! [&_.anticon]:text-fs-10!"
+      onClick={onBack}
+    >
+      Back to feed
+    </Button>
+  );
   const shell = (children: React.ReactNode) => (
     <div
       ref={cardRef}
@@ -328,18 +349,27 @@ export const FullRecordingCard: React.FC<Props> = ({
   );
 
   if (snippetSetId === null || current?.status === "error") {
-    return shell(message("Audio unavailable"));
+    return shell(
+      <>
+        <div className="pb-2">{backButton}</div>
+        {message("Audio unavailable")}
+      </>,
+    );
   }
   if (current?.status === "tooLong") {
     return shell(
-      message(
-        `This recording is ${formatClock(current.durationSec)} long. The full view supports up to ${formatClock(FULL_RECORDING_MAX_SEC)}.`,
-      ),
+      <>
+        <div className="pb-2">{backButton}</div>
+        {message(
+          `This recording is ${formatClock(current.durationSec)} long. The full view supports up to ${formatClock(FULL_RECORDING_MAX_SEC)}.`,
+        )}
+      </>,
     );
   }
   if (!audio) {
     return shell(
       <div role="status" aria-live="polite">
+        <div className="pb-2">{backButton}</div>
         <p className="m-0 mb-2 text-fs-11 text-gray-500 font-ibm-sans">
           Loading full recording ·{" "}
           <span className="font-ibm-mono">{loadingPct}%</span>
@@ -378,8 +408,9 @@ export const FullRecordingCard: React.FC<Props> = ({
   return shell(
     <>
       {/* What this is */}
-      <div className="flex items-center justify-between gap-2 pb-1.5">
-        <p className="m-0 truncate text-fs-10 text-gray-500 font-ibm-sans">
+      <div className="flex items-center gap-2 pb-1.5">
+        {backButton}
+        <p className="m-0 min-w-0 flex-1 truncate text-fs-10 text-gray-500 font-ibm-sans">
           <span className="font-ibm-mono font-semibold text-gray-700">
             {formatClock(durationSec)}
           </span>{" "}
@@ -541,14 +572,33 @@ export const FullRecordingCard: React.FC<Props> = ({
                 return (
                   <div
                     key={w.id}
-                    aria-hidden
-                    className="absolute top-0 pointer-events-none border-l border-white/30"
-                    style={{ left: pct(w.startSec), height: plotH }}
+                    // The whole slot lights up while its chip is hovered, so it
+                    // is clear which snippet a click will open.
+                    className="absolute top-0 pointer-events-none border-l border-white/30 has-[button:hover]:bg-blue-400/20 has-[button:hover]:border-blue-300"
+                    style={{ left: pct(w.startSec), height: plotH, width: slotPx }}
                   >
-                    {slotPx >= NEIGHBOUR_LABEL_MIN_PX && (
-                      <span className="absolute bottom-0.5 left-1 whitespace-nowrap text-fs-9 leading-none text-white/80 font-ibm-mono">
-                        #{w.id}
-                      </span>
+                    {slotPx >= 1 && (
+                      // A slot too thin for any text is still hoverable and
+                      // clickable: the chip simply fills it. The hover text is
+                      // the browser's own, shown below the pointer.
+                      <button
+                        type="button"
+                        title={`Open snippet #${w.id} in the feed`}
+                        aria-label={`Open snippet ${w.id} in the feed`}
+                        className="absolute -top-px left-0 z-10 flex h-4 max-w-full cursor-pointer items-center gap-0.5 overflow-hidden whitespace-nowrap rounded-br border-0 bg-slate-900/70 p-0 text-left text-fs-9 font-semibold leading-tight text-white font-ibm-mono pointer-events-auto hover:bg-blue-600"
+                        style={
+                          slotPx < NEIGHBOUR_LABEL_MIN_PX
+                            ? { width: slotPx }
+                            : { paddingInline: 4 }
+                        }
+                        onClick={() => onSelectSnippet(w.id)}
+                      >
+                        {slotPx >= NEIGHBOUR_LABEL_MIN_PX
+                          ? `#${w.id} ↗`
+                          : slotPx >= NEIGHBOUR_ARROW_MIN_PX
+                            ? "↗"
+                            : null}
+                      </button>
                     )}
                   </div>
                 );
@@ -591,9 +641,23 @@ export const FullRecordingCard: React.FC<Props> = ({
                     height: plotH,
                   }}
                 >
-                  <span className="absolute -top-px left-0 whitespace-nowrap rounded-br bg-yellow-400 px-1 py-px text-fs-9 font-semibold leading-tight text-gray-900 font-ibm-sans">
-                    Snippet #{snippetId}
-                  </span>
+                  {/* Always there, so a window too narrow for its name tag
+                      still stands out from the neighbours' chips. */}
+                  <span className="absolute -top-0.5 -left-0.5 -right-0.5 h-1.5 bg-yellow-400" />
+                  {(() => {
+                    // Same steps as the neighbours' chips: the number goes
+                    // once the window is narrower than NEIGHBOUR_LABEL_MIN_PX.
+                    const winPx =
+                      (snippetWin.endSec - snippetWin.startSec) * pxPerSec;
+                    if (winPx < NEIGHBOUR_LABEL_MIN_PX) return null;
+                    return (
+                      <span className="absolute -top-px left-0 whitespace-nowrap rounded-br bg-yellow-400 px-1 py-px text-fs-9 font-semibold leading-tight text-gray-900 font-ibm-sans">
+                        {winPx >= SNIPPET_TAG_MIN_PX
+                          ? `Snippet #${snippetId}`
+                          : `#${snippetId}`}
+                      </span>
+                    );
+                  })()}
                 </div>
               )}
 

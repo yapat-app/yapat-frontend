@@ -261,6 +261,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     [similarTo],
   );
   const closeFullRecording = useCallback(() => setFullRecording(null), []);
+  // Written by the snippet header; read by the split while it is dragged.
+  const feedMinWidthRef = useRef(0);
 
   // While it is open: Esc closes it, and the feed's ↑/↓ and Shift+F (Find
   // similar) shortcuts are held back: neither applies to a full recording and
@@ -405,6 +407,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         onOpenFullRecording={openFullRecording}
         onCloseFullRecording={closeFullRecording}
         fullRecordingOpen={fullRecordingOpen}
+        minWidthRef={feedMinWidthRef}
       />
       <div className="flex-1 overflow-hidden">
         <PredictionFeed
@@ -439,6 +442,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       mode="right_px"
       initialRightRatio={0.45}
       minRightPanelPx={400}
+      // The header reports the narrowest width it fits in (it depends on the
+      // snippet, e.g. whether "Labeled" shows), so the feed stops exactly there.
+      minRightPanelPxRef={feedMinWidthRef}
       maxRightPanelPx={4000}
       maxRightRatio={0.55}
       left={

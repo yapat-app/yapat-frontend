@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Tooltip, Button, ConfigProvider } from "antd";
 import {
   SoundOutlined,
@@ -15,12 +15,19 @@ import {
 } from "../../utils/recordingNameCache";
 import { SpectrogramSettingsPopover } from "../../components/fullRecording/SpectrogramSettingsPopover";
 
+/** Width of the file-name control once it is just its icon (min-w-8). */
+const FILE_NAME_ICON_ONLY_PX = 32;
+/** Room kept for the "Labeled" badge (and its gap) while it is not showing. */
+const LABELED_BADGE_RESERVE_PX = 68;
+
 interface SnippetHeaderProps {
   onFindSimilar?: (snippetId: number) => void;
   /** Makes the file name a control that opens the snippet's full recording. */
   onOpenFullRecording?: (recordingId: number, snippetId: number) => void;
   onCloseFullRecording?: () => void;
   fullRecordingOpen?: boolean;
+  /** Receives the narrowest width (px) this header fits in on one line. */
+  minWidthRef?: React.MutableRefObject<number>;
 }
 
 export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
@@ -28,6 +35,7 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
   onOpenFullRecording,
   onCloseFullRecording,
   fullRecordingOpen = false,
+  minWidthRef,
 }) => {
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const selectedSnippetIds = useAppSelector((s) => s.al.selectedSnippetIds);
@@ -129,6 +137,12 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
     );
   }
 
+  // Highest sample rate of each recording looked up, to cap the settings'
+  // frequency slider at what the recording actually contains.
+  const [sampleRateById, setSampleRateById] = useState<Record<number, number>>(
+    {},
+  );
+
   useEffect(() => {
     if (recordingId === null) return;
     let cancelled = false;
@@ -139,6 +153,9 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
         const name = rec.file_name || rec.name || undefined;
         if (name) rememberRecordingName(recordingId, name);
         setRecordingName(name);
+        if (rec.sample_rate && rec.sample_rate > 0) {
+          setSampleRateById((r) => ({ ...r, [recordingId]: rec.sample_rate! }));
+        }
       })
       .catch(() => {
         if (!cancelled) setRecordingName(undefined);
@@ -147,6 +164,40 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
       cancelled = true;
     };
   }, [recordingId]);
+
+  // Report the narrowest width this header fits in on one line: the left side
+  // at its floor (the file name down to just its icon) plus the right side in
+  // full. The feed's split reads it, so the feed stops being dragged exactly
+  // where the header would start to overlap.
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const left = leftRef.current;
+    const right = rightRef.current;
+    if (!minWidthRef || !left || !right) return;
+    const items = Array.from(left.children) as HTMLElement[];
+    const itemsPx = items.reduce(
+      (sum, el) =>
+        sum +
+        // The control may sit inside a wrapper element, so look in it too.
+        (el.matches("[data-full-recording-toggle]") ||
+        el.querySelector("[data-full-recording-toggle]")
+          ? FILE_NAME_ICON_ONLY_PX
+          : el.offsetWidth),
+      0,
+    );
+    const gapsPx = 8 * Math.max(0, items.length - 1);
+    // The "Labeled" badge only shows on labelled snippets. Its room is always
+    // counted, so labelled and unlabelled snippets share one drag limit and the
+    // header never overflows when the next snippet is labelled.
+    const badgePx = right.querySelector("[data-labeled-badge]")
+      ? 0
+      : LABELED_BADGE_RESERVE_PX;
+    // 32 = the header's side padding, 8 = the gap between its two sides.
+    minWidthRef.current = Math.ceil(
+      32 + itemsPx + gapsPx + 8 + right.offsetWidth + badgePx,
+    );
+  });
 
   if (snippetId === null) return null;
   // No feed generated yet (nothing in memory for this dataset) — the feed body
@@ -159,9 +210,12 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
       data-tour="selection-panel"
       className="shrink-0 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100 bg-white sticky top-0 z-10"
     >
-      <div className="flex items-center gap-2 min-w-0">
+      <div
+        ref={leftRef}
+        className="flex flex-1 items-center gap-2 min-w-0 overflow-hidden"
+      >
         <SoundOutlined className="text-gray-400" />
-        <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 truncate">
+        <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 shrink-0 whitespace-nowrap">
           Snippet #{snippetId}
         </h2>
         {recordingName && onOpenFullRecording && recordingId !== null ? (
@@ -205,13 +259,13 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
                     else onOpenFullRecording(recordingId, snippetId);
                   }}
                   className={[
-                    "min-w-0 max-w-[190px] -ml-1 h-5! px-1.5! text-fs-11! font-ibm-sans transition-none!",
+                    "min-w-8 shrink-[100] max-w-[190px] -ml-1 h-5! px-1.5! text-fs-11! font-ibm-sans transition-none! [&_.anticon]:shrink-0",
                     fullRecordingOpen
                       ? ""
                       : "text-gray-500! hover:text-blue-600! hover:bg-blue-50!",
                   ].join(" ")}
                 >
-                  <span className="truncate">{recordingName}</span>
+                  <span className="min-w-0 truncate">{recordingName}</span>
                 </Button>
               </Tooltip>
             </ConfigProvider>
@@ -229,7 +283,7 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div ref={rightRef} className="flex items-center gap-2 shrink-0">
         {!fullRecordingOpen && (
           <Tooltip title="Keyboard shortcuts: previous / next snippet">
             <span className="inline-flex items-center gap-1 text-fs-10 text-gray-400 font-ibm-sans cursor-default select-none">
@@ -244,12 +298,18 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
           </Tooltip>
         )}
         {hasFeedback && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-fs-10 font-medium bg-green-50 text-green-700 border border-green-200">
+          <span
+            data-labeled-badge
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-fs-10 font-medium bg-green-50 text-green-700 border border-green-200"
+          >
             Labeled
           </span>
         )}
         {onFindSimilar && !fullRecordingOpen && (
-          <Tooltip title="Show the snippets that sound most like this one (Shift+F)">
+          <Tooltip
+            title="Show the snippets that sound most like this one (Shift+F)"
+            placement="topRight"
+          >
             <Button
               size="small"
               icon={<AudioOutlined />}
@@ -260,7 +320,14 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
             </Button>
           </Tooltip>
         )}
-        <SpectrogramSettingsPopover datasetId={selectedDatasetId} />
+        <SpectrogramSettingsPopover
+          datasetId={selectedDatasetId}
+          maxHz={
+            recordingId !== null && sampleRateById[recordingId]
+              ? sampleRateById[recordingId] / 2
+              : undefined
+          }
+        />
       </div>
     </div>
   );

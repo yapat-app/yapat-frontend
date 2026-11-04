@@ -523,15 +523,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const selectedIdx =
     selectedSnippetId === null ? -1 : indexOf(selectedSnippetId);
 
-  // `useALSync` can only scroll to a mounted card. In blind mode the feed
-  // renders a small virtualized window, so jump the scroll container directly
-  // to the selected snippet's slot when its position is known. Runs as a
-  // layout effect so a remount doesn't paint row 0 first.
+  // `useALSync` is off in blind mode, so nothing else scrolls to a selection
+  // made outside the feed. The feed renders a small virtualized window, so jump
+  // the scroll container directly to the selected snippet's slot when its
+  // position is known. Also when its card is already mounted but off-centre:
+  // otherwise the scroll sync would take the centered card for the selection
+  // and undo it. Runs as a layout effect so a remount doesn't paint row 0 first.
   useLayoutEffect(() => {
     if (!isBlind) return;
     if (skipScrollIntoViewRef.current) return;
     if (selectedSnippetId === null) return;
-    if (cardRefs.current.has(selectedSnippetId)) return;
     if (selectedIdx === -1 || selectedIdx >= rowCount) return;
     scrollToIndex(selectedIdx);
   }, [isBlind, selectedSnippetId, selectedIdx, rowCount, scrollToIndex]);

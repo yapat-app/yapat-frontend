@@ -98,10 +98,12 @@ const Group: React.FC<{
 
 interface PanelProps {
   datasetId: number | null;
+  /** Highest frequency the recording contains (half its sample rate), if known. */
+  maxHz?: number;
   onClose: () => void;
 }
 
-const SettingsPanel: React.FC<PanelProps> = ({ datasetId, onClose }) => {
+const SettingsPanel: React.FC<PanelProps> = ({ datasetId, maxHz, onClose }) => {
   const { savedPrefs, savePrefs, resetPrefs, previewPrefs, isDefault } =
     useSpectrogramPrefs();
   const dataset = useDatasetSpectrogramConfig(datasetId);
@@ -119,15 +121,26 @@ const SettingsPanel: React.FC<PanelProps> = ({ datasetId, onClose }) => {
   const patch = (p: Partial<SpectrogramPrefs>) =>
     setDraft((d) => ({ ...d, ...p }));
 
-  // The slider spans 0 Hz to a round number above anything chosen so far
+  // The slider ends at the recording's highest frequency when that is known.
+  // Otherwise it spans 0 Hz to a round number above anything chosen so far
   // (24 kHz by default; it grows for ultrasonic datasets).
   const datasetMaxHz = dataset?.spectrogram_f_max_hz ?? 0;
+  const recordingMaxHz = maxHz ? Math.floor(maxHz / 100) * 100 : 0;
   const sliderMaxHz =
-    Math.ceil(Math.max(24000, draft.fMaxHz ?? 0, datasetMaxHz) / 1000) * 1000;
+    recordingMaxHz >= 200
+      ? recordingMaxHz
+      : Math.ceil(Math.max(24000, draft.fMaxHz ?? 0, datasetMaxHz) / 1000) *
+        1000;
   const sliderValue: [number, number] = [
-    draft.fMinHz ??
-      (hasDatasetRange ? (dataset?.spectrogram_f_min_hz ?? 0) : 0),
-    draft.fMaxHz ?? (hasDatasetRange ? datasetMaxHz : sliderMaxHz),
+    Math.min(
+      draft.fMinHz ??
+        (hasDatasetRange ? (dataset?.spectrogram_f_min_hz ?? 0) : 0),
+      sliderMaxHz - 100,
+    ),
+    Math.min(
+      draft.fMaxHz ?? (hasDatasetRange ? datasetMaxHz : sliderMaxHz),
+      sliderMaxHz,
+    ),
   ];
 
   // Live preview: what you pick is drawn on screen straight away (after a short
@@ -334,10 +347,15 @@ const SettingsPanel: React.FC<PanelProps> = ({ datasetId, onClose }) => {
 
 interface Props {
   datasetId: number | null;
+  /** Highest frequency of the current recording, if known (caps the slider). */
+  maxHz?: number;
 }
 
 /** Gear button + popover; sits next to "Find similar" in the snippet header. */
-export const SpectrogramSettingsPopover: React.FC<Props> = ({ datasetId }) => {
+export const SpectrogramSettingsPopover: React.FC<Props> = ({
+  datasetId,
+  maxHz,
+}) => {
   const [open, setOpen] = useState(false);
   // Bumped on every open so the panel starts from the saved settings again.
   const [openCount, setOpenCount] = useState(0);
@@ -363,19 +381,33 @@ export const SpectrogramSettingsPopover: React.FC<Props> = ({ datasetId }) => {
       styles={{ container: { padding: 0, overflow: "hidden" } }}
       // Never empty: antd ignores open requests from a Popover with no content.
       content={
-        <SettingsPanel key={openCount} datasetId={datasetId} onClose={close} />
+        <SettingsPanel
+          key={openCount}
+          datasetId={datasetId}
+          maxHz={maxHz}
+          onClose={close}
+        />
       }
     >
-      <Button
-        size="small"
-        title="Spectrogram settings"
-        aria-label="Spectrogram settings"
-        aria-expanded={open}
-        icon={<SettingOutlined />}
-        type={open ? "primary" : "default"}
-        ghost={open}
-        className={isDefault ? "" : "text-blue-600! border-blue-300!"}
-      />
+      {/* The Popover needs a plain element to attach to; the hint lives inside
+          it and stays out of the way while the panel is open. */}
+      <span className="inline-flex">
+        <Tooltip
+          title="Spectrogram settings"
+          placement="topRight"
+          open={open ? false : undefined}
+        >
+          <Button
+            size="small"
+            aria-label="Spectrogram settings"
+            aria-expanded={open}
+            icon={<SettingOutlined />}
+            type={open ? "primary" : "default"}
+            ghost={open}
+            className={isDefault ? "" : "text-blue-600! border-blue-300!"}
+          />
+        </Tooltip>
+      </span>
     </Popover>
   );
 };
