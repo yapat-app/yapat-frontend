@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Button, Tooltip, message } from "antd";
+import { Button, Popover, Tooltip, message } from "antd";
 import {
   CheckSquareOutlined,
   FolderAddOutlined,
@@ -27,6 +27,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import type { Dataset, IngestJob, QuickLabel } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../hooks";
+import { useEmbeddingOptions } from "../../hooks/useEmbeddingOptions";
 import {
   fetchAllDatasets,
   fetchReferenceDatasets,
@@ -49,12 +50,15 @@ import { DatasetQuickLabelsModal } from "../DatasetQuickLabelsModal";
 import { DatasetMetadataModal } from "../DatasetMetadataModal";
 import { ExportAnnotationPanel } from "../ExportAnnotation";
 import { useDatasetJobs } from "./datasetJobsContext";
+import { EmbeddingModelsList } from "./EmbeddingModelsList";
 import { TILE_HEADER_CLASS, TileActionButton } from "./TileActionButton";
 import {
   DATASET_STATUS_META,
+  DISABLED_ACTION_CLASS,
   formatPercent,
   getDatasetStatus,
 } from "../../utils/datasetStatus";
+import { readyEmbeddingModelCount } from "../../utils/embeddingOptions";
 
 type Props = {
   dataset: Dataset;
@@ -172,6 +176,8 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const jobs = useDatasetJobs(dataset);
   const status = getDatasetStatus(dataset, jobs);
   const statusMeta = DATASET_STATUS_META[status];
+  const embeddingOptions = useEmbeddingOptions(Number(dataset.id), jobs.running);
+  const readyModels = readyEmbeddingModelCount(embeddingOptions);
 
   // Starts from the copy the page loaded before it appeared (see above).
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>(
@@ -262,10 +268,22 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
       ? missingEmbeddingsNote
       : statusMeta.hint;
 
+  const statusPillClass = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusMeta.badge}`;
+  const statusDot = (
+    <span
+      aria-hidden="true"
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusMeta.dot}`}
+    />
+  );
+
   const canManage = isAdmin || user?.role === "team_owner";
   // Adding recordings needs embeddings: new files are embedded and scored
   // like the existing ones. Not while another job changes the dataset.
   const showAddRecordings = canManage && !!dataset.is_ready_for_feed;
+  // First embeddings, or another model on a dataset that already has them.
+  const showGenerateEmbeddings =
+    isAdmin &&
+    (status === "not_found" || (!!dataset.is_ready_for_feed && !isReference));
   const addRecordingsBusy =
     (jobs.ingestRunning && !jobs.ingestStalled) ||
     jobs.running ||
@@ -300,17 +318,27 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                 </Tooltip>
               )}
               {/* Status pill, tinted by state; the dot matches the list and legend. */}
-              <Tooltip title={statusTooltip}>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusMeta.badge}`}
+              {status === "ready" && embeddingOptions.length > 0 ? (
+                <Popover
+                  content={<EmbeddingModelsList options={embeddingOptions} />}
+                  placement="bottomLeft"
+                  arrow={false}
+                  trigger={["hover", "focus"]}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusMeta.dot}`}
-                  />
-                  {statusMeta.label}
-                </span>
-              </Tooltip>
+                  <span tabIndex={0} className={statusPillClass}>
+                    {statusDot}
+                    {statusMeta.label}
+                    {readyModels > 1 && ` · ${readyModels} models`}
+                  </span>
+                </Popover>
+              ) : (
+                <Tooltip title={statusTooltip}>
+                  <span className={statusPillClass}>
+                    {statusDot}
+                    {statusMeta.label}
+                  </span>
+                </Tooltip>
+              )}
             </div>
             <p className="m-0 mt-1 text-sm text-slate-500 font-ibm-sans">
               {dataset.description?.trim() ? dataset.description : "—"}
@@ -333,12 +361,11 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
           </div>
 
           {(!isReference ||
-            (isAdmin && status === "not_found") ||
+            showGenerateEmbeddings ||
             showAddRecordings) && (
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2.5 sm:w-auto">
-              {/* Generate Embeddings (admin only): only offered while the
-                  embeddings are missing; once they are ready it is gone. */}
-              {isAdmin && status === "not_found" && (
+              {/* Generate Embeddings (admin only): the first model, then any others. */}
+              {showGenerateEmbeddings && (
                 <GenerateEmbeddings
                   dataset={dataset}
                   running={jobs.running}
@@ -351,6 +378,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               {showAddRecordings && (
                 <Button
                   size="large"
+                  className={DISABLED_ACTION_CLASS}
                   icon={
                     jobs.ingestRunning && !jobs.ingestStalled ? (
                       <LoadingOutlined />
@@ -383,6 +411,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                     borderColor: "#1e40af",
                     color: "#fff",
                   }}
+                  className={DISABLED_ACTION_CLASS}
+                  disabled={!dataset.is_ready_for_feed}
+                  title={dataset.is_ready_for_feed ? undefined : "Embeddings aren't ready yet"}
                   onClick={handleStartAL}
                 >
                   Annotate

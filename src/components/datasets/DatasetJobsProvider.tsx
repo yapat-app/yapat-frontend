@@ -59,6 +59,8 @@ const DatasetJobWatcher = ({ dataset }: { dataset: Dataset }) => {
       setStarted(id, null);
       if (p.status === "completed") {
         message.success(`Embeddings ready for ${dataset.name}`);
+        // An open hub (here or in another tab) offers the new model.
+        notifyDatasetDataChanged(id);
       } else {
         message.error(
           `Embedding generation failed for ${dataset.name}${p.error_message ? `: ${p.error_message}` : ""}`,
