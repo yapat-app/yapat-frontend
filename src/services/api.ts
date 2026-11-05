@@ -30,6 +30,7 @@ import type {
   ScanProgress,
   CreateEmbedding,
   EmbeddingMethod,
+  EmbeddingOption,
   Feed,
   FeedCreate,
   FeedSimilarityCreate,
@@ -50,6 +51,7 @@ import type {
   retrainActiveLearningBody,
   PredictionHistogram,
 } from "../types";
+import { dedupeEmbeddingOptions } from "../utils/embeddingOptions";
 import {
   parseWavSampleRate,
   resolveSnippetSampleRate,
@@ -248,6 +250,12 @@ export const embeddingApi = {
   getJobProgress: async (jobId: number): Promise<EmbeddingJobProgress> => {
     const response = await api.get(`api/embeddings/${jobId}/progress`);
     return response.data;
+  },
+
+  /** Embedding models on a dataset, one per model (see dedupeEmbeddingOptions). */
+  options: async (datasetId: number): Promise<EmbeddingOption[]> => {
+    const response = await api.get(`api/datasets/${datasetId}/embedding-options`);
+    return dedupeEmbeddingOptions(response.data);
   },
 
   allSnippetSets: async (datasetId: number | null): Promise<SnippetSet[]> => {
