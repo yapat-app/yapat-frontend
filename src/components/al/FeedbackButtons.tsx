@@ -6,8 +6,10 @@
  *               via a MODIFY action.
  *
  * Bootstrap (AL feed, no checkpoint yet): labels go to the same feedback
- * endpoint as MODIFY with the snippet set's embedding model; the request that
+ * endpoint as MODIFY with the selected embedding model; the request that
  * reaches the dataset's threshold trains the first model before it returns.
+ * While another embedding model has a classifier, it starts this model's own
+ * in the background instead.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +18,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   fetchFeedbackCount,
   runInference,
+  selectHasSeveralEmbeddingModels,
   setClassicSnippetAnnotations,
   submitBootstrapFeedback,
   submitFeedback,
@@ -72,6 +75,7 @@ export const FeedbackButtons: React.FC<Props> = ({
     bootstrapSubmitting,
     feedbackCount,
     retrainThreshold,
+    classifierTrainingModelId,
   } = useAppSelector((state) => state.al);
 
   const isClassicFeed = feedSource === "classic";
@@ -79,9 +83,14 @@ export const FeedbackButtons: React.FC<Props> = ({
   const hasCheckpoint = usedCheckpointId !== null;
   // No model yet: labels are bootstrap feedback toward the first model.
   const isBootstrap = !isClassicFeed && !hasCheckpoint;
-  // The request that reaches the threshold trains the first model.
+  // "First model" would mislead once the dataset has several embedding models.
+  const severalEmbeddingModels = useAppSelector(selectHasSeveralEmbeddingModels);
+  // The request that reaches the threshold trains the first model, or starts
+  // this embedding model's own classifier in the background.
   const trainingFirstModel =
-    isBootstrap && bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold;
+    isBootstrap &&
+    (classifierTrainingModelId !== null ||
+      (bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold));
   const canManageQuickLabels = useCanManageQuickLabels();
   // During the guided tour, disable all labeling so actions are preview-only.
   // In bootstrap, one request at a time across all cards: the training one
@@ -147,6 +156,7 @@ export const FeedbackButtons: React.FC<Props> = ({
         prediction.snippet_id,
         normalized,
         existing,
+        embeddingModelId,
       );
       dispatch(
         setClassicSnippetAnnotations({
@@ -211,6 +221,8 @@ export const FeedbackButtons: React.FC<Props> = ({
       );
       if (fb.retrain_triggered && fb.active_checkpoint_id) {
         message.success("First model trained. Loading its predictions…");
+      } else if (fb.retrain_triggered && fb.auto_retrain_job_id) {
+        message.info("Training this model's classifier…");
       }
       setSaveState("saved");
       window.setTimeout(
@@ -273,6 +285,7 @@ export const FeedbackButtons: React.FC<Props> = ({
           snippet_id: prediction.snippet_id,
           action,
           ...(labels && labels.length > 0 ? { labels } : {}),
+          ...(embeddingModelId !== null ? { embedding_model_id: embeddingModelId } : {}),
         }),
       ).unwrap();
 
@@ -449,12 +462,15 @@ export const FeedbackButtons: React.FC<Props> = ({
       {isBootstrap &&
         (trainingFirstModel ? (
           <span className="shrink-0 inline-flex items-center gap-1.5 text-fs-11 text-blue-600 w-fit">
-            <Spin size="small" /> Training first model… this can take a few minutes
+            <Spin size="small" />{" "}
+            {severalEmbeddingModels ? "Training this model's classifier" : "Training first model"}… this
+            can take a few minutes
           </span>
         ) : (
           <Tooltip title="No model yet. Once this many snippets are labelled, the first model is trained and the feed is ranked by it. At least one label must be a species.">
             <span className="shrink-0 text-fs-11 text-amber-600 cursor-help w-fit">
-              The first model trains after you label {retrainThreshold} snippets ·{" "}
+              {severalEmbeddingModels ? "This model's classifier" : "The first model"} trains after you
+              label {retrainThreshold} snippets ·{" "}
               {Math.min(feedbackCount, retrainThreshold)} / {retrainThreshold} done
             </span>
           </Tooltip>

@@ -90,6 +90,7 @@ export const LabelSpace: React.FC = () => {
   );
 
   const { currentSnippet } = useAppSelector((state: any) => state.snippet);
+  const embeddingModelId = useAppSelector((state) => state.al.embeddingModelId);
 
   // Load conversation label space once when entering pre-annotation screen
   const [loadedConversationId, setLoadedConversationId] = useState<
@@ -211,6 +212,7 @@ export const LabelSpace: React.FC = () => {
         taxon_id: label.taxon_id.toLowerCase(),
         display_name:
           label.canonical_name || label.scientific_name || label.name,
+        ...(embeddingModelId !== null ? { embedding_model_id: embeddingModelId } : {}),
       };
 
       await dispatch(createAnnotation(annotationData)).unwrap();

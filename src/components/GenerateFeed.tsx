@@ -44,6 +44,9 @@ export const GenerateFeedModal = ({
   const phase = usePhaseConfig();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { selectedDatasetId } = useAppSelector((state) => state.dataset);
+  // The hub's model, when it is on this dataset; otherwise the backend's default.
+  const hubDatasetId = useAppSelector((state) => state.al.selectedDatasetId);
+  const hubEmbeddingModelId = useAppSelector((state) => state.al.embeddingModelId);
   const { snippetsLoading } = useAppSelector((state) => state.snippet);
   const { feed } = useAppSelector((state) => state.feed);
   const [disableFeedGeneration, setDisableFeedGeneration] = useState(true);
@@ -141,6 +144,9 @@ export const GenerateFeedModal = ({
         start_time: startSec,
         end_time: endSec,
         limit: feedParams.limit,
+        ...(hubDatasetId === selectedDatasetId && hubEmbeddingModelId !== null
+          ? { embedding_model_id: hubEmbeddingModelId }
+          : {}),
       };
       console.log("payload before similarity", payload);
       dispatch(fetchSimilaritySnippetFeed(payload));

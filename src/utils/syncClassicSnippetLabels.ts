@@ -5,6 +5,11 @@ import { createAnnotation, deleteAnnotation } from "../redux/features/annotation
 import { buildAnnotationCreatePayload } from "./annotationCreatePayload";
 import { annotationDisplayLabel } from "./classicFeedSync";
 
+/** The backend's 409 for a label the snippet already has. */
+export function isDuplicateAnnotationError(err: unknown): boolean {
+  return typeof err === "string" && err.includes("already has an annotation");
+}
+
 /**
  * Persist label selection for a classic-feed snippet: DELETE removed annotations,
  * POST new ones, return fresh rows from the API.
@@ -14,6 +19,7 @@ export async function syncClassicSnippetLabels(
   snippetId: number,
   nextLabels: string[],
   existing: Annotation[],
+  embeddingModelId: number | null,
 ): Promise<Annotation[]> {
   const nextNorm = nextLabels.map((l) => l.trim()).filter(Boolean);
   const nextLower = new Set(nextNorm.map((l) => l.toLowerCase()));
@@ -33,9 +39,15 @@ export async function syncClassicSnippetLabels(
 
   for (const label of nextNorm) {
     if (existingLower.has(label.toLowerCase())) continue;
-    await dispatch(
-      createAnnotation(buildAnnotationCreatePayload(snippetId, label)),
-    ).unwrap();
+    try {
+      await dispatch(
+        createAnnotation(buildAnnotationCreatePayload(snippetId, label, embeddingModelId)),
+      ).unwrap();
+    } catch (err) {
+      // 409: someone labelled it first (e.g. under another model sharing this
+      // set). It is what was asked for; the refetch below shows it.
+      if (!isDuplicateAnnotationError(err)) throw err;
+    }
   }
 
   return annotationApi.getAll({ snippet_id: snippetId });

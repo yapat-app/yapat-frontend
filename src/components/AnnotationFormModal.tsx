@@ -30,6 +30,7 @@ export const AnnotationFormModal: React.FC<AnnotationFormProps> = ({
   onSuccess,
 }) => {
   const dispatch = useAppDispatch();
+  const embeddingModelId = useAppSelector((state) => state.al.embeddingModelId);
   const { loading, error, lastCreated } = useAppSelector(
     (state) => state.annotation,
   );
@@ -75,6 +76,7 @@ export const AnnotationFormModal: React.FC<AnnotationFormProps> = ({
       const annotationData: AnnotationCreate = {
         snippet_id: snippetId,
         species_name: values.species_name,
+        ...(embeddingModelId !== null ? { embedding_model_id: embeddingModelId } : {}),
       };
 
       // Use taxon_id if we have it from autocomplete

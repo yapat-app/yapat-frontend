@@ -10,17 +10,20 @@ const TAXON_ID_RE = /^([a-z]+:[a-zA-Z0-9_-]+|custom:[a-f0-9-]+)$/;
 export function buildAnnotationCreatePayload(
   snippetId: number,
   label: string,
+  embeddingModelId: number | null,
 ): AnnotationCreate {
   const display = label.trim();
   if (!display) {
     throw new Error("Label is empty");
   }
+  const model = embeddingModelId === null ? {} : { embedding_model_id: embeddingModelId };
 
   if (TAXON_ID_RE.test(display)) {
     return {
       snippet_id: snippetId,
       taxon_id: display,
       display_name: display,
+      ...model,
     };
   }
 
@@ -35,5 +38,6 @@ export function buildAnnotationCreatePayload(
     snippet_id: snippetId,
     taxon_id: `local:${slug || "label"}`,
     display_name: display,
+    ...model,
   };
 }
