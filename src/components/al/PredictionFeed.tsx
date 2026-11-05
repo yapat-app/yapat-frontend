@@ -469,6 +469,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useEffect(() => {
     if (skipScrollIntoViewRef.current) {
       skipScrollIntoViewRef.current = false;
+      // The feed chose this one itself, which ends any earlier hold. Its timer
+      // went with the previous run (a model switch clears the selection, then
+      // the feed picks the first row), so nothing else would release it.
+      scrollSyncSuspendedRef.current = false;
       return;
     }
     scrollSyncSuspendedRef.current = true;

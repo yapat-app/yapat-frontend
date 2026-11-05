@@ -9,13 +9,14 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Select, Button, Spin } from "antd";
+import { Select, Button, Spin, Tooltip } from "antd";
 import {
   DatabaseOutlined,
   ExperimentOutlined,
   SearchOutlined,
   HistoryOutlined,
   DeleteOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { NavigationBar } from "../components/NavigationBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
@@ -30,6 +31,7 @@ import { useHubALSession } from "./annotationHub/useHubALSession";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
+import { EmbeddingModelSwitcher } from "./annotationHub/EmbeddingModelSwitcher";
 import { useDatasetActivity } from "./annotationHub/useDatasetActivity";
 import { HubDatasetActivityPanel, HubIngestBanner } from "./annotationHub/HubDatasetActivity";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
@@ -52,6 +54,7 @@ import { buildExploreFilters } from "../explore/filters";
 import { useStickyAdmissions } from "../explore/useStickyAdmissions";
 import { useExploreScope } from "../explore/useExploreScope";
 import { useExploreFacets } from "../explore/useExploreSummary";
+import type { EmbeddingOption } from "../types";
 
 const { Option } = Select;
 
@@ -333,6 +336,7 @@ export const AnnotationHub: React.FC = () => {
     similarTo,
     dataset: al.selectedDatasetId,
     snippetSet: al.snippetSetId,
+    embeddingModel: al.embeddingModelId,
     phase: phase.id,
   });
   const stickyIds = useStickyAdmissions(stickyResetKey, annotationFeedbacks);
@@ -512,6 +516,21 @@ export const AnnotationHub: React.FC = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [findSimilarEnabled, selectedSnippetId, handleFindSimilar]);
+  // ── Embedding model switch ────────────────────────────────────────────────
+  // Filters that belong to the old model go in the same update as the switch,
+  // so no request pairs them with the new scope.
+  const handleSwitchEmbeddingModel = (option: EmbeddingOption) => {
+    setPredictedSpeciesScope([]);
+    // Snippet ids and neighbours are the old model's.
+    setSimilarTo(null);
+    if (option.snippet_set_id !== al.snippetSetId) setAnnotatedSpeciesScope([]);
+    if (statusAutoSwitchedRef.current) {
+      statusAutoSwitchedRef.current = false;
+      setFilterAnnotationStatus("any");
+    }
+    al.handleSwitchEmbeddingModel(option);
+  };
+
   const focusSpeciesOptions = al.labelScopeOptions;
   const focusableSpecies = React.useMemo(
     () =>
@@ -565,11 +584,19 @@ export const AnnotationHub: React.FC = () => {
   // Starting a model (cold start or bootstrap) is for managers (`isManager`).
   // Cold start only: offer "Generate Feed" while the dataset has no model
   // checkpoint (and no feed yet).
+  const severalEmbeddingModels = al.embeddingOptions.length > 1;
   const showFeedAction =
     isManager &&
     al.checkpointsLoaded &&
     al.checkpoints.length === 0 &&
-    al.predictions.length === 0;
+    al.predictions.length === 0 &&
+    // A model switched to has its feed already, even with no classifier.
+    (!severalEmbeddingModels || exploreScope === null);
+  // Single-model datasets keep today's bootstrap: labelling trains the first model.
+  const noClassifierOnThisModel =
+    severalEmbeddingModels &&
+    al.selectedOption !== null &&
+    al.selectedOption.active_checkpoint_id === null;
   const feedActionLabel = "Generate Feed";
 
   return (
@@ -608,6 +635,26 @@ export const AnnotationHub: React.FC = () => {
             ))}
           </Select>
         </div>
+
+        <EmbeddingModelSwitcher
+          options={al.embeddingOptions}
+          selected={al.selectedOption}
+          trainingClassifier={al.classifierTrainingModelId !== null}
+          onSwitch={handleSwitchEmbeddingModel}
+          onOpen={al.refreshEmbeddingOptions}
+        />
+        {isManager && noClassifierOnThisModel && (
+          <Tooltip title="Train this model's classifier on the labels already on its snippets">
+            <Button
+              size="middle"
+              icon={<ThunderboltOutlined />}
+              loading={al.classifierTrainingModelId !== null}
+              onClick={() => void al.handleTrainClassifier()}
+            >
+              Train classifier
+            </Button>
+          </Tooltip>
+        )}
 
         {/* Find species: the primary entry point for "where is species X?".
             Same state as the sidebar field and the projection legend; shown
@@ -841,10 +888,10 @@ export const AnnotationHub: React.FC = () => {
                   confidenceLabel={confidenceLabel}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
-                  showModelScores={phase.sidebar.modelScores}
+                  showModelScores={phase.sidebar.modelScores && !noClassifierOnThisModel}
                   showFindSimilar={phase.sidebar.findSimilar}
                   similarityActive={similarTo !== null}
-                  showLabelScope={phase.sidebar.labelScope}
+                  showLabelScope={phase.sidebar.labelScope && !noClassifierOnThisModel}
                   collapsed={sidebarCollapsed}
                   onCollapsedChange={setSidebarCollapsed}
                   onResetFilters={() => {
@@ -891,6 +938,7 @@ export const AnnotationHub: React.FC = () => {
         localTopKOnly={al.localTopKOnly}
         setLocalTopKOnly={al.setLocalTopKOnly}
         hasReadySnippetSet={al.hasReadySnippetSet}
+        modelChoiceLocked={al.selectedOption !== null}
         hasGroundTruthMetadata={al.hasGroundTruthMetadata}
         setHasGroundTruthMetadata={al.setHasGroundTruthMetadata}
         trainEmbeddingModelId={al.trainEmbeddingModelId}

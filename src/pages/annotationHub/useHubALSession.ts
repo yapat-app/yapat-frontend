@@ -9,7 +9,11 @@ import {
   setSelectedDataset,
   setInferenceConfig,
   runInference,
+  fetchEmbeddingOptions,
   fetchFeedbackCount,
+  selectEmbeddingOption,
+  switchEmbeddingModel,
+  clearError,
   hydrateSavedFeed,
   restoreFeedFromServer,
   pollRetrainJob,
@@ -20,7 +24,11 @@ import {
   clearFirstModelCheckpoint,
 } from "../../redux/features/alSlice";
 import { embeddingApi } from "../../services/api";
-import { useDatasetDataEpoch } from "../../explore/datasetRefresh";
+import {
+  notifyDatasetDataChanged,
+  useDatasetDataEpoch,
+} from "../../explore/datasetRefresh";
+import { useEmbeddingJobStatus } from "../../hooks/useEmbeddingJobStatus";
 import { alApi } from "../../services/alApi";
 import { studyLogger } from "../../studyLogging";
 import type { PAMCheckpoint } from "../../types/al";
@@ -32,7 +40,7 @@ export interface LabelScopeOption {
   tooltip: string | null;
   sampleCount: number | null;
 }
-import type { SnippetSet } from "../../types";
+import type { EmbeddingJobProgress, EmbeddingOption, SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
 import {
   buildInferenceSuggestionParams,
@@ -42,6 +50,15 @@ import {
 } from "./alInferenceHelpers";
 import { fetchPamQuickLabelNames } from "../../utils/fetchPamQuickLabelNames";
 import type { AnnotateMode } from "./types";
+
+/** Why training a model's first classifier failed, from a 400 or the failed job. */
+function showClassifierTrainingError(detail: string): void {
+  if (/no labels/i.test(detail)) {
+    message.warning("Label some snippets first");
+  } else {
+    message.error(detail ? `Training failed: ${detail}` : "Training failed");
+  }
+}
 
 /**
  * AL / validate session for AnnotationHub: URL sync, inference, feed restore,
@@ -83,11 +100,22 @@ export function useHubALSession(
     lastRetrainDispatch,
     usedCheckpointId,
     embeddingModelId,
+    embeddingOptions,
+    embeddingOptionsDatasetId,
+    classifierTrainingModelId,
     firstModelCheckpointId,
   } = useAppSelector((s) => s.al);
+  const selectedOption = useAppSelector(selectEmbeddingOption);
+  // Settled for this dataset, whether the request succeeded or not.
+  const embeddingOptionsLoaded =
+    selectedDatasetId !== null &&
+    embeddingOptionsDatasetId === Number(selectedDatasetId);
   const dataEpoch = useDatasetDataEpoch(
     selectedDatasetId === null ? null : Number(selectedDatasetId),
   );
+
+  // A model switch leaves no rows in memory, but its feed exists on the server.
+  const hasFeed = predictions.length > 0 || lastInferenceAt !== null;
 
   const feedbackCountDisplay = useMemo(() => {
     if (!Number.isFinite(retrainThreshold) || retrainThreshold <= 0) {
@@ -103,7 +131,7 @@ export function useHubALSession(
     if (
       selectedDatasetId === null ||
       !modelFamilyName ||
-      predictions.length === 0
+      !hasFeed
     )
       return;
     dispatch(
@@ -112,8 +140,15 @@ export function useHubALSession(
         model_family_name: modelFamilyName,
       }),
     );
-  }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length]);
-  const [checkpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
+  }, [dispatch, selectedDatasetId, modelFamilyName, predictions.length, hasFeed]);
+  const [allCheckpoints, setCheckpoints] = useState<PAMCheckpoint[]>([]);
+  // A classifier belongs to one embedding model: only the selected model's count.
+  const checkpoints = useMemo(() => {
+    if (!embeddingOptionsLoaded) return [];
+    return embeddingModelId === null
+      ? allCheckpoints
+      : allCheckpoints.filter((c) => c.embedding_model_id === embeddingModelId);
+  }, [allCheckpoints, embeddingModelId, embeddingOptionsLoaded]);
   const [checkpointsDatasetId, setCheckpointsDatasetId] = useState<
     number | null
   >(null);
@@ -215,7 +250,7 @@ export function useHubALSession(
   const [labelScopeLoading, setLabelScopeLoading] = useState(false);
   const [hasGroundTruthMetadata, setHasGroundTruthMetadata] =
     useState<boolean>(false);
-  const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(1);
+  const [trainEmbeddingModelId, setTrainEmbeddingModelId] = useState<number>(0);
   const [trainMetadataPath, setTrainMetadataPath] = useState<string>("");
   const [trainLabelConfigPath, setTrainLabelConfigPath] = useState<string>("");
   const [trainDevice, setTrainDevice] = useState<"cpu" | "cuda">("cpu");
@@ -295,14 +330,39 @@ export function useHubALSession(
     // open (datasetRefresh.ts) — a ready snippet set may exist now.
   }, [selectedDatasetId, dataEpoch]);
 
+  useEffect(() => {
+    if (selectedDatasetId === null) return;
+    void dispatch(fetchEmbeddingOptions(Number(selectedDatasetId)));
+    // dataEpoch: a model finished embedding or recordings were added.
+  }, [dispatch, selectedDatasetId, dataEpoch]);
+
+  // Keep the hub on the current model while another one embeds, and offer the
+  // new one when it finishes. The first model's job is watched by
+  // useDatasetActivity, which also replaces the workspace during that job.
+  const runningEmbeddingJobId =
+    embeddingOptions.find((o) => o.status === "pending" || o.status === "running")
+      ?.embedding_job_id ?? null;
+  const onEmbeddingJobFinished = useCallback(
+    (progress: EmbeddingJobProgress) => {
+      if (progress.status === "completed") {
+        notifyDatasetDataChanged(progress.dataset_id);
+      } else {
+        void dispatch(fetchEmbeddingOptions(progress.dataset_id));
+      }
+    },
+    [dispatch],
+  );
+  useEmbeddingJobStatus(runningEmbeddingJobId, onEmbeddingJobFinished);
+
   const resolvedSnippetSetId = useMemo(() => {
+    if (selectedOption) return selectedOption.snippet_set_id;
     if (localSS !== null) return localSS;
     if (snippetSetId !== null) return snippetSetId;
     const ready = snippetSets.find(
       (s) => String(s.status).toLowerCase() === "ready",
     );
     return ready?.id ?? null;
-  }, [localSS, snippetSetId, snippetSets]);
+  }, [selectedOption, localSS, snippetSetId, snippetSets]);
   const hasReadySnippetSet = resolvedSnippetSetId !== null;
 
   useEffect(() => {
@@ -352,6 +412,7 @@ export function useHubALSession(
     if (!isAlLikeMode || isValidateMode) return;
     if (inferenceLoading || predictions.length > 0 || lastInferenceAt) return;
     if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
+    if (!embeddingOptionsLoaded) return;
     if (checkpoints.length === 0) return;
     if (hasAutoInferredRef.current) return;
     // Same cross-dataset guard as handleRunInference — checkpoints and
@@ -365,7 +426,10 @@ export function useHubALSession(
     // but same-commit effects can't see each other's updates, so this one
     // would otherwise latch onto a stale placeholder family and infer with
     // the wrong model_family_name.
-    const effectiveFamily = checkpoints[0]?.model_family_name ?? localFamily;
+    const effectiveFamily =
+      selectedOption?.model_family_name ??
+      checkpoints[0]?.model_family_name ??
+      localFamily;
     if (!effectiveFamily) return;
     hasAutoInferredRef.current = true;
 
@@ -374,9 +438,7 @@ export function useHubALSession(
         modelCheckpointId: localCkpt,
         modelFamilyName: effectiveFamily,
         snippetSetId: resolvedSnippetSetId,
-        embeddingModelId:
-          snippetSets.find((s) => s.id === resolvedSnippetSetId)
-            ?.embedding_model_id ?? 1,
+        embeddingModelId,
         k: localK,
       }),
     );
@@ -404,6 +466,9 @@ export function useHubALSession(
     selectedDatasetId,
     localFamily,
     resolvedSnippetSetId,
+    embeddingOptionsLoaded,
+    selectedOption,
+    embeddingModelId,
     checkpoints.length,
     localCkpt,
     localK,
@@ -412,6 +477,10 @@ export function useHubALSession(
   ]);
 
   useEffect(() => {
+    if (selectedOption) {
+      setLocalFamily(selectedOption.model_family_name);
+      return;
+    }
     if (checkpoints.length === 0) {
       if (!localFamily) setLocalFamily(modelFamilyName ?? "default");
       return;
@@ -420,7 +489,7 @@ export function useHubALSession(
     if (first && first.model_family_name !== localFamily) {
       setLocalFamily(first.model_family_name ?? null);
     }
-  }, [checkpoints]);
+  }, [checkpoints, selectedOption]);
 
   useEffect(() => {
     if (!isAlLikeMode) return;
@@ -591,18 +660,14 @@ export function useHubALSession(
       return;
     }
     const family =
-      (localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? "");
+      selectedOption?.model_family_name ??
+      ((localFamily ?? "").trim() || (checkpoints[0]?.model_family_name ?? ""));
     if (!family) {
       message.info(
         "No model family selected for this dataset yet — try Apply again in a moment.",
       );
       return;
     }
-    const embeddingModelId =
-      snippetSets.find((s) => s.id === resolvedSnippetSetId)
-        ?.embedding_model_id ??
-      embeddingMethods?.[0]?.id ??
-      1;
     const suggestionParams = buildSuggestionParams(
       localK,
       isValidateMode ? true : localTopKOnly,
@@ -639,7 +704,8 @@ export function useHubALSession(
     localCkpt,
     checkpoints,
     snippetSets,
-    embeddingMethods,
+    selectedOption,
+    embeddingModelId,
     phase,
     localTopKOnly,
     localK,
@@ -655,20 +721,21 @@ export function useHubALSession(
       return;
     }
     if (selectedDatasetId === null || resolvedSnippetSetId === null) return;
-    const family = (localFamily ?? "").trim() || "default";
+    const family =
+      selectedOption?.model_family_name ?? ((localFamily ?? "").trim() || "default");
     if (!hasGroundTruthMetadata) {
       handleRunInference();
       return;
     }
-    if (!trainEmbeddingModelId || !Number.isFinite(trainEmbeddingModelId))
-      return;
+    const trainModelId = embeddingModelId ?? trainEmbeddingModelId;
+    if (!trainModelId || !Number.isFinite(trainModelId)) return;
     if (!trainMetadataPath.trim() || !trainLabelConfigPath.trim()) return;
     const result = await dispatch(
       trainFromScratch({
         dataset_id: selectedDatasetId,
         model_family_name: family,
         snippet_set_id: resolvedSnippetSetId ?? undefined,
-        embedding_model_id: trainEmbeddingModelId,
+        embedding_model_id: trainModelId,
         metadata_path: trainMetadataPath.trim(),
         label_config_path: trainLabelConfigPath.trim(),
         device: trainDevice,
@@ -690,6 +757,8 @@ export function useHubALSession(
     selectedDatasetId,
     resolvedSnippetSetId,
     localFamily,
+    selectedOption,
+    embeddingModelId,
     hasGroundTruthMetadata,
     trainEmbeddingModelId,
     trainMetadataPath,
@@ -699,7 +768,62 @@ export function useHubALSession(
     dispatch,
   ]);
 
+  /**
+   * Switch to another embedding model. Explore reloads everything from the new
+   * scope, so this never asks for inference.
+   */
+  const handleSwitchEmbeddingModel = useCallback(
+    (option: EmbeddingOption) => {
+      if (option.status !== "completed") return;
+      if (option.embedding_model_id === embeddingModelId) return;
+      studyLogger.log("embedding_model_change", {
+        from: embeddingModelId,
+        to: option.embedding_model_id,
+        snippetSetChanged: option.snippet_set_id !== snippetSetId,
+        hasClassifier: option.active_checkpoint_id !== null,
+      });
+      refreshedForCheckpointRef.current = null;
+      setLocalSS(option.snippet_set_id);
+      setLocalFamily(option.model_family_name);
+      setLocalLabelScope([]);
+      dispatch(switchEmbeddingModel(option));
+    },
+    [dispatch, embeddingModelId, snippetSetId],
+  );
+
+  const refreshEmbeddingOptions = useCallback(() => {
+    if (selectedDatasetId !== null) {
+      void dispatch(fetchEmbeddingOptions(Number(selectedDatasetId)));
+    }
+  }, [dispatch, selectedDatasetId]);
+
+  /** First classifier for the selected model, from the labels already on its snippets. */
+  const handleTrainClassifier = useCallback(async () => {
+    if (selectedDatasetId === null || !selectedOption) return;
+    const result = await dispatch(
+      trainFromScratch({
+        dataset_id: selectedDatasetId,
+        snippet_set_id: selectedOption.snippet_set_id,
+        embedding_model_id: selectedOption.embedding_model_id,
+        model_family_name: selectedOption.model_family_name,
+        use_existing_labels: true,
+        run_inference: true,
+      }),
+    );
+    if (trainFromScratch.fulfilled.match(result)) {
+      if (result.payload.waiting_for_ingest_job_id != null) {
+        message.info("Training starts when the new recordings finish being added.");
+      }
+      return;
+    }
+    // Reported here, not as a failed feed.
+    dispatch(clearError());
+    showClassifierTrainingError(String(result.payload ?? ""));
+  }, [dispatch, selectedDatasetId, selectedOption]);
+
   const retrainJobId = lastRetrainDispatch?.job_id ?? null;
+  const classifierTrainingRef = useRef(classifierTrainingModelId);
+  classifierTrainingRef.current = classifierTrainingModelId;
 
   const lastNotifiedJobIdRef = useRef<number | null>(null);
   const retrainStartedAtRef = useRef<Record<number, number>>({});
@@ -716,6 +840,8 @@ export function useHubALSession(
     async function tick() {
       if (cancelled) return;
       const r = await dispatch(pollRetrainJob(stableJobId));
+      // Left behind while waiting, e.g. by switching embedding model.
+      if (cancelled) return;
       if (!pollRetrainJob.fulfilled.match(r)) {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
@@ -727,6 +853,13 @@ export function useHubALSession(
       if (status === "COMPLETED" || status === "FAILED") {
         if (lastNotifiedJobIdRef.current !== stableJobId) {
           lastNotifiedJobIdRef.current = stableJobId;
+          if (classifierTrainingRef.current !== null) {
+            if (status === "COMPLETED") {
+              message.success("Classifier trained. Loading its predictions…");
+            } else {
+              showClassifierTrainingError(r.payload.error_message ?? "");
+            }
+          }
           if (status === "COMPLETED") {
             const startedAt = retrainStartedAtRef.current[stableJobId];
             studyLogger.log(
@@ -804,6 +937,7 @@ export function useHubALSession(
         } catch {
           /* ignore */
         }
+        void dispatch(fetchEmbeddingOptions(stableDatasetId));
         return;
       }
       // A retrain held for an add-recordings run can wait up to an hour; poll
@@ -835,7 +969,7 @@ export function useHubALSession(
     if (!isAlLikeMode) return;
     if (selectedDatasetId === null || modelFamilyName === null) return;
     // Nothing scored yet, or a job is already in flight — don't interfere.
-    if (predictions.length === 0 || lastInferenceAt === null) return;
+    if (lastInferenceAt === null) return;
     if (usedCheckpointId === null || snippetSetId === null) return;
 
     const datasetId = selectedDatasetId;
@@ -888,7 +1022,6 @@ export function useHubALSession(
     isAlLikeMode,
     selectedDatasetId,
     modelFamilyName,
-    predictions.length,
     lastInferenceAt,
     usedCheckpointId,
     snippetSetId,
@@ -927,10 +1060,7 @@ export function useHubALSession(
         modelCheckpointId: newCheckpointId,
         modelFamilyName,
         snippetSetId,
-        embeddingModelId:
-          embeddingModelId ??
-          snippetSets.find((s) => s.id === snippetSetId)?.embedding_model_id ??
-          1,
+        embeddingModelId,
       }),
     );
     dispatch(
@@ -945,6 +1075,7 @@ export function useHubALSession(
     dispatch(
       fetchFeedbackCount({ dataset_id: datasetId, model_family_name: modelFamilyName }),
     );
+    void dispatch(fetchEmbeddingOptions(datasetId));
     alApi
       .getCheckpoints(datasetId)
       .then((updated) => {
@@ -975,7 +1106,7 @@ export function useHubALSession(
         isSuggestionsMode(modelInfo),
     );
     setHasGroundTruthMetadata(false);
-    setTrainEmbeddingModelId(embeddingMethods?.[0]?.id ?? 1);
+    setTrainEmbeddingModelId(embeddingModelId ?? embeddingMethods?.[0]?.id ?? 0);
     setTrainMetadataPath("");
     setTrainLabelConfigPath("");
     setTrainDevice("cpu");
@@ -989,6 +1120,7 @@ export function useHubALSession(
     modelInfo,
     isValidateMode,
     embeddingMethods,
+    embeddingModelId,
   ]);
 
   return {
@@ -1016,7 +1148,15 @@ export function useHubALSession(
     alConfigOpen,
     setAlConfigOpen,
     checkpoints,
-    checkpointsLoaded: checkpointsDatasetId === selectedDatasetId,
+    checkpointsLoaded:
+      checkpointsDatasetId === selectedDatasetId && embeddingOptionsLoaded,
+    embeddingOptions,
+    embeddingModelId,
+    selectedOption,
+    classifierTrainingModelId,
+    handleSwitchEmbeddingModel,
+    refreshEmbeddingOptions,
+    handleTrainClassifier,
     snippetSets,
     localCkpt,
     localFamily,

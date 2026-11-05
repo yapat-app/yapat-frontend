@@ -29,6 +29,8 @@ import { SnippetHeader } from "./SnippetHeader";
 import { SortPanel } from "./SortPanel";
 import { defaultSortFields, makeSortFieldId } from "./sortPanelHelpers";
 import { usePhaseConfig } from "../../studyPhases";
+import { useAppSelector } from "../../hooks";
+import { selectHasSeveralEmbeddingModels } from "../../redux/features/alSlice";
 import { studyLogger } from "../../studyLogging";
 import type { SortField } from "../../types/sort";
 import type { ExploreFilters } from "../../types/explore";
@@ -84,6 +86,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onClearSimilar,
 }) => {
   const phase = usePhaseConfig();
+  // Nothing to rank by until this embedding model has a classifier. Single-model
+  // datasets keep today's sort options during bootstrap.
+  const noClassifierOnThisModel = useAppSelector(
+    (s) => selectHasSeveralEmbeddingModels(s) && s.al.usedCheckpointId === null,
+  );
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
   const [thumbData, setThumbData] = useState<ProjectionThumbnailData | null>(
     null,
@@ -311,7 +318,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
         fields={sortFields}
         onChange={setSortFields}
         allowNonModel={phase.sort.nonModel}
-        allowModel={phase.sort.model}
+        allowModel={phase.sort.model && !noClassifierOnThisModel}
         disabled={phase.sort.disabled}
         similarityActive={similarityActive}
       />
