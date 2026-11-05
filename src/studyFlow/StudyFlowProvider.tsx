@@ -28,6 +28,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { message } from "antd";
 import { usePhaseContext } from "../studyPhases";
 import { useAppSelector } from "../hooks";
+import { selectHasSeveralEmbeddingModels } from "../redux/features/alSlice";
 import { studyLogger } from "../studyLogging/StudyLogger";
 import { StudyFlowContext, type StudyFlowContextValue } from "./context";
 import { isFlowEnabled, phaseDurationMs, phaseSequence } from "./flowConfig";
@@ -152,16 +153,19 @@ export const StudyFlowProvider: React.FC<Props> = ({ children }) => {
     }
   }, [enabled, stage, phaseId, durationMs]);
 
-  // Cards whose control needs a trained model stay hidden until the feed has
-  // one. They are not marked seen meanwhile, so they surface later as new in
+  // Cards whose control needs a trained model, or several embedding models,
+  // stay hidden until the feed has them. They are not marked seen meanwhile, so they surface later as new in
   // the Guide menu.
   const feedHasModel = useAppSelector((s) => s.al.usedCheckpointId != null);
+  const severalEmbeddingModels = useAppSelector(selectHasSeveralEmbeddingModels);
   const availableSteps = useMemo(
     () =>
       getPhaseContent(phaseId).tour.filter(
-        (s) => !s.requiresModel || feedHasModel,
+        (s) =>
+          (!s.requiresModel || feedHasModel) &&
+          (!s.requiresSeveralEmbeddingModels || severalEmbeddingModels),
       ),
-    [phaseId, feedHasModel],
+    [phaseId, feedHasModel, severalEmbeddingModels],
   );
 
   // Steps to show this phase: only featureKeys not seen in an earlier phase.

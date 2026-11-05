@@ -76,6 +76,7 @@ const ALL_EVENT_TYPES = [
   "audio_interaction",
   // Hub filters / navigation
   "dataset_change",
+  "embedding_model_change",
   "annotation_status_filter_change",
   "annotated_species_filter_change",
   "focus_species_change",

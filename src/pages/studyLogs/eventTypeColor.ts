@@ -26,6 +26,7 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
 
   // Hub filters / navigation
   dataset_change: "geekblue",
+  embedding_model_change: "geekblue",
   annotation_status_filter_change: "geekblue",
   annotated_species_filter_change: "geekblue",
   focus_species_change: "geekblue",

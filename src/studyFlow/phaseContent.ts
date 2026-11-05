@@ -21,10 +21,10 @@ import { SCORE_ALLOWED_PROPERTIES } from "../pages/annotationHub/scoreFilterConf
 // ── Shared copy ────────────────────────────────────────────────────────────
 
 const CLIP_DESC =
-  "Each sample is a 3-second audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
+  "Each sample is a short audio snippet, shown as a spectrogram. Press ▶ to play it; the red line tracks playback position.";
 
 const LABEL_DESC =
-  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the clip to apply that label. You can add multiple species for one audio sample.";
+  "Below the player you'll see Quick Labels — one button per species. Click the species you hear (and see) in the snippet to apply that label. You can add multiple species for one audio sample.";
 
 const TIP_DESC =
   "If you're not confident about a snippet, skip it.";
@@ -64,7 +64,7 @@ const MODEL_SCORES_INTRO =
 const clipStep = (): TourStepSpec => ({
   featureKey: "clip",
   target: "spectrogram",
-  title: "The clip",
+  title: "The snippet",
   description: CLIP_DESC,
   placement: "left",
 });
@@ -167,6 +167,25 @@ const findSpeciesStep = (): TourStepSpec => ({
   requiresModel: true,
 });
 
+const EMBEDDING_MODELS_DESC = [
+  "This dataset has more than one embedding model. Each model describes the audio in its own way, so switching changes the scores, the predictions and the projection.",
+  "",
+  "The list says how each model relates to the others:",
+  "• Shared snippets, labels — the same snippets and labels as the models sharing them",
+  "• Separate snippets, labels — its own snippets. Switching to it shows different snippets; your labels on the current ones are kept",
+  "",
+  "Each model has its own classifier. Only labels you make while a model is selected count towards training that model.",
+].join("\n");
+
+const embeddingModelsStep = (): TourStepSpec => ({
+  featureKey: "embedding-models",
+  target: "embedding-model",
+  title: "Embedding models",
+  description: EMBEDDING_MODELS_DESC,
+  placement: "bottom",
+  requiresSeveralEmbeddingModels: true,
+});
+
 const sortStep = (): TourStepSpec => ({
   featureKey: "sort",
   target: "sort-panel",
@@ -222,7 +241,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
   P4: {
     title: "Welcome to Phase 4",
     body: [INTRO_P4_MODEL_TOOLS, INTRO_GUIDE_LINE],
-    tour: [...modelScoreSteps(), findSpeciesStep(), sortStep()],
+    tour: [...modelScoreSteps(), embeddingModelsStep(), findSpeciesStep(), sortStep()],
   },
 
   // ── Phase 5 — full workspace, standalone onboarding ─────────────────────
@@ -240,6 +259,7 @@ export const PHASE_CONTENT: Record<string, PhaseContent> = {
       zoomStep(),
       metadataStep(),
       ...modelScoreSteps(),
+      embeddingModelsStep(),
       findSpeciesStep(),
       sortStep(),
     ],

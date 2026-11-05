@@ -157,6 +157,16 @@ export type StudyLogEvent =
       payload: { from: number | null; to: number | null };
     }
   | {
+      eventType: "embedding_model_change";
+      payload: {
+        from: number | null;
+        to: number;
+        /** The new model uses other snippets and labels. */
+        snippetSetChanged: boolean;
+        hasClassifier: boolean;
+      };
+    }
+  | {
       eventType: "annotation_status_filter_change";
       /** source: "find_species_auto" / "find_similar_auto" when a search switched it, else omitted. */
       payload: { status: string; source?: string };

@@ -46,6 +46,8 @@ export interface TourStepSpec {
    * cold-start or bootstrap feed, and appears there once a model is trained.
    */
   requiresModel?: boolean;
+  /** The card's control only exists while the dataset has several embedding models. */
+  requiresSeveralEmbeddingModels?: boolean;
   /**
    * When set, the step renders the animated ScoreExplainer for this score above
    * its description. Kept as a key rather than a render prop so phaseContent.ts
