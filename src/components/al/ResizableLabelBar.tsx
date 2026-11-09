@@ -11,6 +11,8 @@ import { studyLogger } from "../../studyLogging";
 interface Props {
   children: React.ReactNode;
   className?: string;
+  /** Dim the bar and make it unusable (e.g. while a listen-only view is open). */
+  locked?: boolean;
 }
 
 // Default size: the bar's original content-driven bounds, so the default
@@ -26,7 +28,11 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
 
-export const ResizableLabelBar: React.FC<Props> = ({ children, className }) => {
+export const ResizableLabelBar: React.FC<Props> = ({
+  children,
+  className,
+  locked = false,
+}) => {
   const barRef = useRef<HTMLDivElement | null>(null);
   // null = default size. Intentionally not persisted, like ResizableSplit.
   const [heightPx, setHeightPx] = useState<number | null>(null);
@@ -92,8 +98,15 @@ export const ResizableLabelBar: React.FC<Props> = ({ children, className }) => {
   return (
     <div
       ref={barRef}
-      className={["relative shrink-0 flex flex-col", className ?? ""].join(" ")}
+      className={[
+        "relative shrink-0 flex flex-col",
+        className ?? "",
+        locked ? "opacity-50 select-none" : "",
+      ].join(" ")}
       style={sizeStyle}
+      // `inert` blocks pointer and keyboard use of everything inside. React 18
+      // has no typing for it, but passes the attribute through to the DOM.
+      {...(locked ? ({ inert: "" } as Record<string, string>) : {})}
     >
       <div
         role="separator"

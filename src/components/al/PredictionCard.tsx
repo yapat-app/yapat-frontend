@@ -22,10 +22,16 @@ import { useInViewport } from "../../hooks/useInViewport";
 import type { PAMPrediction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { useDatasetSpectrogramConfig } from "../../hooks/useDatasetSpectrogramConfig";
+import { useSpectrogramPrefs } from "../../hooks/useSpectrogramPrefs";
 import {
   spectrogramChromeHeight,
   spectrogramLayoutHeights,
 } from "../../utils/spectrogramConfig";
+import {
+  applyPrefsToDatasetRange,
+  isDefaultSpectrogramPrefs,
+  spectrogramAnalysisKey,
+} from "../../utils/spectrogramPrefs";
 
 /**
  * The anchor of a "Find similar" search scores 1.0 against itself; a small
@@ -86,11 +92,35 @@ const PredictionCardImpl: React.FC<Props> = ({
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
-  const datasetSpectrogram = useDatasetSpectrogramConfig(selectedDatasetId);
+  const datasetConfig = useDatasetSpectrogramConfig(selectedDatasetId);
+  // The annotator's own display settings (frequency range, contrast, colours,
+  // window). With the defaults nothing below differs from the dataset-only path.
+  const { prefs: wantedPrefs } = useSpectrogramPrefs();
+  // The card you are looking at follows a settings change at once; the other
+  // cards catch up one after another a moment later, so the page never has to
+  // redraw several spectrograms in one go (each redraw blocks the page).
+  const isSelectedCard = useAppSelector(
+    (s) => s.al.activeSnippetId === prediction.snippet_id,
+  );
+  const [laggedPrefs, setLaggedPrefs] = useState(wantedPrefs);
+  useEffect(() => {
+    const t = window.setTimeout(
+      () => setLaggedPrefs(wantedPrefs),
+      isSelectedCard ? 0 : 250 + (prediction.snippet_id % 4) * 300,
+    );
+    return () => window.clearTimeout(t);
+  }, [wantedPrefs, isSelectedCard, prediction.snippet_id]);
+  const spectrogramPrefs = isSelectedCard ? wantedPrefs : laggedPrefs;
+  const customSpectrogram = !isDefaultSpectrogramPrefs(spectrogramPrefs);
+  const datasetSpectrogram = useMemo(
+    () => applyPrefsToDatasetRange(datasetConfig, spectrogramPrefs),
+    [datasetConfig, spectrogramPrefs],
+  );
   const spectrogramBandKey = useMemo(
     () =>
-      `${datasetSpectrogram?.spectrogram_f_min_hz ?? ""}:${datasetSpectrogram?.spectrogram_f_max_hz ?? ""}`,
-    [datasetSpectrogram],
+      `${datasetSpectrogram?.spectrogram_f_min_hz ?? ""}:${datasetSpectrogram?.spectrogram_f_max_hz ?? ""}` +
+      (customSpectrogram ? `|${spectrogramAnalysisKey(spectrogramPrefs)}` : ""),
+    [datasetSpectrogram, customSpectrogram, spectrogramPrefs],
   );
   const activeSnippetId = useAppSelector((state) => state.al.activeSnippetId);
   const feedbacks = useAppSelector((state) => state.al.feedbacks);
@@ -453,7 +483,13 @@ const PredictionCardImpl: React.FC<Props> = ({
               navigator={false}
               settings={false}
               dark={false}
-              colormap="viridis"
+              colormap={
+                customSpectrogram ? spectrogramPrefs.colormap : "viridis"
+              }
+              rangeDb={customSpectrogram ? spectrogramPrefs.rangeDb : undefined}
+              windowMs={
+                customSpectrogram ? spectrogramPrefs.windowMs : undefined
+              }
             />
           </div>
         )}

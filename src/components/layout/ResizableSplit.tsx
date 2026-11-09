@@ -21,6 +21,12 @@ export interface ResizableSplitProps {
   /** If set, the initial width is this fraction of the container width instead of initialRightPx. */
   initialRightRatio?: number;
   minRightPanelPx?: number;
+  /**
+   * A live lower bound for the right panel, read on every drag step, for when
+   * the minimum depends on the panel's content. The larger of this and
+   * minRightPanelPx applies.
+   */
+  minRightPanelPxRef?: React.MutableRefObject<number>;
   maxRightPanelPx?: number;
   /** Optional cap as a fraction of the container width (e.g. 0.4 = 40%) — re-applied on window resize too, not just while dragging. */
   maxRightRatio?: number;
@@ -70,6 +76,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
   initialRightPx = 560,
   initialRightRatio,
   minRightPanelPx = 420,
+  minRightPanelPxRef,
   maxRightPanelPx = 900,
   maxRightRatio,
   initialLeftPx = 272,
@@ -202,7 +209,11 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
           maxRightRatio ? window.innerWidth * maxRightRatio : Infinity,
           w - MIN_FLEX_SIDE_RESERVE_PX,
         );
-        const nextRight = clamp(w - x, minRightPanelPx, maxR);
+        const nextRight = clamp(
+          w - x,
+          Math.max(minRightPanelPx, minRightPanelPxRef?.current ?? 0),
+          maxR,
+        );
         latestValue = nextRight;
         setRightPx(nextRight);
       } else {
@@ -246,6 +257,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
     minLeftPx,
     minRightPx,
     minRightPanelPx,
+    minRightPanelPxRef,
     maxRightPanelPx,
     maxRightRatio,
     minLeftPanelPx,

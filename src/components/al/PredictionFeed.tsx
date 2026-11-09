@@ -12,6 +12,10 @@ import { Spin, Empty, Alert, Card, Progress, Row, Col, Statistic } from "antd";
 import { CheckCircleOutlined, SoundOutlined } from "@ant-design/icons";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { recordingApi } from "../../services/api";
+import {
+  rememberRecordingName,
+  rememberSnippetRecording,
+} from "../../utils/recordingNameCache";
 import { PredictionCard } from "./PredictionCard";
 import { FeedbackButtons } from "./FeedbackButtons";
 import { ResizableLabelBar } from "./ResizableLabelBar";
@@ -116,6 +120,13 @@ interface PredictionFeedProps {
   exploreFilters?: ExploreFilters;
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
+  /**
+   * Content drawn over the snippet card's slot (the region above the label
+   * bar), e.g. a listen-only view. The feed stays mounted underneath.
+   */
+  overlay?: React.ReactNode;
+  /** Dim and disable the label bar (set together with `overlay`). */
+  labelsLocked?: boolean;
 }
 
 type FeedRowSlot = { index: number; prediction: PAMPrediction | undefined };
@@ -127,6 +138,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   exploreFilters,
   quickLabels = [],
   quickLabelsLoading = false,
+  overlay,
+  labelsLocked = false,
 }) => {
   const dispatch = useAppDispatch();
   const {
@@ -449,6 +462,14 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
     visiblePredictionWindowKey,
     FEED_HYDRATION_DEBOUNCE_MS,
   );
+  // Let the snippet header know which recording each of these snippets is in.
+  useEffect(() => {
+    for (const p of visiblePredictionWindow) {
+      if (typeof p.recording_id === "number") {
+        rememberSnippetRecording(p.snippet_id, p.recording_id);
+      }
+    }
+  }, [visiblePredictionWindow]);
 
   const skipScrollIntoViewRef = useRef(false);
   // Briefly held after a selection change that came from OUTSIDE the feed (a
@@ -469,6 +490,12 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   useEffect(() => {
     if (skipScrollIntoViewRef.current) {
       skipScrollIntoViewRef.current = false;
+      // A scroll-driven selection means the feed is steering again, so any pause
+      // started by an earlier outside selection is over. Without this, the
+      // cleanup below cancels that pause's timer and nothing ever switches the
+      // pause off: scrolling then moves the cards but the selection (snippet
+      // number, spectrogram) never follows until something else is selected.
+      scrollSyncSuspendedRef.current = false;
       return;
     }
     scrollSyncSuspendedRef.current = true;
@@ -496,15 +523,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const selectedIdx =
     selectedSnippetId === null ? -1 : indexOf(selectedSnippetId);
 
-  // `useALSync` can only scroll to a mounted card. In blind mode the feed
-  // renders a small virtualized window, so jump the scroll container directly
-  // to the selected snippet's slot when its position is known. Runs as a
-  // layout effect so a remount doesn't paint row 0 first.
+  // `useALSync` is off in blind mode, so nothing else scrolls to a selection
+  // made outside the feed. The feed renders a small virtualized window, so jump
+  // the scroll container directly to the selected snippet's slot when its
+  // position is known. Also when its card is already mounted but off-centre:
+  // otherwise the scroll sync would take the centered card for the selection
+  // and undo it. Runs as a layout effect so a remount doesn't paint row 0 first.
   useLayoutEffect(() => {
     if (!isBlind) return;
     if (skipScrollIntoViewRef.current) return;
     if (selectedSnippetId === null) return;
-    if (cardRefs.current.has(selectedSnippetId)) return;
     if (selectedIdx === -1 || selectedIdx >= rowCount) return;
     scrollToIndex(selectedIdx);
   }, [isBlind, selectedSnippetId, selectedIdx, rowCount, scrollToIndex]);
@@ -902,7 +930,10 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           (typeof rec.file_name === "string" && rec.file_name) ||
           (typeof rec.name === "string" && rec.name) ||
           null;
-        if (name) next[id] = name;
+        if (name) {
+          next[id] = name;
+          rememberRecordingName(id, name);
+        }
       }
       setRecordingNameById(next);
     }
@@ -1356,6 +1387,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
               </div>
             </div>
           )}
+
+          {/* A listen-only view over the card slot (the label bar stays below). */}
+          {overlay}
         </div>
 
         {/* Sticky label bar — one shared instance for the whole feed, targeting
@@ -1363,7 +1397,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             of the height; the handle on its top edge lets the user enlarge it.
             Large quick-label sets scroll inside it.*/}
         {stickyLabelPrediction && (
-          <ResizableLabelBar className="bg-white">
+          <ResizableLabelBar className="bg-white" locked={labelsLocked}>
             <FeedbackButtons
               prediction={stickyLabelPrediction}
               serverLabels={labelsFor(stickyLabelPrediction.snippet_id)}
