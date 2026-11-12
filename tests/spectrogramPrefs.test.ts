@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_SPECTROGRAM_PREFS,
   applyPrefsToDatasetRange,
+  customAnalysisOf,
   isDefaultSpectrogramPrefs,
   sanitizeSpectrogramPrefs,
   spectrogramPrefsKey,
@@ -94,4 +95,95 @@ test("the key changes exactly when the picture would", () => {
     a,
     spectrogramPrefsKey({ ...DEFAULT_SPECTROGRAM_PREFS, windowMs: 50 }),
   );
+  assert.notEqual(
+    a,
+    spectrogramPrefsKey({ ...DEFAULT_SPECTROGRAM_PREFS, zeroPad: 2 }),
+  );
+});
+
+test("the extra colour schemes are accepted", () => {
+  for (const id of ["hot", "jet", "bone"]) {
+    assert.equal(sanitizeSpectrogramPrefs({ colormap: id }).colormap, id);
+  }
+});
+
+test("scale, window type, gain and high boost are validated and clamped", () => {
+  const p = sanitizeSpectrogramPrefs({
+    scale: "linear",
+    windowType: "blackman",
+    gainDb: 12.4,
+    highBoostDb: 15,
+  });
+  assert.equal(p.scale, "linear");
+  assert.equal(p.windowType, "blackman");
+  assert.equal(p.gainDb, 12);
+  assert.equal(p.highBoostDb, 15);
+
+  const bad = sanitizeSpectrogramPrefs({
+    scale: "cubic",
+    windowType: "kaiser",
+    gainDb: 999,
+    highBoostDb: -5,
+  });
+  assert.equal(bad.scale, "mel");
+  assert.equal(bad.windowType, "hann");
+  assert.equal(bad.gainDb, 30);
+  assert.equal(bad.highBoostDb, 0);
+  assert.equal(sanitizeSpectrogramPrefs({ gainDb: -99 }).gainDb, -30);
+});
+
+test("zero padding: only the offered values survive, anything else is 1x", () => {
+  assert.equal(DEFAULT_SPECTROGRAM_PREFS.zeroPad, 1);
+  assert.equal(sanitizeSpectrogramPrefs({ zeroPad: 2 }).zeroPad, 2);
+  assert.equal(sanitizeSpectrogramPrefs({ zeroPad: 4 }).zeroPad, 4);
+  for (const bad of [0, 3, 8, -1, "2", null, undefined]) {
+    assert.equal(sanitizeSpectrogramPrefs({ zeroPad: bad }).zeroPad, 1);
+  }
+  assert.ok(
+    !isDefaultSpectrogramPrefs({ ...DEFAULT_SPECTROGRAM_PREFS, zeroPad: 2 }),
+  );
+});
+
+test("our own spectrogram is only used when one of those options is set", () => {
+  assert.equal(customAnalysisOf(DEFAULT_SPECTROGRAM_PREFS), null);
+  // Zero padding, colour, contrast, window size and range stay with the player.
+  assert.equal(
+    customAnalysisOf({
+      ...DEFAULT_SPECTROGRAM_PREFS,
+      zeroPad: 2,
+      colormap: "jet",
+      rangeDb: 60,
+      windowMs: 50,
+      fMinHz: 100,
+      fMaxHz: 5000,
+    }),
+    null,
+  );
+  for (const change of [
+    { scale: "linear" as const },
+    { windowType: "hamming" as const },
+    { gainDb: 6 },
+    { highBoostDb: 10 },
+  ]) {
+    const a = customAnalysisOf({ ...DEFAULT_SPECTROGRAM_PREFS, ...change });
+    assert.ok(a, JSON.stringify(change));
+  }
+});
+
+test("the key changes when the new options do", () => {
+  const a = spectrogramPrefsKey(DEFAULT_SPECTROGRAM_PREFS);
+  for (const change of [
+    { scale: "log" as const },
+    { windowType: "blackman" as const },
+    { gainDb: 3 },
+    { highBoostDb: 3 },
+  ]) {
+    assert.notEqual(
+      a,
+      spectrogramPrefsKey({ ...DEFAULT_SPECTROGRAM_PREFS, ...change }),
+    );
+    assert.ok(
+      !isDefaultSpectrogramPrefs({ ...DEFAULT_SPECTROGRAM_PREFS, ...change }),
+    );
+  }
 });

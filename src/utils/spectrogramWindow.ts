@@ -9,10 +9,11 @@ import {
 import { DEFAULT_SPECTROGRAM_WINDOW_MS } from "./spectrogramPrefs";
 
 /**
- * FFT parameters for an annotator-chosen analysis window (in ms).
+ * FFT parameters for an annotator-chosen analysis window (in ms) and zero
+ * padding (the FFT is `zeroPad` times longer than the window needs).
  *
- * The default window returns `spectrogramParamsForSampleRate` unchanged, so
- * nobody who leaves the setting alone sees any difference. Other choices keep
+ * The default window and padding return `spectrogramParamsForSampleRate`
+ * unchanged, so nobody who leaves the settings alone sees any difference. Other choices keep
  * that same hop (same time resolution of the picture) and only change how
  * much sound each column analyses. The result always goes through
  * `clampSpectrogramParams`: a violated `n_fft >= win_length >= hop_length`
@@ -21,9 +22,18 @@ import { DEFAULT_SPECTROGRAM_WINDOW_MS } from "./spectrogramPrefs";
 export function spectrogramParamsForWindow(
   sampleRate: number,
   windowMs: number,
+  zeroPad = 1,
 ): SpectrogramParams {
   const base = spectrogramParamsForSampleRate(sampleRate);
-  if (windowMs === DEFAULT_SPECTROGRAM_WINDOW_MS) return base;
+  if (windowMs === DEFAULT_SPECTROGRAM_WINDOW_MS && zeroPad === 1) return base;
+
+  // Padding alone keeps today's framing and only lengthens the FFT.
+  if (windowMs === DEFAULT_SPECTROGRAM_WINDOW_MS) {
+    return clampSpectrogramParams({
+      ...base,
+      n_fft: Math.min(SPECTROGRAM_MAX_N_FFT, base.n_fft * zeroPad),
+    });
+  }
 
   const sr =
     Number.isFinite(sampleRate) && sampleRate > 0
@@ -32,7 +42,7 @@ export function spectrogramParamsForWindow(
   const win = Math.max(2, Math.round((sr * windowMs) / 1000));
   const n_fft = Math.min(
     SPECTROGRAM_MAX_N_FFT,
-    Math.max(SPECTROGRAM_N_FFT, 2 ** Math.ceil(Math.log2(win))),
+    Math.max(SPECTROGRAM_N_FFT, 2 ** Math.ceil(Math.log2(win))) * zeroPad,
   );
   return clampSpectrogramParams({
     n_fft,

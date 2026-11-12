@@ -29,6 +29,7 @@ import {
 } from "../../utils/spectrogramConfig";
 import {
   applyPrefsToDatasetRange,
+  customAnalysisOf,
   isDefaultSpectrogramPrefs,
   spectrogramAnalysisKey,
 } from "../../utils/spectrogramPrefs";
@@ -489,6 +490,12 @@ const PredictionCardImpl: React.FC<Props> = ({
               rangeDb={customSpectrogram ? spectrogramPrefs.rangeDb : undefined}
               windowMs={
                 customSpectrogram ? spectrogramPrefs.windowMs : undefined
+              }
+              zeroPad={
+                customSpectrogram ? spectrogramPrefs.zeroPad : undefined
+              }
+              analysis={
+                customSpectrogram ? customAnalysisOf(spectrogramPrefs) : null
               }
             />
           </div>
