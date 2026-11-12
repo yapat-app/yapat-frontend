@@ -17,15 +17,21 @@ import { SpectrogramAudioControls } from "../SpectrogramAudioControls";
 import { useDatasetSpectrogramConfig } from "../../hooks/useDatasetSpectrogramConfig";
 import { useSpectrogramPrefs } from "../../hooks/useSpectrogramPrefs";
 import {
+  PLACEHOLDER_SXX,
+  useCustomSpectrogram,
+} from "../../hooks/useCustomSpectrogram";
+import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   SPECTROGRAM_TIME_AXIS_HEIGHT,
-  buildMelTicks,
+  buildFreqTicks,
   formatSpectrogramHz,
   resolveSpectrogramDisplayRange,
 } from "../../utils/spectrogramConfig";
 import {
   SPECTROGRAM_COLORMAPS,
+  SPECTROGRAM_SCALES,
   applyPrefsToDatasetRange,
+  customAnalysisOf,
 } from "../../utils/spectrogramPrefs";
 import { spectrogramParamsForWindow } from "../../utils/spectrogramWindow";
 import {
@@ -155,12 +161,39 @@ export const FullRecordingCard: React.FC<Props> = ({
     [sampleRate, datasetSpectrogram, prefs],
   );
   const fftParams = useMemo(
-    () => spectrogramParamsForWindow(sampleRate, prefs.windowMs),
-    [sampleRate, prefs.windowMs],
+    () => spectrogramParamsForWindow(sampleRate, prefs.windowMs, prefs.zeroPad),
+    [sampleRate, prefs.windowMs, prefs.zeroPad],
   );
-  const freqTicks = useMemo(() => buildMelTicks(fMin, fMax, 5), [fMin, fMax]);
+  // Options the player cannot draw itself (scale, gain, high boost, window
+  // type): when any is set the picture is computed here and handed to it.
+  const analysis = useMemo(
+    () => customAnalysisOf(prefs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only these fields matter
+    [prefs.scale, prefs.windowType, prefs.gainDb, prefs.highBoostDb],
+  );
+  const scale = analysis?.scale ?? "mel";
+  const scaleLabel =
+    SPECTROGRAM_SCALES.find((c) => c.id === scale)?.label ?? "Mel";
+  const freqTicks = useMemo(
+    () => buildFreqTicks(scale, fMin, fMax, 5),
+    [scale, fMin, fMax],
+  );
+  const custom = useCustomSpectrogram({
+    src: audio?.url ?? "",
+    sampleRate,
+    analysis: audio ? analysis : null,
+    params: fftParams,
+    fMin,
+    fMax,
+    rangeDb: prefs.rangeDb,
+  });
+  // An empty picture while ours is computed (so the default never flashes);
+  // if the computation fails the player draws its own.
+  const sxx = analysis
+    ? (custom.sxx ?? (custom.pending ? PLACEHOLDER_SXX : undefined))
+    : undefined;
   // Height is deliberately not in the key: it only rescales the drawing.
-  const playerKey = `${audio?.url ?? ""}|${fMin}|${fMax}|${fftParams.n_fft}|${fftParams.win_length}|${fftParams.hop_length}|${prefs.rangeDb}`;
+  const playerKey = `${audio?.url ?? ""}|${fMin}|${fMax}|${fftParams.n_fft}|${fftParams.win_length}|${fftParams.hop_length}|${prefs.rangeDb}${analysis ? "|x" : ""}`;
   const colormapLabel =
     SPECTROGRAM_COLORMAPS.find((c) => c.id === prefs.colormap)?.label ??
     prefs.colormap;
@@ -248,18 +281,30 @@ export const FullRecordingCard: React.FC<Props> = ({
 
   // ── "Rendering…" until the player has drawn its picture ─────────────────
   const [paintedKey, setPaintedKey] = useState<string | null>(null);
+  // The player's own picture, reused to fill the overview bar.
+  const [overviewImg, setOverviewImg] = useState<{
+    key: string;
+    href: string;
+  } | null>(null);
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    // Stays connected: a colour-scheme change redraws the picture in place,
+    // and the overview bar must follow it.
     const check = () => {
-      if (!root.querySelector('svg image[href^="data:"]')) return false;
+      const img = root.querySelector('svg image[href^="data:"]');
+      if (!img) return;
+      const href = img.getAttribute("href");
+      if (href)
+        setOverviewImg((prev) =>
+          prev?.key === playerKey && prev.href === href
+            ? prev
+            : { key: playerKey, href },
+        );
       setPaintedKey(playerKey);
-      return true;
     };
     const first = requestAnimationFrame(check);
-    const obs = new MutationObserver(() => {
-      if (check()) obs.disconnect();
-    });
+    const obs = new MutationObserver(check);
     obs.observe(root, { childList: true, subtree: true, attributes: true });
     return () => {
       cancelAnimationFrame(first);
@@ -428,12 +473,12 @@ export const FullRecordingCard: React.FC<Props> = ({
         </p>
         <div className="shrink-0 flex items-center gap-1.5">
           <span className="rounded-full bg-gray-100 px-1.5 py-px text-fs-9 text-gray-600 font-ibm-mono">
-            Mel · {formatSpectrogramHz(fMin)}–{formatSpectrogramHz(fMax)} ·{" "}
+            {scaleLabel} · {formatSpectrogramHz(fMin)}–{formatSpectrogramHz(fMax)} ·{" "}
             {colormapLabel}
           </span>
           <Tooltip
             placement="topRight"
-            title="Colours are scaled to the whole recording, so the highlighted snippet can look slightly different from its card. The Contrast setting helps when comparing."
+            title="Colours are scaled to the whole recording, so the highlighted snippet can look slightly different from its card. The Sensitivity setting helps when comparing."
             styles={{
               root: { maxWidth: 230 },
               container: { fontSize: 11, lineHeight: 1.45, padding: "6px 9px" },
@@ -476,7 +521,15 @@ export const FullRecordingCard: React.FC<Props> = ({
         role="presentation"
         title="Whole recording: drag to move through it"
         className="relative mb-2 h-7 cursor-pointer rounded-md bg-gray-100 select-none touch-none overflow-hidden"
-        style={{ marginLeft: Y_AXIS_WIDTH }}
+        style={{
+          marginLeft: Y_AXIS_WIDTH,
+          ...(overviewImg?.key === playerKey
+            ? {
+                backgroundImage: `url("${overviewImg.href}")`,
+                backgroundSize: "100% 100%",
+              }
+            : null),
+        }}
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           scrubOverview(e.clientX);
@@ -487,7 +540,7 @@ export const FullRecordingCard: React.FC<Props> = ({
       >
         {snippetWin && (
           <div
-            className="absolute top-0 h-full bg-yellow-400"
+            className="absolute top-0 h-full bg-yellow-400/80"
             style={{
               left: pct(snippetWin.startSec),
               width: `max(3px, ${((snippetWin.endSec - snippetWin.startSec) / durationSec) * 100}%)`,
@@ -495,8 +548,13 @@ export const FullRecordingCard: React.FC<Props> = ({
           />
         )}
         <div
-          className="absolute top-0 h-full rounded-md border-2 border-blue-500 bg-blue-500/15"
+          // Like the navigator strip in audio editors: the part in view keeps
+          // its full colour, and the rest is softly shaded. The frame is the
+          // app's blue, which stays readable against the white page where the
+          // window meets the bar's edge.
+          className="absolute top-0 h-full rounded-md border-[3px] border-blue-600"
           style={{
+            boxShadow: "0 0 0 9999px rgba(15,23,42,0.5)",
             left: `${(scrollLeft / contentW) * 100}%`,
             width: `${Math.min(100, (viewW / contentW) * 100)}%`,
           }}
@@ -518,7 +576,7 @@ export const FullRecordingCard: React.FC<Props> = ({
         </div>
 
         <div className="relative flex-1 min-w-0">
-          {!painted && (
+          {(!painted || custom.pending) && (
             <div
               role="status"
               className="absolute inset-x-0 top-0 z-10 flex items-center justify-center rounded bg-white/80 text-fs-11 text-gray-500 font-ibm-sans pointer-events-none"
@@ -556,6 +614,7 @@ export const FullRecordingCard: React.FC<Props> = ({
                   f_max={fMax}
                   n_mels={fftParams.n_mels}
                   top_db={prefs.rangeDb}
+                  sxx={sxx}
                   specHeight={plotH}
                   navigator={false}
                   settings={false}
@@ -572,9 +631,10 @@ export const FullRecordingCard: React.FC<Props> = ({
                 return (
                   <div
                     key={w.id}
-                    // The whole slot lights up while its chip is hovered, so it
-                    // is clear which snippet a click will open.
-                    className="absolute top-0 pointer-events-none border-l border-white/30 has-[button:hover]:bg-blue-400/20 has-[button:hover]:border-blue-300"
+                    // Hovering its chip outlines the whole slot in blue (like
+                    // the selected snippet's yellow outline) and tints it, so
+                    // it is clear which snippet a click will open.
+                    className="absolute top-0 pointer-events-none border-l border-white/30 has-[button:hover]:bg-blue-400/20 has-[button:hover]:border-2 has-[button:hover]:border-blue-500"
                     style={{ left: pct(w.startSec), height: plotH, width: slotPx }}
                   >
                     {slotPx >= 1 && (
