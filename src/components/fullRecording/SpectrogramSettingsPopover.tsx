@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, ConfigProvider, Popover, Radio, Slider, Tooltip } from "antd";
 import {
   CloseOutlined,
-  DownOutlined,
   InfoCircleOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
@@ -42,6 +41,8 @@ const PRESETS: Array<{
 /** How long to wait after the last change before redrawing the preview. */
 const PREVIEW_DELAY_MS = 300;
 
+const cap = (t: string) => t.replace(/^./, (ch) => ch.toUpperCase());
+
 /**
  * Wording for every setting. Kept short on purpose: a name people already know,
  * one caption under the chosen option, and (behind the (i)) one or two
@@ -57,7 +58,7 @@ const HELP = {
   colour:
     "Only changes the colours, never the sound. Grayscale suits printing; Jet separates small differences. (Audacity: Scheme)",
   detail:
-    "A picture cannot be sharp in both timing and pitch at once. Timing suits clicks and pulses; Pitch suits whistles and steady tones. (Audacity: Window size)",
+    "How much sound each column of the picture looks at. Shorter: sharper timing, good for clicks and pulses. Longer: sharper pitch, good for whistles and steady tones. 25 ms is the default. (Audacity: Window size)",
   brightness:
     "Brightens or dims the whole picture. Brighten to bring out faint calls; loud sounds then saturate. (Audacity: Gain)",
   boost:
@@ -91,9 +92,12 @@ const SCALE_TEXT: Record<SpectrogramScale, ChoiceText> = {
 
 /** Keyed by window length in ms. */
 const DETAIL_TEXT: Record<number, ChoiceText> = {
-  12: { label: "Timing", caption: "Clicks and pulses look crisper" },
-  25: { label: "Balanced", caption: "A good all-round start" },
-  50: { label: "Pitch", caption: "Steady notes and whistles look crisper" },
+  12: { label: "12 ms", caption: "Timing · clicks and pulses look crisper" },
+  25: { label: "25 ms", caption: "Balanced · a good all-round start" },
+  50: {
+    label: "50 ms",
+    caption: "Pitch · steady notes and whistles look crisper",
+  },
 };
 
 /** Shown in this order, from sharpest to cleanest. */
@@ -117,7 +121,7 @@ const SMOOTHING_TEXT: Record<number, ChoiceText> = {
 
 /** Look of the button rows: equal-width, short plain words. */
 const OPTION_BUTTONS_CLASS =
-  "flex! w-full! [&_.ant-radio-button-wrapper]:flex-1 [&_.ant-radio-button-wrapper]:h-9! [&_.ant-radio-button-wrapper]:px-2! [&_.ant-radio-button-wrapper]:text-center [&_.ant-radio-button-wrapper]:text-fs-13! [&_.ant-radio-button-wrapper]:leading-[34px]! [&_.ant-radio-button-wrapper]:font-ibm-sans!";
+  "flex! w-full! [&_.ant-radio-button-wrapper]:flex-1 [&_.ant-radio-button-wrapper]:h-7! [&_.ant-radio-button-wrapper]:px-1! [&_.ant-radio-button-wrapper]:text-center [&_.ant-radio-button-wrapper]:text-fs-12! [&_.ant-radio-button-wrapper]:leading-[26px]! [&_.ant-radio-button-wrapper]:font-ibm-sans!";
 
 /** Both sliders share this look: blue track, light rail, blue handle. */
 const SLIDER_THEME = {
@@ -137,33 +141,41 @@ const SLIDER_THEME = {
   },
 } as const;
 
+/** The (i) next to a label: hover or focus it for what the setting does. */
+const InfoTip: React.FC<{ title: string; help: string }> = ({ title, help }) => (
+  <Tooltip
+    title={help}
+    placement="left"
+    styles={{
+      root: { maxWidth: 250 },
+      container: { fontSize: 11, lineHeight: 1.5, padding: "6px 9px" },
+    }}
+  >
+    <InfoCircleOutlined
+      tabIndex={0}
+      role="img"
+      aria-label={`About ${title.toLowerCase()}`}
+      className="text-fs-11 text-slate-400 hover:text-blue-600 cursor-help"
+    />
+  </Tooltip>
+);
+
+const LABEL_CLASS =
+  "m-0 flex items-center gap-1 text-fs-11 font-semibold uppercase tracking-wider text-slate-600 font-ibm-sans";
+
+/** A setting with its label above it and, at the right of the label, its current value. */
 const Group: React.FC<{
   title: string;
-  /** Current value, shown at the right of the heading. */
   value?: string;
   help: string;
   children: React.ReactNode;
 }> = ({ title, value, help, children }) => (
-  <section className="flex min-w-0 flex-col gap-[6px]">
-    <h4 className="m-0 flex items-center gap-1 text-fs-11 font-semibold uppercase tracking-wider text-slate-600 font-ibm-sans">
+  <section className="flex min-w-0 flex-col gap-1.5">
+    <h4 className={LABEL_CLASS}>
       {title}
-      <Tooltip
-        title={help}
-        placement="left"
-        styles={{
-          root: { maxWidth: 250 },
-          container: { fontSize: 11, lineHeight: 1.5, padding: "6px 9px" },
-        }}
-      >
-        <InfoCircleOutlined
-          tabIndex={0}
-          role="img"
-          aria-label={`About ${title.toLowerCase()}`}
-          className="text-fs-11 text-slate-400 hover:text-blue-600 cursor-help"
-        />
-      </Tooltip>
+      <InfoTip title={title} help={help} />
       {value && (
-        <span className="ml-auto normal-case tracking-normal text-fs-11 font-normal text-slate-700">
+        <span className="ml-auto min-w-0 truncate normal-case tracking-normal text-fs-11 font-normal text-slate-700">
           {value}
         </span>
       )}
@@ -172,7 +184,22 @@ const Group: React.FC<{
   </section>
 );
 
-/** Button choices with, underneath, a short caption for the chosen one. */
+/** A one-line setting: the label at the left, its control at the right. */
+const Row: React.FC<{
+  title: string;
+  help: string;
+  children: React.ReactNode;
+}> = ({ title, help, children }) => (
+  <section className="grid min-h-7 grid-cols-[148px_minmax(0,1fr)] items-center gap-x-2">
+    <h4 className={LABEL_CLASS}>
+      {title}
+      <InfoTip title={title} help={help} />
+    </h4>
+    <div className="min-w-0">{children}</div>
+  </section>
+);
+
+/** Button choices; each option's short caption shows on hover. */
 function ChoiceGroup<V extends string | number>({
   value,
   onChange,
@@ -184,28 +211,24 @@ function ChoiceGroup<V extends string | number>({
   options: Array<{ value: V } & ChoiceText>;
   ariaLabel: string;
 }) {
-  const current = options.find((o) => o.value === value);
   return (
-    <>
-      <Radio.Group
-        optionType="button"
-        buttonStyle="solid"
-        value={value}
-        onChange={(e) => onChange(e.target.value as V)}
-        options={options.map((o) => ({ label: o.label, value: o.value }))}
-        className={OPTION_BUTTONS_CLASS}
-        aria-label={ariaLabel}
-      />
-      {current && (
-        <p className="m-0 mt-1 text-fs-11 leading-[1.4] text-slate-500">
-          {current.caption}
-        </p>
-      )}
-    </>
+    <Radio.Group
+      optionType="button"
+      buttonStyle="solid"
+      value={value}
+      onChange={(e) => onChange(e.target.value as V)}
+      options={options.map((o) => ({
+        label: o.label,
+        value: o.value,
+        title: o.caption,
+      }))}
+      className={OPTION_BUTTONS_CLASS}
+      aria-label={ariaLabel}
+    />
   );
 }
 
-/** A slider with a plain word at each end and its value at the right. */
+/** A slider with a plain word at each end and its value at the right, for use inside a Row. */
 const SliderRow: React.FC<{
   min: number;
   max: number;
@@ -217,65 +240,39 @@ const SliderRow: React.FC<{
   /** Show a + in front of positive values. */
   signed?: boolean;
   onChange: (v: number) => void;
-}> = ({
-  min,
-  max,
-  value,
-  unit,
-  label,
-  lowLabel,
-  highLabel,
-  signed,
-  onChange,
-}) => {
+}> = ({ min, max, value, unit, label, lowLabel, highLabel, signed, onChange }) => {
   const show = (v: number) => (signed && v > 0 ? `+${v}` : `${v}`);
   return (
-  <div className="flex flex-col">
-    <div
-      className="grid grid-cols-[minmax(0,1fr)_34px] items-center gap-2"
-      // Arrow keys move the slider, not the feed's snippet.
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <Slider
-        min={min}
-        max={max}
-        step={1}
-        value={value}
-        tooltip={{ formatter: (v) => `${show(v ?? 0)} ${unit}` }}
-        onChange={onChange}
-        className="my-1.5!"
-        aria-label={label}
-      />
-      <span className="text-right text-fs-13 font-ibm-mono text-slate-800">
-        {show(value)}
-      </span>
+    <div className="flex flex-col px-1">
+      <div
+        className="grid grid-cols-[minmax(0,1fr)_34px] items-center gap-2"
+        // Arrow keys move the slider, not the feed's snippet.
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <Slider
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          tooltip={{ formatter: (v) => `${show(v ?? 0)} ${unit}` }}
+          onChange={onChange}
+          className="my-1!"
+          aria-label={label}
+        />
+        <span className="text-right text-fs-13 font-ibm-mono text-slate-800">
+          {show(value)}
+        </span>
+      </div>
+      <div
+        className="mr-[42px] flex justify-between text-fs-10 leading-none text-slate-400 font-ibm-sans select-none"
+        aria-hidden
+      >
+        <span>{lowLabel}</span>
+        <span>{highLabel}</span>
+      </div>
     </div>
-    <div
-      className="mr-[42px] flex justify-between text-fs-10 text-slate-400 font-ibm-sans select-none"
-      aria-hidden
-    >
-      <span>{lowLabel}</span>
-      <span>{highLabel}</span>
-    </div>
-  </div>
   );
 };
-
-/** Audacity-style heading that groups related settings (Scale, Colours, Algorithm). */
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
-  title,
-  children,
-}) => (
-  <div className="flex flex-col gap-3">
-    <div className="flex items-center gap-2" aria-hidden>
-      <span className="text-fs-10 font-semibold uppercase tracking-wider text-slate-400 font-ibm-sans">
-        {title}
-      </span>
-      <span className="h-px flex-1 bg-slate-100" />
-    </div>
-    {children}
-  </div>
-);
 
 /** Space kept between the card and the button above it / the bottom of the screen. */
 const CARD_GAP_PX = 8;
@@ -302,8 +299,6 @@ const SettingsPanel: React.FC<PanelProps> = ({
     useSpectrogramPrefs();
   const dataset = useDatasetSpectrogramConfig(datasetId);
   const [draft, setDraft] = useState<SpectrogramPrefs>(savedPrefs);
-  // Open by default so every option is in reach; it can still be folded away.
-  const [advancedOpen, setAdvancedOpen] = useState(true);
 
   const customRange = draft.fMinHz !== null || draft.fMaxHz !== null;
   const changed =
@@ -354,7 +349,7 @@ const SettingsPanel: React.FC<PanelProps> = ({
   return (
     <ConfigProvider theme={SLIDER_THEME}>
       <div
-        className="flex w-[340px] flex-col font-ibm-sans"
+        className="flex w-[min(392px,calc(100vw-32px))] flex-col font-ibm-sans"
         style={{ maxHeight: maxHeightPx }}
         data-testid="spectrogram-settings"
       >
@@ -371,9 +366,8 @@ const SettingsPanel: React.FC<PanelProps> = ({
           />
         </div>
 
-        <div className="flex flex-col gap-3.5 pl-3.5 pr-5 pt-3 pb-3 min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-          <Section title="Frequency">
-            <Group
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 pt-4 pb-4">
+                                <Group
               title="Frequency range"
               help={HELP.frequency}
               value={
@@ -438,158 +432,139 @@ const SettingsPanel: React.FC<PanelProps> = ({
               </div>
             </Group>
 
-            <Group title="Scale" help={HELP.scale}>
-              <ChoiceGroup
-                ariaLabel="Scale"
-                value={draft.scale}
-                onChange={(v) => patch({ scale: v })}
-                options={SPECTROGRAM_SCALES.map((c) => ({
-                  value: c.id,
-                  ...SCALE_TEXT[c.id],
-                }))}
-              />
-            </Group>
-          </Section>
+          <Row title="Scale" help={HELP.scale}>
+            <ChoiceGroup
+              ariaLabel="Scale"
+              value={draft.scale}
+              onChange={(v) => patch({ scale: v })}
+              options={SPECTROGRAM_SCALES.map((c) => ({
+                value: c.id,
+                ...SCALE_TEXT[c.id],
+              }))}
+            />
+          </Row>
 
-          <Section title="Picture">
-            <Group title="Sensitivity" help={HELP.sensitivity}>
-              <SliderRow
-                min={SPECTROGRAM_RANGE_DB_MIN}
-                max={SPECTROGRAM_RANGE_DB_MAX}
-                value={draft.rangeDb}
-                unit="dB"
-                label="Sensitivity"
-                lowLabel="Cleaner"
-                highLabel="More detail"
-                onChange={(v) => patch({ rangeDb: v })}
-              />
-            </Group>
+          <div className="my-0.5 h-px bg-slate-100" aria-hidden />
 
-            <Group
-              title="Colour scheme"
-              help={HELP.colour}
-              value={SPECTROGRAM_COLORMAPS.find(
-                (c) => c.id === draft.colormap,
-              )?.label.replace(/^./, (ch) => ch.toUpperCase())}
-            >
-              {/* Native radios inside labels: styled with plain elements, so they
-              keep working with the keyboard and need no button styling. */}
-              <div
-                role="radiogroup"
-                aria-label="Colour scheme"
-                className="grid grid-cols-8 gap-1"
-              >
-                {SPECTROGRAM_COLORMAPS.map((c) => (
-                  <label
-                    key={c.id}
-                    title={`${c.label.replace(/^./, (ch) => ch.toUpperCase())}: ${c.hint}`}
-                    className="cursor-pointer"
-                  >
-                    <input
-                      type="radio"
-                      name="spectrogram-colormap"
-                      value={c.id}
-                      checked={draft.colormap === c.id}
-                      onChange={() => patch({ colormap: c.id })}
-                      aria-label={c.label}
-                      className="peer sr-only"
-                    />
-                    <span
-                      className="block h-6 rounded-md border border-slate-900/10 hover:border-slate-400 peer-checked:ring-2 peer-checked:ring-blue-600 peer-checked:ring-offset-1 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400"
-                      style={{ background: c.gradient }}
-                    />
-                  </label>
-                ))}
-              </div>
-            </Group>
-          </Section>
+          <Row title="Sensitivity" help={HELP.sensitivity}>
+            <SliderRow
+              min={SPECTROGRAM_RANGE_DB_MIN}
+              max={SPECTROGRAM_RANGE_DB_MAX}
+              value={draft.rangeDb}
+              unit="dB"
+              label="Sensitivity"
+              lowLabel="Cleaner"
+              highLabel="More detail"
+              onChange={(v) => patch({ rangeDb: v })}
+            />
+          </Row>
 
-          <Section title="Detail">
-            <Group title="Sharper detail in" help={HELP.detail}>
-              <ChoiceGroup
-                ariaLabel="Sharper detail in"
-                value={draft.windowMs}
-                onChange={(v) => patch({ windowMs: v })}
-                options={SPECTROGRAM_WINDOW_CHOICES_MS.map((ms) => ({
-                  value: ms,
-                  label: DETAIL_TEXT[ms]?.label ?? `${ms} ms`,
-                  caption: DETAIL_TEXT[ms]?.caption ?? "",
-                }))}
-              />
-            </Group>
-          </Section>
-
-          <div className="flex flex-col gap-3">
-            <Button
-              type="text"
-              size="small"
-              aria-expanded={advancedOpen}
-              onClick={() => setAdvancedOpen((o) => !o)}
-              className="flex! h-5! items-center! justify-start! gap-2! px-0! text-fs-10! font-semibold! tracking-wider text-slate-400! font-ibm-sans! uppercase hover:bg-transparent! hover:text-slate-600!"
-            >
-              <span>Fine-tuning</span>
-              <span className="h-px flex-1 bg-slate-100" />
-              <DownOutlined
-                className={`text-[9px] transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-              />
-            </Button>
-
-            {advancedOpen && (
-              <>
-                <Group title="Brightness" help={HELP.brightness}>
-                  <SliderRow
-                    min={SPECTROGRAM_GAIN_DB_MIN}
-                    max={SPECTROGRAM_GAIN_DB_MAX}
-                    value={draft.gainDb}
-                    unit="dB"
-                    label="Brightness"
-                    lowLabel="Dim"
-                    highLabel="Bright"
-                    signed
-                    onChange={(v) => patch({ gainDb: v })}
-                  />
-                </Group>
-
-                <Group title="Boost highs" help={HELP.boost}>
-                  <SliderRow
-                    min={0}
-                    max={SPECTROGRAM_BOOST_DB_MAX}
-                    value={draft.highBoostDb}
-                    unit="dB/decade"
-                    label="Boost highs"
-                    lowLabel="Off"
-                    highLabel="Strong"
-                    onChange={(v) => patch({ highBoostDb: v })}
-                  />
-                </Group>
-
-                <Group title="Line quality" help={HELP.lineQuality}>
-                  <ChoiceGroup
-                    ariaLabel="Line quality"
-                    value={draft.windowType}
-                    onChange={(v) => patch({ windowType: v })}
-                    options={LINE_QUALITY_ORDER.map((id) => ({
-                      value: id,
-                      ...LINE_QUALITY_TEXT[id],
-                    }))}
-                  />
-                </Group>
-
-                <Group title="Smoothing" help={HELP.smoothing}>
-                  <ChoiceGroup
-                    ariaLabel="Smoothing"
-                    value={draft.zeroPad}
-                    onChange={(v) => patch({ zeroPad: v })}
-                    options={SPECTROGRAM_ZERO_PAD_CHOICES.map((z) => ({
-                      value: z,
-                      label: SMOOTHING_TEXT[z]?.label ?? `${z}×`,
-                      caption: SMOOTHING_TEXT[z]?.caption ?? "",
-                    }))}
-                  />
-                </Group>
-              </>
+          <Group
+            title="Colour scheme"
+            help={HELP.colour}
+            value={cap(
+              SPECTROGRAM_COLORMAPS.find((c) => c.id === draft.colormap)?.label ??
+                draft.colormap,
             )}
-          </div>
+          >
+            {/* Native radios inside labels: styled with plain elements, so they
+            keep working with the keyboard and need no button styling. */}
+            <div
+              role="radiogroup"
+              aria-label="Colour scheme"
+              className="grid grid-cols-8 gap-1.5"
+            >
+              {SPECTROGRAM_COLORMAPS.map((c) => (
+                <label
+                  key={c.id}
+                  className="cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="spectrogram-colormap"
+                    value={c.id}
+                    checked={draft.colormap === c.id}
+                    onChange={() => patch({ colormap: c.id })}
+                    aria-label={c.label}
+                    className="peer sr-only"
+                  />
+                  <span
+                    className="block h-7 rounded-md border border-slate-900/10 hover:border-slate-400 peer-checked:ring-2 peer-checked:ring-blue-600 peer-checked:ring-offset-1 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-400"
+                    style={{ background: c.gradient }}
+                  />
+                </label>
+              ))}
+            </div>
+          </Group>
+
+          <div className="my-0.5 h-px bg-slate-100" aria-hidden />
+
+          <Row title="Window size" help={HELP.detail}>
+            <ChoiceGroup
+              ariaLabel="Window size"
+              value={draft.windowMs}
+              onChange={(v) => patch({ windowMs: v })}
+              options={SPECTROGRAM_WINDOW_CHOICES_MS.map((ms) => ({
+                value: ms,
+                label: DETAIL_TEXT[ms]?.label ?? `${ms} ms`,
+                caption: DETAIL_TEXT[ms]?.caption ?? "",
+              }))}
+            />
+          </Row>
+
+          <div className="my-0.5 h-px bg-slate-100" aria-hidden />
+
+          <Row title="Brightness" help={HELP.brightness}>
+            <SliderRow
+              min={SPECTROGRAM_GAIN_DB_MIN}
+              max={SPECTROGRAM_GAIN_DB_MAX}
+              value={draft.gainDb}
+              unit="dB"
+              label="Brightness"
+              lowLabel="Dim"
+              highLabel="Bright"
+              signed
+              onChange={(v) => patch({ gainDb: v })}
+            />
+          </Row>
+
+          <Row title="Boost highs" help={HELP.boost}>
+            <SliderRow
+              min={0}
+              max={SPECTROGRAM_BOOST_DB_MAX}
+              value={draft.highBoostDb}
+              unit="dB/decade"
+              label="Boost highs"
+              lowLabel="Off"
+              highLabel="Strong"
+              onChange={(v) => patch({ highBoostDb: v })}
+            />
+          </Row>
+
+          <Row title="Line quality" help={HELP.lineQuality}>
+            <ChoiceGroup
+              ariaLabel="Line quality"
+              value={draft.windowType}
+              onChange={(v) => patch({ windowType: v })}
+              options={LINE_QUALITY_ORDER.map((id) => ({
+                value: id,
+                ...LINE_QUALITY_TEXT[id],
+              }))}
+            />
+          </Row>
+
+          <Row title="Smoothing" help={HELP.smoothing}>
+            <ChoiceGroup
+              ariaLabel="Smoothing"
+              value={draft.zeroPad}
+              onChange={(v) => patch({ zeroPad: v })}
+              options={SPECTROGRAM_ZERO_PAD_CHOICES.map((z) => ({
+                value: z,
+                label: SMOOTHING_TEXT[z]?.label ?? `${z}×`,
+                caption: SMOOTHING_TEXT[z]?.caption ?? "",
+              }))}
+            />
+          </Row>
         </div>
 
         <div className="flex flex-col gap-2 px-3.5 pt-2.5 pb-3 border-t border-slate-100 bg-slate-50 rounded-b-lg">
