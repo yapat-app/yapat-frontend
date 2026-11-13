@@ -3,17 +3,28 @@ import SpectrogramPlayer from "react-audio-spectrogram-player";
 import { SpectrogramAudioControls } from "./SpectrogramAudioControls";
 import { useAudioInstrumentation } from "../studyLogging";
 import {
+  PLACEHOLDER_SXX,
+  useCustomSpectrogram,
+} from "../hooks/useCustomSpectrogram";
+import {
   SPECTROGRAM_FALLBACK_SAMPLE_RATE,
   SPECTROGRAM_TIME_AXIS_HEIGHT,
-  buildMelTicks,
+  buildFreqTicks,
   formatSpectrogramHz,
   formatSpectrogramTime,
   minDurationForSpectrogram,
+  minSamplesForSpectrogram,
   resolveSpectrogramDisplayRange,
   spectrogramLayoutHeights,
   spectrogramParamsForSampleRate,
   type DatasetSpectrogramRange,
 } from "../utils/spectrogramConfig";
+import { spectrogramParamsForWindow } from "../utils/spectrogramWindow";
+import {
+  DEFAULT_SPECTROGRAM_RANGE_DB,
+  SPECTROGRAM_SCALES,
+  type CustomAnalysis,
+} from "../utils/spectrogramPrefs";
 
 const Y_AXIS_WIDTH = 44;
 
@@ -37,6 +48,18 @@ export interface SnippetSpectrogramPlayerProps {
   dark?: boolean;
   colormap?: string;
   showAxisInfo?: boolean;
+  /** User display setting: dB range below the peak (library default 80 when omitted). */
+  rangeDb?: number;
+  /** User display setting: analysis window in ms (today's framing when omitted). */
+  windowMs?: number;
+  /** User display setting: zero padding of that window (1 when omitted). */
+  zeroPad?: number;
+  /**
+   * Display options the player cannot draw itself (scale, gain, high boost,
+   * window type). When set, the picture is computed here and handed to the
+   * player; when omitted the player draws it exactly as it always did.
+   */
+  analysis?: CustomAnalysis | null;
 }
 
 function buildTicks(min: number, max: number, count: number): number[] {
@@ -59,6 +82,10 @@ export const SnippetSpectrogramPlayer: React.FC<
   dark = false,
   colormap = "viridis",
   showAxisInfo = true,
+  rangeDb,
+  windowMs,
+  zeroPad,
+  analysis,
 }) => {
   // Instrument the library's internal <audio> element (play/pause/seek/volume).
   useAudioInstrumentation();
@@ -97,11 +124,15 @@ export const SnippetSpectrogramPlayer: React.FC<
     () => resolveSpectrogramDisplayRange(sampleRate, datasetSpectrogram),
     [sampleRate, datasetSpectrogram],
   );
-  // Use mel-scale ticks so labels align with the actual frequency positions
-  // in the spectrogram image (which is rendered on a mel scale internally).
-  // Linear ticks cause a systematic offset — e.g. a 3 kHz signal appears
-  // labelled as ~8 kHz when the file is at 22 kHz sample rate.
-  const freqTicks = useMemo(() => buildMelTicks(fMin, fMax, 5), [fMin, fMax]);
+  // Ticks follow the scale the picture is drawn on, so labels align with the
+  // actual frequency positions in the image. By default that is the mel scale
+  // the player renders internally: linear ticks there cause a systematic
+  // offset, e.g. a 3 kHz signal labelled as ~8 kHz at 22 kHz sample rate.
+  const scale = analysis?.scale ?? "mel";
+  const freqTicks = useMemo(
+    () => buildFreqTicks(scale, fMin, fMax, 5),
+    [scale, fMin, fMax],
+  );
   const timeTicks = useMemo(() => {
     const dur = resolvedDuration ?? 0;
     if (dur <= 0) return [];
@@ -109,8 +140,11 @@ export const SnippetSpectrogramPlayer: React.FC<
   }, [resolvedDuration]);
 
   const fftParams = useMemo(
-    () => spectrogramParamsForSampleRate(sampleRate),
-    [sampleRate],
+    () =>
+      windowMs === undefined
+        ? spectrogramParamsForSampleRate(sampleRate)
+        : spectrogramParamsForWindow(sampleRate, windowMs, zeroPad),
+    [sampleRate, windowMs, zeroPad],
   );
 
   // The WASM backend traps (as a bare `RuntimeError: unreachable`, which React
@@ -119,14 +153,41 @@ export const SnippetSpectrogramPlayer: React.FC<
   // and treating that as too-short would hide the player on every mount.
   const tooShortForSpectrogram =
     resolvedDuration !== null &&
-    resolvedDuration < minDurationForSpectrogram(sampleRate);
+    resolvedDuration <
+      (windowMs === undefined
+        ? minDurationForSpectrogram(sampleRate)
+        : minSamplesForSpectrogram(fftParams) / sampleRate);
+
+  const custom = useCustomSpectrogram({
+    src,
+    sampleRate,
+    analysis: tooShortForSpectrogram ? null : (analysis ?? null),
+    params: fftParams,
+    fMin,
+    fMax,
+    rangeDb: rangeDb ?? DEFAULT_SPECTROGRAM_RANGE_DB,
+  });
+  // While our own picture is computed the player gets an empty one, so it never
+  // flashes the default picture; if the computation fails it draws its own.
+  const sxx = analysis
+    ? (custom.sxx ?? (custom.pending ? PLACEHOLDER_SXX : undefined))
+    : undefined;
 
   // Only inputs that change the decoded/analysed signal belong here: a new key
   // remounts the player, which re-decodes the audio and recomputes the mel
   // spectrogram (a visible blank gap while it works). Height is deliberately
   // excluded -- it only scales the rendered SVG, and the player accepts it as a
   // plain prop. Including it meant any container resize forced a full re-decode.
-  const playerKey = `${src}|${fMin}|${fMax}|${fftParams.hop_length}`;
+  //
+  // The optional display settings join the key only when they are in use, so
+  // a player without them keeps exactly the key it always had.
+  const settingsKey =
+    (windowMs === undefined
+      ? ""
+      : `|w${fftParams.win_length}:${fftParams.n_fft}`) +
+    (rangeDb === undefined ? "" : `|d${rangeDb}`) +
+    (analysis ? "|x" : "");
+  const playerKey = `${src}|${fMin}|${fMax}|${fftParams.hop_length}${settingsKey}`;
 
   /**
    * Sizing note: react-audio-spectrogram-player renders the spectrogram as an
@@ -186,6 +247,8 @@ export const SnippetSpectrogramPlayer: React.FC<
                 f_min={fMin}
                 f_max={fMax}
                 n_mels={fftParams.n_mels}
+                top_db={rangeDb}
+                sxx={sxx}
                 specHeight={plotHeight}
                 navigator={navigator}
                 settings={settings}
@@ -222,7 +285,8 @@ export const SnippetSpectrogramPlayer: React.FC<
 
       {showAxisInfo && (
         <p className="mt-1 text-fs-10 text-gray-400 font-ibm-sans text-center shrink-0">
-          Mel spectrogram · {formatSpectrogramHz(fMin)}–
+          {SPECTROGRAM_SCALES.find((c) => c.id === scale)?.label} spectrogram ·{" "}
+          {formatSpectrogramHz(fMin)}–
           {formatSpectrogramHz(fMax)} · {Math.round(sampleRate / 1000)} kHz
           sample rate
         </p>

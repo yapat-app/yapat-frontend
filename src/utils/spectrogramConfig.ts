@@ -1,6 +1,7 @@
 /** Mel-spectrogram settings aligned with `react-audio-spectrogram-player` defaults. */
 
 import { LAPTOP_MEDIA_QUERY } from "../hooks/useLaptopViewport";
+import { LOG_SCALE_MIN_HZ, type SpectrogramScale } from "./spectrogramCompute";
 
 export const SPECTROGRAM_N_FFT = 1024;
 export const SPECTROGRAM_HOP_LENGTH = 160;
@@ -269,6 +270,29 @@ export function buildMelTicks(
     ticks.push(melToHz(mel));
   }
   // Reverse so the first item is the top of the axis (highest frequency).
+  return ticks.reverse();
+}
+
+/**
+ * Frequency ticks (top of the axis first) that line up with the picture on the
+ * chosen scale: mel and log spacing as drawn, or even steps for linear.
+ */
+export function buildFreqTicks(
+  scale: SpectrogramScale,
+  fMin: number,
+  fMax: number,
+  count: number,
+): number[] {
+  if (scale === "mel") return buildMelTicks(fMin, fMax, count);
+  if (count <= 1 || fMax <= fMin) return [fMax];
+  const lo = scale === "log" ? Math.max(fMin, LOG_SCALE_MIN_HZ) : Math.max(0, fMin);
+  const ticks: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    ticks.push(
+      scale === "log" ? lo * Math.pow(fMax / lo, t) : lo + t * (fMax - lo),
+    );
+  }
   return ticks.reverse();
 }
 
