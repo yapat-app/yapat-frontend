@@ -38,7 +38,6 @@ import { ScanProgressPanel } from "../ScanProgressPanel";
 import { IngestProgressPanel } from "../IngestProgressPanel";
 import { EmbeddingFailuresNotice } from "../EmbeddingFailuresNotice";
 import { AddRecordingsModal } from "../AddRecordingsModal";
-import { DatasetSpectrogramSettings } from "../DatasetSpectrogramSettings";
 import { DatasetReferencePools } from "../DatasetReferencePools";
 import {
   getCachedQuickLabels,
@@ -150,13 +149,12 @@ const StatTile = ({
  * Columns follow the panel's own width (container queries), not the screen:
  * the panel's width depends on the list beside it. Tiles go side by side only
  * once each has room for its header (label plus a named action button), so the
- * button text never has to wrap or shrink to an icon. With an odd number of
- * tiles in two columns the last one spans the row.
+ * button text never has to wrap or shrink to an icon. A single tile spans the
+ * row.
  */
 const SETUP_COLS: Record<number, string> = {
   1: "",
   2: "@2xl:grid-cols-2",
-  3: "@2xl:grid-cols-2 @2xl:[&>:last-child:nth-child(odd)]:col-span-2 @5xl:grid-cols-3 @5xl:[&>:last-child:nth-child(odd)]:col-span-1",
 };
 
 export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
@@ -270,12 +268,11 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
     (jobs.ingestRunning && !jobs.ingestStalled) ||
     jobs.running ||
     jobs.scanning;
-  const setupHint = canManage
-    ? "Settings used when annotating this dataset."
-    : "Settings used when annotating this dataset. Only admins and team owners can change the spectrogram range.";
+  const setupHint = "Settings used when annotating this dataset.";
 
-  const setupTileCount =
-    1 + (!isReference ? 1 : 0) + (!isReference && isAdmin ? 1 : 0);
+  // Quick labels, plus reference pools for admins. Reference datasets have no
+  // setup tiles.
+  const setupTileCount = !isReference ? 1 + (isAdmin ? 1 : 0) : 0;
 
   const chips = quickLabels.slice(0, 5);
 
@@ -498,26 +495,23 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
       </div>
 
       {/* Annotation setup */}
-      <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
-        <SectionLabel hint={isReference ? undefined : setupHint}>
-          {isReference ? "Setup" : "Annotation setup"}
-        </SectionLabel>
-        <div
-          className={`grid grid-cols-1 items-stretch gap-3 ${SETUP_COLS[setupTileCount]}`}
-        >
-          <DatasetSpectrogramSettings dataset={dataset} />
-
-          {!isReference && (
-            <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
-              <div className={TILE_HEADER_CLASS}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <TileLabel icon={<ThunderboltOutlined />}>
-                    Quick labels
-                  </TileLabel>
-                  {quickLabels.length > 0 && (
-                    <span className="rounded-full bg-slate-100 px-1.5 py-px text-fs-10 font-semibold text-slate-600">
-                      {quickLabels.length}
-                    </span>
+      {setupTileCount > 0 && (
+        <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
+          <SectionLabel hint={setupHint}>Annotation setup</SectionLabel>
+          <div
+            className={`grid grid-cols-1 items-stretch gap-3 ${SETUP_COLS[setupTileCount]}`}
+          >
+            {!isReference && (
+              <div className="h-full rounded-lg border border-slate-200 bg-white px-4 py-3.5">
+                <div className={TILE_HEADER_CLASS}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <TileLabel icon={<ThunderboltOutlined />}>
+                      Quick labels
+                    </TileLabel>
+                    {quickLabels.length > 0 && (
+                      <span className="rounded-full bg-slate-100 px-1.5 py-px text-fs-10 font-semibold text-slate-600">
+                        {quickLabels.length}
+                      </span>
                   )}
                 </div>
                 <TileActionButton
@@ -562,6 +556,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
           )}
         </div>
       </div>
+      )}
 
       {/* Data & tools */}
       {!isReference && (
