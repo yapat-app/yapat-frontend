@@ -465,6 +465,8 @@ export interface Dataset {
   default_snippet_set_id?: number | null;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  /** Feedback events before auto-retrain; null = platform default. */
+  retrain_after_threshold?: number | null;
   quick_labels?: QuickLabel[] | null;
   created_at?: string;
   updated_at?: string;
@@ -660,6 +662,7 @@ export interface DatasetUpdate {
   dataset_type?: DatasetType;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  retrain_after_threshold?: number | null;
 }
 
 export interface DatasetCreate {
