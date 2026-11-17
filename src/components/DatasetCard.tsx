@@ -31,7 +31,6 @@ import {
   LoadingOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { DatasetSpectrogramSettings } from "./DatasetSpectrogramSettings";
 import { usePhaseConfig } from "../studyPhases";
 import { DatasetQuickLabelsModal } from "./DatasetQuickLabelsModal";
 import { DatasetMetadataModal } from "./DatasetMetadataModal";
@@ -252,9 +251,6 @@ export const DatasetCard: React.FC<DatasetCardProps> = ({ dataset }) => {
             <p className="sub_base_text">
               {dataset.description?.trim() ? dataset.description : "—"}
             </p>
-            <div className="mt-2">
-              <DatasetSpectrogramSettings dataset={dataset} />
-            </div>
 
             {isReference && (
               <p className="mt-2 text-xs text-gray-500">
