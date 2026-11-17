@@ -70,7 +70,7 @@ export const DatasetRetrainThresholdSettings: React.FC<Props> = ({
         <div className={TILE_HEADER_CLASS}>
           <p className="m-0 flex items-center gap-2 min-w-0 truncate text-fs-11 font-semibold uppercase tracking-wider text-slate-600 font-ibm-sans">
             <SyncOutlined className="text-slate-500" />
-            Auto-retrain threshold
+            Auto-retrain
           </p>
           <TileActionButton
             icon={<EditOutlined />}
