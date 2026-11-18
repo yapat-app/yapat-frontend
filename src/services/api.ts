@@ -709,6 +709,44 @@ export const datasetApi = {
   },
 
   /**
+   * Dry-run an annotation import: the backend checks every row of an exported
+   * CSV/JSON against this dataset's recordings and snippets and returns counts
+   * with reasons, WITHOUT saving anything. Admins and team owners only.
+   */
+  previewAnnotationImport: async (
+    datasetId: number,
+    file: File,
+  ): Promise<import("../types").AnnotationImportPreview> => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await api.post(
+      `/api/datasets/${datasetId}/annotations/import/preview`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
+  },
+
+  /**
+   * Import annotations from an exported CSV/JSON: rows that match a snippet are
+   * added next to the annotations already there; the rest are skipped and
+   * reported. Admins and team owners only.
+   */
+  importAnnotations: async (
+    datasetId: number,
+    file: File,
+  ): Promise<import("../types").AnnotationImportResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await api.post(
+      `/api/datasets/${datasetId}/annotations/import`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return response.data;
+  },
+
+  /**
    * Start the "add recordings" pipeline (scan → segment → embed → finalize →
    * score) for files copied into the dataset's folder. `sourceUri` (relative
    * to DATA_ROOT) widens the dataset to a parent of its current folder; omit

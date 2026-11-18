@@ -23,6 +23,7 @@ import {
   SoundOutlined,
   TableOutlined,
   ThunderboltOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import type { Dataset, IngestJob, QuickLabel } from "../../types";
@@ -31,6 +32,7 @@ import {
   fetchAllDatasets,
   fetchReferenceDatasets,
 } from "../../redux/features/datasetSlice";
+import { getAllDatasetAnnotationStats } from "../../redux/features/annotationSlice";
 import { usePhaseConfig } from "../../studyPhases";
 import { GenerateEmbeddings } from "../GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "../EmbeddingProgressPanel";
@@ -46,6 +48,7 @@ import {
 } from "./quickLabelsCache";
 import { DatasetQuickLabelsModal } from "../DatasetQuickLabelsModal";
 import { DatasetMetadataModal } from "../DatasetMetadataModal";
+import { ImportAnnotationsModal } from "../ImportAnnotationsModal";
 import { ExportAnnotationPanel } from "../ExportAnnotation";
 import { useDatasetJobs } from "./datasetJobsContext";
 import { TILE_HEADER_CLASS, TileActionButton } from "./TileActionButton";
@@ -157,6 +160,15 @@ const SETUP_COLS: Record<number, string> = {
   2: "@2xl:grid-cols-2",
 };
 
+/**
+ * Data & tools tiles: three across once the panel is wide enough for each
+ * tile's icon and text, two on medium widths (an odd last tile spans the row).
+ */
+const TOOL_COLS: Record<number, string> = {
+  2: "@2xl:grid-cols-2",
+  3: "@2xl:grid-cols-2 @2xl:[&>:last-child:nth-child(odd)]:col-span-2 @4xl:grid-cols-3 @4xl:[&>:last-child:nth-child(odd)]:col-span-1",
+};
+
 export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const { datasetAnnotations } = useAppSelector((state) => state.annotation);
   const navigate = useNavigate();
@@ -180,6 +192,7 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   );
   const [managingLabels, setManagingLabels] = useState(false);
   const [managingMetadata, setManagingMetadata] = useState(false);
+  const [importingAnnotations, setImportingAnnotations] = useState(false);
   const [addingRecordings, setAddingRecordings] = useState(false);
 
   // Reference datasets live in their own list, so refresh the one this is in.
@@ -562,7 +575,9 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
       {!isReference && (
         <div className="border-t border-slate-100 px-5 py-5 sm:px-6">
           <SectionLabel>Data &amp; tools</SectionLabel>
-          <div className="grid grid-cols-1 items-start gap-3 @2xl:grid-cols-2">
+          <div
+            className={`grid grid-cols-1 items-stretch gap-3 ${TOOL_COLS[canManage ? 3 : 2]}`}
+          >
             <ExportAnnotationPanel
               datasetId={dataset.id}
               disabled={!statsReady || stats.annotated_snippets < 1}
@@ -603,6 +618,29 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               </div>
               <RightOutlined className="text-slate-400" />
             </div>
+            {canManage && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setImportingAnnotations(true)}
+                onKeyDown={activateOnKey(() => setImportingAnnotations(true))}
+                title="Add annotations to this dataset from an exported CSV or JSON file"
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3.5 transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-500"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                  <UploadOutlined />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="m-0 text-sm font-semibold text-slate-900 font-ibm-sans">
+                    Import annotations
+                  </p>
+                  <p className="m-0 text-xs text-slate-500 font-ibm-sans">
+                    Add labelled snippets from an exported file
+                  </p>
+                </div>
+                <RightOutlined className="text-slate-400" />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -624,6 +662,16 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
         // Refreshes `recordings_with_metadata` for the coverage note.
         onImported={refetchDatasets}
       />
+
+      {canManage && (
+        <ImportAnnotationsModal
+          dataset={dataset}
+          open={importingAnnotations}
+          onClose={() => setImportingAnnotations(false)}
+          // Refreshes the annotated counts shown on this page.
+          onImported={() => dispatch(getAllDatasetAnnotationStats())}
+        />
+      )}
 
       {showAddRecordings && (
         <AddRecordingsModal

@@ -845,6 +845,73 @@ export interface RecordingMetadataImportResult {
   errors?: string[];
 }
 
+/** A row of an annotation import file that cannot be imported, and why. */
+export interface AnnotationImportIssue {
+  /** Line in a CSV (the header is line 1), or position from 1 in a JSON list. */
+  row: number;
+  reason: string;
+}
+
+/** What would happen to one row of an annotation import file. */
+export type AnnotationImportStatus =
+  | "will_import"
+  | "already_exist"
+  | "no_match"
+  | "invalid";
+
+export interface AnnotationImportRow {
+  /** Line in a CSV (the header is line 1), or position from 1 in a JSON list. */
+  row: number;
+  status: AnnotationImportStatus;
+  recording: string;
+  start: string;
+  end: string;
+  taxon_id: string;
+  name?: string | null;
+  /** Why the row is not imported (already_exist, no_match, invalid). */
+  reason?: string | null;
+}
+
+/** A species in an import file, with its row counts per status. */
+export interface AnnotationImportLabel {
+  taxon_id: string;
+  name?: string | null;
+  will_import: number;
+  already_exist: number;
+  no_match: number;
+  invalid: number;
+}
+
+/**
+ * Dry-run summary for `POST /api/datasets/{id}/annotations/import/preview`.
+ * Nothing is saved.
+ */
+export interface AnnotationImportPreview {
+  total_rows: number;
+  /** Rows that match a snippet and would be added. */
+  will_import: number;
+  /** Rows whose snippet already has that species, or that repeat an earlier row. */
+  already_exist: number;
+  /** Rows whose recording or snippet is not in this dataset. */
+  no_match: number;
+  /** Rows with missing or unusable values. */
+  invalid: number;
+  /** The first rows of each status (capped per status), in file order. */
+  rows: AnnotationImportRow[];
+  /** Every species in the file with its row counts per status, most rows first. */
+  labels: AnnotationImportLabel[];
+}
+
+/** Result of `POST /api/datasets/{id}/annotations/import`. */
+export interface AnnotationImportResult {
+  total_rows: number;
+  imported: number;
+  already_exist: number;
+  no_match: number;
+  invalid: number;
+  issues: AnnotationImportIssue[];
+}
+
 // ============================================================================
 // Task Types (for Celery tasks)
 // ============================================================================
