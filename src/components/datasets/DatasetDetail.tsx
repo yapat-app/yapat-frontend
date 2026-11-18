@@ -41,6 +41,7 @@ import { IngestProgressPanel } from "../IngestProgressPanel";
 import { EmbeddingFailuresNotice } from "../EmbeddingFailuresNotice";
 import { AddRecordingsModal } from "../AddRecordingsModal";
 import { DatasetReferencePools } from "../DatasetReferencePools";
+import { DatasetRetrainThresholdSettings } from "../DatasetRetrainThresholdSettings";
 import {
   getCachedQuickLabels,
   loadQuickLabels,
@@ -153,11 +154,12 @@ const StatTile = ({
  * the panel's width depends on the list beside it. Tiles go side by side only
  * once each has room for its header (label plus a named action button), so the
  * button text never has to wrap or shrink to an icon. A single tile spans the
- * row.
+ * row; with an odd number of tiles in two columns the last one spans the row.
  */
 const SETUP_COLS: Record<number, string> = {
   1: "",
   2: "@2xl:grid-cols-2",
+  3: "@2xl:grid-cols-2 @2xl:[&>:last-child:nth-child(odd)]:col-span-2 @5xl:grid-cols-3 @5xl:[&>:last-child:nth-child(odd)]:col-span-1",
 };
 
 /**
@@ -283,9 +285,11 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
     jobs.scanning;
   const setupHint = "Settings used when annotating this dataset.";
 
-  // Quick labels, plus reference pools for admins. Reference datasets have no
-  // setup tiles.
-  const setupTileCount = !isReference ? 1 + (isAdmin ? 1 : 0) : 0;
+  // Quick labels, the auto-retrain threshold for admins and team owners, and
+  // reference pools for admins. Reference datasets have no setup tiles.
+  const setupTileCount = !isReference
+    ? 1 + (canManage ? 1 : 0) + (isAdmin ? 1 : 0)
+    : 0;
 
   const chips = quickLabels.slice(0, 5);
 
@@ -562,6 +566,10 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
                 )}
               </div>
             </div>
+          )}
+
+          {!isReference && canManage && (
+            <DatasetRetrainThresholdSettings dataset={dataset} />
           )}
 
           {!isReference && isAdmin && (

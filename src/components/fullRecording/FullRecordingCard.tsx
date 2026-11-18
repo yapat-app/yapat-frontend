@@ -54,6 +54,8 @@ const MIN_PLOT_HEIGHT = 120;
 const MAX_PLOT_HEIGHT = 560;
 /** Vertical space the card spends on everything except the plot itself. */
 const CARD_CHROME_HEIGHT = 186;
+/** Extra vertical padding of the wide layout's card (pt-4 pb-3 vs pt-3 pb-2.5). */
+const ROOMY_EXTRA_PADDING_Y = 6;
 /** Same width rule as the snippet card, so the two line up exactly. */
 const CARD_WIDTH = "min(100%, 1200px)";
 const ZOOM_SLIDER_STEPS = 1000;
@@ -87,6 +89,8 @@ interface Props {
   onBack: () => void;
   /** Jumps to another snippet of this recording in the feed. */
   onSelectSnippet: (snippetId: number) => void;
+  /** Use all the room the card has, with the wide layout's padding. */
+  fillAvailable?: boolean;
 }
 
 export const FullRecordingCard: React.FC<Props> = ({
@@ -96,6 +100,7 @@ export const FullRecordingCard: React.FC<Props> = ({
   snippetId,
   onBack,
   onSelectSnippet,
+  fillAvailable = false,
 }) => {
   const { prefs } = useSpectrogramPrefs();
   const datasetSpectrogram = useDatasetSpectrogramConfig(datasetId);
@@ -212,8 +217,13 @@ export const FullRecordingCard: React.FC<Props> = ({
     availH > 0
       ? Math.round(
           Math.min(
-            MAX_PLOT_HEIGHT,
-            Math.max(MIN_PLOT_HEIGHT, availH - CARD_CHROME_HEIGHT),
+            fillAvailable ? Infinity : MAX_PLOT_HEIGHT,
+            Math.max(
+              MIN_PLOT_HEIGHT,
+              availH -
+                CARD_CHROME_HEIGHT -
+                (fillAvailable ? ROOMY_EXTRA_PADDING_Y : 0),
+            ),
           ),
         )
       : DEFAULT_PLOT_HEIGHT;
@@ -377,8 +387,11 @@ export const FullRecordingCard: React.FC<Props> = ({
   const shell = (children: React.ReactNode) => (
     <div
       ref={cardRef}
-      className="mx-auto h-full min-h-[280px] rounded-xl border border-gray-100 bg-white shadow-sm px-3 pt-3 pb-2.5 overflow-hidden"
-      style={{ width: CARD_WIDTH, maxWidth: "100%" }}
+      className={[
+        "mx-auto h-full min-h-[280px] rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden",
+        fillAvailable ? "px-4 pt-4 pb-3" : "px-3 pt-3 pb-2.5",
+      ].join(" ")}
+      style={{ width: fillAvailable ? "100%" : CARD_WIDTH, maxWidth: "100%" }}
     >
       {children}
     </div>

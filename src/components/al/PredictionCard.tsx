@@ -73,6 +73,8 @@ interface Props {
   hideHeader?: boolean;
   /** Suppress the inline blind-mode label area (a sticky label bar is rendered below the feed instead). */
   hideLabels?: boolean;
+  /** Let the spectrogram use all the room the card has (wide feed layout). */
+  fillAvailable?: boolean;
 }
 
 const PredictionCardImpl: React.FC<Props> = ({
@@ -89,6 +91,7 @@ const PredictionCardImpl: React.FC<Props> = ({
   onFindSimilar,
   hideHeader = false,
   hideLabels = false,
+  fillAvailable = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -187,12 +190,12 @@ const PredictionCardImpl: React.FC<Props> = ({
   // Card fills the scroll-snap viewport. Spectrogram takes the upper portion;
   // the label area below is fixed at LABEL_AREA_H px so the search + chips fit.
   const HEADER_H = 49;
-  const BODY_PAD_Y = 40;
+  const BODY_PAD_Y = fillAvailable ? 64 : 40;
   const LABEL_AREA_H =
     typeof cardHeightPx === "number"
       ? Math.round(Math.min(320, Math.max(230, cardHeightPx * 0.46)))
       : 248;
-  const SPEC_WIDTH = "min(100%, 1200px)";
+  const SPEC_WIDTH = fillAvailable ? "100%" : "min(100%, 1200px)";
 
   const [blindSpecHeight, setBlindSpecHeight] = useState<number>(300);
   const blindSpecBlockHeight = useMemo(
@@ -218,7 +221,7 @@ const PredictionCardImpl: React.FC<Props> = ({
       8;
     const melBudget = available - spectrogramChromeHeight();
 
-    const cap = hideLabels ? 560 : 600;
+    const cap = fillAvailable ? Infinity : hideLabels ? 560 : 600;
     setBlindSpecHeight(Math.max(120, Math.min(cap, melBudget)));
   };
 
@@ -228,7 +231,7 @@ const PredictionCardImpl: React.FC<Props> = ({
     const onResize = () => computeBlindSpecHeightRef.current();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [isBlind, cardHeightPx]);
+  }, [isBlind, cardHeightPx, fillAvailable]);
 
   // Simple in-memory cache so scrolling back doesn't re-download audio.
   // We keep object URLs for the session;
@@ -402,7 +405,9 @@ const PredictionCardImpl: React.FC<Props> = ({
       {/* ── Spectrogram ── */}
       <div
         data-tour="spectrogram"
-        className="shrink-0 px-2.5 pt-2 pb-2"
+        className={
+          fillAvailable ? "shrink-0 p-4" : "shrink-0 px-2.5 pt-2 pb-2"
+        }
         onClick={(e) => e.stopPropagation()}
       >
         {similarityScore !== undefined && (
@@ -459,7 +464,10 @@ const PredictionCardImpl: React.FC<Props> = ({
         )}
         {audioBlobUrl && loadedAudioSnippetId === prediction.snippet_id && (
           <div
-            className="mx-auto shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm px-3 pt-3 pb-2.5 overflow-x-hidden"
+            className={[
+              "mx-auto shrink-0 rounded-xl border border-gray-100 bg-white shadow-sm overflow-x-hidden",
+              fillAvailable ? "px-4 pt-4 pb-3" : "px-3 pt-3 pb-2.5",
+            ].join(" ")}
             style={{ width: SPEC_WIDTH, maxWidth: "100%" }}
           >
             <SnippetSpectrogramPlayer
