@@ -46,6 +46,11 @@ import {
 import { useExploreScope } from "../../explore/useExploreScope";
 
 const FEED_PAGE_SIZE = 50;
+/** From this feed width, the labels sit beside the spectrogram, not below it. */
+const WIDE_FEED_MIN_PX = 1300;
+/** Space kept around the snippet card in the wide layout. */
+const WIDE_CARD_INSET_Y_PX = 20;
+const WIDE_CARD_INSET_X_PX = 12;
 /**
  * Browsers cap an element's height (~2^24 px in Chromium), so a virtual list
  * of full-viewport cards stops scrolling correctly past a few tens of
@@ -124,7 +129,7 @@ interface PredictionFeedProps {
    * Content drawn over the snippet card's slot (the region above the label
    * bar), e.g. a listen-only view. The feed stays mounted underneath.
    */
-  overlay?: React.ReactNode;
+  overlay?: (layout: { wide: boolean }) => React.ReactNode;
   /** Dim and disable the label bar (set together with `overlay`). */
   labelsLocked?: boolean;
 }
@@ -243,6 +248,19 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
+  // Follows the feed's own width, so it applies however the feed got wide
+  // (panels collapsed, split dragged, large window).
+  const [feedBodyEl, setFeedBodyEl] = useState<HTMLDivElement | null>(null);
+  const [wideFeed, setWideFeed] = useState(false);
+  useLayoutEffect(() => {
+    if (!feedBodyEl) return;
+    const measure = () =>
+      setWideFeed(feedBodyEl.clientWidth >= WIDE_FEED_MIN_PX);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(feedBodyEl);
+    return () => ro.disconnect();
+  }, [feedBodyEl]);
   const [recordingNameById, setRecordingNameById] = useState<
     Record<number, string>
   >({});
@@ -1274,12 +1292,23 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       );
     }
     const truncated = serverMode && feedTotal > MAX_VIRTUAL_ROWS;
+    // The slot keeps its full height, so scrolling and snapping are unaffected;
+    // the inset comes out of the card inside it.
+    const cardHeightPx = wideFeed
+      ? blindSnapCardHeight - 2 * WIDE_CARD_INSET_Y_PX
+      : blindSnapCardHeight;
     return (
-      <div className="flex flex-col h-full min-h-0 overflow-hidden relative">
+      <div
+        ref={setFeedBodyEl}
+        className={[
+          "flex h-full min-h-0 overflow-hidden relative",
+          wideFeed ? "flex-row" : "flex-col",
+        ].join(" ")}
+      >
         {/* Middle region: the scrollable spectrogram feed, plus the on-demand
             overlay. The overlay covers only this region — never the sticky
-            label bar below it. */}
-        <div className="flex-1 min-h-0 relative">
+            label bar next to it. */}
+        <div className="flex-1 min-h-0 min-w-0 relative">
           <div
             ref={bindScrollContainer}
             className="absolute inset-0 overflow-y-auto px-3 pt-2 pb-2"
@@ -1289,7 +1318,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             style={{ scrollSnapType: "y mandatory", overflowAnchor: "none" }}
             onScroll={handleBlindScroll}
           >
-            <div className="w-full max-w-300 mx-auto">
+            <div
+              className={wideFeed ? "w-full" : "w-full max-w-300 mx-auto"}
+            >
               {/* Spacer for the off-screen cards above the window. */}
               <div style={{ height: blindTopSpacer }} />
               {blindVisibleRows.map(({ prediction: p, index }) =>
@@ -1300,6 +1331,9 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                     style={{
                       height: blindSnapCardHeight,
                       marginBottom: BLIND_SLOT_GAP_PX,
+                      padding: wideFeed
+                        ? `${WIDE_CARD_INSET_Y_PX}px ${WIDE_CARD_INSET_X_PX}px`
+                        : undefined,
                     }}
                   >
                     <PredictionCard
@@ -1310,7 +1344,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                           : undefined
                       }
                       cardRef={registerCard}
-                      cardHeightPx={blindSnapCardHeight}
+                      cardHeightPx={cardHeightPx}
                       serverLabels={labelsFor(p.snippet_id)}
                       quickLabels={quickLabels}
                       quickLabelsLoading={quickLabelsLoading}
@@ -1320,6 +1354,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                       onFindSimilar={onFindSimilar}
                       hideHeader={hideCardHeader}
                       hideLabels
+                      fillAvailable={wideFeed}
                     />
                   </div>
                 ) : (
@@ -1361,7 +1396,16 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
               onWheel={() => setOverlayDismissedFor(selectedSnippetId)}
               onTouchStart={() => setOverlayDismissedFor(selectedSnippetId)}
             >
-              <div className="flex-1 overflow-y-auto px-3 py-3">
+              <div
+                className="flex-1 overflow-y-auto px-3 py-3"
+                style={
+                  wideFeed
+                    ? {
+                        padding: `${WIDE_CARD_INSET_Y_PX}px ${12 + WIDE_CARD_INSET_X_PX}px`,
+                      }
+                    : undefined
+                }
+              >
                 {resolvedAdHocPrediction && (
                   <PredictionCard
                     key={resolvedAdHocPrediction.snippet_id}
@@ -1373,7 +1417,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                           ]
                         : undefined
                     }
-                    cardHeightPx={blindSnapCardHeight}
+                    cardHeightPx={cardHeightPx}
                     serverLabels={labelsFor(resolvedAdHocPrediction.snippet_id)}
                     quickLabels={quickLabels}
                     quickLabelsLoading={quickLabelsLoading}
@@ -1382,6 +1426,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
                     onFindSimilar={onFindSimilar}
                     hideHeader={hideCardHeader}
                     hideLabels
+                    fillAvailable={wideFeed}
                   />
                 )}
               </div>
@@ -1389,7 +1434,7 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
           )}
 
           {/* A listen-only view over the card slot (the label bar stays below). */}
-          {overlay}
+          {overlay?.({ wide: wideFeed })}
         </div>
 
         {/* Sticky label bar — one shared instance for the whole feed, targeting
@@ -1397,12 +1442,17 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
             of the height; the handle on its top edge lets the user enlarge it.
             Large quick-label sets scroll inside it.*/}
         {stickyLabelPrediction && (
-          <ResizableLabelBar className="bg-white" locked={labelsLocked}>
+          <ResizableLabelBar
+            className="bg-white"
+            locked={labelsLocked}
+            side={wideFeed ? "right" : "bottom"}
+          >
             <FeedbackButtons
               prediction={stickyLabelPrediction}
               serverLabels={labelsFor(stickyLabelPrediction.snippet_id)}
               quickLabels={quickLabels}
               quickLabelsLoading={quickLabelsLoading}
+              narrow={wideFeed}
             />
           </ResizableLabelBar>
         )}

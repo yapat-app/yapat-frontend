@@ -52,6 +52,8 @@ export interface ResizableSplitProps {
   onToggleCollapse?: () => void;
   collapsedPx?: number;
 
+  leftRailPx?: number;
+
   className?: string;
 }
 
@@ -87,6 +89,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
   collapsed = false,
   onToggleCollapse,
   collapsedPx = 0,
+  leftRailPx,
   className,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -276,18 +279,26 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
       window.dispatchEvent(new Event("resize")),
     );
     return () => window.cancelAnimationFrame(raf);
-  }, [collapsed]);
+  }, [collapsed, leftRailPx]);
 
-  const leftStyle: React.CSSProperties =
-    mode === "ratio"
+  const hasLeftRail = mode === "right_px" && leftRailPx !== undefined;
+
+  const leftStyle: React.CSSProperties = hasLeftRail
+    ? { flex: "0 0 auto", width: leftRailPx }
+    : mode === "ratio"
       ? { flexBasis: `${Math.round(ratio * 1000) / 10}%` }
       : mode === "left_px"
         ? { flex: "0 0 auto", width: effectiveLeftPx, overflow: "hidden" }
         : { flex: "1 1 auto", minWidth: 0 };
 
   const rightStyle: React.CSSProperties =
-    mode === "right_px"
-      ? { flex: "0 0 auto", width: effectiveRightPx, overflow: "hidden" }
+    mode === "right_px" && !hasLeftRail
+      ? {
+          flex: "0 0 auto",
+          width: effectiveRightPx,
+          maxWidth: `calc(100% - ${MIN_FLEX_SIDE_RESERVE_PX}px)`,
+          overflow: "hidden",
+        }
       : { flex: "1 1 auto", minWidth: 0 };
 
   const showChevron =
@@ -306,7 +317,7 @@ export const ResizableSplit: React.FC<ResizableSplitProps> = ({
         {left}
       </div>
 
-      {collapsed && !onToggleCollapse
+      {hasLeftRail || (collapsed && !onToggleCollapse)
         ? null
         : (() => {
             const handle = (

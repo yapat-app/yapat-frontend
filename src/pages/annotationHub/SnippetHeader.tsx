@@ -199,10 +199,10 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
     );
   });
 
+  // The feed clears the selection when it is empty, so this also covers that
+  // case. Snippets are shown before the first model exists, so predictions may
+  // legitimately be empty here.
   if (snippetId === null) return null;
-  // No feed generated yet (nothing in memory for this dataset) — the feed body
-  // below shows its own empty state, so stay in sync and render nothing.
-  if (!prediction && predictions.length === 0) return null;
   const hasFeedback = !!feedbacks[snippetId];
 
   return (
