@@ -8,6 +8,8 @@ interface Props {
   /** The snippet the view was opened from. */
   snippetId: number;
   onClose: () => void;
+  /** Wide feed layout: same width and spacing as the wide snippet card. */
+  wide?: boolean;
 }
 
 /**
@@ -21,6 +23,7 @@ export const FullRecordingOverlay: React.FC<Props> = ({
   recordingId,
   snippetId,
   onClose,
+  wide = false,
 }) => {
   const dispatch = useAppDispatch();
   const datasetId = useAppSelector((s) => s.al.selectedDatasetId);
@@ -38,10 +41,23 @@ export const FullRecordingOverlay: React.FC<Props> = ({
   if (datasetId === null) return null;
 
   return (
-    <div className="absolute inset-0 z-30 bg-white overflow-hidden px-3 pt-2 pb-2">
-      <div className="w-full max-w-300 mx-auto h-full">
-        <div className="h-full rounded-xl border border-yellow-400 ring-2 ring-yellow-200 shadow-md bg-white overflow-hidden px-2.5 pt-2 pb-2">
+    <div
+      className={[
+        "absolute inset-0 z-30 overflow-hidden",
+        wide ? "bg-[#f7fafc] px-6 py-5" : "bg-white px-3 pt-2 pb-2",
+      ].join(" ")}
+    >
+      <div
+        className={wide ? "w-full h-full" : "w-full max-w-300 mx-auto h-full"}
+      >
+        <div
+          className={[
+            "h-full rounded-xl border border-yellow-400 ring-2 ring-yellow-200 shadow-md bg-white overflow-hidden",
+            wide ? "p-4" : "px-2.5 pt-2 pb-2",
+          ].join(" ")}
+        >
           <FullRecordingCard
+            fillAvailable={wide}
             datasetId={Number(datasetId)}
             snippetSetId={snippetSetId}
             recordingId={recordingId}
