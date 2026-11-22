@@ -111,7 +111,7 @@ const LIST_META: Record<
     reason: "text-amber-700",
   },
   invalid: {
-    title: "have missing or unusable values",
+    title: "have missing, unusable or ambiguous values",
     reason: "text-red-700",
   },
 };
@@ -253,7 +253,10 @@ export const ImportAnnotationsModal: React.FC<Props> = ({
       <Paragraph type="secondary" style={{ marginBottom: 16 }}>
         Required columns: <Text code>recording_file_name</Text>,{" "}
         <Text code>snippet_start_time</Text>,{" "}
-        <Text code>snippet_end_time</Text> and <Text code>taxon_id</Text>.
+        <Text code>snippet_end_time</Text> and <Text code>taxon_id</Text>. If the
+        same file name exists in more than one folder, also include{" "}
+        <Text code>recording_file_path</Text> (Export does) so the right
+        recording is used.
       </Paragraph>
 
       <Dragger
