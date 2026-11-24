@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { setSelectedSnippet } from "../../redux/features/alSlice";
+import { useExploreScope } from "../../explore/useExploreScope";
 import { FullRecordingCard } from "./FullRecordingCard";
 
 interface Props {
@@ -28,6 +29,7 @@ export const FullRecordingOverlay: React.FC<Props> = ({
   const dispatch = useAppDispatch();
   const datasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const snippetSetId = useAppSelector((s) => s.al.snippetSetId);
+  const { scope } = useExploreScope();
   const selectedSnippetId = useAppSelector(
     (s) => s.al.selectedSnippetIds[0] ?? null,
   );
@@ -60,6 +62,7 @@ export const FullRecordingOverlay: React.FC<Props> = ({
             fillAvailable={wide}
             datasetId={Number(datasetId)}
             snippetSetId={snippetSetId}
+            scope={scope}
             recordingId={recordingId}
             snippetId={snippetId}
             onBack={onClose}

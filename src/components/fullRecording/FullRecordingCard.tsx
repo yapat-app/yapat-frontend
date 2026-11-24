@@ -14,6 +14,9 @@ import {
   ZoomOutOutlined,
 } from "@ant-design/icons";
 import { SpectrogramAudioControls } from "../SpectrogramAudioControls";
+import { useLabelledSnippets } from "../../explore/useLabelledSnippets";
+import type { ExploreScope } from "../../types/explore";
+import { countLabelled } from "../../utils/labelledSnippets";
 import { useDatasetSpectrogramConfig } from "../../hooks/useDatasetSpectrogramConfig";
 import { useSpectrogramPrefs } from "../../hooks/useSpectrogramPrefs";
 import {
@@ -83,6 +86,8 @@ function formatClock(sec: number): string {
 interface Props {
   datasetId: number;
   snippetSetId: number | null;
+  /** Used to look up which snippets are labelled; without it nothing is marked. */
+  scope?: ExploreScope | null;
   recordingId: number;
   snippetId: number;
   /** Closes the view and returns to the feed. */
@@ -96,6 +101,7 @@ interface Props {
 export const FullRecordingCard: React.FC<Props> = ({
   datasetId,
   snippetSetId,
+  scope = null,
   recordingId,
   snippetId,
   onBack,
@@ -150,6 +156,15 @@ export const FullRecordingCard: React.FC<Props> = ({
   const current = load?.key === loadKey ? load : null;
   const audio = current?.status === "ready" ? current.audio : null;
   const snippetWin = audio?.windows.find((w) => w.id === snippetId) ?? null;
+
+  // Which snippets of this recording are already labelled (null = not known).
+  const windowIds = useMemo(
+    () => (audio ? audio.windows.map((w) => w.id) : null),
+    [audio],
+  );
+  const labelled = useLabelledSnippets(scope, windowIds);
+  const labelledCount =
+    labelled && windowIds ? countLabelled(windowIds, labelled) : null;
   const loadingPct =
     progress?.key === loadKey && progress.total > 0
       ? Math.round((progress.done / progress.total) * 100)
@@ -526,6 +541,18 @@ export const FullRecordingCard: React.FC<Props> = ({
             ? "whole recording in view"
             : `${viewSec} s in view`}
         </span>
+        {labelledCount !== null && windowIds && (
+          <span className="ml-auto inline-flex items-center gap-1 text-fs-10 text-gray-500 font-ibm-sans">
+            <span
+              aria-hidden
+              className="inline-block h-1.75 w-1.75 rounded-xs bg-green-400"
+            />
+            <span className="font-ibm-mono font-semibold text-green-700">
+              {labelledCount}
+            </span>{" "}
+            of {windowIds.length} snippets labelled
+          </span>
+        )}
       </div>
 
       {/* Overview of the whole file */}
@@ -641,6 +668,11 @@ export const FullRecordingCard: React.FC<Props> = ({
                 if (w.id === snippetId) return null;
                 const slotEnd = audio.windows[i + 1]?.startSec ?? w.endSec;
                 const slotPx = (slotEnd - w.startSec) * pxPerSec;
+                const isLabelled = labelled?.has(w.id) ?? false;
+                // The tick takes a little room, so the full label needs more.
+                const labelMinPx = isLabelled
+                  ? NEIGHBOUR_LABEL_MIN_PX + 12
+                  : NEIGHBOUR_LABEL_MIN_PX;
                 return (
                   <div
                     key={w.id}
@@ -656,20 +688,27 @@ export const FullRecordingCard: React.FC<Props> = ({
                       // the browser's own, shown below the pointer.
                       <button
                         type="button"
-                        title={`Open snippet #${w.id} in the feed`}
-                        aria-label={`Open snippet ${w.id} in the feed`}
-                        className="absolute -top-px left-0 z-10 flex h-4 max-w-full cursor-pointer items-center gap-0.5 overflow-hidden whitespace-nowrap rounded-br border-0 bg-slate-900/70 p-0 text-left text-fs-9 font-semibold leading-tight text-white font-ibm-mono pointer-events-auto hover:bg-blue-600"
+                        title={`Open snippet #${w.id} in the feed${isLabelled ? " (already labelled)" : ""}`}
+                        aria-label={`Open snippet ${w.id} in the feed${isLabelled ? ", already labelled" : ""}`}
+                        className={[
+                          "absolute -top-px left-0 z-10 flex h-4 max-w-full cursor-pointer items-center gap-0.5 overflow-hidden whitespace-nowrap rounded-br border-0 p-0 text-left text-fs-9 font-semibold leading-tight font-ibm-mono pointer-events-auto hover:bg-blue-600 hover:text-white",
+                          isLabelled
+                            ? "bg-green-100/95 text-green-800 shadow-[inset_0_0_0_1px_rgba(22,163,74,0.35)]"
+                            : "bg-slate-900/70 text-white",
+                        ].join(" ")}
                         style={
-                          slotPx < NEIGHBOUR_LABEL_MIN_PX
+                          slotPx < labelMinPx
                             ? { width: slotPx }
                             : { paddingInline: 4 }
                         }
                         onClick={() => onSelectSnippet(w.id)}
                       >
-                        {slotPx >= NEIGHBOUR_LABEL_MIN_PX
-                          ? `#${w.id} ↗`
+                        {slotPx >= labelMinPx
+                          ? `${isLabelled ? "✓ " : ""}#${w.id} ↗`
                           : slotPx >= NEIGHBOUR_ARROW_MIN_PX
-                            ? "↗"
+                            ? isLabelled
+                              ? "✓"
+                              : "↗"
                             : null}
                       </button>
                     )}
