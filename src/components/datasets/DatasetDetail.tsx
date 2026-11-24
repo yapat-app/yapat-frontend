@@ -10,7 +10,13 @@
  * `button { all: unset }` rule from a dependency strips <button> styling.
  */
 
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Button, Popover, Tooltip, message } from "antd";
 import {
   CheckSquareOutlined,
@@ -28,11 +34,13 @@ import { useNavigate } from "react-router-dom";
 import type { Dataset, IngestJob, QuickLabel } from "../../types";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import { useEmbeddingOptions } from "../../hooks/useEmbeddingOptions";
+import { labelSharingApi } from "../../services/labelSharingApi";
 import {
   fetchAllDatasets,
   fetchReferenceDatasets,
 } from "../../redux/features/datasetSlice";
 import { usePhaseConfig } from "../../studyPhases";
+import { getAllEmbeddingMethods } from "../../redux/features/embeddingSlice";
 import { GenerateEmbeddings } from "../GenerateEmbeddings";
 import { EmbeddingProgressPanel } from "../EmbeddingProgressPanel";
 import { ScanProgressPanel } from "../ScanProgressPanel";
@@ -51,6 +59,12 @@ import { DatasetMetadataModal } from "../DatasetMetadataModal";
 import { ExportAnnotationPanel } from "../ExportAnnotation";
 import { useDatasetJobs } from "./datasetJobsContext";
 import { EmbeddingModelsList } from "./EmbeddingModelsList";
+import { AnnotateModelControl } from "./AnnotateModelControl";
+import {
+  SnippetBreakdownPopover,
+  type SnippetBreakdownView,
+} from "./SnippetBreakdownPopover";
+import { useSnippetBreakdown } from "./useSnippetBreakdown";
 import { TILE_HEADER_CLASS, TileActionButton } from "./TileActionButton";
 import {
   DATASET_STATUS_META,
@@ -58,7 +72,10 @@ import {
   formatPercent,
   getDatasetStatus,
 } from "../../utils/datasetStatus";
-import { readyEmbeddingModelCount } from "../../utils/embeddingOptions";
+import {
+  dedupeEmbeddingOptions,
+  readyEmbeddingModelCount,
+} from "../../utils/embeddingOptions";
 
 type Props = {
   dataset: Dataset;
@@ -176,8 +193,54 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
   const jobs = useDatasetJobs(dataset);
   const status = getDatasetStatus(dataset, jobs);
   const statusMeta = DATASET_STATUS_META[status];
-  const embeddingOptions = useEmbeddingOptions(Number(dataset.id), jobs.running);
+  // Bumped after the embedding model is changed on this card.
+  const [optionsRevision, setOptionsRevision] = useState(0);
+  // Also reloads reference pools' state for each model (embedding progress).
+  const refreshEmbeddingOptions = useCallback(
+    () => setOptionsRevision((n) => n + 1),
+    [],
+  );
+  const embeddingOptions = useEmbeddingOptions(
+    Number(dataset.id),
+    `${jobs.running}-${optionsRevision}`,
+  );
   const readyModels = readyEmbeddingModelCount(embeddingOptions);
+  // Optional shared-label review: pending suggestions per set of clips, for a
+  // quiet hint by the model control. Only with several models, and only where
+  // the phase offers the review.
+  const showSharingHints =
+    !isReference &&
+    status === "ready" &&
+    readyModels > 1 &&
+    !!phase.ui.showLabelSharingReview;
+  const [pendingBySnippetSet, setPendingBySnippetSet] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  useEffect(() => {
+    if (!showSharingHints) return;
+    let cancelled = false;
+    labelSharingApi
+      .getSummary(Number(dataset.id))
+      .then((s) => {
+        if (!cancelled) setPendingBySnippetSet(s.pending_by_snippet_set);
+      })
+      .catch(() => {
+        // Older backends have no label sharing: no hint.
+        if (!cancelled) setPendingBySnippetSet(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showSharingHints, dataset.id, optionsRevision]);
+  const reviewHref = `/annotate?dataset_id=${dataset.id}&phase=${phase.id}&review=1`;
+  const snippetBreakdown = useSnippetBreakdown(Number(dataset.id));
+  // Every model on the server, so the status popup can list those not generated here.
+  const embeddingMethods = useAppSelector((s) => s.embedding.embeddingMethods);
+  const hasEmbeddingMethods = embeddingMethods !== null;
+  useEffect(() => {
+    if (!hasEmbeddingMethods) void dispatch(getAllEmbeddingMethods());
+  }, [dispatch, hasEmbeddingMethods]);
 
   // Starts from the copy the page loaded before it appeared (see above).
   const [quickLabels, setQuickLabels] = useState<QuickLabel[]>(
@@ -255,6 +318,39 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
     <span className="inline-block h-6 w-20 rounded bg-gray-200 align-middle" />
   );
 
+  // With several models the snippet totals add up all of them: each tile
+  // explains its own number by model.
+  const activeModelCount = dedupeEmbeddingOptions(embeddingOptions).filter(
+    (o) => o.status !== "failed",
+  ).length;
+  const showSnippetBreakdown =
+    !isReference &&
+    activeModelCount > 1 &&
+    statsReady &&
+    stats.total_snippets > 0;
+  const withSnippetBreakdown = (
+    view: SnippetBreakdownView,
+    tile: ReactNode,
+    ariaLabel: string,
+  ) =>
+    showSnippetBreakdown ? (
+      <SnippetBreakdownPopover
+        view={view}
+        breakdown={snippetBreakdown.data}
+        failed={snippetBreakdown.failed}
+        onOpen={snippetBreakdown.load}
+        options={embeddingOptions}
+        recordingCount={dataset.recording_count ?? 0}
+        showSharing={!!phase.ui.showLabelSharingReview}
+        reviewHref={reviewHref}
+        ariaLabel={ariaLabel}
+      >
+        {tile}
+      </SnippetBreakdownPopover>
+    ) : (
+      tile
+    );
+
   const annotatedPct =
     statsReady && stats.total_snippets > 0
       ? Math.min(100, (stats.annotated_snippets / stats.total_snippets) * 100)
@@ -294,6 +390,8 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
 
   const setupTileCount =
     1 + (!isReference ? 1 : 0) + (!isReference && isAdmin ? 1 : 0);
+  // Several finished models: admins and team owners pick the one Annotate uses.
+  const canPickModel = canManage && !isReference && readyModels > 1;
 
   const chips = quickLabels.slice(0, 5);
 
@@ -320,7 +418,13 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               {/* Status pill, tinted by state; the dot matches the list and legend. */}
               {status === "ready" && embeddingOptions.length > 0 ? (
                 <Popover
-                  content={<EmbeddingModelsList options={embeddingOptions} />}
+                  content={
+                    <EmbeddingModelsList
+                      options={embeddingOptions}
+                      methods={embeddingMethods ?? []}
+                      canGenerate={isAdmin}
+                    />
+                  }
                   placement="bottomLeft"
                   arrow={false}
                   trigger={["hover", "focus"]}
@@ -343,6 +447,23 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
             <p className="m-0 mt-1 text-sm text-slate-500 font-ibm-sans">
               {dataset.description?.trim() ? dataset.description : "—"}
             </p>
+            {!isReference && status === "ready" && (
+              <AnnotateModelControl
+                dataset={dataset}
+                options={embeddingOptions}
+                canPick={canPickModel}
+                pendingBySnippetSet={
+                  showSharingHints ? pendingBySnippetSet : null
+                }
+                reviewHref={reviewHref}
+                isAdmin={isAdmin}
+                onRefreshOptions={refreshEmbeddingOptions}
+                onSaved={() => {
+                  setOptionsRevision((n) => n + 1);
+                  refetchDatasets();
+                }}
+              />
+            )}
             {!isAdmin && status === "not_found" && (
               <p className="m-0 mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
                 <InfoCircleOutlined />
@@ -488,43 +609,61 @@ export const DatasetDetail: React.FC<Props> = ({ dataset }) => {
               </StatTile>
             </div>
           </Tooltip>
-          <StatTile icon={<ScissorOutlined />} label="Total snippets">
-            {statsReady
-              ? stats.total_snippets.toLocaleString()
-              : statPlaceholder}
-          </StatTile>
-          <StatTile
-            icon={<CheckSquareOutlined />}
-            label="Annotated snippets"
-            valueClass="text-emerald-700"
-            // The track is always there (the fill only grows once the counts
-            // arrive), so the tile has the same height before and after loading.
-            footer={
-              <div
-                className="mt-1 h-1 w-3/5 overflow-hidden rounded-full bg-slate-200"
-                title={
-                  statsReady
-                    ? formatPercent(
-                        stats.annotated_snippets,
-                        stats.total_snippets,
-                      )
-                    : undefined
-                }
-                aria-hidden="true"
-              >
+          {withSnippetBreakdown(
+            "snippets",
+            <StatTile
+              icon={<ScissorOutlined />}
+              label="Total snippets"
+              footer={
+                showSnippetBreakdown ? (
+                  <span className="mt-0.5 border-b border-dotted border-slate-400 text-fs-11 leading-3.5 text-slate-600">
+                    across {activeModelCount} models
+                  </span>
+                ) : undefined
+              }
+            >
+              {statsReady
+                ? stats.total_snippets.toLocaleString()
+                : statPlaceholder}
+            </StatTile>,
+            `Total snippets of ${dataset.name}, by model`,
+          )}
+          {withSnippetBreakdown(
+            "annotated",
+            <StatTile
+              icon={<CheckSquareOutlined />}
+              label="Annotated snippets"
+              valueClass="text-emerald-700"
+              // The track is always there (the fill only grows once the counts
+              // arrive), so the tile has the same height before and after loading.
+              footer={
                 <div
-                  className="h-full rounded-full bg-emerald-600"
-                  style={{
-                    width: `${annotatedPct > 0 ? Math.max(annotatedPct, 1.5) : 0}%`,
-                  }}
-                />
-              </div>
-            }
-          >
-            {statsReady
-              ? `${stats.annotated_snippets.toLocaleString()} / ${stats.total_snippets.toLocaleString()}`
-              : statPlaceholder}
-          </StatTile>
+                  className="mt-1 h-1 w-3/5 overflow-hidden rounded-full bg-slate-200"
+                  title={
+                    statsReady
+                      ? formatPercent(
+                          stats.annotated_snippets,
+                          stats.total_snippets,
+                        )
+                      : undefined
+                  }
+                  aria-hidden="true"
+                >
+                  <div
+                    className="h-full rounded-full bg-emerald-600"
+                    style={{
+                      width: `${annotatedPct > 0 ? Math.max(annotatedPct, 1.5) : 0}%`,
+                    }}
+                  />
+                </div>
+              }
+            >
+              {statsReady
+                ? `${stats.annotated_snippets.toLocaleString()} / ${stats.total_snippets.toLocaleString()}`
+                : statPlaceholder}
+            </StatTile>,
+            `Annotated snippets of ${dataset.name}, by model`,
+          )}
         </div>
       </div>
 
