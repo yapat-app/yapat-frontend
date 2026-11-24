@@ -12,7 +12,6 @@ import {
   fetchEmbeddingOptions,
   fetchFeedbackCount,
   selectEmbeddingOption,
-  switchEmbeddingModel,
   clearError,
   hydrateSavedFeed,
   restoreFeedFromServer,
@@ -40,7 +39,7 @@ export interface LabelScopeOption {
   tooltip: string | null;
   sampleCount: number | null;
 }
-import type { EmbeddingJobProgress, EmbeddingOption, SnippetSet } from "../../types";
+import type { EmbeddingJobProgress, SnippetSet } from "../../types";
 import { usePhaseConfig } from "../../studyPhases";
 import {
   buildInferenceSuggestionParams,
@@ -768,35 +767,6 @@ export function useHubALSession(
     dispatch,
   ]);
 
-  /**
-   * Switch to another embedding model. Explore reloads everything from the new
-   * scope, so this never asks for inference.
-   */
-  const handleSwitchEmbeddingModel = useCallback(
-    (option: EmbeddingOption) => {
-      if (option.status !== "completed") return;
-      if (option.embedding_model_id === embeddingModelId) return;
-      studyLogger.log("embedding_model_change", {
-        from: embeddingModelId,
-        to: option.embedding_model_id,
-        snippetSetChanged: option.snippet_set_id !== snippetSetId,
-        hasClassifier: option.active_checkpoint_id !== null,
-      });
-      refreshedForCheckpointRef.current = null;
-      setLocalSS(option.snippet_set_id);
-      setLocalFamily(option.model_family_name);
-      setLocalLabelScope([]);
-      dispatch(switchEmbeddingModel(option));
-    },
-    [dispatch, embeddingModelId, snippetSetId],
-  );
-
-  const refreshEmbeddingOptions = useCallback(() => {
-    if (selectedDatasetId !== null) {
-      void dispatch(fetchEmbeddingOptions(Number(selectedDatasetId)));
-    }
-  }, [dispatch, selectedDatasetId]);
-
   /** First classifier for the selected model, from the labels already on its snippets. */
   const handleTrainClassifier = useCallback(async () => {
     if (selectedDatasetId === null || !selectedOption) return;
@@ -1154,8 +1124,6 @@ export function useHubALSession(
     embeddingModelId,
     selectedOption,
     classifierTrainingModelId,
-    handleSwitchEmbeddingModel,
-    refreshEmbeddingOptions,
     handleTrainClassifier,
     snippetSets,
     localCkpt,

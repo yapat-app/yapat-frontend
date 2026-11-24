@@ -137,6 +137,10 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   // - so here we only require that dataset processing/discovery has produced recordings
   const isDatasetReady = Boolean((dataset.recording_count ?? 0) > 0);
 
+  // Every model already has embeddings here (or can't run on this server):
+  // nothing to offer, so the button goes away rather than sitting disabled.
+  if (isAdmin && nothingLeftToGenerate && !running && !scanning) return null;
+
   return (
     <div>
       {scanning ? (
@@ -248,8 +252,6 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
                 className={DISABLED_ACTION_CLASS}
                 size={size}
                 icon={<ApartmentOutlined />}
-                disabled={nothingLeftToGenerate}
-                title={nothingLeftToGenerate ? "No other models can be generated" : undefined}
                 onClick={showModal}
               >
                 Generate Embeddings

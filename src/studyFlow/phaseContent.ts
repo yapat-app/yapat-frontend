@@ -168,13 +168,9 @@ const findSpeciesStep = (): TourStepSpec => ({
 });
 
 const EMBEDDING_MODELS_DESC = [
-  "This dataset has more than one embedding model. Each model describes the audio in its own way, so switching changes the scores, the predictions and the projection.",
+  "This dataset has more than one embedding model. The hub works on the one named here: its scores, predictions and projection are what you see.",
   "",
-  "The list says how each model relates to the others:",
-  "• Shared snippets, labels — the same snippets and labels as the models sharing them",
-  "• Separate snippets, labels — its own snippets. Switching to it shows different snippets; your labels on the current ones are kept",
-  "",
-  "Each model has its own classifier. Only labels you make while a model is selected count towards training that model.",
+  "The model is fixed for this dataset and can't be changed from the hub.",
 ].join("\n");
 
 const embeddingModelsStep = (): TourStepSpec => ({

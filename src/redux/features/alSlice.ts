@@ -298,17 +298,6 @@ function saveFeed(
   }, 300);
 }
 
-/** Write a debounced save now, for a change the next read must already see. */
-function flushFeedSave(): void {
-  if (_saveFeedTimer !== null) {
-    clearTimeout(_saveFeedTimer);
-    _saveFeedTimer = null;
-  }
-  const pending = _pendingSave;
-  _pendingSave = null;
-  if (pending) writeFeed(pending.perKey, pending.data);
-}
-
 function loadFeed(datasetId?: number | string | null): PersistedFeed | null {
   const normalized = normalizeDatasetId(datasetId ?? null);
   try {
@@ -461,13 +450,13 @@ function applyEmbeddingOption(state: ALState, option: EmbeddingOption): void {
 }
 
 /**
- * Bring the session in line with freshly loaded options: keep the model it is
- * on, else select the saved or default one. Refreshing the options therefore
- * never interrupts the current feed.
+ * Bring the session in line with freshly loaded options. The hub always works
+ * on the dataset's default model (it can't be switched from the hub), so a
+ * session saved on another model moves to the default. Refreshing the options
+ * never interrupts a feed that is already on it.
  */
-function reconcileEmbeddingSelection(state: ALState, datasetId: number): void {
-  const saved = state.embeddingModelId ?? loadFeed(datasetId)?.embeddingModelId;
-  const target = pickEmbeddingOption(state.embeddingOptions, saved);
+function reconcileEmbeddingSelection(state: ALState): void {
+  const target = pickEmbeddingOption(state.embeddingOptions, null);
   if (!target) return;
 
   const sameSession =
@@ -874,20 +863,6 @@ const alSlice = createSlice({
       clearSessionState(state);
       state.selectedDatasetId = nextId;
     },
-    /**
-     * Switch the session to another embedding model. Explore serves its snippets,
-     * scores and projection from what is already stored, so no inference runs:
-     * the new scope is what reloads the feed, sidebar and projection.
-     */
-    switchEmbeddingModel: (state, action: PayloadAction<EmbeddingOption>) => {
-      clearModelState(state);
-      applyEmbeddingOption(state, action.payload);
-      state.feedSource = "pam";
-      state.lastInferenceAt = new Date().toISOString();
-      saveFeed(state);
-      // Written now so the restore path can't read the old model's saved feed.
-      flushFeedSave();
-    },
     setInferenceConfig: (
       state,
       action: PayloadAction<{
@@ -1183,7 +1158,7 @@ const alSlice = createSlice({
       if (normalizeDatasetId(state.selectedDatasetId) !== datasetId) return;
       state.embeddingOptions = action.payload;
       state.embeddingOptionsDatasetId = datasetId;
-      reconcileEmbeddingSelection(state, datasetId);
+      reconcileEmbeddingSelection(state);
     });
     builder.addCase(fetchEmbeddingOptions.rejected, (state, action) => {
       const datasetId = action.meta.arg;
@@ -1615,7 +1590,6 @@ export const {
   requestFeedResume,
   clearFeedResume,
   setSelectedDataset,
-  switchEmbeddingModel,
   setInferenceConfig,
   setColorBy,
   setSamplingMethod,
