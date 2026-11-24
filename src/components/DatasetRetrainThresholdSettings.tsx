@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
+  ConfigProvider,
   Form,
   InputNumber,
   Modal,
@@ -14,6 +15,13 @@ import { datasetApi, getErrorMessage } from "../services/api";
 import { fetchAllDatasets } from "../redux/features/datasetSlice";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { TILE_HEADER_CLASS, TileActionButton } from "./datasets/TileActionButton";
+import {
+  canResetThreshold,
+  formatThreshold,
+  initialThreshold,
+  parseThreshold,
+  thresholdToSave,
+} from "../utils/retrainThreshold";
 
 type Props = {
   dataset: Dataset;
@@ -31,23 +39,33 @@ export const DatasetRetrainThresholdSettings: React.FC<Props> = ({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<FormValues>();
+  const typed = Form.useWatch("threshold", form);
 
   const canManage = user?.role === "admin" || user?.role === "team_owner";
   const hasOverride = dataset.retrain_after_threshold != null;
+  // Sent by the backend; null with an older backend, then the old wording is kept.
+  const defaultThreshold = dataset.default_retrain_threshold ?? null;
 
   useEffect(() => {
     if (!open) return;
     form.setFieldsValue({
-      threshold: dataset.retrain_after_threshold ?? undefined,
+      threshold: initialThreshold(
+        dataset.retrain_after_threshold,
+        defaultThreshold,
+      ),
     });
-  }, [open, dataset, form]);
+  }, [open, dataset, defaultThreshold, form]);
 
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
       await datasetApi.update(Number(dataset.id), {
-        retrain_after_threshold: values.threshold ?? null,
+        // The default number means "use the default", so it is stored as null.
+        retrain_after_threshold: thresholdToSave(
+          values.threshold,
+          defaultThreshold,
+        ),
       });
       message.success("Retrain threshold saved");
       setOpen(false);
@@ -83,7 +101,9 @@ export const DatasetRetrainThresholdSettings: React.FC<Props> = ({
           <span className="text-base font-ibm-mono font-semibold text-slate-800">
             {hasOverride
               ? `${dataset.retrain_after_threshold} feedback events`
-              : "Using default"}
+              : defaultThreshold !== null
+                ? `${defaultThreshold} feedback events`
+                : "Using default"}
           </span>
           <Tag color={hasOverride ? "blue" : "default"} className="m-0">
             {hasOverride ? "Custom" : "Default"}
@@ -119,32 +139,77 @@ export const DatasetRetrainThresholdSettings: React.FC<Props> = ({
           className="text-sm mb-4 font-ibm-sans"
         >
           Auto-retrain kicks off once this many feedback events have been
-          submitted since the last retrain. Leave empty to use the platform
-          default.
+          submitted since the last retrain.
+          {defaultThreshold === null &&
+            " Leave empty to use the platform default."}
         </Typography.Paragraph>
 
         <Form form={form} layout="vertical">
-          <Form.Item
-            label="Feedback events until retrain"
-            name="threshold"
-            rules={[{ type: "number", min: 1, message: "Must be at least 1" }]}
-            extra="Leave empty to use the platform default"
+          {/* The reset link sits on the label row, so showing or hiding it does
+              not change the height of the window. */}
+          <div
+            className="mb-2 flex items-center justify-between gap-3"
+            style={{ minHeight: 24 }}
           >
-            <InputNumber
-              min={1}
-              step={1}
-              className="w-full"
-              placeholder="Default"
-            />
-          </Form.Item>
-          <Button
-            type="link"
-            size="small"
-            className="px-0"
-            onClick={() => form.setFieldsValue({ threshold: undefined })}
+            <label
+              htmlFor="threshold"
+              className="text-sm"
+              style={{ color: "rgba(0, 0, 0, 0.88)" }}
+            >
+              Feedback events until retrain
+            </label>
+            {canResetThreshold(typed, defaultThreshold) && (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, height: "auto" }}
+                onClick={() =>
+                  form.setFieldsValue({
+                    threshold: defaultThreshold ?? undefined,
+                  })
+                }
+              >
+                Reset to default
+              </Button>
+            )}
+          </div>
+          {/* Keep the ↑/↓ arrows visible, so people notice they can step the
+              number without having to hover first. */}
+          <ConfigProvider
+            theme={{ components: { InputNumber: { handleVisible: true } } }}
           >
-            Reset to default
-          </Button>
+            <Form.Item
+              name="threshold"
+              rules={[{ type: "number", min: 1, message: "Must be at least 1" }]}
+              extra={
+                defaultThreshold !== null
+                  ? `Platform default: ${defaultThreshold}. Any other number applies to this dataset only.`
+                  : "Leave empty to use the platform default"
+              }
+            >
+              <InputNumber<number>
+                min={1}
+                step={1}
+                className="w-full"
+                style={{ width: "100%" }}
+                placeholder={
+                  defaultThreshold !== null
+                    ? `Default (${defaultThreshold})`
+                    : "Default"
+                }
+                // The default number is shown as "10 (default)".
+                formatter={(value, info) =>
+                  formatThreshold(
+                    value,
+                    defaultThreshold,
+                    info.userTyping,
+                    info.input,
+                  )
+                }
+                parser={(text) => parseThreshold(text) as unknown as number}
+              />
+            </Form.Item>
+          </ConfigProvider>
         </Form>
       </Modal>
     </>
