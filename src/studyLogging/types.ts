@@ -65,7 +65,12 @@ export type StudyLogEvent =
   | {
       eventType: "split_resize";
       payload: {
-        mode: "ratio" | "right_px" | "left_px" | "label_bar_px";
+        mode:
+          | "ratio"
+          | "right_px"
+          | "left_px"
+          | "label_bar_px"
+          | "label_bar_width_px";
         value: number;
         viewportW: number;
         viewportH: number;

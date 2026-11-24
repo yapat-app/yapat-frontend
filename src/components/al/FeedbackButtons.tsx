@@ -41,6 +41,8 @@ interface Props {
   /** Dataset-wide quick labels resolved once by AnnotationHub. */
   quickLabels?: string[];
   quickLabelsLoading?: boolean;
+  /** Lay the label picker out for a narrow column. */
+  narrow?: boolean;
 }
 
 export const FeedbackButtons: React.FC<Props> = ({
@@ -48,6 +50,7 @@ export const FeedbackButtons: React.FC<Props> = ({
   serverLabels,
   quickLabels = [],
   quickLabelsLoading = false,
+  narrow = false,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -589,7 +592,12 @@ export const FeedbackButtons: React.FC<Props> = ({
     // flex-1 (rather than h-full) so this works both inside the fixed-height
     // inline label area and inside the sticky label bar, whose height is
     // capped by a max-height rather than being definite.
-    <div className="flex flex-col gap-1.5 flex-1 min-h-0">
+    <div
+      className={[
+        "flex flex-col flex-1 min-h-0",
+        narrow ? "gap-3" : "gap-1.5",
+      ].join(" ")}
+    >
       {isBootstrap &&
         (trainingFirstModel ? (
           <span className="shrink-0 inline-flex items-center gap-1.5 text-fs-11 text-blue-600 w-fit">
@@ -641,6 +649,7 @@ export const FeedbackButtons: React.FC<Props> = ({
           ) : null
         }
         compact
+        stackRecent={narrow}
         showList
         fillHeight
         showSelectedRow={false}

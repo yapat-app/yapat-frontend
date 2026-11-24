@@ -123,6 +123,8 @@ interface Props {
    * Designed for inline embedding inside a snippet card below the spectrogram.
    */
   compact?: boolean;
+  /** Compact mode: put "Recent" above its chips, for a narrow column. */
+  stackRecent?: boolean;
 }
 
 export const LabelSelector: React.FC<Props> = ({
@@ -141,6 +143,7 @@ export const LabelSelector: React.FC<Props> = ({
   labelsLoading,
   statusSlot,
   onManageQuickLabels,
+  stackRecent = false,
   compact = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -511,7 +514,7 @@ export const LabelSelector: React.FC<Props> = ({
     );
 
     return (
-      <div data-tour="labeling" className={["flex flex-col gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
+      <div data-tour="labeling" className={["flex flex-col", stackRecent ? "gap-3" : "gap-2", fillHeight ? "h-full min-h-0" : ""].join(" ")}>
 
         {/* ── Current labels — shown as dismissible AntD Tags ── */}
         {value.length > 0 && (
@@ -604,11 +607,28 @@ export const LabelSelector: React.FC<Props> = ({
             wrap onto a second line are clipped; they are all in the full
             list below. ── */}
         {recentOptions.length > 0 && (
-          <div className="shrink-0 flex items-start gap-2 h-6.5">
-            <span className="shrink-0 leading-6.5 text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans">
+          <div
+            className={
+              stackRecent
+                ? "shrink-0 flex flex-col gap-1"
+                : "shrink-0 flex items-start gap-2 h-6.5"
+            }
+          >
+            <span
+              className={[
+                "shrink-0 text-fs-11 laptop:text-[9.5px]! laptop:tracking-wide! font-semibold text-gray-400 uppercase tracking-wider font-ibm-sans",
+                stackRecent ? "" : "leading-6.5",
+              ].join(" ")}
+            >
               Recent
             </span>
-            <div className="flex-1 min-w-0 h-full flex flex-wrap gap-1.5 overflow-hidden">
+            <div
+              className={[
+                "min-w-0 flex flex-wrap gap-1.5 overflow-hidden",
+                // Two rows at most; everything is in the full list below.
+                stackRecent ? "max-h-14.5" : "flex-1 h-full",
+              ].join(" ")}
+            >
               {recentOptions.map((opt) => renderQuickChip(opt, "recent"))}
             </div>
           </div>

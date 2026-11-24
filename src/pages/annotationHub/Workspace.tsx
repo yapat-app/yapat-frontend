@@ -21,6 +21,7 @@ import {
   ExpandAltOutlined,
   LinkOutlined,
 } from "@ant-design/icons";
+import { TbChartDots3, TbLayoutSidebarLeftCollapse } from "react-icons/tb";
 import { ShareReviewPanel } from "../../components/al/ShareReviewPanel";
 import type { LabelSharingSession } from "./useLabelSharing";
 import { FullRecordingOverlay } from "../../components/fullRecording/FullRecordingOverlay";
@@ -79,6 +80,8 @@ type WorkspaceProps = {
 const NO_IDS: number[] = [];
 
 const NO_FOCUS: string[] = [];
+/** Same width as the collapsed filter sidebar. */
+const PROJECTION_RAIL_PX = 44;
 
 export const Workspace: React.FC<WorkspaceProps> = ({
   onFindSimilar,
@@ -103,6 +106,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   const noClassifierOnThisModel = useAppSelector(
     (s) => selectHasSeveralEmbeddingModels(s) && s.al.usedCheckpointId === null,
   );
+  const [projectionCollapsed, setProjectionCollapsed] = useState(false);
   const [projMethod, setProjMethod] = useState<ProjectionMethod>("pca");
   const [thumbData, setThumbData] = useState<ProjectionThumbnailData | null>(
     null,
@@ -474,13 +478,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             quickLabelsLoading={quickLabelsLoading}
             labelsLocked={fullRecordingOpen}
             overlay={
-              fullRecording ? (
-                <FullRecordingOverlay
-                  recordingId={fullRecording.recordingId}
-                  snippetId={fullRecording.snippetId}
-                  onClose={closeFullRecording}
-                />
-              ) : undefined
+              fullRecording
+                ? ({ wide }) => (
+                    <FullRecordingOverlay
+                      recordingId={fullRecording.recordingId}
+                      snippetId={fullRecording.snippetId}
+                      onClose={closeFullRecording}
+                      wide={wide}
+                    />
+                  )
+                : undefined
             }
           />
         )}
@@ -502,97 +509,135 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       // snippet, e.g. whether "Labeled" shows), so the feed stops exactly there.
       minRightPanelPxRef={feedMinWidthRef}
       maxRightPanelPx={4000}
-      maxRightRatio={0.55}
+      leftRailPx={projectionCollapsed ? PROJECTION_RAIL_PX : undefined}
       left={
         <div
           data-tour="projection-panel"
-          className="flex flex-col h-full border-r border-gray-200 overflow-hidden"
+          className="relative h-full border-r border-gray-200 overflow-hidden"
         >
-          <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-white">
-            <Tooltip
-              title={
-                phase.visualization.allowPointClick
-                  ? "Click a point to inspect that snippet"
-                  : "Projection view (view only)"
-              }
-            >
-              <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none cursor-default">
-                Feature Projection
-              </h2>
-            </Tooltip>
-          </div>
-
-          <div
-            data-tour="projection-methods"
-            className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 bg-white overflow-x-auto"
-          >
-            {PROJECTION_METHODS.filter(
-              (m) => !thumbData?.unavailableMethods.has(m.key),
-            ).map((m) => {
-              const isActive = m.key === effectiveProjMethod;
-              const hasProj = Boolean(
-                thumbData?.fpvCoordsBySnippetForMethod?.[m.key],
-              );
-              const isLoadingThumb =
-                Boolean(thumbData?.loadingMethods.has(m.key)) && !hasProj;
-              return (
+          {projectionCollapsed && (
+            <div className="flex h-full w-full flex-col items-center bg-white pt-2.5">
+              <Tooltip title="Show feature projection" placement="right">
                 <button
-                  key={m.key}
                   type="button"
-                  onClick={() => handleMethodChange(m.key)}
-                  disabled={thumbData?.fpvLoading && isActive}
-                  className={[
-                    "shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
-                    isActive
-                      ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
-                      : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
-                    !hasProj && !isLoadingThumb
-                      ? "opacity-50 cursor-not-allowed"
-                      : "",
-                  ].join(" ")}
+                  onClick={() => setProjectionCollapsed(false)}
+                  aria-label="Show feature projection"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                 >
-                  <div className="w-18 h-9 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
-                    <MiniProjection
-                      points={thumbData?.thumbnailPoints ?? []}
-                      coordsBySnippet={
-                        thumbData?.fpvCoordsBySnippetForMethod?.[m.key] ?? null
-                      }
-                      selectedSnippetId={thumbData?.selectedSnippetId ?? null}
-                      selectedCoord={
-                        thumbData?.selectedCoordByMethod?.[m.key] ?? null
-                      }
-                      allActualLabels={thumbData?.allActualLabels ?? []}
-                      loading={isLoadingThumb}
-                    />
-                  </div>
-                  <div
+                  <TbChartDots3 className="h-4.5 w-4.5" />
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          {/* Stays mounted and laid out while collapsed, so the plot keeps its
+              zoom and Plotly's resize handler never meets a display:none div. */}
+          <div
+            className={
+              projectionCollapsed
+                ? "invisible absolute inset-y-0 left-0 flex w-160 flex-col"
+                : "flex h-full flex-col"
+            }
+            {...(projectionCollapsed
+              ? ({ inert: "" } as Record<string, string>)
+              : {})}
+          >
+            <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-2 border-b border-gray-100 bg-white">
+              <Tooltip
+                title={
+                  phase.visualization.allowPointClick
+                    ? "Click a point to inspect that snippet"
+                    : "Projection view (view only)"
+                }
+              >
+                <h2 className="min-w-0 truncate text-sm font-semibold font-ibm-mono text-gray-700 leading-none cursor-default">
+                  Feature Projection
+                </h2>
+              </Tooltip>
+              <Tooltip title="Hide feature projection">
+                <button
+                  type="button"
+                  onClick={() => setProjectionCollapsed(true)}
+                  aria-label="Hide feature projection"
+                  className="-mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                >
+                  <TbLayoutSidebarLeftCollapse className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            </div>
+
+            <div
+              data-tour="projection-methods"
+              className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 bg-white overflow-x-auto"
+            >
+              {PROJECTION_METHODS.filter(
+                (m) => !thumbData?.unavailableMethods.has(m.key),
+              ).map((m) => {
+                const isActive = m.key === effectiveProjMethod;
+                const hasProj = Boolean(
+                  thumbData?.fpvCoordsBySnippetForMethod?.[m.key],
+                );
+                const isLoadingThumb =
+                  Boolean(thumbData?.loadingMethods.has(m.key)) && !hasProj;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => handleMethodChange(m.key)}
+                    disabled={thumbData?.fpvLoading && isActive}
                     className={[
-                      "mt-1 text-center text-fs-11 font-ibm-sans",
+                      "shrink-0 text-left rounded-lg border px-1.5 py-1.5 transition-all",
                       isActive
-                        ? "text-blue-700 font-semibold"
-                        : "text-gray-600",
+                        ? "border-blue-400 bg-blue-50 shadow-sm ring-2 ring-blue-200"
+                        : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300",
+                      !hasProj && !isLoadingThumb
+                        ? "opacity-50 cursor-not-allowed"
+                        : "",
                     ].join(" ")}
                   >
-                    {m.label}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                    <div className="w-18 h-9 rounded-md bg-linear-to-br from-gray-50 to-gray-100 border border-gray-200 overflow-hidden relative">
+                      <MiniProjection
+                        points={thumbData?.thumbnailPoints ?? []}
+                        coordsBySnippet={
+                          thumbData?.fpvCoordsBySnippetForMethod?.[m.key] ??
+                          null
+                        }
+                        selectedSnippetId={thumbData?.selectedSnippetId ?? null}
+                        selectedCoord={
+                          thumbData?.selectedCoordByMethod?.[m.key] ?? null
+                        }
+                        allActualLabels={thumbData?.allActualLabels ?? []}
+                        loading={isLoadingThumb}
+                      />
+                    </div>
+                    <div
+                      className={[
+                        "mt-1 text-center text-fs-11 font-ibm-sans",
+                        isActive
+                          ? "text-blue-700 font-semibold"
+                          : "text-gray-600",
+                      ].join(" ")}
+                    >
+                      {m.label}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-          <div className="flex-1 overflow-hidden">
-            <ProjectionView
-              projectionMethod={effectiveProjMethod}
-              onProjectionMethodChange={setProjMethod}
-              onThumbnailData={handleThumbnailData}
-              exploreFilters={exploreFilters}
-              focusSpecies={focusSpecies}
-              focusableSpecies={focusableSpecies}
-              onLegendSpeciesToggle={
-                onFocusSpeciesChange ? handleLegendSpeciesToggle : undefined
-              }
-              reviewSnippetIds={reviewSnippetIds}
-            />
+            <div className="flex-1 overflow-hidden">
+              <ProjectionView
+                projectionMethod={effectiveProjMethod}
+                onProjectionMethodChange={setProjMethod}
+                onThumbnailData={handleThumbnailData}
+                exploreFilters={exploreFilters}
+                focusSpecies={focusSpecies}
+                focusableSpecies={focusableSpecies}
+                onLegendSpeciesToggle={
+                  onFocusSpeciesChange ? handleLegendSpeciesToggle : undefined
+                }
+                reviewSnippetIds={reviewSnippetIds}
+              />
+            </div>
           </div>
         </div>
       }

@@ -533,6 +533,8 @@ export interface Dataset {
   default_embedding_model_id?: number | null;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  /** Feedback events before auto-retrain; null = platform default. */
+  retrain_after_threshold?: number | null;
   quick_labels?: QuickLabel[] | null;
   created_at?: string;
   updated_at?: string;
@@ -729,6 +731,7 @@ export interface DatasetUpdate {
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
   default_embedding_model_id?: number | null;
+  retrain_after_threshold?: number | null;
 }
 
 export interface DatasetCreate {

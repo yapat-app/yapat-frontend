@@ -41,7 +41,6 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
   const selectedSnippetIds = useAppSelector((s) => s.al.selectedSnippetIds);
   const predictions = useAppSelector((s) => s.al.predictions);
   const feedbacks = useAppSelector((s) => s.al.feedbacks);
-  const hasFeed = useAppSelector((s) => s.al.lastInferenceAt !== null);
 
   const snippetId = selectedSnippetIds[0] ?? null;
   const prediction = predictions.find((p) => p.snippet_id === snippetId);
@@ -200,11 +199,10 @@ export const SnippetHeader: React.FC<SnippetHeaderProps> = ({
     );
   });
 
+  // The feed clears the selection when it is empty, so this also covers that
+  // case. Snippets are shown before the first model exists, so predictions may
+  // legitimately be empty here.
   if (snippetId === null) return null;
-  // No feed generated yet (nothing in memory for this dataset) — the feed body
-  // below shows its own empty state, so stay in sync and render nothing.
-  // Switching embedding model leaves no rows in memory, but the feed exists.
-  if (!prediction && predictions.length === 0 && !hasFeed) return null;
   const hasFeedback = !!feedbacks[snippetId];
 
   return (
