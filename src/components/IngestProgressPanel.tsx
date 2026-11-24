@@ -14,7 +14,8 @@ const fullNumber = new Intl.NumberFormat();
 const STAGES: { stage: IngestJobStage; label: string; unit: string }[] = [
   { stage: "scanning", label: "Scanning for new files", unit: "files" },
   { stage: "segmenting", label: "Cutting new recordings into snippets", unit: "recordings" },
-  { stage: "embedding", label: "Computing BirdNET embeddings", unit: "snippets" },
+  // New recordings go through every model finished on the dataset.
+  { stage: "embedding", label: "Computing embeddings", unit: "snippets" },
   { stage: "finalizing", label: "Updating views", unit: "" },
   { stage: "scoring", label: "Scoring new snippets", unit: "snippets" },
 ];

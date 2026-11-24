@@ -9,8 +9,9 @@
  */
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { Select, Input, Tag, Spin, Tooltip, Empty, Button } from "antd";
+import { Select, Input, Tag, Spin, Tooltip, Empty, Button, Popover } from "antd";
 import {
+  LinkOutlined,
   SearchOutlined,
   GlobalOutlined,
   CloseOutlined,
@@ -59,10 +60,26 @@ function highlight(text: string, query: string): React.ReactNode {
   );
 }
 
+/**
+ * How a label chip looks when the label was shared from another snippet set.
+ * "auto": copied automatically (dashed, with a popover to keep or remove it);
+ * "reviewed": accepted from the shared-label review (solid, link icon).
+ */
+export interface LabelChipMeta {
+  shared: "auto" | "reviewed";
+  tooltip?: React.ReactNode;
+  /** Shown on click instead of the tooltip (auto copies). */
+  popover?: React.ReactNode;
+  /** Replaces the default "remove from selection" on the chip's ×. */
+  onRemove?: () => void;
+}
+
 interface Props {
   value?: string[];
   onChange?: (labels: string[]) => void;
   getLabelTooltip?: (label: string) => string | null;
+  /** Marks chips of labels shared from another snippet set (compact mode). */
+  getLabelMeta?: (label: string) => LabelChipMeta | null;
   disabled?: boolean;
   placeholder?: string;
   /** Show an always-visible label list below the selector (Annotation-like UI). */
@@ -114,6 +131,7 @@ export const LabelSelector: React.FC<Props> = ({
   value = [],
   onChange,
   getLabelTooltip,
+  getLabelMeta,
   disabled = false,
   placeholder = "Search species…",
   showList = true,
@@ -515,21 +533,46 @@ export const LabelSelector: React.FC<Props> = ({
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {value.map((lbl) => (
-                <Tooltip key={lbl} title={getLabelTooltip?.(lbl) ?? undefined}>
+              {value.map((lbl) => {
+                const meta = getLabelMeta?.(lbl) ?? null;
+                const chip = (
                   <Tag
                     color="blue"
                     closable={!disabled}
+                    icon={meta ? <LinkOutlined /> : undefined}
                     onClose={(e) => {
                       e.preventDefault();
-                      toggle(lbl);
+                      if (meta?.onRemove) meta.onRemove();
+                      else toggle(lbl);
                     }}
-                    className="text-xs font-semibold rounded-md px-2 py-0.5 m-0 cursor-help"
+                    className={[
+                      "text-xs font-semibold rounded-md px-2 py-0.5 m-0",
+                      meta?.shared === "auto"
+                        ? "border-dashed! bg-white! cursor-pointer"
+                        : "cursor-help",
+                    ].join(" ")}
                   >
                     {lbl}
                   </Tag>
-                </Tooltip>
-              ))}
+                );
+                return meta?.popover ? (
+                  <Popover
+                    key={lbl}
+                    trigger="click"
+                    content={meta.popover}
+                    title={meta.tooltip}
+                  >
+                    {chip}
+                  </Popover>
+                ) : (
+                  <Tooltip
+                    key={lbl}
+                    title={meta?.tooltip ?? getLabelTooltip?.(lbl) ?? undefined}
+                  >
+                    {chip}
+                  </Tooltip>
+                );
+              })}
             </div>
           </div>
         )}

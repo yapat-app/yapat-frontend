@@ -513,6 +513,8 @@ export const PredictionFeed: React.FC<PredictionFeedProps> = ({
       // cleanup below cancels that pause's timer and nothing ever switches the
       // pause off: scrolling then moves the cards but the selection (snippet
       // number, spectrogram) never follows until something else is selected.
+      // (Also: a model switch clears the selection, then the feed picks the
+      // first row, so the previous run's timer is gone with nothing to release it.)
       scrollSyncSuspendedRef.current = false;
       return;
     }

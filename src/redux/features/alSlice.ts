@@ -8,7 +8,7 @@ import {
 } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import { alApi } from "../../services/alApi";
-import { getErrorMessage } from "../../services/api";
+import { embeddingApi, getErrorMessage } from "../../services/api";
 import type {
   ALState,
   VisibilityFilterState,
@@ -29,7 +29,8 @@ import type {
   PAMInferenceResult,
 } from "../../types/al";
 import { isInferenceJobDispatch } from "../../types/al";
-import type { Annotation, Snippet } from "../../types";
+import type { Annotation, EmbeddingOption, Snippet } from "../../types";
+import { pickEmbeddingOption } from "../../utils/embeddingOptions";
 import {
   annotationDisplayLabel,
   applyClassicLabelScores,
@@ -400,6 +401,99 @@ function clearSessionState(state: ALState): void {
   state.lastInferenceAt = null;
   state.error = null;
   state.feedResumeRequest = null;
+  state.embeddingOptions = [];
+  state.embeddingOptionsDatasetId = null;
+  state.classifierTrainingModelId = null;
+}
+
+/**
+ * Drop everything tied to the embedding model being left: its scores, feed
+ * rows, selection, filters and running jobs. A job keeps running on the server;
+ * the checkpoint sync in useHubALSession picks up its result on switching back.
+ */
+function clearModelState(state: ALState): void {
+  state.predictions = [];
+  state.projectionPredictions = [];
+  state.modelInfo = {};
+  state.totalScored = 0;
+  state.feedbacks = {};
+  state.feedbackCount = 0;
+  state.retrainPending = false;
+  state.classicAnnotationsBySnippet = {};
+  state.selectedSnippetIds = [];
+  state.activeSnippetId = null;
+  state.feedResumeRequest = null;
+  state.lastRetrainDispatch = null;
+  state.lastRetrainJob = null;
+  state.lastRetrainFailed = false;
+  state.retrainLoading = false;
+  state.bootstrapSubmitting = false;
+  state.firstModelCheckpointId = null;
+  state.inferenceLoading = false;
+  // A response still in flight for the old model must not be applied.
+  state.lastPredictionsRequestId = null;
+  state.error = null;
+  state.alFilters.visibility = {
+    propertyKey: null,
+    range: [0, 1],
+    propertyKeys: [],
+    ranges: {},
+  };
+}
+
+function applyEmbeddingOption(state: ALState, option: EmbeddingOption): void {
+  state.embeddingModelId = option.embedding_model_id;
+  state.snippetSetId = option.snippet_set_id;
+  state.modelCheckpointId = option.active_checkpoint_id;
+  state.usedCheckpointId = option.active_checkpoint_id;
+  state.modelFamilyName = option.model_family_name;
+}
+
+/**
+ * Bring the session in line with freshly loaded options. The hub always works
+ * on the dataset's default model (it can't be switched from the hub), so a
+ * session saved on another model moves to the default. Refreshing the options
+ * never interrupts a feed that is already on it.
+ */
+function reconcileEmbeddingSelection(state: ALState): void {
+  const target = pickEmbeddingOption(state.embeddingOptions, null);
+  if (!target) return;
+
+  const sameSession =
+    (state.embeddingModelId === null ||
+      state.embeddingModelId === target.embedding_model_id) &&
+    (state.snippetSetId === null || state.snippetSetId === target.snippet_set_id);
+
+  if (sameSession) {
+    // A checkpoint that replaces another is handled by the checkpoint sync,
+    // which also refreshes the scores.
+    const keepCheckpoint =
+      state.usedCheckpointId !== null && target.active_checkpoint_id !== null;
+    const usedCheckpointId = state.usedCheckpointId;
+    applyEmbeddingOption(state, target);
+    if (keepCheckpoint) state.usedCheckpointId = usedCheckpointId;
+  } else {
+    // The saved model can no longer be used.
+    clearModelState(state);
+    applyEmbeddingOption(state, target);
+  }
+
+  // With a classifier on another model, this one is browsed without scores:
+  // nothing to generate, and labelling here does not train it automatically.
+  const browseWithoutScores =
+    target.active_checkpoint_id === null &&
+    state.embeddingOptions.some((o) => o.active_checkpoint_id !== null);
+  if (
+    state.feedSource !== "classic" &&
+    state.lastInferenceAt === null &&
+    browseWithoutScores
+  ) {
+    state.feedSource = "pam";
+    state.lastInferenceAt = new Date().toISOString();
+  }
+  // saveFeed stamps a time on a session without one, which would hide the
+  // cold-start "Generate Feed" action after a reload.
+  if (state.lastInferenceAt !== null) saveFeed(state);
 }
 
 /**
@@ -437,6 +531,9 @@ function buildInitialState(): ALState {
     usedCheckpointId: null,
     snippetSetId: null,
     embeddingModelId: null,
+    embeddingOptions: [],
+    embeddingOptionsDatasetId: null,
+    classifierTrainingModelId: null,
     inferenceK: 20,
     predictions: [],
     projectionPredictions: [],
@@ -645,6 +742,17 @@ export const restoreFeedFromServer = createAsyncThunk(
   },
 );
 
+export const fetchEmbeddingOptions = createAsyncThunk(
+  "al/fetchEmbeddingOptions",
+  async (datasetId: number, { rejectWithValue }) => {
+    try {
+      return await embeddingApi.options(datasetId);
+    } catch (error: unknown) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  },
+);
+
 export const fetchFeedbackCount = createAsyncThunk(
   "al/fetchFeedbackCount",
   async (
@@ -727,6 +835,9 @@ const alSlice = createSlice({
       if (nextId === currentId) return;
 
       state.selectedDatasetId = nextId;
+      state.embeddingOptions = [];
+      state.embeddingOptionsDatasetId = null;
+      state.classifierTrainingModelId = null;
 
       // Load THIS dataset's own persisted feed (per-dataset key), not whatever
       // was viewed last. This is what makes a previously-generated feed —
@@ -758,7 +869,7 @@ const alSlice = createSlice({
         modelCheckpointId: number | null;
         modelFamilyName: string;
         snippetSetId: number;
-        embeddingModelId: number;
+        embeddingModelId: number | null;
         k?: number;
       }>,
     ) => {
@@ -856,6 +967,8 @@ const alSlice = createSlice({
         // from THIS dataset's snippet set, not a stale value from another dataset.
         state.snippetSetId = null;
         state.embeddingModelId = null;
+        state.embeddingOptions = [];
+        state.embeddingOptionsDatasetId = null;
       }
       // Keep usedCheckpointId so quick labels still load from the same labels.json /
       // checkpoint config as Active Learning (staged behaviour). Classic annotations
@@ -990,6 +1103,7 @@ const alSlice = createSlice({
       state.lastRetrainDispatch = null;
       state.lastRetrainJob = null;
       state.retrainLoading = false;
+      state.classifierTrainingModelId = null;
       // Note: appendPredictionsWithDivider is handled in extraReducers (needs withDisplayFields).
     },
     // Drop a stale AL binding whose snippetSetId doesn't belong to the current
@@ -1039,6 +1153,20 @@ const alSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
+    builder.addCase(fetchEmbeddingOptions.fulfilled, (state, action) => {
+      const datasetId = action.meta.arg;
+      if (normalizeDatasetId(state.selectedDatasetId) !== datasetId) return;
+      state.embeddingOptions = action.payload;
+      state.embeddingOptionsDatasetId = datasetId;
+      reconcileEmbeddingSelection(state);
+    });
+    builder.addCase(fetchEmbeddingOptions.rejected, (state, action) => {
+      const datasetId = action.meta.arg;
+      if (normalizeDatasetId(state.selectedDatasetId) !== datasetId) return;
+      // Keep what is loaded; the first load still has to let the hub continue.
+      state.embeddingOptionsDatasetId = datasetId;
+    });
+
     builder.addCase(runInference.pending, (state, action) => {
       state.inferenceLoading = true;
       state.error = null;
@@ -1125,6 +1253,8 @@ const alSlice = createSlice({
     });
     builder.addCase(runInference.rejected, (state, action) => {
       state.inferenceLoading = false;
+      // Superseded, e.g. by switching embedding model.
+      if (action.meta.requestId !== state.lastPredictionsRequestId) return;
       const message = action.payload as string;
       state.error = message;
 
@@ -1226,7 +1356,9 @@ const alSlice = createSlice({
 
     builder.addCase(
       fetchFeedbackCount.fulfilled,
-      (state, action: PayloadAction<PAMFeedbackCountResponse>) => {
+      (state, action: PayloadAction<PAMFeedbackCountResponse, string, { arg: { model_family_name: string } }>) => {
+        // Answered for a model the user has since switched away from.
+        if (action.meta.arg.model_family_name !== state.modelFamilyName) return;
         // Keep threshold in sync with backend.
         if (
           Number.isFinite(action.payload.retrain_after) &&
@@ -1246,8 +1378,10 @@ const alSlice = createSlice({
     });
     builder.addCase(
       submitFeedback.fulfilled,
-      (state, action: PayloadAction<FeedbackResponse>) => {
+      (state, action: PayloadAction<FeedbackResponse, string, { arg: FeedbackPayload }>) => {
         state.feedbackLoading = false;
+        // Saved, but for a model the user has since switched away from.
+        if (action.meta.arg.model_family_name !== state.modelFamilyName) return;
         const fb = action.payload;
         state.feedbacks[fb.snippet_id] = fb;
 
@@ -1290,8 +1424,9 @@ const alSlice = createSlice({
     });
     builder.addCase(
       submitBootstrapFeedback.fulfilled,
-      (state, action: PayloadAction<FeedbackResponse>) => {
+      (state, action: PayloadAction<FeedbackResponse, string, { arg: FeedbackPayload }>) => {
         state.bootstrapSubmitting = false;
+        if (action.meta.arg.model_family_name !== state.modelFamilyName) return;
         const fb = action.payload;
         state.feedbacks[fb.snippet_id] = fb;
         if (fb.retrain_triggered && fb.active_checkpoint_id) {
@@ -1299,6 +1434,21 @@ const alSlice = createSlice({
           // switches to it (useHubALSession). Its own counter starts at 0.
           state.firstModelCheckpointId = fb.active_checkpoint_id;
           state.feedbackCount = 0;
+        } else if (fb.retrain_triggered && fb.auto_retrain_job_id) {
+          // Another model has a classifier, so this one's first trains in the
+          // background. Polled like the "Train classifier" action.
+          state.feedbackCount = 0;
+          state.retrainLoading = true;
+          state.lastRetrainFailed = false;
+          state.classifierTrainingModelId = action.meta.arg.embedding_model_id ?? null;
+          state.lastRetrainDispatch = {
+            job_id: fb.auto_retrain_job_id,
+            checkpoint_id: fb.auto_retrain_checkpoint_id ?? null,
+            status: "PENDING",
+            message: `Classifier training job ${fb.auto_retrain_job_id} dispatched`,
+            waiting_for_ingest_job_id: fb.retrain_waiting_for_ingest_job_id ?? null,
+          };
+          state.lastRetrainJob = null;
         } else {
           state.feedbackCount = fb.feedback_count_since_retrain;
         }
@@ -1314,7 +1464,8 @@ const alSlice = createSlice({
     });
     builder.addCase(
       triggerRetrain.fulfilled,
-      (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
+      (state, action: PayloadAction<PAMRetrainJobDispatch, string, { arg: PAMRetrainRequest }>) => {
+        if (action.meta.arg.model_family_name !== state.modelFamilyName) return;
         // Keep retrainLoading=true until polling reports a terminal state.
         state.lastRetrainDispatch = action.payload;
         state.lastRetrainJob = null;
@@ -1336,9 +1487,12 @@ const alSlice = createSlice({
     });
     builder.addCase(
       trainFromScratch.fulfilled,
-      (state, action: PayloadAction<PAMRetrainJobDispatch>) => {
+      (state, action: PayloadAction<PAMRetrainJobDispatch, string, { arg: PAMTrainFromScratchRequest }>) => {
         // Keep retrainLoading=true until polling reports a terminal state.
         state.lastRetrainDispatch = action.payload;
+        if (action.meta.arg.use_existing_labels) {
+          state.classifierTrainingModelId = action.meta.arg.embedding_model_id;
+        }
         state.lastRetrainJob = null;
         // Clear counters for a fresh run.
         state.feedbackCount = 0;
@@ -1352,7 +1506,9 @@ const alSlice = createSlice({
 
     builder.addCase(
       pollRetrainJob.fulfilled,
-      (state, action: PayloadAction<PAMRetrainJobStatus>) => {
+      (state, action: PayloadAction<PAMRetrainJobStatus, string, { arg: number }>) => {
+        // Left behind by switching embedding model.
+        if (state.lastRetrainDispatch?.job_id !== action.meta.arg) return;
         state.lastRetrainJob = action.payload;
         if (
           action.payload.status === "COMPLETED" ||
@@ -1364,6 +1520,7 @@ const alSlice = createSlice({
       },
     );
     builder.addCase(pollRetrainJob.rejected, (state, action) => {
+      if (state.lastRetrainDispatch?.job_id !== action.meta.arg) return;
       // Network error while polling — treat as a failed retrain so the UI
       // shows the warning banner and the user can retry manually.
       state.retrainLoading = false;
@@ -1458,6 +1615,16 @@ export const {
 
 export { needsServerRestore };
 export default alSlice.reducer;
+
+/** The selected model's entry, or null before options load or if it isn't listed. */
+export const selectEmbeddingOption = (state: { al: ALState }): EmbeddingOption | null =>
+  state.al.embeddingOptions.find(
+    (o) => o.embedding_model_id === state.al.embeddingModelId,
+  ) ?? null;
+
+/** The dataset has more than one model, so the UI offers model-specific actions. */
+export const selectHasSeveralEmbeddingModels = (state: { al: ALState }): boolean =>
+  state.al.embeddingOptions.length > 1;
 
 /**
  * Add-recordings job the in-flight retrain waits for, or null. The backend

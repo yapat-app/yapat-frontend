@@ -46,6 +46,59 @@ export interface EmbeddingMethod {
   requires_fixed_window: boolean;
   requires_fixed_step: boolean;
   requires_fixed_overlap: boolean;
+  dim?: number;
+  sample_rate?: number;
+  /** False when this server can't run the model; such a model can't be started. */
+  weights_available?: boolean;
+}
+
+export type EmbeddingOptionStatus = "pending" | "running" | "completed" | "failed";
+
+/**
+ * One embedding model on a dataset (GET /datasets/{id}/embedding-options): the
+ * source of truth for the hub's model switcher. Only "completed" can be selected.
+ */
+/**
+ * A reference pool linked to a dataset, for one embedding model (issue #93,
+ * part 3). `no_snippets`: embedded, but nothing came out (e.g. every file is
+ * shorter than the model's window); it does not block the model.
+ */
+export type ReferencePoolStateValue =
+  | "ready"
+  | "no_snippets"
+  | "embedding"
+  | "failed"
+  | "not_embedded";
+
+export interface ReferencePoolState {
+  dataset_id: number;
+  name: string;
+  /** How the pool is linked: to this dataset, or to its team. */
+  scope: "dataset" | "team";
+  state: ReferencePoolStateValue;
+  snippets: number;
+}
+
+export interface EmbeddingOption {
+  embedding_model_id: number;
+  name: string;
+  version: string;
+  dim: number;
+  snippet_set_id: number;
+  window_size: number;
+  step_size: number;
+  overlap: number;
+  embedding_job_id: number;
+  status: EmbeddingOptionStatus;
+  is_default: boolean;
+  /** Another model uses the same snippet set, so they share snippets and labels. */
+  shares_snippet_set: boolean;
+  /** Null until this model has a classifier. */
+  active_checkpoint_id: number | null;
+  /** The classifier's family, or the one to use for its first classifier. */
+  model_family_name: string;
+  /** Linked reference pools and their state for this model. Missing on older backends. */
+  reference_pools?: ReferencePoolState[];
 }
 
 // ============================================================================
@@ -57,9 +110,18 @@ export interface Annotation {
   snippet_id: number;
   user_id: number;
   username?: string | null;
+  /** Embedding model selected when this label was first made, if recorded. */
+  embedding_model_id?: number | null;
   taxon_id: string;
   resolved_name_snapshot: string;
   extra_metadata?: Record<string, any>;
+  /**
+   * How the label was made: by hand, copied automatically from an overlapping
+   * clip of another snippet set, or accepted from the shared-label review.
+   */
+  origin?: import("./labelSharing").AnnotationOrigin;
+  /** The label this one was copied from (shared labels only). */
+  derived_from_id?: number | null;
   created_at: string;
   updated_at?: string;
 }
@@ -98,11 +160,14 @@ export interface AnnotationCreate {
   taxon_id?: string; // Or provide taxon_id directly
   display_name?: string; // Human-readable name for wiki/envo/ols (e.g. from Taxonomy Assistant)
   extra_metadata?: Record<string, any>;
+  /** Selected model; the backend requires it when the snippet's set has several models. */
+  embedding_model_id?: number;
 }
 
 export interface AnnotationBatchCreate {
   snippet_id: number;
-  annotations: Omit<AnnotationCreate, "snippet_id">[];
+  annotations: Omit<AnnotationCreate, "snippet_id" | "embedding_model_id">[];
+  embedding_model_id?: number;
 }
 
 // ============================================================================
@@ -348,7 +413,8 @@ export interface SnippetCreate {
 export interface SnippetSet {
   id: number;
   dataset_id: number;
-  embedding_model_id: number;
+  /** Every model that has finished embedding this set. */
+  embedding_model_ids: number[];
   window_size: number;
   step_size: number;
   overlap: number;
@@ -463,6 +529,8 @@ export interface Dataset {
   team_id?: number;
   dataset_type?: DatasetType;
   default_snippet_set_id?: number | null;
+  /** Embedding model the Annotation Hub uses; null = the first one on the default snippet set. */
+  default_embedding_model_id?: number | null;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
   /** Feedback events before auto-retrain; null = platform default. */
@@ -563,7 +631,7 @@ export interface EmbeddingFailure {
   file_name: string;
   file_path: string;
   snippets_missing: number;
-  /** The error, or "BirdNET returned no embedding for <n> of <m> snippets". */
+  /** The error, or "The model returned no embedding for <n> of <m> snippets". */
   reason: string;
   last_attempt_at: string;
   last_job_id: number | null;
@@ -662,6 +730,7 @@ export interface DatasetUpdate {
   dataset_type?: DatasetType;
   spectrogram_f_min_hz?: number | null;
   spectrogram_f_max_hz?: number | null;
+  default_embedding_model_id?: number | null;
   retrain_after_threshold?: number | null;
 }
 

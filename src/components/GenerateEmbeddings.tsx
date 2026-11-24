@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dataset } from "../types";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { Select, Modal, Button, Form, message, Tooltip, Tag } from "antd";
-import { LoadingOutlined } from "@ant-design/icons";
+import { useEmbeddingOptions } from "../hooks/useEmbeddingOptions";
+import { Alert, Select, Modal, Button, Form, message, Tooltip, Tag } from "antd";
+import { ApartmentOutlined, LoadingOutlined } from "@ant-design/icons";
 import {
   getAllEmbeddingMethods,
   createEmbedding,
@@ -13,8 +14,12 @@ import {
   fetchAllDatasets,
   selectDataset,
 } from "../redux/features/datasetSlice";
-import type { EmbeddingMethod } from "../types";
-const { Option } = Select;
+import {
+  embeddingMethodBlockedReason,
+  embeddingStartNote,
+  noEmbeddingModelsLeft,
+} from "../utils/embeddingOptions";
+import { DISABLED_ACTION_CLASS } from "../utils/datasetStatus";
 
 type DatasetEmbeddingProps = {
   dataset: Dataset;
@@ -51,8 +56,47 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   const datasetIdNumber =
     typeof dataset.id === "string" ? Number(dataset.id) : dataset.id;
 
+  // Only admins get the button that depends on these.
+  const isAdmin = user?.role === "admin";
+  const options = useEmbeddingOptions(
+    isAdmin ? datasetIdNumber : undefined,
+    `${isModalOpen}-${running}`,
+  );
+  const hasEmbeddingMethods = embeddingMethods !== null;
+  useEffect(() => {
+    if (isAdmin && !hasEmbeddingMethods) void dispatch(getAllEmbeddingMethods());
+  }, [dispatch, isAdmin, hasEmbeddingMethods]);
+  const nothingLeftToGenerate =
+    !!dataset.is_ready_for_feed && noEmbeddingModelsLeft(embeddingMethods ?? [], options);
+
+  // Every model stays listed, so the list also shows what this dataset already
+  // has. The backend refuses a second job for a model, even a failed one.
+  const methodOptions = useMemo(
+    () =>
+      (embeddingMethods ?? [])
+        .map((m) => {
+          const blockedReason = embeddingMethodBlockedReason(m, options);
+          return {
+            value: m.id,
+            label: `${m.name} ${m.version} · ${m.window_size} s`,
+            disabled: blockedReason !== null,
+            blockedReason,
+          };
+        })
+        // Models that can still be started come first.
+        .sort((a, b) => Number(a.disabled) - Number(b.disabled)),
+    [embeddingMethods, options],
+  );
+
+  const selectedMethod = embeddingMethods?.find(
+    (m) => m.id === selectedEmbeddedMethodId,
+  );
+  const startNote = selectedMethod ? embeddingStartNote(selectedMethod, options) : null;
+
   const showModal = async () => {
     setIsModalOpen(true);
+    // Don't carry a choice over from another dataset's modal.
+    dispatch(clearEmbedding());
     dispatch(getAllEmbeddingMethods());
     dispatch(selectDataset(Number.isFinite(datasetIdNumber) ? datasetIdNumber : null));
   };
@@ -93,13 +137,17 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
   // - so here we only require that dataset processing/discovery has produced recordings
   const isDatasetReady = Boolean((dataset.recording_count ?? 0) > 0);
 
+  // Every model already has embeddings here (or can't run on this server):
+  // nothing to offer, so the button goes away rather than sitting disabled.
+  if (isAdmin && nothingLeftToGenerate && !running && !scanning) return null;
+
   return (
     <div>
       {scanning ? (
         // Embedding now would miss the files the scan has not saved yet.
         <Button
-          color="default"
-          variant="filled"
+          className={DISABLED_ACTION_CLASS}
+          size={size}
           disabled
           icon={<LoadingOutlined />}
           title="Waiting for the scan to finish"
@@ -108,8 +156,8 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
         </Button>
       ) : scanFailed && !isDatasetReady ? (
         <Button
-          color="default"
-          variant="filled"
+          className={DISABLED_ACTION_CLASS}
+          size={size}
           disabled
           title="The scan failed; see the message on this card"
         >
@@ -117,19 +165,19 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
         </Button>
       ) : !isDatasetReady ? (
         <Button
-          color="default"
-          variant="filled"
+          className={DISABLED_ACTION_CLASS}
+          size={size}
           disabled
           title="Waiting for dataset scan/discovery to finish (recordings not available yet)"
         >
           Processing dataset…
         </Button>
       ) : running ? (
-        <Button color="default" variant="filled" disabled icon={<LoadingOutlined />}>
+        <Button className={DISABLED_ACTION_CLASS} size={size} disabled icon={<LoadingOutlined />}>
           Generating embeddings…
         </Button>
-      ) : dataset.is_ready_for_feed ? (
-        <Button color="default" variant="filled" disabled>
+      ) : dataset.is_ready_for_feed && user?.role !== "admin" ? (
+        <Button className={DISABLED_ACTION_CLASS} size={size} disabled>
           Embeddings ready
         </Button>
       ) : (
@@ -152,31 +200,36 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
                     <Form layout="vertical">
                       <Form.Item
                         label="Embedding method"
-                        name="embeddingMethodId"
-                        rules={[
-                          { required: true, message: "Please select a method" },
-                        ]}
+                        required
                         tooltip="Choose which embedding method to use"
                       >
                         <Select
                           placeholder="Select a method"
                           style={{ width: "100%" }}
+                          value={selectedEmbeddedMethodId ?? undefined}
+                          options={methodOptions}
+                          optionRender={({ data }) => (
+                            <div>
+                              <div className="truncate">{data.label}</div>
+                              {data.blockedReason && (
+                                <div className="text-xs text-gray-500">{data.blockedReason}</div>
+                              )}
+                            </div>
+                          )}
                           onChange={(value: number) => {
                             dispatch(selectEmbedding(value)); // value is the id
                           }}
-                        >
-                          {embeddingMethods.map((method: EmbeddingMethod) => (
-                            <Option key={method.id} value={method.id}>
-                              {method.name}
-                            </Option>
-                          ))}
-                        </Select>
+                        />
                       </Form.Item>
                     </Form>
+                    {startNote && (
+                      <Alert type="info" showIcon message={startNote} className="mb-2" />
+                    )}
                     <div className="py-2 w-full ">
                       <Button
                         loading={embeddingLoading}
                         type="primary"
+                        disabled={!selectedEmbeddedMethodId}
                         onClick={() => void handleGenerate()}
                         className="w-full!"
                       >
@@ -188,11 +241,17 @@ export const GenerateEmbeddings: React.FC<DatasetEmbeddingProps> = ({
                   </div>
                 )}
               </Modal>
+              {/* Navy only while it is the dataset's next step. */}
               <Button
-                color="danger"
-                variant="filled"
+                type={dataset.is_ready_for_feed ? "default" : "primary"}
+                style={
+                  dataset.is_ready_for_feed
+                    ? undefined
+                    : { backgroundColor: "#1e40af", borderColor: "#1e40af", color: "#fff" }
+                }
+                className={DISABLED_ACTION_CLASS}
                 size={size}
-                disabled={dataset.is_ready_for_feed}
+                icon={<ApartmentOutlined />}
                 onClick={showModal}
               >
                 Generate Embeddings

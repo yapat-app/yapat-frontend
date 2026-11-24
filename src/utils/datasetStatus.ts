@@ -67,6 +67,10 @@ export const DATASET_STATUS_META: Record<DatasetStatus, DatasetStatusMeta> = {
   },
 };
 
+/** Disabled header actions: white with muted text, so they keep their shape. */
+export const DISABLED_ACTION_CLASS =
+  "disabled:border-slate-200! disabled:bg-white! disabled:text-slate-500!";
+
 /** Shape of what the jobs provider knows about a dataset's running work. */
 export type DatasetJobFlags = {
   /** An embedding job is in flight. */
@@ -85,8 +89,9 @@ export function getDatasetStatus(
   if (jobs.scanning) return "scanning";
   if (jobs.scanFailed && !hasRecordings) return "scan_failed";
   if (!hasRecordings) return "processing";
-  if (jobs.running) return "generating";
+  // Ready first: a ready dataset stays usable while another model embeds.
   if (dataset.is_ready_for_feed) return "ready";
+  if (jobs.running) return "generating";
   return "not_found";
 }
 

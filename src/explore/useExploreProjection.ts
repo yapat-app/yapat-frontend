@@ -34,7 +34,7 @@ function pointsKey(
   method: ExploreProjectionMethod,
   epoch: number,
 ): string {
-  return `${scope.dataset_id}:${scope.snippet_set_id}:${method}:${epoch}`;
+  return `${scope.dataset_id}:${scope.snippet_set_id}:${scope.embedding_model_id}:${method}:${epoch}`;
 }
 
 function loadPoints(

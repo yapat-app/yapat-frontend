@@ -33,6 +33,8 @@ export type ALInferenceConfigModalProps = {
   localTopKOnly: boolean;
   setLocalTopKOnly: (v: boolean) => void;
   hasReadySnippetSet: boolean;
+  /** The selected embedding model decides the family and model; not editable. */
+  modelChoiceLocked?: boolean;
   hasGroundTruthMetadata: boolean;
   setHasGroundTruthMetadata: (v: boolean) => void;
   trainEmbeddingModelId: number;
@@ -88,6 +90,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
   setLocalLabelScope,
   labelScopeOptions,
   labelScopeLoading = false,
+  modelChoiceLocked = false,
 }) => {
   const dispatch = useAppDispatch();
 
@@ -149,6 +152,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
               <Input
                 placeholder="e.g. birdnet, yamnet, default"
                 value={localFamily ?? ""}
+                disabled={modelChoiceLocked}
                 onChange={(e) => setLocalFamily(e.target.value)}
               />
             </Form.Item>
@@ -183,6 +187,7 @@ export const ALInferenceConfigModal: React.FC<ALInferenceConfigModalProps> = ({
                     }
                     loading={embeddingMethodsLoading}
                     value={trainEmbeddingModelId}
+                    disabled={modelChoiceLocked}
                     onChange={(v: number) => setTrainEmbeddingModelId(v)}
                     style={{ width: "100%" }}
                     showSearch

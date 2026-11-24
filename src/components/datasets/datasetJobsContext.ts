@@ -67,9 +67,8 @@ export function resolveActiveJobId(
   dataset: Dataset,
   startedJobId: number | null,
 ): number | null {
-  return dataset.is_ready_for_feed
-    ? null
-    : (dataset.active_embedding_job?.id ?? startedJobId);
+  // A ready dataset can still be embedding another model.
+  return dataset.active_embedding_job?.id ?? startedJobId;
 }
 
 /**

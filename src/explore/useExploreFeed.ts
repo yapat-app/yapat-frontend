@@ -38,7 +38,7 @@ const EMPTY_ROWS: ReadonlyMap<number, ExploreFeedRow> = new Map();
 export interface ExploreFeedController {
   /** Identifies scope + filters + sort; null when disabled. */
   queryKey: string | null;
-  /** Filters + sort only — changes when the user asks a different question. */
+  /** Model + filters + sort — changes when the user asks a different question. */
   viewKey: string;
   total: number | null;
   loading: boolean;
@@ -71,9 +71,12 @@ export function useExploreFeed(opts: {
   const { scope, filters, sort, enabled, revision = "" } = opts;
   const pageSize = opts.pageSize ?? EXPLORE_FEED_PAGE_SIZE;
 
+  // Another embedding model ranks and scores differently, so its rows must not
+  // stand in for the old ones the way a new checkpoint's do (softKey below).
+  const embeddingModelId = scope?.embedding_model_id ?? null;
   const viewKey = useMemo(
-    () => JSON.stringify({ f: filterViewKey(filters), s: sort }),
-    [filters, sort],
+    () => JSON.stringify({ m: embeddingModelId, f: filterViewKey(filters), s: sort }),
+    [embeddingModelId, filters, sort],
   );
   const queryKey =
     enabled && scope ? JSON.stringify({ scope, v: viewKey, pageSize, revision }) : null;

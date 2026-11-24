@@ -17,7 +17,7 @@ export interface ExploreScopeState {
 }
 
 /**
- * The (dataset, snippet set, checkpoint) the hub is currently showing.
+ * The (dataset, snippet set, embedding model, checkpoint) the hub is showing.
  *
  * Enabled once an inference request has resolved for the session, which is
  * what guarantees predictions exist for `usedCheckpointId`. A null checkpoint
@@ -27,6 +27,8 @@ export function useExploreScope(): ExploreScopeState {
   const selectedDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
   const snippetSetId = useAppSelector((s) => s.al.snippetSetId);
   const usedCheckpointId = useAppSelector((s) => s.al.usedCheckpointId);
+  const embeddingModelId = useAppSelector((s) => s.al.embeddingModelId);
+  const embeddingOptionsDatasetId = useAppSelector((s) => s.al.embeddingOptionsDatasetId);
   const feedSource = useAppSelector((s) => s.al.feedSource);
   const lastInferenceAt = useAppSelector((s) => s.al.lastInferenceAt);
   const dataEpoch = useDatasetDataEpoch(
@@ -38,17 +40,27 @@ export function useExploreScope(): ExploreScopeState {
       selectedDatasetId !== null &&
       snippetSetId !== null &&
       feedSource !== "classic" &&
-      lastInferenceAt !== null;
+      lastInferenceAt !== null &&
+      // Wait for the selected model: it may not be the one saved with this session.
+      embeddingOptionsDatasetId === Number(selectedDatasetId);
     if (!ready) return { scope: null, scopeKey: "none", revision: "" };
     const scope: ExploreScope = {
       dataset_id: Number(selectedDatasetId),
       snippet_set_id: Number(snippetSetId),
       checkpoint_id: usedCheckpointId ?? null,
-      // The backend resolves the embedding model from the snippet set.
-      embedding_model_id: null,
+      embedding_model_id: embeddingModelId,
     };
     // Unchanged from before while nothing was added (epoch 0).
     const revision = (lastInferenceAt ?? "") + (dataEpoch ? `|data${dataEpoch}` : "");
     return { scope, scopeKey: JSON.stringify(scope), revision };
-  }, [selectedDatasetId, snippetSetId, usedCheckpointId, feedSource, lastInferenceAt, dataEpoch]);
+  }, [
+    selectedDatasetId,
+    snippetSetId,
+    usedCheckpointId,
+    embeddingModelId,
+    embeddingOptionsDatasetId,
+    feedSource,
+    lastInferenceAt,
+    dataEpoch,
+  ]);
 }

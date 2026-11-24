@@ -162,6 +162,16 @@ export type StudyLogEvent =
       payload: { from: number | null; to: number | null };
     }
   | {
+      eventType: "embedding_model_change";
+      payload: {
+        from: number | null;
+        to: number;
+        /** The new model uses other snippets and labels. */
+        snippetSetChanged: boolean;
+        hasClassifier: boolean;
+      };
+    }
+  | {
       eventType: "annotation_status_filter_change";
       /** source: "find_species_auto" / "find_similar_auto" when a search switched it, else omitted. */
       payload: { status: string; source?: string };
@@ -188,6 +198,36 @@ export type StudyLogEvent =
       eventType: "find_similar_clear";
       /** source: feed_chip, reset_filters. */
       payload: { anchorSnippetId: number; source: string };
+    }
+  | {
+      /** Entered or left the optional shared-label review. */
+      eventType: "shared_review_toggle";
+      payload: { active: boolean; pending: number; source: string };
+    }
+  | {
+      /** A decision on one shared-label suggestion. */
+      eventType: "shared_review_decision";
+      payload: {
+        candidateId: number;
+        decision: "accept" | "reject" | "relabel";
+        reason: string;
+        suggestedLabel: string;
+        /** The label chosen instead, for relabel. */
+        label?: string;
+        input: "keyboard" | "mouse";
+        /** ms from the item opening to the decision. */
+        dwellMs: number;
+      };
+    }
+  | {
+      /** A label copied automatically from another snippet set was removed or kept. */
+      eventType: "shared_label_action";
+      payload: { label: string; action: "remove" | "keep" };
+    }
+  | {
+      /** A manager started a one-way label transfer between two models. */
+      eventType: "shared_label_transfer";
+      payload: { fromEmbeddingModelId: number; toEmbeddingModelId: number };
     }
   | {
       eventType: "label_scope_change";

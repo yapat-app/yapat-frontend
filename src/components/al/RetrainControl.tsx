@@ -28,12 +28,15 @@ export const RetrainControl: React.FC<Props> = ({ variant = "full" }) => {
     usedCheckpointId,
     feedSource,
     bootstrapSubmitting,
+    classifierTrainingModelId,
   } = useAppSelector((state) => state.al);
   // No model yet: the first one is trained by labelling (bootstrap feedback),
   // and there is nothing to retrain.
   const isBootstrap = feedSource !== "classic" && usedCheckpointId === null;
   const trainingFirstModel =
-    isBootstrap && bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold;
+    isBootstrap &&
+    (classifierTrainingModelId !== null ||
+      (bootstrapSubmitting && feedbackCount + 1 >= retrainThreshold));
   // Held by the backend until an add-recordings run on this dataset ends.
   const waitingForIngest = useAppSelector(selectRetrainWaitingForIngest) !== null;
   const waitingHint =

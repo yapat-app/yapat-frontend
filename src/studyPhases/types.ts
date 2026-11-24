@@ -112,6 +112,12 @@ export interface UIPhaseConfig {
   histogramStyle?: "embedded" | "standalone" | "none";
   /** "Find similar snippets" mic button on snippet cards / sticky header. Currently disabled for all phases. */
   showFindSimilarButton: boolean;
+  /**
+   * Optional review of labels shared between a dataset's snippet sets: the
+   * "To review" status, the sidebar's Shared labels section and the shared
+   * label marker on chips. Defaults to false when omitted.
+   */
+  showLabelSharingReview?: boolean;
 }
 
 /** Which sidebar filter sections are shown (Annotation Hub only). */

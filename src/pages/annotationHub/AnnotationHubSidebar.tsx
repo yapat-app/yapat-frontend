@@ -12,8 +12,12 @@ import {
   AudioOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
+  LinkOutlined,
+  FilterOutlined,
 } from "@ant-design/icons";
 import type { AnnotateMode } from "./types";
+import { REASON_OPTIONS } from "./useLabelSharing";
+import type { LabelShareReason } from "../../types/labelSharing";
 import type { LabelScopeOption } from "./useHubALSession";
 import {
   ScoreHistogramPanel,
@@ -105,6 +109,21 @@ export type AnnotationHubSidebarProps = {
   showLabelScope: boolean;
   /** True while a "Find similar" search is active (adds the Similarity row). */
   similarityActive?: boolean;
+  /**
+   * Optional shared-label review. Adds a "To review" Status option while this
+   * model's clips have pending suggestions (or while reviewing).
+   */
+  sharedReview?: {
+    pending: number;
+    active: boolean;
+    onChange: (active: boolean, source: string) => void;
+    /** Reason filter, shown under the toggle while reviewing. */
+    reason: LabelShareReason | null;
+    onReasonChange: (reason: LabelShareReason | null) => void;
+    pendingByReason: Partial<Record<LabelShareReason, number>> | null;
+  } | null;
+  /** The Shared labels section (counts, admin backfill). */
+  sharedLabelsSection?: React.ReactNode;
 };
 
 /** Deterministic varied bar heights (%) so the skeleton reads as a histogram, not a grey block. */
@@ -233,6 +252,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
   showFindSimilar,
   showLabelScope,
   similarityActive = false,
+  sharedReview = null,
+  sharedLabelsSection = null,
   exploreFilters,
   exploreFacets,
   exploreFacetsLoading,
@@ -542,12 +563,21 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                   <Segmented
                     block
                     size="small"
-                    value={filterAnnotationStatus}
-                    onChange={(v) =>
+                    // While reviewing shared labels no status is selected; any
+                    // pick here leaves the review.
+                    value={
+                      sharedReview?.active
+                        ? "__review__"
+                        : filterAnnotationStatus
+                    }
+                    onChange={(v) => {
+                      if (sharedReview?.active) {
+                        sharedReview.onChange(false, "status_filter");
+                      }
                       onFilterAnnotationStatusChange(
                         v as "any" | "annotated" | "unannotated",
-                      )
-                    }
+                      );
+                    }}
                     options={[
                       { value: "any", label: "All" },
                       { value: "unannotated", label: "Unlabeled" },
@@ -560,6 +590,106 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
                       "[&_.ant-segmented-thumb]:rounded-md! [&_.ant-segmented-thumb]:bg-gray-900! [&_.ant-segmented-thumb]:shadow-none!",
                     ].join(" ")}
                   />
+                  {sharedReview &&
+                    (sharedReview.pending > 0 || sharedReview.active) && (
+                      // While reviewing, the toggle and the reason filter form
+                      // one card: dark bar on top, filter below, one outline.
+                      <div
+                        className={[
+                          "mt-1.5",
+                          sharedReview.active
+                            ? "overflow-hidden rounded-lg border border-gray-900 bg-white"
+                            : "",
+                        ].join(" ")}
+                      >
+                        <Tooltip
+                          title="Labels shared from this dataset's other models that need a listen. Optional: until you accept one, its snippet counts as unlabeled."
+                          placement="right"
+                        >
+                          <button
+                            type="button"
+                            aria-pressed={sharedReview.active}
+                            onClick={() =>
+                              sharedReview.onChange(
+                                !sharedReview.active,
+                                "status_filter",
+                              )
+                            }
+                            className={[
+                              "flex w-full cursor-pointer items-center gap-2 px-2.5 py-1.5 text-left font-ibm-sans transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-300",
+                              sharedReview.active
+                                ? "bg-gray-900 text-white"
+                                : "rounded-lg border border-orange-200 bg-orange-50/70 text-orange-800 hover:border-orange-300 hover:bg-orange-50",
+                            ].join(" ")}
+                          >
+                            <LinkOutlined
+                              className={
+                                sharedReview.active
+                                  ? "text-white"
+                                  : "text-orange-600"
+                              }
+                            />
+                            <span className="text-fs-11 font-medium">
+                              {sharedReview.active
+                                ? "Reviewing shared labels"
+                                : "Shared labels to review"}
+                            </span>
+                            <span
+                              className={[
+                                "ml-auto rounded-full px-1.5 text-fs-10 font-semibold leading-4 tabular-nums",
+                                sharedReview.active
+                                  ? "bg-white/20 text-white"
+                                  : "bg-orange-600 text-white",
+                              ].join(" ")}
+                            >
+                              {sharedReview.pending}
+                            </span>
+                          </button>
+                        </Tooltip>
+                        {sharedReview.active && (
+                          <Select
+                            variant="borderless"
+                            allowClear
+                            prefix={
+                              <FilterOutlined className="text-gray-500" />
+                            }
+                            placeholder="All"
+                            aria-label="Filter suggestions by reason"
+                            value={sharedReview.reason ?? undefined}
+                            onChange={(v) =>
+                              sharedReview.onReasonChange(
+                                (v as LabelShareReason | undefined) ?? null,
+                              )
+                            }
+                            // Each reason with its pending count on this model's
+                            // clips; empty ones are disabled unless chosen (to clear).
+                            options={REASON_OPTIONS.map((o) => {
+                              const counts = sharedReview.pendingByReason;
+                              if (!counts) return o;
+                              const n = counts[o.value] ?? 0;
+                              return {
+                                value: o.value,
+                                disabled:
+                                  n === 0 && o.value !== sharedReview.reason,
+                                label: (
+                                  <span className="flex items-center justify-between gap-3">
+                                    <span>{o.label}</span>
+                                    <span className="font-ibm-mono text-fs-11 tabular-nums opacity-70">
+                                      {n}
+                                    </span>
+                                  </span>
+                                ),
+                              };
+                            })}
+                            className={[
+                              "w-full h-[30px]! rounded-none! px-2.5! font-ibm-sans hover:bg-gray-50!",
+                              "[&_.ant-select-prefix]:me-2! [&_.ant-select-content]:text-fs-11! [&_.ant-select-content]:font-medium [&_.ant-select-content]:text-gray-800",
+                              "[&_.ant-select-placeholder]:text-fs-11! [&_.ant-select-placeholder]:font-medium [&_.ant-select-placeholder]:text-gray-500!",
+                            ].join(" ")}
+                          />
+                        )}
+                      </div>
+                    )}
                 </div>
 
                 {/* ── Annotated species (Status = Labeled only) ── */}
@@ -846,6 +976,8 @@ export const AnnotationHubSidebar: React.FC<AnnotationHubSidebarProps> = ({
               )}
             </div>
           </CollapsibleSection>
+
+          {sharedLabelsSection}
 
           {showFindSimilar && (
             <CollapsibleSection title="Find similar">

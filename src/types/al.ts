@@ -2,7 +2,7 @@
  * PAM Active Learning Types — aligned with /api/pam-al/* backend schemas.
  */
 
-import type { Annotation } from "./index";
+import type { Annotation, EmbeddingOption } from "./index";
 
 export type FeedbackAction = "ACCEPT" | "REJECT" | "MODIFY";
 export type ALColorBy = "prediction" | "uncertainty" | "taxon";
@@ -170,8 +170,8 @@ export interface FeedbackPayload {
   /** If false, backend skips taxonomy resolution + canonical `annotations` writes (faster for study code labels). */
   persist_annotations?: boolean;
   /**
-   * Bootstrap feedback (no checkpoint yet): the snippet set's embedding model.
-   * Required there; the backend default of 1 is not safe to rely on.
+   * The selected embedding model. Required for bootstrap feedback (no
+   * checkpoint yet), where the backend has no other way to know it.
    */
   embedding_model_id?: number;
   /** Bootstrap feedback: head to train for the first model (backend default: linear). */
@@ -233,8 +233,10 @@ export interface PAMTrainFromScratchRequest {
   dataset_id: number;
   snippet_set_id?: number | null;
   embedding_model_id: number;
-  metadata_path: string;
-  label_config_path: string;
+  /** Train on the labels already on this snippet set; needs no metadata paths. */
+  use_existing_labels?: boolean;
+  metadata_path?: string;
+  label_config_path?: string;
   min_samples_per_class?: number;
   max_samples_per_class?: number | null;
   model_family_name: string;
@@ -292,9 +294,20 @@ export interface ALLabeledSnippetsResponse {
   snippet_ids: number[];
 }
 
+export interface ALSnippetLabelDetail {
+  label: string;
+  /** "user", "ground_truth" or "derived" (copied from another snippet set). */
+  source: string;
+  user_id?: number | null;
+  username?: string | null;
+  labeled_by: string;
+  can_edit: boolean;
+}
+
 export interface ALSnippetLabel {
   snippet_id: number;
   labels: string[];
+  label_details?: ALSnippetLabelDetail[];
 }
 
 export interface ALSnippetLabelsResponse {
@@ -307,6 +320,17 @@ export interface PAMCheckpointHyperparameters {
   used_species?: string[] | null;
   excluded_species?: string[] | null;
   class_counts?: Record<string, number> | null;
+  /** Reference pools this training mixed in, and the ones it left out. */
+  reference_pool?: {
+    reference_sample_count?: number;
+    skipped?: {
+      dataset_id: number;
+      name: string;
+      /** not_embedded | no_snippets | error; missing on older checkpoints. */
+      code?: string;
+      reason: string;
+    }[];
+  } | null;
 }
 
 export interface PAMCheckpoint {
@@ -316,6 +340,7 @@ export interface PAMCheckpoint {
   version: string;
   checkpoint_path: string | null;
   model_type: string;
+  embedding_model_id?: number | null;
   is_base: number;
   status: PAMModelStatusValue | string;
   created_at: string;
@@ -337,7 +362,13 @@ export interface ALState {
   usedCheckpointId: number | null; // last checkpoint actually used by backend
 
   snippetSetId: number | null;
-  embeddingModelId: number | null; // embedding space used for dataset-level projections
+  embeddingModelId: number | null; // the selected embedding model (saved per dataset)
+  /** Embedding models on the selected dataset (the hub's model switcher). */
+  embeddingOptions: EmbeddingOption[];
+  /** Dataset the options were loaded for; null until they load (or fail to). */
+  embeddingOptionsDatasetId: number | null;
+  /** Model whose first classifier the "Train classifier" action is training. */
+  classifierTrainingModelId: number | null;
   inferenceK: number;
   predictions: PAMPrediction[];
   projectionPredictions: PAMPrediction[]; // snapshot updated only after retrain

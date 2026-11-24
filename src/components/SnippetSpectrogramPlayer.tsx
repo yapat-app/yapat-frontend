@@ -60,6 +60,11 @@ export interface SnippetSpectrogramPlayerProps {
    * player; when omitted the player draws it exactly as it always did.
    */
   analysis?: CustomAnalysis | null;
+  /**
+   * Shades part of the clip (seconds from the clip's start), e.g. where an
+   * overlapping clip of another snippet set lies. Drawn over the picture only.
+   */
+  highlight?: { start: number; end: number; label?: string } | null;
 }
 
 function buildTicks(min: number, max: number, count: number): number[] {
@@ -86,6 +91,7 @@ export const SnippetSpectrogramPlayer: React.FC<
   windowMs,
   zeroPad,
   analysis,
+  highlight = null,
 }) => {
   // Instrument the library's internal <audio> element (play/pause/seek/volume).
   useAudioInstrumentation();
@@ -227,7 +233,33 @@ export const SnippetSpectrogramPlayer: React.FC<
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="w-full min-w-0 overflow-x-hidden">
+          <div className="relative w-full min-w-0 overflow-x-hidden">
+            {highlight &&
+              resolvedDuration !== null &&
+              resolvedDuration > 0 &&
+              highlight.end > highlight.start && (
+                <div
+                  className="pointer-events-none absolute top-0 z-10 border-x-2 border-dashed border-white bg-white/20"
+                  style={{
+                    height: plotHeight,
+                    left: `${Math.max(0, Math.min(1, highlight.start / resolvedDuration)) * 100}%`,
+                    width: `${
+                      Math.max(
+                        0,
+                        Math.min(1, highlight.end / resolvedDuration) -
+                          Math.max(0, highlight.start / resolvedDuration),
+                      ) * 100
+                    }%`,
+                  }}
+                  aria-hidden
+                >
+                  {highlight.label && (
+                    <span className="absolute left-1 top-1 whitespace-nowrap rounded bg-gray-900/70 px-1.5 py-px text-fs-10 font-semibold text-white font-ibm-sans">
+                      {highlight.label}
+                    </span>
+                  )}
+                </div>
+              )}
             {tooShortForSpectrogram ? (
               <div
                 className="flex flex-col items-center justify-center gap-1 rounded bg-gray-50 text-fs-11 text-gray-500 font-ibm-sans"

@@ -1,6 +1,8 @@
 import { Progress } from "antd";
 import { LoadingOutlined, WarningOutlined } from "@ant-design/icons";
 import type { EmbeddingJobProgress } from "../types";
+import { useEmbeddingJobOption } from "../hooks/useEmbeddingJobOption";
+import { computingEmbeddingsLabel } from "../utils/embeddingOptions";
 import { embeddingProgressView } from "../utils/jobProgress";
 
 const fullNumber = new Intl.NumberFormat();
@@ -32,16 +34,19 @@ export const EmbeddingProgressPanel: React.FC<Props> = ({
 }) => {
   const stalled = Boolean(progress?.stalled);
   const { counting, percent } = embeddingProgressView(progress);
+  const option = useEmbeddingJobOption(progress?.dataset_id, progress?.embedding_job_id);
 
   const step = !progress
     ? "Checking progress…"
     : counting
-      ? "Step 2 of 2 · Computing BirdNET embeddings"
-      : `Step 1 of 2 · Cutting ${
-          recordingCount
-            ? `${fullNumber.format(recordingCount)} recordings`
-            : "recordings"
-        } into snippets`;
+      ? `Step 2 of 2 · ${computingEmbeddingsLabel(option)}`
+      : option?.shares_snippet_set
+        ? "Step 1 of 2 · Reusing existing snippets"
+        : `Step 1 of 2 · Cutting ${
+            recordingCount
+              ? `${fullNumber.format(recordingCount)} recordings`
+              : "recordings"
+          } into snippets`;
   const footer = stalled
     ? "No progress for over 10 minutes. The embedding worker may have stopped; check the Celery worker logs."
     : [
