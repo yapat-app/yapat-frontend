@@ -54,6 +54,8 @@ const MIN_PLOT_HEIGHT = 120;
 const MAX_PLOT_HEIGHT = 560;
 /** Vertical space the card spends on everything except the plot itself. */
 const CARD_CHROME_HEIGHT = 186;
+/** The "Listen: this clip / other clip / both" row, when there is one. */
+const LISTEN_ROW_HEIGHT = 30;
 /** Same width rule as the snippet card, so the two line up exactly. */
 const CARD_WIDTH = "min(100%, 1200px)";
 const ZOOM_SLIDER_STEPS = 1000;
@@ -85,9 +87,25 @@ interface Props {
   snippetId: number;
   /** Closes the view and returns to the feed. */
   onBack: () => void;
-  /** Jumps to another snippet of this recording in the feed. */
-  onSelectSnippet: (snippetId: number) => void;
+  /**
+   * Jumps to another snippet of this recording in the feed. Without it the
+   * neighbouring snippets are only outlined, not clickable.
+   */
+  onSelectSnippet?: (snippetId: number) => void;
+  /**
+   * A second clip to mark and play, in recording seconds, e.g. the labelled
+   * clip a shared-label suggestion came from (it may belong to another
+   * model's snippets). Adds a row of "play this clip" buttons.
+   */
+  compareClip?: { startSec: number; endSec: number; label: string } | null;
+  /** Text of the back button. */
+  backLabel?: string;
+  /** The line under the player. */
+  note?: string;
 }
+
+/** Orange of the review panel's "labelled clip" bar. */
+const COMPARE_TONE = "#ea580c";
 
 export const FullRecordingCard: React.FC<Props> = ({
   datasetId,
@@ -96,6 +114,9 @@ export const FullRecordingCard: React.FC<Props> = ({
   snippetId,
   onBack,
   onSelectSnippet,
+  compareClip = null,
+  backLabel = "Back to feed",
+  note = "Listen only · close the full recording to label this snippet",
 }) => {
   const { prefs } = useSpectrogramPrefs();
   const datasetSpectrogram = useDatasetSpectrogramConfig(datasetId);
@@ -213,7 +234,12 @@ export const FullRecordingCard: React.FC<Props> = ({
       ? Math.round(
           Math.min(
             MAX_PLOT_HEIGHT,
-            Math.max(MIN_PLOT_HEIGHT, availH - CARD_CHROME_HEIGHT),
+            Math.max(
+              MIN_PLOT_HEIGHT,
+              availH -
+                CARD_CHROME_HEIGHT -
+                (compareClip ? LISTEN_ROW_HEIGHT : 0),
+            ),
           ),
         )
       : DEFAULT_PLOT_HEIGHT;
@@ -265,19 +291,21 @@ export const FullRecordingCard: React.FC<Props> = ({
     setZoom(next);
   };
 
-  const didCentreRef = useRef(false);
+  // Centred on the snippet once per snippet: the view can stay open while the
+  // snippet changes (the shared-label review steps through a recording).
+  const centredForRef = useRef<number | null>(null);
   useLayoutEffect(() => {
     const sc = scrollerRef.current;
     if (!sc || viewW <= 0 || pxPerSec <= 0) return;
     if (centreSecRef.current !== null) {
       sc.scrollLeft = Math.max(0, centreSecRef.current * pxPerSec - viewW / 2);
       centreSecRef.current = null;
-    } else if (!didCentreRef.current && snippetWin) {
-      didCentreRef.current = true;
+    } else if (centredForRef.current !== snippetId && snippetWin) {
+      centredForRef.current = snippetId;
       const mid = (snippetWin.startSec + snippetWin.endSec) / 2;
       sc.scrollLeft = Math.max(0, mid * pxPerSec - viewW / 2);
     }
-  }, [viewW, pxPerSec, snippetWin]);
+  }, [viewW, pxPerSec, snippetWin, snippetId]);
 
   // ── "Rendering…" until the player has drawn its picture ─────────────────
   const [paintedKey, setPaintedKey] = useState<string | null>(null);
@@ -347,11 +375,49 @@ export const FullRecordingCard: React.FC<Props> = ({
 
   const audioEl = () => rootRef.current?.querySelector("audio") ?? null;
 
+  // Playing one clip: stop at its end. Checked every frame, since
+  // `timeupdate` only fires a few times a second.
+  const stopFrameRef = useRef<number | null>(null);
+  const [playingRange, setPlayingRange] = useState<string | null>(null);
+  const clearStop = () => {
+    if (stopFrameRef.current !== null)
+      cancelAnimationFrame(stopFrameRef.current);
+    stopFrameRef.current = null;
+    setPlayingRange(null);
+  };
+  useEffect(
+    () => () => {
+      if (stopFrameRef.current !== null)
+        cancelAnimationFrame(stopFrameRef.current);
+    },
+    [],
+  );
+
   const seekAndPlay = (sec: number) => {
     const el = audioEl();
     if (!el) return;
+    clearStop();
     el.currentTime = sec;
     void el.play().catch(() => {});
+  };
+
+  const playRange = (id: string, startSec: number, endSec: number) => {
+    const el = audioEl();
+    if (!el) return;
+    clearStop();
+    el.currentTime = startSec;
+    void el.play().catch(() => {});
+    setPlayingRange(id);
+    const tick = () => {
+      if (el.paused || el.currentTime >= endSec) {
+        if (!el.paused) el.pause();
+        stopFrameRef.current = null;
+        setPlayingRange(null);
+        return;
+      }
+      stopFrameRef.current = requestAnimationFrame(tick);
+    };
+    stopFrameRef.current = requestAnimationFrame(tick);
   };
 
   const scrubOverview = (clientX: number) => {
@@ -371,7 +437,7 @@ export const FullRecordingCard: React.FC<Props> = ({
       className="shrink-0 h-5! px-1.5! gap-1! font-ibm-sans text-fs-10! [&_.anticon]:text-fs-10!"
       onClick={onBack}
     >
-      Back to feed
+      {backLabel}
     </Button>
   );
   const shell = (children: React.ReactNode) => (
@@ -515,6 +581,81 @@ export const FullRecordingCard: React.FC<Props> = ({
         </span>
       </div>
 
+      {/* Play each marked clip on its own, or both together */}
+      {compareClip &&
+        snippetWin &&
+        (() => {
+          const ranges = [
+            {
+              id: "this",
+              label: "This snippet",
+              swatch: "bg-yellow-400",
+              startSec: snippetWin.startSec,
+              endSec: snippetWin.endSec,
+            },
+            {
+              id: "compare",
+              label: compareClip.label,
+              swatch: "",
+              startSec: compareClip.startSec,
+              endSec: compareClip.endSec,
+            },
+            {
+              id: "both",
+              label: "Both",
+              swatch: null,
+              startSec: Math.min(snippetWin.startSec, compareClip.startSec),
+              endSec: Math.max(snippetWin.endSec, compareClip.endSec),
+            },
+          ];
+          return (
+            <div
+              className="flex flex-wrap items-center gap-1.5 pb-1.5"
+              role="group"
+              aria-label="Play a snippet"
+            >
+              <span className="text-fs-10 text-gray-500 font-ibm-sans">
+                Listen:
+              </span>
+              {ranges.map((r) => {
+                const playing = playingRange === r.id;
+                return (
+                  <Button
+                    key={r.id}
+                    size="small"
+                    type={playing ? "primary" : "default"}
+                    onClick={() => {
+                      if (playing) {
+                        audioEl()?.pause();
+                        clearStop();
+                      } else {
+                        playRange(r.id, r.startSec, r.endSec);
+                      }
+                    }}
+                    className="h-6! gap-1.5! px-2! font-ibm-sans text-fs-11!"
+                  >
+                    {r.swatch !== null && (
+                      <span
+                        aria-hidden
+                        className={`inline-block h-2.5 w-2.5 rounded-sm ${r.swatch}`}
+                        style={
+                          r.swatch === ""
+                            ? { backgroundColor: COMPARE_TONE }
+                            : undefined
+                        }
+                      />
+                    )}
+                    {playing ? "Stop" : `▶ ${r.label}`}
+                    <span className="font-ibm-mono text-fs-10 opacity-60">
+                      {formatClock(r.startSec)}–{formatClock(r.endSec)}
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
       {/* Overview of the whole file */}
       <div
         ref={overviewRef}
@@ -544,6 +685,16 @@ export const FullRecordingCard: React.FC<Props> = ({
             style={{
               left: pct(snippetWin.startSec),
               width: `max(3px, ${((snippetWin.endSec - snippetWin.startSec) / durationSec) * 100}%)`,
+            }}
+          />
+        )}
+        {compareClip && (
+          <div
+            className="absolute bottom-0 h-1/2"
+            style={{
+              backgroundColor: COMPARE_TONE,
+              left: pct(compareClip.startSec),
+              width: `max(3px, ${((compareClip.endSec - compareClip.startSec) / durationSec) * 100}%)`,
             }}
           />
         )}
@@ -637,7 +788,7 @@ export const FullRecordingCard: React.FC<Props> = ({
                     className="absolute top-0 pointer-events-none border-l border-white/30 has-[button:hover]:bg-blue-400/20 has-[button:hover]:border-2 has-[button:hover]:border-blue-500"
                     style={{ left: pct(w.startSec), height: plotH, width: slotPx }}
                   >
-                    {slotPx >= 1 && (
+                    {onSelectSnippet && slotPx >= 1 && (
                       // A slot too thin for any text is still hoverable and
                       // clickable: the chip simply fills it. The hover text is
                       // the browser's own, shown below the pointer.
@@ -721,6 +872,32 @@ export const FullRecordingCard: React.FC<Props> = ({
                 </div>
               )}
 
+              {/* The second clip, e.g. where a shared label came from. Dashed,
+                  so where it overlaps the snippet both outlines stay visible. */}
+              {compareClip && (
+                <div
+                  aria-hidden
+                  className="absolute top-0 pointer-events-none border-2 border-dashed"
+                  style={{
+                    borderColor: COMPARE_TONE,
+                    backgroundColor: "rgba(234,88,12,0.12)",
+                    left: pct(compareClip.startSec),
+                    width: `max(4px, ${((compareClip.endSec - compareClip.startSec) / durationSec) * 100}%)`,
+                    height: plotH,
+                  }}
+                >
+                  {(compareClip.endSec - compareClip.startSec) * pxPerSec >=
+                    NEIGHBOUR_LABEL_MIN_PX && (
+                    <span
+                      className="absolute bottom-0 left-0 whitespace-nowrap rounded-tr px-1 py-px text-fs-9 font-semibold leading-tight text-white font-ibm-sans"
+                      style={{ backgroundColor: COMPARE_TONE }}
+                    >
+                      {compareClip.label}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Time axis */}
               <div
                 className="relative border-t border-gray-100 select-none"
@@ -760,7 +937,7 @@ export const FullRecordingCard: React.FC<Props> = ({
       </div>
 
       <p className="m-0 mt-1 text-center text-fs-9 text-gray-400 font-ibm-sans">
-        Listen only · close the full recording to label this snippet
+        {note}
         {audio.gaps.length > 0 && (
           <span className="text-amber-700">
             {" "}

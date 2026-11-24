@@ -192,7 +192,15 @@ interface ProjectionViewProps {
   focusSpecies?: string[];
   focusableSpecies?: ReadonlySet<string>;
   onLegendSpeciesToggle?: (label: string) => void;
+  /**
+   * Clips with a pending shared-label suggestion (the loaded review queue).
+   * Drawn as orange rings where they are among the plotted points.
+   */
+  reviewSnippetIds?: readonly number[];
 }
+
+const REVIEW_RING_COLOR = "#ea580c";
+const NO_REVIEW_IDS: readonly number[] = [];
 
 const THUMBNAIL_METHODS: ProjectionMethod[] = ["tsne", "umap", "pca"];
 
@@ -224,6 +232,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   focusSpecies,
   focusableSpecies,
   onLegendSpeciesToggle,
+  reviewSnippetIds = NO_REVIEW_IDS,
 }) => {
   const dispatch = useAppDispatch();
   const phase = usePhaseConfig();
@@ -890,9 +899,45 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     labelVocab,
   ]);
 
+  // Shared-label review: ring every queued clip that is plotted, so the
+  // reviewer sees where the disputed clips sit. Clicking one selects it, and
+  // the review panel follows the selection.
+  const reviewTraces = useMemo(() => {
+    if (reviewSnippetIds.length === 0) return [];
+    const x: number[] = [];
+    const y: number[] = [];
+    const ids: number[] = [];
+    for (const id of reviewSnippetIds) {
+      const shown = lookupDisplayed(id);
+      if (!shown) continue;
+      x.push(shown.coord[0]);
+      y.push(shown.coord[1]);
+      ids.push(id);
+    }
+    if (x.length === 0) return [];
+    return [
+      {
+        type: "scattergl" as const,
+        mode: "markers" as const,
+        name: "",
+        showlegend: false,
+        x,
+        y,
+        customdata: ids,
+        marker: {
+          color: "rgba(255,255,255,0.9)",
+          size: 11,
+          opacity: 1,
+          line: { width: 2.5, color: REVIEW_RING_COLOR },
+        },
+        hovertemplate: `Snippet #%{customdata}<br>Shared label to review<extra></extra>`,
+      },
+    ];
+  }, [reviewSnippetIds, lookupDisplayed]);
+
   const traces = useMemo(
-    () => [...baseTraces, ...selectionTraces],
-    [baseTraces, selectionTraces],
+    () => [...baseTraces, ...reviewTraces, ...selectionTraces],
+    [baseTraces, reviewTraces, selectionTraces],
   );
   // Bump datarevision whenever the trace data changes so Plotly re-reads the
   // arrays and repaints the selection overlay.
@@ -1190,6 +1235,7 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
   const handlePlotRelayout = (event: Record<string, unknown>) => {
     if (event["xaxis.autorange"] || event["yaxis.autorange"]) {
       lastRangeRef.current = null;
+      setAxisRange(null);
       setViewBox(null);
       // Plotly's double-click reset (logged here, not in onDoubleClick, so it
       // counts once).
@@ -1226,6 +1272,21 @@ export const ProjectionView: React.FC<ProjectionViewProps> = ({
     ) {
       lastRangeRef.current = { x: [x0, x1], y: [y0, y1] };
       setViewBox([x0, x1, y0, y1]);
+      // Keep a drag or scroll zoom in our own state, not only inside Plotly:
+      // the layout then carries it, so a click that re-renders (or remounts)
+      // the plot cannot snap back to the full view. Only the user resets it
+      // (double-click or the zoom buttons).
+      if (isRangeChange) {
+        setAxisRange((prev) =>
+          prev &&
+          prev.x[0] === x0 &&
+          prev.x[1] === x1 &&
+          prev.y[0] === y0 &&
+          prev.y[1] === y1
+            ? prev
+            : { x: [x0, x1], y: [y0, y1] },
+        );
+      }
       if (
         isRangeChange &&
         performance.now() - programmaticRangeAtRef.current > 400

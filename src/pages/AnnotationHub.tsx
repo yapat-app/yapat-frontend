@@ -31,9 +31,14 @@ import { useHubALSession } from "./annotationHub/useHubALSession";
 import { ALInferenceConfigModal } from "./annotationHub/ALInferenceConfigModal";
 import { AnnotationHubSidebar } from "./annotationHub/AnnotationHubSidebar";
 import { Workspace } from "./annotationHub/Workspace";
-import { EmbeddingModelSwitcher } from "./annotationHub/EmbeddingModelSwitcher";
+import { EmbeddingModelLabel } from "./annotationHub/EmbeddingModelLabel";
+import { useLabelSharing } from "./annotationHub/useLabelSharing";
+import { SharedLabelsSection } from "./annotationHub/SharedLabelsSection";
 import { useDatasetActivity } from "./annotationHub/useDatasetActivity";
-import { HubDatasetActivityPanel, HubIngestBanner } from "./annotationHub/HubDatasetActivity";
+import {
+  HubDatasetActivityPanel,
+  HubIngestBanner,
+} from "./annotationHub/HubDatasetActivity";
 import { ResizableSplit } from "../components/layout/ResizableSplit";
 import { usePhaseConfig, STUDY_PHASES, isPhaseLocked } from "../studyPhases";
 import {
@@ -54,7 +59,6 @@ import { buildExploreFilters } from "../explore/filters";
 import { useStickyAdmissions } from "../explore/useStickyAdmissions";
 import { useExploreScope } from "../explore/useExploreScope";
 import { useExploreFacets } from "../explore/useExploreSummary";
-import type { EmbeddingOption } from "../types";
 
 const { Option } = Select;
 
@@ -132,6 +136,8 @@ export const AnnotationHub: React.FC = () => {
   );
   const isManager = user?.role === "admin" || user?.role === "team_owner";
   const activityDatasetId = useAppSelector((s) => s.al.selectedDatasetId);
+  const hubSnippetSetId = useAppSelector((s) => s.al.snippetSetId);
+  const hubEmbeddingModelId = useAppSelector((s) => s.al.embeddingModelId);
   // The current feed was scored by a trained model. False on a cold start or
   // bootstrap feed, where there are no per-species scores to search.
   const feedHasModel = useAppSelector((s) => s.al.usedCheckpointId != null);
@@ -516,21 +522,6 @@ export const AnnotationHub: React.FC = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [findSimilarEnabled, selectedSnippetId, handleFindSimilar]);
-  // ── Embedding model switch ────────────────────────────────────────────────
-  // Filters that belong to the old model go in the same update as the switch,
-  // so no request pairs them with the new scope.
-  const handleSwitchEmbeddingModel = (option: EmbeddingOption) => {
-    setPredictedSpeciesScope([]);
-    // Snippet ids and neighbours are the old model's.
-    setSimilarTo(null);
-    if (option.snippet_set_id !== al.snippetSetId) setAnnotatedSpeciesScope([]);
-    if (statusAutoSwitchedRef.current) {
-      statusAutoSwitchedRef.current = false;
-      setFilterAnnotationStatus("any");
-    }
-    al.handleSwitchEmbeddingModel(option);
-  };
-
   const focusSpeciesOptions = al.labelScopeOptions;
   const focusableSpecies = React.useMemo(
     () =>
@@ -566,6 +557,30 @@ export const AnnotationHub: React.FC = () => {
     studyLogger.log("label_scope_change", { labels, op });
     al.setLocalLabelScope(labels);
   };
+
+  // Optional review of labels shared between this dataset's models. Only
+  // meaningful with several models; pending suggestions write no label.
+  const sharing = useLabelSharing({
+    datasetId: activityDatasetId,
+    snippetSetId: hubSnippetSetId,
+    embeddingModelId: hubEmbeddingModelId,
+    enabled:
+      !!phase.ui.showLabelSharingReview && al.embeddingOptions.length > 1,
+  });
+
+  // Opened from a dataset card's "shared labels to review" link: switch the
+  // review on once this dataset's counts are in. Once per page load; the
+  // parameter stays in the URL (rewriting it re-runs the hub's URL effects).
+  const reviewFromUrl = searchParams.get("review") === "1";
+  const reviewFromUrlDoneRef = useRef(false);
+  useEffect(() => {
+    if (!reviewFromUrl || reviewFromUrlDoneRef.current) return;
+    if (!sharing.enabled || hubSnippetSetId === null) return;
+    reviewFromUrlDoneRef.current = true;
+    if (sharing.pendingHere > 0 && !sharing.reviewing) {
+      sharing.setReviewing(true, "dataset_card");
+    }
+  }, [reviewFromUrl, sharing, hubSnippetSetId]);
 
   if (awaitingHubDatasetBootstrap) {
     return (
@@ -636,12 +651,49 @@ export const AnnotationHub: React.FC = () => {
           </Select>
         </div>
 
-        <EmbeddingModelSwitcher
-          options={al.embeddingOptions}
+        {al.selectedDatasetId !== null &&
+          phase.sidebar.modelScores &&
+          feedHasModel && (
+            <div data-tour="find-species" className="flex items-center gap-2">
+              <SearchOutlined className="text-gray-400 text-sm" />
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                size="middle"
+                placeholder="Find species…"
+                aria-label="Find species"
+                style={{ minWidth: 220, maxWidth: 420 }}
+                loading={al.labelScopeLoading}
+                value={predictedSpeciesScope}
+                onChange={(v) =>
+                  handleFocusSpeciesChange(v as string[], "toolbar")
+                }
+                options={focusSpeciesOptions.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                  disabled: o.disabled,
+                }))}
+                filterOption={(input, option) =>
+                  String(option?.label ?? "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                notFoundContent={
+                  al.labelScopeLoading ? "Loading…" : "No species in this model"
+                }
+                maxTagCount="responsive"
+              />
+            </div>
+          )}
+
+        <EmbeddingModelLabel
           selected={al.selectedOption}
-          trainingClassifier={al.classifierTrainingModelId !== null}
-          onSwitch={handleSwitchEmbeddingModel}
-          onOpen={al.refreshEmbeddingOptions}
+          checkpoint={
+            al.checkpoints.find(
+              (c) => c.id === al.selectedOption?.active_checkpoint_id,
+            ) ?? null
+          }
         />
         {isManager && noClassifierOnThisModel && (
           <Tooltip title="Train this model's classifier on the labels already on its snippets">
@@ -660,39 +712,6 @@ export const AnnotationHub: React.FC = () => {
             Same state as the sidebar field and the projection legend; shown
             only where the phase exposes model scores and the feed has a
             model, since it rescopes the model's per-species scores. */}
-        {al.selectedDatasetId !== null && phase.sidebar.modelScores && feedHasModel && (
-          <div data-tour="find-species" className="flex items-center gap-2">
-            <SearchOutlined className="text-gray-400 text-sm" />
-            <Select
-              mode="multiple"
-              allowClear
-              showSearch
-              size="middle"
-              placeholder="Find species…"
-              aria-label="Find species"
-              style={{ minWidth: 220, maxWidth: 420 }}
-              loading={al.labelScopeLoading}
-              value={predictedSpeciesScope}
-              onChange={(v) =>
-                handleFocusSpeciesChange(v as string[], "toolbar")
-              }
-              options={focusSpeciesOptions.map((o) => ({
-                value: o.value,
-                label: o.label,
-                disabled: o.disabled,
-              }))}
-              filterOption={(input, option) =>
-                String(option?.label ?? "")
-                  .toLowerCase()
-                  .includes(input.toLowerCase())
-              }
-              notFoundContent={
-                al.labelScopeLoading ? "Loading…" : "No species in this model"
-              }
-              maxTagCount="responsive"
-            />
-          </div>
-        )}
 
         {/* Phase switch: hidden when the deployment pins the phase
             (VITE_STUDY_PHASE_LOCK), so annotators on the main site cannot
@@ -797,9 +816,14 @@ export const AnnotationHub: React.FC = () => {
             {/* Background work on this dataset, shown to every user. Scanning or
                 embedding replaces the workspace (no feed yet); adding recordings
                 only shows a strip, since the dataset stays usable. */}
-            {al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking && (
-              <HubDatasetActivityPanel activity={datasetActivity} isManager={isManager} />
-            )}
+            {al.selectedDatasetId &&
+              !al.isRestoredFeed &&
+              datasetActivity.blocking && (
+                <HubDatasetActivityPanel
+                  activity={datasetActivity}
+                  isManager={isManager}
+                />
+              )}
 
             {al.selectedDatasetId && datasetActivity.kind === "ingesting" && (
               <HubIngestBanner
@@ -807,31 +831,38 @@ export const AnnotationHub: React.FC = () => {
                 isManager={isManager}
                 retrainWaiting={retrainWaitingForIngest !== null}
                 // Cold start: the dataset has no model yet.
-                firstModelWaiting={al.checkpointsLoaded && al.checkpoints.length === 0}
+                firstModelWaiting={
+                  al.checkpointsLoaded && al.checkpoints.length === 0
+                }
               />
             )}
 
             {(al.selectedDatasetId || al.isRestoredFeed) &&
-              !(al.selectedDatasetId && !al.isRestoredFeed && datasetActivity.blocking) && (
-              <Workspace
-                onFindSimilar={
-                  findSimilarEnabled ? handleFindSimilar : undefined
-                }
-                similarTo={similarTo}
-                onClearSimilar={handleClearSimilar}
-                exploreFilters={exploreFilters}
-                showFeedAction={showFeedAction}
-                feedActionLabel={feedActionLabel}
-                feedActionLoading={al.inferenceLoading}
-                feedActionDisabled={!al.selectedDatasetId}
-                onFeedAction={al.openInferenceModal}
-                quickLabels={quickLabelList.labels}
-                quickLabelsLoading={quickLabelList.loading}
-                focusSpecies={predictedSpeciesScope}
-                focusableSpecies={focusableSpecies}
-                onFocusSpeciesChange={handleFocusSpeciesChange}
-              />
-            )}
+              !(
+                al.selectedDatasetId &&
+                !al.isRestoredFeed &&
+                datasetActivity.blocking
+              ) && (
+                <Workspace
+                  onFindSimilar={
+                    findSimilarEnabled ? handleFindSimilar : undefined
+                  }
+                  similarTo={similarTo}
+                  onClearSimilar={handleClearSimilar}
+                  exploreFilters={exploreFilters}
+                  showFeedAction={showFeedAction}
+                  feedActionLabel={feedActionLabel}
+                  feedActionLoading={al.inferenceLoading}
+                  feedActionDisabled={!al.selectedDatasetId}
+                  onFeedAction={al.openInferenceModal}
+                  quickLabels={quickLabelList.labels}
+                  quickLabelsLoading={quickLabelList.loading}
+                  focusSpecies={predictedSpeciesScope}
+                  focusableSpecies={focusableSpecies}
+                  onFocusSpeciesChange={handleFocusSpeciesChange}
+                  sharedReview={sharing.enabled && sharing.reviewing ? sharing : null}
+                />
+              )}
           </div>
         );
 
@@ -888,10 +919,34 @@ export const AnnotationHub: React.FC = () => {
                   confidenceLabel={confidenceLabel}
                   showSampleProperties={phase.sidebar.sampleProperties}
                   dateTimeDisabled={phase.sidebar.dateTimeDisabled}
-                  showModelScores={phase.sidebar.modelScores && !noClassifierOnThisModel}
+                  showModelScores={
+                    phase.sidebar.modelScores && !noClassifierOnThisModel
+                  }
                   showFindSimilar={phase.sidebar.findSimilar}
                   similarityActive={similarTo !== null}
-                  showLabelScope={phase.sidebar.labelScope && !noClassifierOnThisModel}
+                  showLabelScope={
+                    phase.sidebar.labelScope && !noClassifierOnThisModel
+                  }
+                  sharedReview={
+                    sharing.enabled
+                      ? {
+                          pending: sharing.pendingHere,
+                          active: sharing.reviewing,
+                          onChange: sharing.setReviewing,
+                          reason: sharing.reason,
+                          onReasonChange: sharing.setReason,
+                          pendingByReason: sharing.pendingByReason,
+                        }
+                      : null
+                  }
+                  sharedLabelsSection={
+                    <SharedLabelsSection
+                      session={sharing}
+                      isManager={isManager}
+                      models={al.embeddingOptions}
+                      currentModelId={hubEmbeddingModelId}
+                    />
+                  }
                   collapsed={sidebarCollapsed}
                   onCollapsedChange={setSidebarCollapsed}
                   onResetFilters={() => {

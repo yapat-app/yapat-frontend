@@ -159,6 +159,7 @@ export const STUDY_PHASES: Record<string, PhaseConfig> = {
       labelingMode: "blind",
       histogramStyle: "none",
       showFindSimilarButton: true,
+      showLabelSharingReview: true,
     },
     sidebar: {
       showPane: true,

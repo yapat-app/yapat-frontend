@@ -195,6 +195,36 @@ export type StudyLogEvent =
       payload: { anchorSnippetId: number; source: string };
     }
   | {
+      /** Entered or left the optional shared-label review. */
+      eventType: "shared_review_toggle";
+      payload: { active: boolean; pending: number; source: string };
+    }
+  | {
+      /** A decision on one shared-label suggestion. */
+      eventType: "shared_review_decision";
+      payload: {
+        candidateId: number;
+        decision: "accept" | "reject" | "relabel";
+        reason: string;
+        suggestedLabel: string;
+        /** The label chosen instead, for relabel. */
+        label?: string;
+        input: "keyboard" | "mouse";
+        /** ms from the item opening to the decision. */
+        dwellMs: number;
+      };
+    }
+  | {
+      /** A label copied automatically from another snippet set was removed or kept. */
+      eventType: "shared_label_action";
+      payload: { label: string; action: "remove" | "keep" };
+    }
+  | {
+      /** A manager started a one-way label transfer between two models. */
+      eventType: "shared_label_transfer";
+      payload: { fromEmbeddingModelId: number; toEmbeddingModelId: number };
+    }
+  | {
       eventType: "label_scope_change";
       payload: { labels: string[]; op: "add" | "remove" | "clear" | "set" };
     }

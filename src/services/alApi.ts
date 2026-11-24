@@ -140,6 +140,27 @@ export const alApi = {
     return response.data;
   },
 
+  /**
+   * DELETE /api/pam-al/snippet-labels — remove one label from a snippet.
+   * `source: "derived"` removes a label copied from another snippet set; the
+   * backend remembers it as rejected so it is not copied again.
+   */
+  deleteSnippetLabel: async (params: {
+    datasetId: number;
+    snippetId: number;
+    label: string;
+    source: "user" | "ground_truth" | "derived";
+  }): Promise<void> => {
+    await api.delete(`${BASE}/snippet-labels`, {
+      params: {
+        dataset_id: params.datasetId,
+        snippet_id: params.snippetId,
+        label: params.label,
+        source: params.source,
+      },
+    });
+  },
+
   /** GET /api/pam-al/checkpoints/{checkpoint_id}/species — species list for a checkpoint */
   getCheckpointSpecies: async (checkpointId: number): Promise<string[]> => {
     const cached = checkpointSpeciesCache.get(checkpointId);

@@ -294,9 +294,20 @@ export interface ALLabeledSnippetsResponse {
   snippet_ids: number[];
 }
 
+export interface ALSnippetLabelDetail {
+  label: string;
+  /** "user", "ground_truth" or "derived" (copied from another snippet set). */
+  source: string;
+  user_id?: number | null;
+  username?: string | null;
+  labeled_by: string;
+  can_edit: boolean;
+}
+
 export interface ALSnippetLabel {
   snippet_id: number;
   labels: string[];
+  label_details?: ALSnippetLabelDetail[];
 }
 
 export interface ALSnippetLabelsResponse {
@@ -309,6 +320,17 @@ export interface PAMCheckpointHyperparameters {
   used_species?: string[] | null;
   excluded_species?: string[] | null;
   class_counts?: Record<string, number> | null;
+  /** Reference pools this training mixed in, and the ones it left out. */
+  reference_pool?: {
+    reference_sample_count?: number;
+    skipped?: {
+      dataset_id: number;
+      name: string;
+      /** not_embedded | no_snippets | error; missing on older checkpoints. */
+      code?: string;
+      reason: string;
+    }[];
+  } | null;
 }
 
 export interface PAMCheckpoint {

@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Spin, message, Tooltip } from "antd";
+import { Button, Spin, message, Tooltip } from "antd";
 import { useAppDispatch, useAppSelector } from "../../hooks";
 import {
   fetchFeedbackCount,
@@ -27,7 +27,9 @@ import type { PAMPrediction, FeedbackAction } from "../../types/al";
 import { usePhaseConfig } from "../../studyPhases";
 import { studyLogger } from "../../studyLogging";
 import { useStudyFlow } from "../../studyFlow";
-import { LabelSelector } from "./LabelSelector";
+import { LabelSelector, type LabelChipMeta } from "./LabelSelector";
+import { alApi } from "../../services/alApi";
+import type { Annotation } from "../../types";
 import { openQuickLabelsManager, useCanManageQuickLabels } from "./quickLabelsManagerEvents";
 import { annotationDisplayLabel } from "../../utils/classicFeedSync";
 import { syncClassicSnippetLabels } from "../../utils/syncClassicSnippetLabels";
@@ -104,11 +106,23 @@ export const FeedbackButtons: React.FC<Props> = ({
   const annotationLabels = snippetAnnotations
     .map(annotationDisplayLabel)
     .filter((name): name is string => Boolean(name));
-  const submittedLabels = isClassicFeed
+  // Shared copies removed here; the feed row only drops them on its next fetch.
+  const [removedShared, setRemovedShared] = useState<{
+    snippetId: number;
+    labels: string[];
+  } | null>(null);
+  const removedHere =
+    removedShared?.snippetId === prediction.snippet_id
+      ? removedShared.labels
+      : null;
+  const submittedLabelsRaw = isClassicFeed
     ? annotationLabels
     : existingFeedback
       ? (existingFeedback.final_labels ?? [])
       : (serverLabels ?? []);
+  const submittedLabels = removedHere
+    ? submittedLabelsRaw.filter((l) => !removedHere.includes(l))
+    : submittedLabelsRaw;
   const lastSyncedSnippetIdRef = useRef<number | null>(null);
   // Autosave must only ever persist a USER edit. Every LabelSelector change
   // bumps userEditRevRef; the sync effect records the revision it synced at.
@@ -346,6 +360,123 @@ export const FeedbackButtons: React.FC<Props> = ({
     }
   }
 
+  // ── Labels shared from another snippet set ─────────────────────────────
+  // A copy carries the hub's label text in extra_metadata.al_label; its
+  // user is the person who made the source label.
+  const showShared = !!phase.ui.showLabelSharingReview;
+  const sharedByLabel = new Map<string, Annotation>();
+  if (showShared) {
+    for (const ann of snippetAnnotations) {
+      if (ann.origin !== "auto_shared" && ann.origin !== "reviewed_shared")
+        continue;
+      const text =
+        (typeof ann.extra_metadata?.al_label === "string"
+          ? ann.extra_metadata.al_label
+          : "") || annotationDisplayLabel(ann);
+      if (text) sharedByLabel.set(text, ann);
+    }
+  }
+
+  const removeSharedCopy = async (label: string) => {
+    if (selectedDatasetId === null) return;
+    try {
+      await alApi.deleteSnippetLabel({
+        datasetId: selectedDatasetId,
+        snippetId: prediction.snippet_id,
+        label,
+        source: "derived",
+      });
+    } catch {
+      message.error("Could not remove the shared label");
+      return;
+    }
+    studyLogger.log(
+      "shared_label_action",
+      { label, action: "remove" },
+      { snippetId: prediction.snippet_id },
+    );
+    const remaining = selectedLabels.filter((l) => l !== label);
+    // Show the removal without submitting it: the backend already dropped the
+    // copy, and a REJECT/MODIFY here would touch the snippet's other labels.
+    setRemovedShared((prev) => ({
+      snippetId: prediction.snippet_id,
+      labels: [
+        ...(prev?.snippetId === prediction.snippet_id ? prev.labels : []),
+        label,
+      ],
+    }));
+    const key = [...remaining].map((s) => s.trim()).filter(Boolean).sort().join("|");
+    skipAutoSubmitKeyRef.current = key;
+    lastSubmittedKeyRef.current = key;
+    setSelectedLabels(remaining);
+    dispatch(
+      setClassicSnippetAnnotations({
+        snippetId: prediction.snippet_id,
+        annotations: snippetAnnotations.filter(
+          (a) => a !== sharedByLabel.get(label),
+        ),
+      }),
+    );
+    message.success("Shared label removed. It won't be copied here again.", 2);
+  };
+
+  const keepSharedCopy = async (label: string) => {
+    // Labelling the clip with the same label makes the copy a manual label.
+    studyLogger.log(
+      "shared_label_action",
+      { label, action: "keep" },
+      { snippetId: prediction.snippet_id },
+    );
+    const ok = await submit("MODIFY", selectedLabels);
+    if (ok) message.success(`${label} is now your label`, 1.5);
+  };
+
+  const getLabelMeta = (label: string): LabelChipMeta | null => {
+    const ann = sharedByLabel.get(label);
+    if (!ann) return null;
+    const who = ann.username ?? "another annotator";
+    if (ann.origin === "reviewed_shared") {
+      return {
+        shared: "reviewed",
+        tooltip: `Accepted by ${who} from a label shared by another model's snippet`,
+      };
+    }
+    return {
+      shared: "auto",
+      tooltip: `Shared from ${who}`,
+      onRemove: () => void removeSharedCopy(label),
+      popover: (
+        <div className="flex max-w-[260px] flex-col gap-2 text-xs font-ibm-sans">
+          <span className="text-gray-600">
+            Copied automatically from {who}'s label on an overlapping snippet of
+            another model, where the label must also hold for this snippet.
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="small"
+              type="primary"
+              disabled={feedbackDisabled}
+              onClick={() => void keepSharedCopy(label)}
+            >
+              Keep as my label
+            </Button>
+            <Button
+              size="small"
+              danger
+              disabled={feedbackDisabled}
+              onClick={() => void removeSharedCopy(label)}
+            >
+              Remove
+            </Button>
+          </div>
+          <span className="text-fs-10 text-gray-400">
+            A removed copy is not shared to this snippet again.
+          </span>
+        </div>
+      ),
+    };
+  };
+
   // Sync local selection from backend feedback when in blind mode.
   // Never touch saveState here — the submit() function owns that lifecycle.
   useEffect(() => {
@@ -484,6 +615,7 @@ export const FeedbackButtons: React.FC<Props> = ({
           setSelectedLabels(labels);
           setSaveState("idle");
         }}
+        getLabelMeta={showShared ? getLabelMeta : undefined}
         getLabelTooltip={(lbl) =>
           labelContributors[lbl]?.length
             ? `Annotated by: ${labelContributors[lbl].join(", ")}`

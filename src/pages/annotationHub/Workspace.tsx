@@ -16,7 +16,13 @@ import React, {
   useRef,
 } from "react";
 import { Tooltip, Button, Tag } from "antd";
-import { AudioOutlined, ExpandAltOutlined } from "@ant-design/icons";
+import {
+  AudioOutlined,
+  ExpandAltOutlined,
+  LinkOutlined,
+} from "@ant-design/icons";
+import { ShareReviewPanel } from "../../components/al/ShareReviewPanel";
+import type { LabelSharingSession } from "./useLabelSharing";
 import { FullRecordingOverlay } from "../../components/fullRecording/FullRecordingOverlay";
 import { ResizableSplit } from "../../components/layout/ResizableSplit";
 import {
@@ -66,7 +72,11 @@ type WorkspaceProps = {
   similarTo?: number | null;
   /** Ends the "Find similar" search; `source` records which control did it. */
   onClearSimilar?: (source: string) => void;
+  /** Set while Status = "To review": the feed shows the shared-label review. */
+  sharedReview?: LabelSharingSession | null;
 };
+
+const NO_IDS: number[] = [];
 
 const NO_FOCUS: string[] = [];
 
@@ -85,6 +95,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onFocusSpeciesChange,
   similarTo = null,
   onClearSimilar,
+  sharedReview = null,
 }) => {
   const phase = usePhaseConfig();
   // Nothing to rank by until this embedding model has a classifier. Single-model
@@ -324,6 +335,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({
       ? focusSpecies[0]
       : `${focusSpecies.length} species`;
 
+  // Undecided suggestions in the loaded review queue, ringed on the projection.
+  const reviewSnippetIds = useMemo(
+    () =>
+      sharedReview
+        ? sharedReview.items
+            .filter((it) => sharedReview.decided[it.id] === undefined)
+            .map((it) => it.target.snippet_id)
+        : NO_IDS,
+    [sharedReview],
+  );
+
   const rightPanel = (
     <div
       data-tour="feed"
@@ -334,6 +356,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           <h2 className="text-sm font-semibold font-ibm-mono text-gray-700 leading-none">
             Feed
           </h2>
+          {sharedReview && (
+            <Tag
+              color="orange"
+              icon={<LinkOutlined />}
+              closable
+              onClose={(e) => {
+                e.preventDefault();
+                sharedReview.setReviewing(false, "feed_chip");
+              }}
+              className="m-0 text-xs"
+            >
+              Reviewing shared labels
+            </Tag>
+          )}
           {focusSpecies.length > 0 && (
             <Tooltip title={focusSpecies.join(", ")}>
               <Tag
@@ -393,48 +429,61 @@ export const Workspace: React.FC<WorkspaceProps> = ({
           </Button>
         )}
       </div>
-      {/* Sorting applies to the feed, not to a full recording: lock it while that is open. */}
-      <div
-        className={fullRecordingOpen ? "opacity-50 select-none" : undefined}
-        {...(fullRecordingOpen
-          ? ({ inert: "" } as Record<string, string>)
-          : {})}
-      >
-        <SortPanel
-          fields={sortFields}
-          onChange={setSortFields}
-          allowNonModel={phase.sort.nonModel}
-          allowModel={phase.sort.model && !noClassifierOnThisModel}
-          disabled={phase.sort.disabled}
-          similarityActive={similarityActive}
-        />
-      </div>
-      <SnippetHeader
-        onFindSimilar={onFindSimilar}
-        onOpenFullRecording={openFullRecording}
-        onCloseFullRecording={closeFullRecording}
-        fullRecordingOpen={fullRecordingOpen}
-        minWidthRef={feedMinWidthRef}
-      />
+      {/* Sorting applies to the feed, not to a full recording: lock it while that is open.
+          The review queue has its own order (recording, then time) and header. */}
+      {!sharedReview && (
+        <>
+          <div
+            className={fullRecordingOpen ? "opacity-50 select-none" : undefined}
+            {...(fullRecordingOpen
+              ? ({ inert: "" } as Record<string, string>)
+              : {})}
+          >
+            <SortPanel
+              fields={sortFields}
+              onChange={setSortFields}
+              allowNonModel={phase.sort.nonModel}
+              allowModel={phase.sort.model && !noClassifierOnThisModel}
+              disabled={phase.sort.disabled}
+              similarityActive={similarityActive}
+            />
+          </div>
+          <SnippetHeader
+            onFindSimilar={onFindSimilar}
+            onOpenFullRecording={openFullRecording}
+            onCloseFullRecording={closeFullRecording}
+            fullRecordingOpen={fullRecordingOpen}
+            minWidthRef={feedMinWidthRef}
+          />
+        </>
+      )}
       <div className="flex-1 overflow-hidden">
-        <PredictionFeed
-          onFindSimilar={onFindSimilar}
-          hideCardHeader
-          sortFields={sortFields}
-          exploreFilters={exploreFilters}
-          quickLabels={quickLabels}
-          quickLabelsLoading={quickLabelsLoading}
-          labelsLocked={fullRecordingOpen}
-          overlay={
-            fullRecording ? (
-              <FullRecordingOverlay
-                recordingId={fullRecording.recordingId}
-                snippetId={fullRecording.snippetId}
-                onClose={closeFullRecording}
-              />
-            ) : undefined
-          }
-        />
+        {sharedReview ? (
+          <ShareReviewPanel
+            session={sharedReview}
+            quickLabels={quickLabels}
+            quickLabelsLoading={quickLabelsLoading}
+          />
+        ) : (
+          <PredictionFeed
+            onFindSimilar={onFindSimilar}
+            hideCardHeader
+            sortFields={sortFields}
+            exploreFilters={exploreFilters}
+            quickLabels={quickLabels}
+            quickLabelsLoading={quickLabelsLoading}
+            labelsLocked={fullRecordingOpen}
+            overlay={
+              fullRecording ? (
+                <FullRecordingOverlay
+                  recordingId={fullRecording.recordingId}
+                  snippetId={fullRecording.snippetId}
+                  onClose={closeFullRecording}
+                />
+              ) : undefined
+            }
+          />
+        )}
       </div>
     </div>
   );
@@ -542,6 +591,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               onLegendSpeciesToggle={
                 onFocusSpeciesChange ? handleLegendSpeciesToggle : undefined
               }
+              reviewSnippetIds={reviewSnippetIds}
             />
           </div>
         </div>
