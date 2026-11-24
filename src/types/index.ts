@@ -467,6 +467,8 @@ export interface Dataset {
   spectrogram_f_max_hz?: number | null;
   /** Feedback events before auto-retrain; null = platform default. */
   retrain_after_threshold?: number | null;
+  /** The platform default used when retrain_after_threshold is not set. */
+  default_retrain_threshold?: number | null;
   quick_labels?: QuickLabel[] | null;
   created_at?: string;
   updated_at?: string;
