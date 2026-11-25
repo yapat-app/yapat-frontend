@@ -97,8 +97,10 @@ export const ExportAnnotationPanel: React.FC<ExportAnnotationPanelProps> = ({
   return (
     <div
       className={`rounded-lg border bg-white transition-colors ${
-        disabled ? "border-slate-200" : "border-blue-500"
-      } ${disabled ? "opacity-60" : ""}`}
+        disabled
+          ? "border-slate-200 opacity-60"
+          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+      }`}
     >
       <div
         role="button"
@@ -117,7 +119,7 @@ export const ExportAnnotationPanel: React.FC<ExportAnnotationPanelProps> = ({
         } focus-visible:outline-2 focus-visible:outline-blue-500`}
       >
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            disabled ? "bg-slate-100 text-slate-500" : "bg-blue-600 text-white"
+            disabled ? "bg-slate-100 text-slate-500" : "bg-slate-100 text-slate-600"
           }`}>
           <DownloadOutlined />
         </span>

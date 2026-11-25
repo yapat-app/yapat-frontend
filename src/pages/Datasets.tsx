@@ -319,13 +319,8 @@ export const Datasets = () => {
   const visibleDatasets = useMemo(() => {
     const needle = search.trim().toLowerCase();
 
-    const matches = (d: Dataset) => {
-      // Search covers source_uri too, so "chorusrf" finds every site and
-      // "part04" finds each participant's copy.
-      if (needle) {
-        const haystack = `${d.name ?? ""} ${d.source_uri ?? ""}`.toLowerCase();
-        if (!haystack.includes(needle)) return false;
-      }
+    // Team and type filters apply to every dataset, whatever is searched.
+    const passesFilters = (d: Dataset) => {
       if (teamFilter === "none") {
         if (d.team_id != null) return false;
       } else if (teamFilter !== "all") {
@@ -339,7 +334,23 @@ export const Datasets = () => {
       return true;
     };
 
-    const result = listedDatasets.filter(matches);
+    const candidates = listedDatasets.filter(passesFilters);
+
+    // Search looks at the dataset name first. Only when no name matches does it
+    // look at the path (source_uri), so "chorusrf" or "part04" still find every
+    // site or participant's copy when no dataset is named after them.
+    let result = candidates;
+    if (needle) {
+      const byName = candidates.filter((d) =>
+        (d.name ?? "").toLowerCase().includes(needle),
+      );
+      result =
+        byName.length > 0
+          ? byName
+          : candidates.filter((d) =>
+              (d.source_uri ?? "").toLowerCase().includes(needle),
+            );
+    }
 
     const statOf = (d: Dataset) =>
       statsById.get(Number(d.id)) ?? { total: 0, annotated: 0 };
